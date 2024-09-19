@@ -452,11 +452,10 @@ impl Lowered {
 }
 
 impl Compiled {
-    pub fn get_function<'program, Params: RotoParams, Return: Reflect>(
-        &'program mut self,
+    pub fn get_function<Params: RotoParams, Return: Reflect>(
+        &mut self,
         name: &str,
-    ) -> Result<TypedFunc<'program, Params, Return>, FunctionRetrievalError>
-    {
+    ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
         self.module.get_function(
             &mut self.runtime.type_registry,
             &self.identifiers,

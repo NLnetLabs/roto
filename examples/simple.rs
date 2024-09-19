@@ -29,16 +29,32 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
+    let func2 = compiled
+        .get_function::<(u32,), Verdict<(), ()>>("just_reject")
+        .inspect_err(|e| eprintln!("{e}"))
+        .unwrap();
+
+    // We should now be able to drop this safely, because each func has an Arc
+    // to the data it references.
+    drop(compiled);
+
     for y in 0..20 {
         let mut bla = Bla { _x: 1, y, _z: 1 };
-        let res = func.call(&mut bla as *mut _);
 
-        let expected = if y > 10 {
-            Verdict::Accept(y * 2)
-        } else {
-            Verdict::Reject(())
-        };
-        println!("main({y}) = {res:?}   (expected: {expected:?})");
+        let func = func.clone();
+        std::thread::spawn(move || {
+            let res = func.call(&mut bla as *mut _);
+            let expected = if y > 10 {
+                Verdict::Accept(y * 2)
+            } else {
+                Verdict::Reject(())
+            };
+            println!("main({y}) = {res:?}   (expected: {expected:?})");
+        }).join().unwrap();
+
+
+        let res = func2.call(y);
+        println!("{res:?}");
     }
     Ok(())
 }

@@ -45,27 +45,70 @@ pub mod check;
 #[cfg(test)]
 mod tests;
 
+#[derive(Clone)]
+pub struct ModuleData(Arc<JITModule>);
+
+impl Drop for ModuleData {
+    fn drop(&mut self) {
+        // get_mut returns None if we are not the last Arc, so the JITModule
+        // shouldn't be dropped yet.
+        let Some(module) = Arc::get_mut(&mut self.0) else {
+            return;
+        };
+
+        // If this fails we'd rather just return and leak some memory than
+        // panic.
+        let Ok(builder) =
+            JITBuilder::new(cranelift_module::default_libcall_names())
+        else {
+            return;
+        };
+
+        // Swap in an empty JITModule so that we can take ownership
+        // so that we can call `free_memory` on the old one.
+        // The new one hasn't allocated anything so it will just get dropped
+        // normally.
+        let mut other = JITModule::new(builder);
+        std::mem::swap(&mut other, module);
+
+        // SAFETY: We only give out functions that hold a ModuleData and
+        // therefore an Arc to this module. By `get_mut`, we know that we are
+        // the last Arc to this memory and hence it is safe to free its
+        // memory. New Arcs cannot have been created in the meantime because
+        // that requires access to the last Arc, which we know that we have.
+        unsafe { other.free_memory() };
+    }
+}
+
 /// A compiled, ready-to-run Roto module
 pub struct Module {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
     /// The inner cranelift module
-    inner: JITModule,
+    inner: ModuleData,
 
     /// Info from the typechecker for checking types against Rust types
     type_info: TypeInfo,
 }
 
-pub struct TypedFunc<'module, Params, Return> {
+#[derive(Clone)]
+pub struct TypedFunc<Params, Return> {
     func: *const u8,
     return_by_ref: bool,
-    _ty: PhantomData<&'module (Params, Return)>,
+
+    // The module holds the data for this function, that's why we need
+    // to ensure that it doesn't get dropped. This field is ESSENTIAL
+    // for the safety of calling this function. Without it, the data that
+    // the `func` pointer points to might have been dropped.
+    _module: ModuleData,
+    _ty: PhantomData<(Params, Return)>,
 }
 
-impl<'module, Params: RotoParams, Return: Reflect>
-    TypedFunc<'module, Params, Return>
-{
+unsafe impl <Params, Return> Send for TypedFunc<Params, Return> {}
+unsafe impl <Params, Return> Sync for TypedFunc<Params, Return> {}
+
+impl<Params: RotoParams, Return: Reflect> TypedFunc<Params, Return> {
     pub fn call_tuple(&self, params: Params) -> Return {
         unsafe {
             Params::invoke::<Return>(self.func, params, self.return_by_ref)
@@ -75,7 +118,7 @@ impl<'module, Params: RotoParams, Return: Reflect>
 
 macro_rules! call_impl {
     ($($ty:ident),*) => {
-        impl<'module, $($ty,)* Return: Reflect> TypedFunc<'module, ($($ty,)*), Return>
+        impl<$($ty,)* Return: Reflect> TypedFunc<($($ty,)*), Return>
         where
             ($($ty,)*): RotoParams,
         {
@@ -85,7 +128,7 @@ macro_rules! call_impl {
             }
 
             #[allow(non_snake_case)]
-            pub fn as_func(self) -> impl Fn($($ty,)*) -> Return + 'module {
+            pub fn as_func(self) -> impl Fn($($ty,)*) -> Return {
                 move |$($ty,)*| self.call($($ty,)*)
             }
         }
@@ -342,7 +385,7 @@ impl ModuleBuilder<'_> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
-            inner: self.inner,
+            inner: ModuleData(Arc::new(self.inner)),
             type_info: self.type_info,
         }
     }
@@ -749,13 +792,12 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 }
 
 impl Module {
-    pub fn get_function<'module, Params: RotoParams, Return: Reflect>(
-        &'module mut self,
+    pub fn get_function<Params: RotoParams, Return: Reflect>(
+        &mut self,
         type_registry: &mut TypeRegistry,
         identifiers: &StringInterner<StringBackend>,
         name: &str,
-    ) -> Result<TypedFunc<'module, Params, Return>, FunctionRetrievalError>
-    {
+    ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
         let function_info = self.functions.get(name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
                 name: name.to_string(),
@@ -789,10 +831,11 @@ impl Module {
         let return_by_ref =
             return_type_by_ref(type_registry, TypeId::of::<Return>());
 
-        let func_ptr = self.inner.get_finalized_function(id);
+        let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
             return_by_ref,
+            _module: self.inner.clone(),
             _ty: PhantomData,
         })
     }
