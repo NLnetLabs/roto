@@ -2,7 +2,9 @@ use inetnum::asn::Asn;
 use string_interner::{backend::StringBackend, StringInterner};
 
 use crate::{
-    runtime::ty::{Reflect, TypeDescription, TypeRegistry},
+    runtime::ty::{
+        Reflect, TypeDescription, TypeRegistry, GLOBAL_TYPE_REGISTRY,
+    },
     typechecker::{
         info::TypeInfo,
         types::{type_to_string, Primitive, Type},
@@ -56,13 +58,13 @@ impl Display for FunctionRetrievalError {
 }
 
 pub fn check_roto_type_reflect<T: Reflect>(
-    registry: &mut TypeRegistry,
     type_info: &mut TypeInfo,
     identifiers: &StringInterner<StringBackend>,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
+    let mut registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
     let rust_ty = registry.resolve::<T>().type_id;
-    check_roto_type(registry, type_info, identifiers, rust_ty, roto_ty)
+    check_roto_type(&registry, type_info, identifiers, rust_ty, roto_ty)
 }
 
 #[allow(non_snake_case)]
@@ -170,7 +172,6 @@ pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
 
 pub trait RotoParams {
     fn check(
-        registry: &mut TypeRegistry,
         type_info: &mut TypeInfo,
         identifiers: &StringInterner<StringBackend>,
         ty: &[Type],
@@ -199,7 +200,6 @@ macro_rules! params {
             $($t: Reflect,)*
         {
             fn check(
-                registry: &mut TypeRegistry,
                 type_info: &mut TypeInfo,
                 identifiers: &StringInterner<StringBackend>,
                 ty: &[Type]
@@ -216,7 +216,7 @@ macro_rules! params {
                 let mut i = 0;
                 $(
                     i += 1;
-                    check_roto_type_reflect::<$t>(registry, type_info, identifiers, $t)
+                    check_roto_type_reflect::<$t>(type_info, identifiers, $t)
                         .map_err(|e| FunctionRetrievalError::TypeMismatch(format!("argument {i}"), e))?;
                 )*
                 Ok(())

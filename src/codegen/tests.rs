@@ -292,7 +292,7 @@ fn record_with_fields_flipped() {
     let f = p
         .get_function::<(i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)")
-        .as_func();
+        .into_func();
 
     for x in 0..100 {
         let expected = if x == 20 {

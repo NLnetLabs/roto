@@ -1,7 +1,8 @@
 //! Machine code generation via cranelift
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU8, sync::Arc
+    any::TypeId, collections::HashMap, marker::PhantomData,
+    mem::ManuallyDrop, num::NonZeroU8, sync::Arc,
 };
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    runtime::ty::{Reflect, TypeRegistry},
+    runtime::ty::{Reflect, GLOBAL_TYPE_REGISTRY},
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
     IrValue,
 };
@@ -47,6 +48,13 @@ mod tests;
 #[derive(Clone)]
 pub struct ModuleData(Arc<ManuallyDrop<JITModule>>);
 
+impl From<JITModule> for ModuleData {
+    fn from(value: JITModule) -> Self {
+        #[allow(clippy::arc_with_non_send_sync)]
+        Self(Arc::new(ManuallyDrop::new(value)))
+    }
+}
+
 impl Drop for ModuleData {
     fn drop(&mut self) {
         // get_mut returns None if we are not the last Arc, so the JITModule
@@ -60,12 +68,15 @@ impl Drop for ModuleData {
         // the last Arc to this memory and hence it is safe to free its
         // memory. New Arcs cannot have been created in the meantime because
         // that requires access to the last Arc, which we know that we have.
-        unsafe { 
+        unsafe {
             let inner = ManuallyDrop::take(module);
             inner.free_memory();
         };
     }
 }
+
+unsafe impl Send for ModuleData {}
+unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
 pub struct Module {
@@ -92,8 +103,8 @@ pub struct TypedFunc<Params, Return> {
     _ty: PhantomData<(Params, Return)>,
 }
 
-unsafe impl <Params, Return> Send for TypedFunc<Params, Return> {}
-unsafe impl <Params, Return> Sync for TypedFunc<Params, Return> {}
+unsafe impl<Params, Return> Send for TypedFunc<Params, Return> {}
+unsafe impl<Params, Return> Sync for TypedFunc<Params, Return> {}
 
 impl<Params: RotoParams, Return: Reflect> TypedFunc<Params, Return> {
     pub fn call_tuple(&self, params: Params) -> Return {
@@ -110,12 +121,13 @@ macro_rules! call_impl {
             ($($ty,)*): RotoParams,
         {
             #[allow(non_snake_case)]
+            #[allow(clippy::too_many_arguments)]
             pub fn call(&self, $($ty: $ty,)*) -> Return {
                 self.call_tuple(($($ty,)*))
             }
 
             #[allow(non_snake_case)]
-            pub fn as_func(self) -> impl Fn($($ty,)*) -> Return {
+            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
                 move |$($ty,)*| self.call($($ty,)*)
             }
         }
@@ -372,7 +384,7 @@ impl ModuleBuilder<'_> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
-            inner: ModuleData(Arc::new(ManuallyDrop::new(self.inner))),
+            inner: self.inner.into(),
             type_info: self.type_info,
         }
     }
@@ -781,7 +793,6 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 impl Module {
     pub fn get_function<Params: RotoParams, Return: Reflect>(
         &mut self,
-        type_registry: &mut TypeRegistry,
         identifiers: &StringInterner<StringBackend>,
         name: &str,
     ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
@@ -796,14 +807,12 @@ impl Module {
         let id = function_info.id;
 
         Params::check(
-            type_registry,
             &mut self.type_info,
             identifiers,
             &sig.parameter_types,
         )?;
 
         check_roto_type_reflect::<Return>(
-            type_registry,
             &mut self.type_info,
             identifiers,
             &sig.return_type,
@@ -815,8 +824,9 @@ impl Module {
             )
         })?;
 
+        let registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
         let return_by_ref =
-            return_type_by_ref(type_registry, TypeId::of::<Return>());
+            return_type_by_ref(&registry, TypeId::of::<Return>());
 
         let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {

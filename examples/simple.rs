@@ -50,8 +50,9 @@ fn main() -> Result<(), roto::RotoReport> {
                 Verdict::Reject(())
             };
             println!("main({y}) = {res:?}   (expected: {expected:?})");
-        }).join().unwrap();
-
+        })
+        .join()
+        .unwrap();
 
         let res = func2.call(y);
         println!("{res:?}");

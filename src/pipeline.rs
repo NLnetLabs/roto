@@ -77,7 +77,6 @@ pub struct Parsed {
 
 /// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked {
-    runtime: Runtime,
     trees: Vec<ast::SyntaxTree>,
     type_infos: Vec<TypeInfo>,
     identifiers: StringInterner<StringBackend>,
@@ -86,7 +85,6 @@ pub struct TypeChecked {
 
 /// Compiler stage: HIR
 pub struct Lowered {
-    runtime: Runtime,
     pub ir: Vec<ir::Function>,
     runtime_functions: HashMap<String, IrFunction>,
     identifiers: StringInterner<StringBackend>,
@@ -95,7 +93,6 @@ pub struct Lowered {
 }
 
 pub struct Compiled {
-    runtime: Runtime,
     module: Module,
     identifiers: StringInterner<StringBackend>,
 }
@@ -370,7 +367,6 @@ impl Parsed {
 
         if errors.is_empty() {
             Ok(TypeChecked {
-                runtime,
                 trees,
                 type_infos,
                 identifiers,
@@ -389,7 +385,6 @@ impl Parsed {
 impl TypeChecked {
     pub fn lower(self) -> Lowered {
         let TypeChecked {
-            runtime,
             trees,
             mut type_infos,
             mut identifiers,
@@ -417,7 +412,6 @@ impl TypeChecked {
 
         Lowered {
             ir,
-            runtime,
             runtime_functions,
             identifiers,
             label_store,
@@ -444,7 +438,6 @@ impl Lowered {
             self.type_info,
         );
         Compiled {
-            runtime: self.runtime,
             module,
             identifiers: self.identifiers,
         }
@@ -456,10 +449,6 @@ impl Compiled {
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
-        self.module.get_function(
-            &mut self.runtime.type_registry,
-            &self.identifiers,
-            name,
-        )
+        self.module.get_function(&self.identifiers, name)
     }
 }
