@@ -1,4 +1,4 @@
-use std::{any::TypeId, rc::Rc};
+use std::{any::TypeId, sync::Arc};
 
 use crate::{lower::value::ReturnValue, IrValue, Runtime};
 
@@ -6,10 +6,35 @@ use super::ty::{Reflect, TypeRegistry};
 
 #[derive(Clone)]
 pub struct FunctionDescription {
-    pub parameter_types: Vec<TypeId>,
-    pub return_type: TypeId,
-    pub pointer: *const u8,
-    pub wrapped: Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>,
+    parameter_types: Vec<TypeId>,
+    return_type: TypeId,
+    pointer: *const u8,
+    wrapped: Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>,
+}
+
+// SAFETY: FunctionDescription is only not Send and Sync because of the function
+// pointer, but that's fine because those are static. The only constructors for
+// FunctionDescription are in this module, so we know that it's only instantiated
+// with these pointers that are ok to send and sync.
+unsafe impl Send for FunctionDescription {}
+unsafe impl Sync for FunctionDescription {}
+
+impl FunctionDescription {
+    pub fn parameter_types(&self) -> &[TypeId] {
+        &self.parameter_types
+    }
+
+    pub fn return_type(&self) -> TypeId {
+        self.return_type
+    }
+
+    pub fn pointer(&self) -> *const u8 {
+        self.pointer
+    }
+
+    pub fn wrapped(&self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
+        self.wrapped.clone()
+    }
 }
 
 impl PartialEq for FunctionDescription {
@@ -37,7 +62,7 @@ pub trait Func<A, R>: Sized {
     fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId>;
     fn return_type(reg: &mut TypeRegistry) -> TypeId;
     fn ptr(&self) -> *const u8;
-    fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
+    fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
 
     fn to_function_description(
         self,
@@ -81,7 +106,7 @@ macro_rules! func_impl {
                 (*self) as *const u8
             }
 
-            fn wrapped(self) -> Rc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
+            fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
                 // We reuse the type names as variable names, so they are
                 // uppercase, but that's the easiest way to do this.
                 #[allow(non_snake_case)]
@@ -97,7 +122,7 @@ macro_rules! func_impl {
                     let ret: ReturnValue = self($($arg),*).into();
                     ret.0
                 };
-                Rc::new(f)
+                Arc::new(f)
             }
         }
     };

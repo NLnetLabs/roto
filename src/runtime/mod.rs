@@ -203,7 +203,7 @@ impl Runtime {
         let description = f.to_function_description(self).unwrap();
         self.check_description(&description)?;
 
-        let Some(first) = description.parameter_types.first() else {
+        let Some(first) = description.parameter_types().first() else {
             panic!()
         };
 
@@ -279,11 +279,11 @@ impl Runtime {
             })
         };
 
-        for ty in &description.parameter_types {
+        for ty in description.parameter_types() {
             check_type(ty)?;
         }
 
-        check_type(&description.return_type)?;
+        check_type(&description.return_type())?;
         Ok(())
     }
 }
