@@ -8,6 +8,7 @@ pub(crate) mod typechecker;
 pub(crate) mod pipeline;
 pub(crate) mod runtime;
 
+pub use codegen::TypedFunc;
 pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;

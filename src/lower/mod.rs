@@ -467,7 +467,7 @@ impl<'r> Lowerer<'r> {
 
                         let ir_func = IrFunction {
                             name: ident.node,
-                            ptr: runtime_func.description.pointer,
+                            ptr: runtime_func.description.pointer(),
                             params,
                             ret: if self.type_info.size_of(&ret) > 0 {
                                 Some(self.lower_type(&ret))
@@ -610,7 +610,7 @@ impl<'r> Lowerer<'r> {
 
                 let ir_func = IrFunction {
                     name: m.node,
-                    ptr: runtime_func.description.pointer,
+                    ptr: runtime_func.description.pointer(),
                     params,
                     ret: if self.type_info.size_of(&ret) > 0 {
                         Some(self.lower_type(&ret))

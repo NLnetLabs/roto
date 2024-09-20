@@ -545,8 +545,8 @@ fn call_runtime_function(
     func: &RuntimeFunction,
     args: Vec<IrValue>,
 ) -> Option<IrValue> {
-    assert_eq!(func.description.parameter_types.len(), args.len());
-    (func.description.wrapped)(args)
+    assert_eq!(func.description.parameter_types().len(), args.len());
+    (func.description.wrapped())(args)
 }
 
 fn eval_operand<'a>(

@@ -221,7 +221,7 @@ impl TypeChecker<'_> {
             } = func;
 
             let parameter_types: Vec<_> = description
-                .parameter_types
+                .parameter_types()
                 .iter()
                 .map(|ty| {
                     let name = &runtime.get_runtime_type(*ty).unwrap().name;
@@ -232,7 +232,7 @@ impl TypeChecker<'_> {
                 .collect();
 
             let ret_name = &runtime
-                .get_runtime_type(description.return_type)
+                .get_runtime_type(description.return_type())
                 .unwrap()
                 .name;
             let ret_name =
