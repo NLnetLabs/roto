@@ -422,6 +422,24 @@ impl TryFrom<&IrValue> for u32 {
     }
 }
 
+impl From<Asn> for IrValue {
+    fn from(value: Asn) -> Self {
+        IrValue::Asn(value)
+    }
+}
+
+impl TryFrom<&IrValue> for Asn {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::Asn(x) => Ok(*x),
+            _ => Err(())
+        }
+    }
+}
+
+
 impl<T> From<*const T> for IrValue {
     fn from(value: *const T) -> Self {
         IrValue::ExtPointer(value as *mut ())
