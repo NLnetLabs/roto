@@ -14,7 +14,6 @@ mod test_eval;
 use ir::{Block, Function, Instruction, Operand, Var, VarKind};
 use label::{LabelRef, LabelStore};
 use std::{collections::HashMap, net::IpAddr};
-use string_interner::{backend::StringBackend, StringInterner};
 use value::IrType;
 
 use crate::{
@@ -59,7 +58,6 @@ struct Lowerer<'r> {
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
     runtime_functions: &'r mut HashMap<String, IrFunction>,
-    identifiers: &'r mut StringInterner<StringBackend>,
     label_store: &'r mut LabelStore,
 }
 
@@ -67,14 +65,12 @@ pub fn lower(
     tree: &ast::SyntaxTree,
     type_info: &mut TypeInfo,
     runtime_functions: &mut HashMap<String, IrFunction>,
-    identifiers: &mut StringInterner<StringBackend>,
     label_store: &mut LabelStore,
 ) -> Vec<Function> {
     Lowerer::tree(
         type_info,
         runtime_functions,
         tree,
-        identifiers,
         label_store,
     )
 }
@@ -84,7 +80,6 @@ impl<'r> Lowerer<'r> {
         type_info: &'r mut TypeInfo,
         runtime_functions: &'r mut HashMap<String, IrFunction>,
         function_name: &Meta<Identifier>,
-        identifiers: &'r mut StringInterner<StringBackend>,
         label_store: &'r mut LabelStore,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
@@ -95,7 +90,6 @@ impl<'r> Lowerer<'r> {
             function_scope,
             runtime_functions,
             blocks: Vec::new(),
-            identifiers,
             label_store,
         }
     }
@@ -140,7 +134,6 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         runtime_functions: &mut HashMap<String, IrFunction>,
         tree: &ast::SyntaxTree,
-        identifiers: &mut StringInterner<StringBackend>,
         label_store: &'r mut LabelStore,
     ) -> Vec<Function> {
         let ast::SyntaxTree {
@@ -157,7 +150,6 @@ impl<'r> Lowerer<'r> {
                             type_info,
                             runtime_functions,
                             &x.ident,
-                            identifiers,
                             label_store,
                         )
                         .filter_map(x),
@@ -174,7 +166,6 @@ impl<'r> Lowerer<'r> {
                             type_info,
                             runtime_functions,
                             ident,
-                            identifiers,
                             label_store,
                         )
                         .function(ident, params, ret, body),
@@ -475,7 +466,7 @@ impl<'r> Lowerer<'r> {
                                 None
                             },
                         };
-                        let s = self.identifiers.resolve(ident.0).unwrap();
+                        let s = ident.as_str();
                         self.runtime_functions.insert(s.into(), ir_func);
 
                         self.add(Instruction::CallRuntime {
@@ -619,7 +610,7 @@ impl<'r> Lowerer<'r> {
                     },
                 };
 
-                let s = self.identifiers.resolve(m.node.0).unwrap();
+                let s = m.node.as_str();
                 self.runtime_functions.insert(s.into(), ir_func);
 
                 self.add(Instruction::CallRuntime {
@@ -836,11 +827,11 @@ impl<'r> Lowerer<'r> {
                 let lbl_cont = self.label_store.next(current_label);
                 let lbl_then = self.label_store.wrap_internal(
                     current_label,
-                    Identifier(self.identifiers.get_or_intern("if-then")),
+                    Identifier::from("if-then"),
                 );
                 let lbl_else = self.label_store.wrap_internal(
                     current_label,
-                    Identifier(self.identifiers.get_or_intern("if-else")),
+                    Identifier::from("if-else"),
                 );
 
                 let branches = vec![(1, lbl_then)];

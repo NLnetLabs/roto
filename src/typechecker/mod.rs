@@ -25,7 +25,6 @@ use std::{
     borrow::Borrow,
     collections::{hash_map::Entry, HashMap},
 };
-use string_interner::{backend::StringBackend, StringInterner};
 use types::{FunctionDefinition, Type};
 
 use self::{
@@ -49,7 +48,6 @@ use info::TypeInfo;
 pub struct TypeChecker<'s> {
     /// The list of built-in functions, methods and static methods.
     functions: Vec<Function>,
-    identifiers: &'s mut StringInterner<StringBackend>,
     type_info: TypeInfo,
     scope_graph: &'s mut ScopeGraph,
     match_counter: usize,
@@ -59,14 +57,12 @@ pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
     runtime: &Runtime,
-    identifiers: &mut StringInterner<StringBackend>,
     scope_graph: &mut ScopeGraph,
     tree: &ast::SyntaxTree,
     pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
     TypeChecker::check_syntax_tree(
         runtime,
-        identifiers,
         scope_graph,
         tree,
         pointer_bytes,
@@ -86,7 +82,6 @@ impl TypeChecker<'_> {
     /// Perform type checking for a syntax tree
     pub fn check_syntax_tree(
         runtime: &Runtime,
-        identifiers: &mut StringInterner<StringBackend>,
         scope_graph: &mut ScopeGraph,
         tree: &ast::SyntaxTree,
         pointer_bytes: u32,
@@ -97,14 +92,13 @@ impl TypeChecker<'_> {
         // whether any types are unresolved.
         // The builtin types are added right away.
         let mut types: HashMap<Identifier, MaybeDeclared> =
-            default_types(identifiers, runtime)
+            default_types(runtime)
                 .into_iter()
                 .map(|(s, t)| (s, MaybeDeclared::Declared(t.clone(), None)))
                 .rev()
                 .collect();
 
         let mut checker = TypeChecker {
-            identifiers,
             functions: Vec::new(),
             type_info: TypeInfo::new(pointer_bytes),
             scope_graph,
@@ -113,7 +107,7 @@ impl TypeChecker<'_> {
 
         let root_scope = checker.scope_graph.root();
 
-        for (v, t) in types::globals(checker.identifiers) {
+        for (v, t) in types::globals() {
             checker.insert_var(
                 root_scope,
                 Meta {
@@ -225,8 +219,7 @@ impl TypeChecker<'_> {
                 .iter()
                 .map(|ty| {
                     let name = &runtime.get_runtime_type(*ty).unwrap().name;
-                    let name =
-                        Identifier(checker.identifiers.get_or_intern(name));
+                    let name = Identifier::from(name);
                     Type::Name(name)
                 })
                 .collect();
@@ -235,27 +228,24 @@ impl TypeChecker<'_> {
                 .get_runtime_type(description.return_type())
                 .unwrap()
                 .name;
-            let ret_name =
-                Identifier(checker.identifiers.get_or_intern(ret_name));
+            let ret_name = Identifier::from(ret_name);
             let return_type = Type::Name(ret_name);
 
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
                 FunctionKind::Method(id) => {
                     let name = &runtime.get_runtime_type(*id).unwrap().name;
-                    let name =
-                        Identifier(checker.identifiers.get_or_intern(name));
+                    let name = Identifier::from(name);
                     types::FunctionKind::Method(Type::Name(name))
                 }
                 FunctionKind::StaticMethod(id) => {
                     let name = &runtime.get_runtime_type(*id).unwrap().name;
-                    let name =
-                        Identifier(checker.identifiers.get_or_intern(name));
+                    let name = Identifier::from(name);
                     types::FunctionKind::StaticMethod(Type::Name(name))
                 }
             };
 
-            let name = Identifier(checker.identifiers.get_or_intern(name));
+            let name = Identifier::from(name);
 
             checker.functions.push(Function::new(
                 kind,
@@ -672,7 +662,7 @@ impl TypeChecker<'_> {
                 })
                 .collect();
             if same_fields.len() > 1 {
-                let ident = self.identifiers.resolve(field.0 .0).unwrap();
+                let ident = field.0.as_str();
                 return Err(self.error_duplicate_fields(ident, &same_fields));
             }
             unspanned_type_fields.push((field.0.clone(), field.1.clone()));

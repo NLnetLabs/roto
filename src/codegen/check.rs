@@ -1,5 +1,4 @@
 use inetnum::asn::Asn;
-use string_interner::{backend::StringBackend, StringInterner};
 
 use crate::{
     runtime::ty::{
@@ -7,7 +6,7 @@ use crate::{
     },
     typechecker::{
         info::TypeInfo,
-        types::{type_to_string, Primitive, Type},
+        types::{Primitive, Type},
     },
 };
 use std::{any::TypeId, fmt::Display, mem::MaybeUninit};
@@ -59,19 +58,17 @@ impl Display for FunctionRetrievalError {
 
 pub fn check_roto_type_reflect<T: Reflect>(
     type_info: &mut TypeInfo,
-    identifiers: &StringInterner<StringBackend>,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
     let mut registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
     let rust_ty = registry.resolve::<T>().type_id;
-    check_roto_type(&registry, type_info, identifiers, rust_ty, roto_ty)
+    check_roto_type(&registry, type_info, rust_ty, roto_ty)
 }
 
 #[allow(non_snake_case)]
 fn check_roto_type(
     registry: &TypeRegistry,
     type_info: &mut TypeInfo,
-    identifiers: &StringInterner<StringBackend>,
     rust_ty: TypeId,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
@@ -91,13 +88,13 @@ fn check_roto_type(
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
             rust_ty: "unknown".into(),
-            roto_ty: type_to_string(identifiers, roto_ty),
+            roto_ty: roto_ty.to_string(),
         });
     };
 
     let error_message = TypeMismatch {
         rust_ty: rust_ty.rust_name.to_string(),
-        roto_ty: type_to_string(identifiers, roto_ty),
+        roto_ty: roto_ty.to_string(),
     };
 
     let mut roto_ty = type_info.resolve(roto_ty);
@@ -134,20 +131,8 @@ fn check_roto_type(
             let Type::Verdict(roto_accept, roto_reject) = &roto_ty else {
                 return Err(error_message);
             };
-            check_roto_type(
-                registry,
-                type_info,
-                identifiers,
-                rust_accept,
-                roto_accept,
-            )?;
-            check_roto_type(
-                registry,
-                type_info,
-                identifiers,
-                rust_reject,
-                roto_reject,
-            )?;
+            check_roto_type(registry, type_info, rust_accept, roto_accept)?;
+            check_roto_type(registry, type_info, rust_reject, roto_reject)?;
             Ok(())
         }
         // We don't do options and results, we should hint towards verdict
@@ -173,7 +158,6 @@ pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
 pub trait RotoParams {
     fn check(
         type_info: &mut TypeInfo,
-        identifiers: &StringInterner<StringBackend>,
         ty: &[Type],
     ) -> Result<(), FunctionRetrievalError>;
 
@@ -201,7 +185,6 @@ macro_rules! params {
         {
             fn check(
                 type_info: &mut TypeInfo,
-                identifiers: &StringInterner<StringBackend>,
                 ty: &[Type]
             ) -> Result<(), FunctionRetrievalError> {
                 let [$($t),*] = ty else {
@@ -216,7 +199,7 @@ macro_rules! params {
                 let mut i = 0;
                 $(
                     i += 1;
-                    check_roto_type_reflect::<$t>(type_info, identifiers, $t)
+                    check_roto_type_reflect::<$t>(type_info, $t)
                         .map_err(|e| FunctionRetrievalError::TypeMismatch(format!("argument {i}"), e))?;
                 )*
                 Ok(())

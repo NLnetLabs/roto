@@ -14,7 +14,6 @@ use crate::{
     runtime::RuntimeFunction,
 };
 use std::collections::HashMap;
-use string_interner::{backend::StringBackend, StringInterner};
 
 /// Memory for the IR evaluation
 ///
@@ -232,9 +231,8 @@ pub fn eval(
     filter_map: &str,
     mem: &mut Memory,
     rx: Vec<IrValue>,
-    identifiers: &StringInterner<StringBackend>,
 ) -> Option<IrValue> {
-    let filter_map_ident = Identifier(identifiers.get(filter_map).unwrap());
+    let filter_map_ident = Identifier::from(filter_map);
     let f = p
         .iter()
         .find(|f| f.name == filter_map_ident)
