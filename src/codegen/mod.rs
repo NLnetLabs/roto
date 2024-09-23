@@ -39,7 +39,6 @@ use cranelift::{
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module as _};
 use log::info;
-use string_interner::{backend::StringBackend, StringInterner};
 
 pub mod check;
 #[cfg(test)]
@@ -148,7 +147,7 @@ pub struct FunctionInfo {
     signature: types::Signature,
 }
 
-struct ModuleBuilder<'a> {
+struct ModuleBuilder {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -167,9 +166,6 @@ struct ModuleBuilder<'a> {
     /// Instruction set architecture
     isa: Arc<dyn TargetIsa>,
 
-    /// Identifiers are used for debugging and resolving function names.
-    identifiers: &'a StringInterner<StringBackend>,
-
     /// To print labels for debugging.
     #[allow(unused)]
     label_store: LabelStore,
@@ -177,8 +173,8 @@ struct ModuleBuilder<'a> {
     type_info: TypeInfo,
 }
 
-struct FuncGen<'a, 'c> {
-    module: &'c mut ModuleBuilder<'a>,
+struct FuncGen<'c> {
+    module: &'c mut ModuleBuilder,
 
     /// The cranelift function builder
     builder: FunctionBuilder<'c>,
@@ -198,7 +194,6 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 pub fn codegen(
     ir: &[ir::Function],
     runtime_functions: &HashMap<String, IrFunction>,
-    identifiers: &StringInterner<StringBackend>,
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module {
@@ -228,7 +223,6 @@ pub fn codegen(
         inner: jit,
         isa,
         variable_map: HashMap::new(),
-        identifiers,
         label_store,
         type_info,
     };
@@ -259,13 +253,12 @@ pub fn codegen(
     let mut builder_context = FunctionBuilderContext::new();
     for func in ir {
         module.define_function(func, &mut builder_context);
-        // info!("\n{}", func);
     }
 
     module.finalize()
 }
 
-impl ModuleBuilder<'_> {
+impl ModuleBuilder {
     /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
@@ -286,11 +279,10 @@ impl ModuleBuilder<'_> {
             None => Vec::new(),
         };
 
-        let name = self.identifiers.resolve(name.0).unwrap();
         let func_id = self
             .inner
             .declare_function(
-                name,
+                name.as_str(),
                 if *public {
                     Linkage::Export
                 } else {
@@ -324,8 +316,7 @@ impl ModuleBuilder<'_> {
             scope,
             ..
         } = func;
-        let name = self.identifiers.resolve(name.0).unwrap();
-        let func_id = self.functions[name].id;
+        let func_id = self.functions[name.as_str()].id;
 
         let mut ctx = self.inner.make_context();
         let mut sig = self.inner.make_signature();
@@ -403,7 +394,7 @@ impl ModuleBuilder<'_> {
     }
 }
 
-impl<'a, 'c> FuncGen<'a, 'c> {
+impl<'c> FuncGen<'c> {
     fn finalize(self) {
         self.builder.finalize()
     }
@@ -511,7 +502,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 self.def(var, val)
             }
             ir::Instruction::Call { to, func, args } => {
-                let func = self.module.identifiers.resolve(func.0).unwrap();
+                let func = func.as_str();
                 let func_id = self.module.functions[func].id;
                 let func_ref = self
                     .module
@@ -793,7 +784,6 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 impl Module {
     pub fn get_function<Params: RotoParams, Return: Reflect>(
         &mut self,
-        identifiers: &StringInterner<StringBackend>,
         name: &str,
     ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
         let function_info = self.functions.get(name).ok_or_else(|| {
@@ -806,15 +796,10 @@ impl Module {
         let sig = &function_info.signature;
         let id = function_info.id;
 
-        Params::check(
-            &mut self.type_info,
-            identifiers,
-            &sig.parameter_types,
-        )?;
+        Params::check(&mut self.type_info, &sig.parameter_types)?;
 
         check_roto_type_reflect::<Return>(
             &mut self.type_info,
-            identifiers,
             &sig.return_type,
         )
         .map_err(|e| {

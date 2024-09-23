@@ -1,13 +1,10 @@
-use string_interner::StringInterner;
-
 use crate::{ast::Declaration, parser::Parser};
 
 use super::{meta::Spans, ParseResult};
 
 fn parse_function(s: &str) -> ParseResult<Declaration> {
     let mut spans = Spans::default();
-    let mut identifiers = StringInterner::default();
-    Parser::run_parser(Parser::root, 0, &mut identifiers, &mut spans, s)
+    Parser::run_parser(Parser::root, 0, &mut spans, s)
 }
 
 #[test]

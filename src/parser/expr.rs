@@ -431,8 +431,7 @@ impl<'source> Parser<'source, '_> {
             let variant = self.identifier()?;
             let mut span = self.get_span(&variant);
 
-            let resolved_variant =
-                self.identifiers.resolve(variant.0).unwrap();
+            let resolved_variant = variant.as_str();
 
             let pattern = if resolved_variant == "_" {
                 Pattern::Underscore
