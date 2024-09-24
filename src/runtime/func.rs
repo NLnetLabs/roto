@@ -116,7 +116,7 @@ macro_rules! func_impl {
                     };
                     $(
                         let Ok($arg) = $arg.try_into() else {
-                            panic!("Type of argument is not correct")
+                            panic!("Type of argument is not correct: {}", $arg)
                         };
                     )*
                     let ret: ReturnValue = self($($arg),*).into();

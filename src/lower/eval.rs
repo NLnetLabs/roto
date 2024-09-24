@@ -84,7 +84,7 @@ struct StackFrame {
 
 #[derive(Debug)]
 struct Allocation {
-    inner: Vec<u8>,
+    inner: Box<[u8]>,
 }
 
 impl Pointer {
@@ -175,7 +175,7 @@ impl Memory {
         let stack_id = frame.id;
         let allocation_index = frame.allocations.len();
         frame.allocations.push(Allocation {
-            inner: vec![0; bytes],
+            inner: vec![0; bytes].into_boxed_slice(),
         });
         self.pointers.push(Pointer {
             stack_index,
@@ -184,6 +184,12 @@ impl Memory {
             allocation_offset: 0,
         });
         self.pointers.len() - 1
+    }
+
+    fn get(&self, p: usize) -> *mut () {
+        let p = &self.pointers[p];
+        let frame = &self.stack[p.stack_index];
+        frame.get(p)
     }
 }
 
@@ -196,6 +202,11 @@ impl StackFrame {
     fn read(&self, p: &Pointer, size: usize) -> &[u8] {
         let alloc = &self.allocations[p.allocation_index];
         alloc.read(p.allocation_offset, size)
+    }
+
+    fn get(&self, p: &Pointer) -> *mut () {
+        let alloc = &self.allocations[p.allocation_index];
+        alloc.get(p.allocation_offset)
     }
 }
 
@@ -218,6 +229,10 @@ impl Allocation {
         assert!(offset % size == 0, "memory access is unaligned");
 
         &self.inner[offset..offset + size]
+    }
+
+    fn get(&self, offset: usize) -> *mut () {
+        &self.inner[offset] as *const _ as *mut _
     }
 }
 
@@ -340,7 +355,7 @@ pub fn eval(
                     .iter()
                     .map(|a| eval_operand(&vars, a).clone())
                     .collect();
-                let ret = call_runtime_function(func, args);
+                let ret = call_runtime_function(mem, func, args);
                 if let Some((to, _ty)) = to {
                     vars.insert(to.clone(), ret.unwrap());
                 }
@@ -540,10 +555,20 @@ pub fn eval(
 }
 
 fn call_runtime_function(
+    mem: &mut Memory,
     func: &RuntimeFunction,
-    args: Vec<IrValue>,
+    mut args: Vec<IrValue>,
 ) -> Option<IrValue> {
     assert_eq!(func.description.parameter_types().len(), args.len());
+
+    // Runtime functions don't understand our pointers, so we need to resolve
+    // them to ExtPointers which are real Rust pointers.
+    for arg in &mut args {
+        if let IrValue::Pointer(x) = arg {
+            *arg = IrValue::ExtPointer(mem.get(*x))
+        }
+    }
+
     (func.description.wrapped())(args)
 }
 

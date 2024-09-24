@@ -111,17 +111,12 @@ impl ScopeGraph {
 }
 
 impl ScopeGraph {
-    pub fn print_scope(
-        &self,
-        mut scope: ScopeRef,
-    ) -> String {
+    pub fn print_scope(&self, mut scope: ScopeRef) -> String {
         let mut idents = Vec::new();
         while let Some(idx) = scope.0 {
             let s = &self.scopes[idx];
             let ident = match &s.scope_type {
-                ScopeType::Function(name) => {
-                    name.as_str().to_string()
-                }
+                ScopeType::Function(name) => name.as_str().to_string(),
                 ScopeType::MatchArm(idx, Some(arm)) => {
                     format!("$match_{idx}_arm_{arm}")
                 }
