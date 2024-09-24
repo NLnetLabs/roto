@@ -34,6 +34,7 @@ use std::{any::TypeId, net::IpAddr};
 
 use func::{Func, FunctionDescription};
 use inetnum::asn::Asn;
+use roto_macros::roto_function;
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
@@ -314,6 +315,15 @@ impl Runtime {
         rt.register_copy_type::<i64>()?;
         rt.register_copy_type::<Asn>()?;
         rt.register_type::<IpAddr>()?;
+
+        #[roto_function]
+        fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
+            let a = unsafe { *a };
+            let b = unsafe { *b };
+            a == b
+        }
+
+        rt.register_method::<IpAddr, _, _>("eq", ipaddr_eq)?;
 
         Ok(rt)
     }
