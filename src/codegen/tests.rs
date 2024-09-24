@@ -670,11 +670,11 @@ fn multiply() {
 
 #[test]
 fn ip_output() {
-    let s = "
+    let s = src!("
         filter-map main() {
             apply { accept 1.2.3.4 }
         }
-    ";
+    ");
 
     let mut p = compile(s);
     let f = p
@@ -688,11 +688,11 @@ fn ip_output() {
 
 #[test]
 fn ip_passthrough() {
-    let s = "
+    let s = src!("
         filter-map main(x: IpAddr) {
             apply { accept x }
         }
-    ";
+    ");
 
     let mut p = compile(s);
     let f = p
@@ -706,7 +706,7 @@ fn ip_passthrough() {
 
 #[test]
 fn ipv4_compare() {
-    let s = "
+    let s = src!("
         filter-map main(x: IpAddr) {
             apply { 
                 if x == 0.0.0.0 {
@@ -718,7 +718,7 @@ fn ipv4_compare() {
                 }
             }
         }
-    ";
+    ");
 
     let mut p = compile(s);
     let f = p
@@ -743,7 +743,7 @@ fn ipv4_compare() {
 
 #[test]
 fn ipv6_compare() {
-    let s = "
+    let s = src!("
         filter-map main(x: IpAddr) {
             apply { 
                 if x == :: {
@@ -757,7 +757,7 @@ fn ipv6_compare() {
                 }
             }
         }
-    ";
+    ");
 
     let mut p = compile(s);
     let f = p
