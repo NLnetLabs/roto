@@ -203,13 +203,13 @@ impl Runtime {
         let description = f.to_function_description(self).unwrap();
         self.check_description(&description)?;
 
-        let Some(first) = description.parameter_types.first() else {
+        let Some(second) = description.parameter_types().get(1) else {
             panic!()
         };
 
         // `to_function_description` already checks the validity of the types
         // so unwrap is ok.
-        let ty = self.type_registry.get(*first).unwrap();
+        let ty = self.type_registry.get(*second).unwrap();
 
         let type_id = match ty.description {
             TypeDescription::Leaf => ty.type_id,
@@ -279,11 +279,14 @@ impl Runtime {
             })
         };
 
-        for ty in &description.parameter_types {
+        for ty in description.parameter_types() {
             check_type(ty)?;
         }
 
-        check_type(&description.return_type)?;
+        check_type(&description.return_type())?;
+        if description.return_type() != TypeId::of::<()>() {
+            return Err("Runtime function cannot have a return type".into());
+        }
         Ok(())
     }
 }
@@ -330,6 +333,7 @@ pub mod tests {
     use std::net::IpAddr;
 
     use super::Runtime;
+    use roto_macros::roto_function;
     use routecore::{
         addr::Prefix,
         bgp::{
@@ -356,53 +360,43 @@ pub mod tests {
         rt.register_type::<HopPath>()?;
         rt.register_type::<AsPath<Vec<u8>>>()?;
 
-        extern "C" fn pow(x: u32, y: u32) -> u32 {
+        #[roto_function]
+        fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
 
-        rt.register_function("pow", pow as extern "C" fn(_, _) -> _)?;
+        rt.register_function("pow", pow)?;
 
-        extern "C" fn is_even(x: u32) -> bool {
+        #[roto_function]
+        fn is_even(x: u32) -> bool {
             x % 2 == 0
         }
 
-        rt.register_method::<u32, _, _>(
-            "is_even",
-            is_even as extern "C" fn(_) -> _,
-        )?;
+        rt.register_method::<u32, _, _>("is_even", is_even)?;
 
-        extern "C" fn is_ipv4(ip: *const IpAddr) -> bool {
+        #[roto_function]
+        fn is_ipv4(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv4()
         }
 
-        rt.register_method::<IpAddr, _, _>(
-            "is_ipv4",
-            is_ipv4 as extern "C" fn(_) -> _,
-        )?;
+        rt.register_method::<IpAddr, _, _>("is_ipv4", is_ipv4)?;
 
-        extern "C" fn is_ipv6(ip: *const IpAddr) -> bool {
+        #[roto_function]
+        fn is_ipv6(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv6()
         }
 
-        rt.register_method::<IpAddr, _, _>(
-            "is_ipv6",
-            is_ipv6 as extern "C" fn(_) -> _,
-        )?;
+        rt.register_method::<IpAddr, _, _>("is_ipv6", is_ipv6)?;
 
-        extern "C" fn to_canonical(ip: *const IpAddr, out: *mut IpAddr) {
+        #[roto_function]
+        fn to_canonical(ip: *const IpAddr) -> IpAddr {
             let ip = unsafe { &*ip };
-            let new = ip.to_canonical();
-            unsafe {
-                *out = new;
-            }
+            ip.to_canonical()
         }
 
-        rt.register_method::<IpAddr, _, _>(
-            "to_canonical",
-            to_canonical as extern "C" fn(_, _) -> _,
-        )?;
+        rt.register_method::<IpAddr, _, _>("to_canonical", to_canonical)?;
 
         Ok(rt)
     }

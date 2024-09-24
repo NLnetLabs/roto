@@ -3,8 +3,10 @@
 //! A [`SyntaxTree`] is the output of the Roto parser. It contains a
 //! representation of the Roto script as Rust types for further processing.
 
+use std::fmt::Display;
+
 use inetnum::asn::Asn;
-use string_interner::symbol::SymbolU32;
+use symbol_table::GlobalSymbol;
 
 use crate::parser::meta::Meta;
 
@@ -208,7 +210,37 @@ pub struct OutputStream {
 /// It is a word composed of a leading alphabetic Unicode character, followed
 /// by alphanumeric Unicode characters or underscore or hyphen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Identifier(pub SymbolU32);
+pub struct Identifier(GlobalSymbol);
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Identifier {
+    pub fn as_str(&self) -> &'static str {
+        self.0.as_str()
+    }
+}
+
+impl From<&str> for Identifier {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<&String> for Identifier {
+    fn from(value: &String) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<String> for Identifier {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct RecordType {

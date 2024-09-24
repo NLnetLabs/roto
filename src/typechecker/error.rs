@@ -7,10 +7,7 @@ use crate::{
     parser::meta::{Meta, MetaId},
 };
 
-use super::{
-    types::{type_to_string, Type},
-    TypeChecker,
-};
+use super::{types::Type, TypeChecker};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -93,10 +90,7 @@ impl TypeChecker<'_> {
 
     pub fn error_undeclared_type(&self, ty: &Meta<Identifier>) -> TypeError {
         TypeError {
-            description: format!(
-                "cannot find type `{}`",
-                self.identifiers.resolve(ty.0).unwrap()
-            ),
+            description: format!("cannot find type `{ty}`",),
             location: ty.id,
             labels: vec![Label::error("not found", ty.id)],
         }
@@ -109,10 +103,8 @@ impl TypeChecker<'_> {
         duplicate: impl IntoIterator<Item = &'a Meta<Identifier>>,
         missing: impl IntoIterator<Item = Identifier>,
     ) -> TypeError {
-        let missing: Vec<_> = missing
-            .into_iter()
-            .map(|m| self.identifiers.resolve(m.0).unwrap())
-            .collect();
+        let missing: Vec<_> =
+            missing.into_iter().map(|m| m.as_str()).collect();
 
         let description = if missing.len() > 1 {
             let fields = join_quoted(missing);
@@ -149,12 +141,9 @@ impl TypeChecker<'_> {
         &self,
         type_name: &Meta<Identifier>,
     ) -> TypeError {
-        dbg!(self.identifiers.get("u8"));
-        dbg!(self.identifiers.get("Foo"));
-        let name = self.identifiers.resolve(type_name.0).unwrap();
         TypeError {
             description: format!(
-                "type `{name}` is a built-in type and cannot be overwritten"
+                "type `{type_name}` is a built-in type and cannot be overwritten"
             ),
             location: type_name.id,
             labels: vec![Label::error("declared here", type_name.id)],
@@ -166,9 +155,10 @@ impl TypeChecker<'_> {
         new_declaration: &Meta<Identifier>,
         old_declaration: MetaId,
     ) -> TypeError {
-        let new = self.identifiers.resolve(new_declaration.0).unwrap();
         TypeError {
-            description: format!("type `{new}` is declared multiple times"),
+            description: format!(
+                "type `{new_declaration}` is declared multiple times"
+            ),
             location: new_declaration.id,
             labels: vec![
                 Label::error("cannot overwrite type", new_declaration.id),
@@ -178,9 +168,8 @@ impl TypeChecker<'_> {
     }
 
     pub fn error_not_defined(&self, ident: &Meta<Identifier>) -> TypeError {
-        let s = self.identifiers.resolve(ident.0).unwrap();
         TypeError {
-            description: format!("cannot find value `{s}` in this scope"),
+            description: format!("cannot find value `{ident}` in this scope"),
             location: ident.id,
             labels: vec![Label::error("not found in this scope", ident.id)],
         }
@@ -193,10 +182,9 @@ impl TypeChecker<'_> {
         takes: usize,
         given: usize,
     ) -> TypeError {
-        let name = self.identifiers.resolve(method_name.0).unwrap();
         TypeError {
             description: format!(
-                "{call_type} `{name}` takes {takes} arguments but {given} arguments were given"
+                "{call_type} `{method_name}` takes {takes} arguments but {given} arguments were given"
             ),
             location: method_name.id,
             labels: vec![Label::error(
@@ -213,16 +201,12 @@ impl TypeChecker<'_> {
     ) -> TypeError {
         TypeError {
             description: format!(
-                "cannot match on the type `{}`, \
+                "cannot match on the type `{ty}`, \
                 because only matching on enums is supported.",
-                type_to_string(self.identifiers, ty)
             ),
             location: span,
             labels: vec![Label::error(
-                format!(
-                    "cannot match on type `{}`",
-                    type_to_string(self.identifiers, ty)
-                ),
+                format!("cannot match on type `{ty}`"),
                 span,
             )],
         }
@@ -233,10 +217,8 @@ impl TypeChecker<'_> {
         variant: &Meta<Identifier>,
         ty: &Type,
     ) -> TypeError {
-        let v = self.identifiers.resolve(variant.0).unwrap();
-        let ty = type_to_string(self.identifiers, ty);
         TypeError {
-            description: format!("pattern has a data field, but the variant `{v}` of `{ty}` doesn't have one"),
+            description: format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one"),
             location: variant.id,
             labels: vec![Label::error("unexpected data field", variant.id)],
         }
@@ -247,10 +229,8 @@ impl TypeChecker<'_> {
         variant: &Meta<Identifier>,
         ty: &Type,
     ) -> TypeError {
-        let v = self.identifiers.resolve(variant.0).unwrap();
-        let ty = type_to_string(self.identifiers, ty);
         TypeError {
-            description: format!("pattern has no data field, but variant `{v}` of `{ty}` does have a data field"),
+            description: format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field"),
             location: variant.id,
             labels: vec![Label::error("missing data field", variant.id)],
         }
@@ -261,11 +241,9 @@ impl TypeChecker<'_> {
         variant: &Meta<Identifier>,
         ty: &Type,
     ) -> TypeError {
-        let v = self.identifiers.resolve(variant.0).unwrap();
-        let ty = type_to_string(self.identifiers, ty);
         TypeError {
             description: format!(
-                "the variant `{v}` does not exist on `{ty}`"
+                "the variant `{variant}` does not exist on `{ty}`"
             ),
             location: variant.id,
             labels: vec![Label::error(
@@ -282,8 +260,6 @@ impl TypeChecker<'_> {
         span: MetaId,
         cause: Option<MetaId>,
     ) -> TypeError {
-        let expected = type_to_string(self.identifiers, expected);
-        let got = type_to_string(self.identifiers, got);
         let mut labels = vec![Label::error(
             format!("expected `{expected}`, found `{got}`"),
             span,
@@ -307,10 +283,8 @@ impl TypeChecker<'_> {
         span: MetaId,
         missing_variants: &[Identifier],
     ) -> TypeError {
-        let missing_variants: Vec<_> = missing_variants
-            .iter()
-            .map(|s| self.identifiers.resolve(s.0).unwrap())
-            .collect();
+        let missing_variants: Vec<_> =
+            missing_variants.iter().map(|s| s.as_str()).collect();
 
         TypeError {
             description: format!(

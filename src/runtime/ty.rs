@@ -9,9 +9,7 @@
 //! for mapping a complex Rust type to Roto types.
 
 use std::{
-    any::{type_name, TypeId},
-    collections::HashMap,
-    net::IpAddr,
+    any::{type_name, TypeId}, collections::HashMap, net::IpAddr, ops::DerefMut, sync::{LazyLock, Mutex}
 };
 
 use inetnum::asn::Asn;
@@ -39,6 +37,7 @@ pub enum TypeDescription {
     Verdict(TypeId, TypeId),
 }
 
+#[derive(Clone)]
 pub struct Ty {
     /// The name of the type in Rust, mostly for diagnostic purposes
     pub rust_name: &'static str,
@@ -68,6 +67,9 @@ impl Ty {
     }
 }
 
+pub static GLOBAL_TYPE_REGISTRY: LazyLock<Mutex<TypeRegistry>> =
+    LazyLock::new(|| Mutex::new(TypeRegistry::default()));
+
 /// A map from [`TypeId`] to a [`Ty`], which is a description of the type
 #[derive(Default)]
 pub struct TypeRegistry {
@@ -75,9 +77,9 @@ pub struct TypeRegistry {
 }
 
 impl TypeRegistry {
-    pub fn store<T: 'static>(&mut self, description: TypeDescription) -> &Ty {
+    pub fn store<T: 'static>(&mut self, description: TypeDescription) -> Ty {
         let ty = Ty::new::<T>(description);
-        self.map.entry(ty.type_id).or_insert(ty)
+        self.map.entry(ty.type_id).or_insert(ty).clone()
     }
 
     pub fn get(&self, id: TypeId) -> Option<&Ty> {
@@ -85,7 +87,7 @@ impl TypeRegistry {
     }
 
     /// Register a type implementing [`Reflect`]
-    pub fn resolve<T: Reflect>(&mut self) -> &Ty {
+    pub fn resolve<T: Reflect>(&mut self) -> Ty {
         T::resolve(self)
     }
 }
@@ -112,7 +114,12 @@ pub trait Reflect: 'static {
     /// Put information about this type into the [`TypeRegistry`]
     ///
     /// The information is also returned for direct use.
-    fn resolve(registry: &mut TypeRegistry) -> &Ty;
+    fn resolve(registry: &mut TypeRegistry) -> Ty;
+
+    fn resolve_global() -> Ty {
+        let mut reg = GLOBAL_TYPE_REGISTRY.lock().unwrap();
+        Self::resolve(reg.deref_mut())
+    }
 }
 
 impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
@@ -122,7 +129,7 @@ impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
         self as _
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = A::resolve(registry).type_id;
         let e = R::resolve(registry).type_id;
 
@@ -138,7 +145,7 @@ impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
         self as _
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = T::resolve(registry).type_id;
         let e = E::resolve(registry).type_id;
 
@@ -154,7 +161,7 @@ impl<T: Reflect> Reflect for Option<T> {
         self as _
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = T::resolve(registry).type_id;
 
         let desc = TypeDescription::Option(t);
@@ -169,7 +176,7 @@ impl<T: 'static> Reflect for *mut T {
         *self
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
         let desc = TypeDescription::MutPtr(t);
@@ -184,7 +191,7 @@ impl<T: 'static> Reflect for *const T {
         *self
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
         let desc = TypeDescription::ConstPtr(t);
@@ -199,7 +206,7 @@ impl Reflect for IpAddr {
         self as _
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> &Ty {
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
         registry.store::<Self>(TypeDescription::Leaf)
     }
 }
@@ -213,7 +220,7 @@ macro_rules! simple_reflect {
                 *self
             }
 
-            fn resolve(registry: &mut TypeRegistry) -> &Ty {
+            fn resolve(registry: &mut TypeRegistry) -> Ty {
                 registry.store::<Self>(TypeDescription::Leaf)
             }
         }

@@ -7,3 +7,7 @@ filter-map main(bla: Bla) {
         }
     }
 }
+
+filter-map just_reject(x: u32) {
+    apply { reject }
+}

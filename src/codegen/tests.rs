@@ -1,26 +1,26 @@
 use std::net::IpAddr;
 
 use inetnum::asn::Asn;
+use roto_macros::roto_function;
 
 use crate::{
-    pipeline::{test_file, Compiled},
-    runtime::tests::routecore_runtime,
+    pipeline::Compiled, runtime::tests::routecore_runtime, src, Files,
     Runtime, Verdict,
 };
 
 #[track_caller]
-fn compile(p: &'static str) -> Compiled {
+fn compile(f: Files) -> Compiled {
     let runtime = routecore_runtime().unwrap();
-    compile_with_runtime(p, runtime)
+    compile_with_runtime(f, runtime)
 }
 
 #[track_caller]
-fn compile_with_runtime(p: &'static str, runtime: Runtime) -> Compiled {
+fn compile_with_runtime(f: Files, runtime: Runtime) -> Compiled {
     let _ = env_logger::try_init();
 
     let pointer_bytes = usize::BITS / 8;
 
-    let res = test_file(file!(), p, line!() as usize)
+    let res = f
         .parse()
         .and_then(|x| x.typecheck(runtime, pointer_bytes))
         .map(|x| {
@@ -39,13 +39,15 @@ fn compile_with_runtime(p: &'static str, runtime: Runtime) -> Compiled {
 
 #[test]
 fn accept() {
-    let s = "
+    let s = src!(
+        "
         filter-map main() {
             apply {
                 accept
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -59,13 +61,15 @@ fn accept() {
 
 #[test]
 fn reject() {
-    let s = "
+    let s = src!(
+        "
         filter-map main() {
             apply {
                 reject
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -78,7 +82,8 @@ fn reject() {
 
 #[test]
 fn equal_to_10() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: u32) {
             apply {
                 if x == 10 {
@@ -88,7 +93,8 @@ fn equal_to_10() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -104,7 +110,8 @@ fn equal_to_10() {
 
 #[test]
 fn equal_to_10_with_function() {
-    let s = "
+    let s = src!(
+        "
         function is_10(x: i32) -> bool {
             x == 10
         }
@@ -118,7 +125,8 @@ fn equal_to_10_with_function() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -134,7 +142,8 @@ fn equal_to_10_with_function() {
 
 #[test]
 fn equal_to_10_with_two_functions() {
-    let s = "
+    let s = src!(
+        "
         function equals(x: u32, y: u32) -> bool {
             x == y
         }
@@ -154,7 +163,8 @@ fn equal_to_10_with_two_functions() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -169,7 +179,8 @@ fn equal_to_10_with_two_functions() {
 
 #[test]
 fn negation() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: i32) {
             apply {
                 if not (x == 10) {
@@ -179,7 +190,8 @@ fn negation() {
                 }
             }
         } 
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -199,7 +211,8 @@ fn negation() {
 
 #[test]
 fn a_bunch_of_comparisons() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: i32) {
             apply {
                 if (
@@ -213,7 +226,8 @@ fn a_bunch_of_comparisons() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -236,7 +250,8 @@ fn a_bunch_of_comparisons() {
 
 #[test]
 fn record() {
-    let s = "
+    let s = src!(
+        "
         type Foo { a: i32, b: i32 }
 
         filter-map main(x: i32) {
@@ -251,7 +266,8 @@ fn record() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -271,7 +287,8 @@ fn record() {
 
 #[test]
 fn record_with_fields_flipped() {
-    let s = "
+    let s = src!(
+        "
         type Foo { a: i32, b: i32 }
 
         filter-map main(x: i32) {
@@ -288,7 +305,8 @@ fn record_with_fields_flipped() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -309,7 +327,8 @@ fn record_with_fields_flipped() {
 
 #[test]
 fn nested_record() {
-    let s = "
+    let s = src!(
+        "
         type Foo { x: Bar, y: Bar }
         type Bar { a: i32, b: i32 }
 
@@ -326,7 +345,8 @@ fn nested_record() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -347,7 +367,8 @@ fn nested_record() {
 #[test]
 fn misaligned_fields() {
     // A record where the second field should be aligned
-    let s = "
+    let s = src!(
+        "
         type Foo { a: i16, b: i32 }
 
         filter-map main(x: i32) {
@@ -362,7 +383,8 @@ fn misaligned_fields() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -382,7 +404,8 @@ fn misaligned_fields() {
 
 #[test]
 fn enum_match() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(r: bool) { 
             define {
                 x = if r {
@@ -399,7 +422,8 @@ fn enum_match() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -412,7 +436,8 @@ fn enum_match() {
 
 #[test]
 fn arithmetic() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: i32) {
             apply {
                 if x + 10 * 20 < 250 {
@@ -422,7 +447,8 @@ fn arithmetic() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -441,7 +467,8 @@ fn arithmetic() {
 
 #[test]
 fn call_runtime_function() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: u32) {
             apply {
                 if pow(x, 2) > 100 {
@@ -451,7 +478,8 @@ fn call_runtime_function() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -468,7 +496,8 @@ fn call_runtime_function() {
 
 #[test]
 fn call_runtime_method() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: u32) {
             apply {
                 if x.is_even() {
@@ -478,7 +507,8 @@ fn call_runtime_method() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -495,13 +525,15 @@ fn call_runtime_method() {
 
 #[test]
 fn int_var() {
-    let s = "
+    let s = src!(
+        "
         filter-map main() {
             apply {
                 accept 32
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -518,23 +550,25 @@ fn issue_52() {
     struct Foo {
         _x: i32,
     }
-    extern "C" fn bar(_x: u32) {}
-    rt.register_type::<Foo>().unwrap();
-    rt.register_static_method::<Foo, _, _>(
-        "bar",
-        bar as extern "C" fn(_) -> _,
-    )
-    .unwrap();
 
-    let s = "
+    #[roto_function]
+    fn bar(_x: u32) -> u32 {
+        2
+    }
+
+    rt.register_type::<Foo>().unwrap();
+    rt.register_static_method::<Foo, _, _>("bar", bar).unwrap();
+
+    let s = src!(
+        "
         filter-map main(foo: Foo) {
             apply {
-                // panics at typechecker/info.rs:70
                 Foo.bar(1);
                 accept
             }
         }
-    ";
+    "
+    );
 
     let _p = compile_with_runtime(s, rt);
 }
@@ -558,7 +592,8 @@ fn issue_54() {
 
 #[test]
 fn asn() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: Asn) {
             apply {
                 if x == AS1000 {
@@ -568,7 +603,8 @@ fn asn() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -587,19 +623,21 @@ fn asn() {
 
 #[test]
 fn mismatched_types() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: i32) {
             apply {
                 accept x
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
 
-    let Err(err) = p.get_function::<(i8,), Verdict<i8, ()>>("main") else {
-        panic!()
-    };
+    let err = p
+        .get_function::<(i8,), Verdict<i8, ()>>("main")
+        .unwrap_err();
 
     eprintln!("{err}");
     assert!(err.to_string().contains("do not match"));
@@ -607,7 +645,8 @@ fn mismatched_types() {
 
 #[test]
 fn multiply() {
-    let s = "
+    let s = src!(
+        "
         filter-map main(x: u8) {
             apply {
                 if x > 10 {
@@ -617,7 +656,8 @@ fn multiply() {
                 }
             }
         }
-    ";
+    "
+    );
 
     let mut p = compile(s);
     let f = p

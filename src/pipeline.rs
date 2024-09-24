@@ -2,8 +2,6 @@
 
 use std::collections::HashMap;
 
-use string_interner::{backend::StringBackend, StringInterner};
-
 use crate::{
     ast,
     codegen::{
@@ -69,7 +67,6 @@ pub struct Files {
 /// Compiler stage: Files loaded and parsed
 pub struct Parsed {
     /// Interned strings for identifiers and such
-    identifiers: StringInterner<StringBackend>,
     files: Vec<SourceFile>,
     trees: Vec<ast::SyntaxTree>,
     spans: Spans,
@@ -77,27 +74,21 @@ pub struct Parsed {
 
 /// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked {
-    runtime: Runtime,
     trees: Vec<ast::SyntaxTree>,
     type_infos: Vec<TypeInfo>,
-    identifiers: StringInterner<StringBackend>,
     scope_graph: ScopeGraph,
 }
 
 /// Compiler stage: HIR
 pub struct Lowered {
-    runtime: Runtime,
     pub ir: Vec<ir::Function>,
     runtime_functions: HashMap<String, IrFunction>,
-    identifiers: StringInterner<StringBackend>,
     label_store: LabelStore,
     type_info: TypeInfo,
 }
 
 pub struct Compiled {
-    runtime: Runtime,
     module: Module,
-    identifiers: StringInterner<StringBackend>,
 }
 
 impl std::fmt::Display for RotoReport {
@@ -292,15 +283,11 @@ impl Files {
     pub fn parse(self) -> Result<Parsed, RotoReport> {
         let mut spans = Spans::default();
 
-        let mut identifiers = StringInterner::new();
-
         let results: Vec<_> = self
             .files
             .iter()
             .enumerate()
-            .map(|(i, f)| {
-                Parser::parse(i, &mut identifiers, &mut spans, &f.contents)
-            })
+            .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
             .collect();
 
         let mut trees = Vec::new();
@@ -314,7 +301,6 @@ impl Files {
 
         if errors.is_empty() {
             Ok(Parsed {
-                identifiers,
                 trees,
                 spans,
                 files: self.files,
@@ -336,7 +322,6 @@ impl Parsed {
         pointer_bytes: u32,
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
-            mut identifiers,
             files,
             trees,
             spans,
@@ -349,7 +334,6 @@ impl Parsed {
             .map(|f| {
                 crate::typechecker::typecheck(
                     &runtime,
-                    &mut identifiers,
                     &mut scope_graph,
                     f,
                     pointer_bytes,
@@ -370,10 +354,8 @@ impl Parsed {
 
         if errors.is_empty() {
             Ok(TypeChecked {
-                runtime,
                 trees,
                 type_infos,
-                identifiers,
                 scope_graph,
             })
         } else {
@@ -389,10 +371,8 @@ impl Parsed {
 impl TypeChecked {
     pub fn lower(self) -> Lowered {
         let TypeChecked {
-            runtime,
             trees,
             mut type_infos,
-            mut identifiers,
             scope_graph,
         } = self;
         let mut runtime_functions = HashMap::new();
@@ -401,7 +381,6 @@ impl TypeChecked {
             &trees[0],
             &mut type_infos[0],
             &mut runtime_functions,
-            &mut identifiers,
             &mut label_store,
         );
 
@@ -409,7 +388,6 @@ impl TypeChecked {
         if log::log_enabled!(log::Level::Info) {
             let s = IrPrinter {
                 scope_graph: &scope_graph,
-                identifiers: &identifiers,
                 label_store: &label_store,
             }
             .program(&ir);
@@ -418,9 +396,7 @@ impl TypeChecked {
 
         Lowered {
             ir,
-            runtime,
             runtime_functions,
-            identifiers,
             label_store,
             type_info: type_infos.remove(0),
         }
@@ -433,35 +409,25 @@ impl Lowered {
         mem: &mut Memory,
         rx: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(&self.ir, "main", mem, rx, &self.identifiers)
+        eval::eval(&self.ir, "main", mem, rx)
     }
 
     pub fn codegen(self) -> Compiled {
         let module = codegen::codegen(
             &self.ir,
             &self.runtime_functions,
-            &self.identifiers,
             self.label_store,
             self.type_info,
         );
-        Compiled {
-            runtime: self.runtime,
-            module,
-            identifiers: self.identifiers,
-        }
+        Compiled { module }
     }
 }
 
 impl Compiled {
-    pub fn get_function<'program, Params: RotoParams, Return: Reflect>(
-        &'program mut self,
+    pub fn get_function<Params: RotoParams, Return: Reflect>(
+        &mut self,
         name: &str,
-    ) -> Result<TypedFunc<'program, Params, Return>, FunctionRetrievalError>
-    {
-        self.module.get_function(
-            &mut self.runtime.type_registry,
-            &self.identifiers,
-            name,
-        )
+    ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
+        self.module.get_function(name)
     }
 }
