@@ -17,11 +17,10 @@ use std::{any::TypeId, collections::HashMap, net::IpAddr};
 use value::IrType;
 
 use crate::{
-    ast::{self, Expr, Identifier, Literal},
-    parser::meta::{Meta, MetaId},
+    ast::{self, Identifier, Literal},
+    parser::meta::Meta,
     runtime::{self, RuntimeFunction},
     typechecker::{
-        self,
         info::TypeInfo,
         scope::{DefinitionRef, ScopeRef},
         types::{
@@ -690,10 +689,14 @@ impl<'r> Lowerer<'r> {
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
                         let ip_addr_type_id = TypeId::of::<IpAddr>();
-                        let runtime_func = self.find_runtime_function(
-                            runtime::FunctionKind::Method(ip_addr_type_id),
-                            "eq",
-                        ).clone();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::Method(
+                                    ip_addr_type_id,
+                                ),
+                                "eq",
+                            )
+                            .clone();
 
                         let out = self
                             .call_runtime_function(
@@ -719,10 +722,14 @@ impl<'r> Lowerer<'r> {
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
                         let ip_addr_type_id = TypeId::of::<IpAddr>();
-                        let runtime_func = self.find_runtime_function(
-                            runtime::FunctionKind::Method(ip_addr_type_id),
-                            "eq",
-                        ).clone();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::Method(
+                                    ip_addr_type_id,
+                                ),
+                                "eq",
+                            )
+                            .clone();
 
                         let out = self
                             .call_runtime_function(
@@ -1098,8 +1105,10 @@ impl<'r> Lowerer<'r> {
 
         if self.is_reference_type(return_type) {
             Some(out_ptr.into())
-        } else {
+        } else if size > 0 {
             Some(self.read_field(out_ptr.into(), 0, return_type))
+        } else {
+            None
         }
     }
 }

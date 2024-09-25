@@ -781,6 +781,32 @@ fn ipv6_compare() {
     assert_eq!(res, Verdict::Reject(ip));
 }
 
+#[test]
+fn function_returning_unit() {
+    let mut runtime = Runtime::basic().unwrap();
+
+    #[roto_function]
+    fn unit_unit() {}
+
+    runtime.register_function("unit_unit", unit_unit).unwrap();
+
+    let s = src!("
+        filter-map main() {
+            apply { 
+                accept unit_unit()
+            }
+        }
+    ");
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), Verdict<(), ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call();
+    assert_eq!(res, Verdict::Accept(()));
+}
+
 // #[test]
 // fn bmp_message() {
 //     let s = "
