@@ -34,10 +34,8 @@ use cranelift::{
     frontend::{
         FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
         Variable,
-    },
+    }, jit::{JITBuilder, JITModule}, module::{DataDescription, FuncId, Linkage, Module as _},
 };
-use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{DataDescription, FuncId, Linkage, Module as _};
 use log::info;
 
 pub mod check;
@@ -212,11 +210,11 @@ pub fn codegen(
     let mut settings = settings::builder();
     settings.set("opt_level", "speed").unwrap();
     let flags = settings::Flags::new(settings);
-    let isa = cranelift_native::builder().unwrap().finish(flags).unwrap();
+    let isa = cranelift::native::builder().unwrap().finish(flags).unwrap();
 
     let mut builder = JITBuilder::with_isa(
         isa.to_owned(),
-        cranelift_module::default_libcall_names(),
+        cranelift::module::default_libcall_names(),
     );
 
     for (name, func) in runtime_functions {
