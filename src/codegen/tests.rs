@@ -1,7 +1,7 @@
 use std::net::IpAddr;
 
 use inetnum::asn::Asn;
-use roto_macros::roto_function;
+use roto_macros::{roto_function, roto_static_method};
 
 use crate::{
     pipeline::Compiled, runtime::tests::routecore_runtime, src, Files,
@@ -545,19 +545,17 @@ fn int_var() {
 
 #[test]
 fn issue_52() {
-    let mut rt = Runtime::basic().unwrap();
-
     struct Foo {
         _x: i32,
     }
 
-    #[roto_function]
+    let mut rt = Runtime::basic().unwrap();
+    rt.register_type::<Foo>().unwrap();
+
+    #[roto_static_method(rt, Foo)]
     fn bar(_x: u32) -> u32 {
         2
     }
-
-    rt.register_type::<Foo>().unwrap();
-    rt.register_static_method::<Foo, _, _>("bar", bar).unwrap();
 
     let s = src!(
         "
@@ -670,11 +668,13 @@ fn multiply() {
 
 #[test]
 fn ip_output() {
-    let s = src!("
+    let s = src!(
+        "
         filter-map main() {
             apply { accept 1.2.3.4 }
         }
-    ");
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -688,11 +688,13 @@ fn ip_output() {
 
 #[test]
 fn ip_passthrough() {
-    let s = src!("
+    let s = src!(
+        "
         filter-map main(x: IpAddr) {
             apply { accept x }
         }
-    ");
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -706,7 +708,8 @@ fn ip_passthrough() {
 
 #[test]
 fn ipv4_compare() {
-    let s = src!("
+    let s = src!(
+        "
         filter-map main(x: IpAddr) {
             apply { 
                 if x == 0.0.0.0 {
@@ -718,7 +721,8 @@ fn ipv4_compare() {
                 }
             }
         }
-    ");
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -743,7 +747,8 @@ fn ipv4_compare() {
 
 #[test]
 fn ipv6_compare() {
-    let s = src!("
+    let s = src!(
+        "
         filter-map main(x: IpAddr) {
             apply { 
                 if x == :: {
@@ -757,7 +762,8 @@ fn ipv6_compare() {
                 }
             }
         }
-    ");
+    "
+    );
 
     let mut p = compile(s);
     let f = p
@@ -785,18 +791,18 @@ fn ipv6_compare() {
 fn function_returning_unit() {
     let mut runtime = Runtime::basic().unwrap();
 
-    #[roto_function]
+    #[roto_function(runtime)]
     fn unit_unit() {}
 
-    runtime.register_function("unit_unit", unit_unit).unwrap();
-
-    let s = src!("
+    let s = src!(
+        "
         filter-map main() {
             apply { 
                 accept unit_unit()
             }
         }
-    ");
+    "
+    );
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
@@ -805,6 +811,23 @@ fn function_returning_unit() {
 
     let res = f.call();
     assert_eq!(res, Verdict::Accept(()));
+}
+
+#[test]
+fn functions_with_lifetimes() {
+    struct Foo<'a> {
+        _x: &'a u32,
+    }
+
+    let mut rt = Runtime::basic().unwrap();
+    rt.register_type::<Foo>().unwrap();
+
+    #[roto_function(rt)]
+    fn funcy(_foo: *const Foo) {}
+
+    #[allow(clippy::needless_lifetimes)]
+    #[roto_function(rt)]
+    fn funcy2<'a>(_foo: *const Foo<'a>) {}
 }
 
 // #[test]

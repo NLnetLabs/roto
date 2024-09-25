@@ -9,7 +9,11 @@
 //! for mapping a complex Rust type to Roto types.
 
 use std::{
-    any::{type_name, TypeId}, collections::HashMap, net::IpAddr, ops::DerefMut, sync::{LazyLock, Mutex}
+    any::{type_name, TypeId},
+    collections::HashMap,
+    net::IpAddr,
+    ops::DerefMut,
+    sync::{LazyLock, Mutex},
 };
 
 use inetnum::asn::Asn;
