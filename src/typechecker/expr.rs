@@ -5,7 +5,7 @@ use std::{borrow::Borrow, collections::HashSet};
 use crate::{
     ast::{self, Identifier, Pattern},
     parser::meta::{Meta, MetaId},
-    typechecker::types::{type_to_string, FunctionDefinition},
+    typechecker::types::FunctionDefinition,
 };
 
 use super::{
@@ -43,7 +43,8 @@ impl TypeChecker<'_> {
                 return Err(self.error_unreachable_expression(expr));
             }
 
-            let ctx = ctx.with_type(Type::Primitive(Primitive::Unit));
+            let var = self.fresh_var();
+            let ctx = ctx.with_type(var);
             diverged |= self.expr(scope, &ctx, expr)?;
         }
 
@@ -160,11 +161,8 @@ impl TypeChecker<'_> {
                     let ty = self.resolve_type(&ty);
 
                     let Type::Function(params, ret) = ty else {
-                        let name_str =
-                            self.identifiers.resolve(name.0).unwrap();
-                        let ty = type_to_string(self.identifiers, &ty);
                         return Err(self.error_simple(
-                            format!("the variable `{name_str}` is not callable, but has type `{ty}`"),
+                            format!("the variable `{name}` is not callable, but has type `{ty}`"),
                             "not a function",
                             name.id,
                         ));
@@ -204,7 +202,7 @@ impl TypeChecker<'_> {
                     let Some((function, signature)) =
                         self.find_function(&FunctionKind::Free, **name)
                     else {
-                        let n = self.identifiers.resolve(name.0).unwrap();
+                        let n = name.as_str();
                         return Err(self.error_simple(
                             format!("function `{n}` not found`",),
                             "function not found",
@@ -241,11 +239,8 @@ impl TypeChecker<'_> {
                     self.find_enum_variant(ctx, id, receiver, name)?
                 {
                     let Some(data) = data else {
-                        let n = self.identifiers.resolve(name.0).unwrap();
-                        let type_name =
-                            self.identifiers.resolve(type_name.0).unwrap();
                         return Err(self.error_simple(
-                            format!("variant {n} of {type_name} does not have data"),
+                            format!("variant {name} of {type_name} does not have data"),
                             "does not have data",
                             name.id,
                         ));
@@ -281,12 +276,8 @@ impl TypeChecker<'_> {
                     self.find_enum_variant(ctx, id, e, x)?
                 {
                     if data.is_some() {
-                        let x_str = self.identifiers.resolve(x.0).unwrap();
-                        let name = self.identifiers.resolve(name.0).unwrap();
                         return Err(self.error_simple(
-                            format!(
-                                "variant {x_str} of {name} requires data"
-                            ),
+                            format!("variant {x} of {name} requires data"),
                             "requires data",
                             x.id,
                         ));
@@ -311,13 +302,10 @@ impl TypeChecker<'_> {
                     };
                 }
 
-                let id = x.id;
-                let x = self.identifiers.resolve(x.0).unwrap();
-                let ty = type_to_string(self.identifiers, &ty);
                 Err(self.error_simple(
                     format!("no field `{x}` on type `{ty}`",),
                     format!("unknown field `{x}`"),
-                    id,
+                    x.id,
                 ))
             }
             Var(x) => {
@@ -345,10 +333,9 @@ impl TypeChecker<'_> {
                 self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 let Type::NamedRecord(_, record_fields) = ty else {
-                    let n = self.identifiers.resolve(name.0).unwrap();
                     return Err(self.error_simple(
                         format!(
-                            "Expected a named record type, but found `{n}`"
+                            "Expected a named record type, but found `{name}`"
                         ),
                         "not a named record type",
                         name.id,
@@ -466,13 +453,10 @@ impl TypeChecker<'_> {
         let Some((variant, data)) =
             variants.iter().find(|(v, _)| v == &x.node)
         else {
-            let id = x.id;
-            let x = self.identifiers.resolve(x.0).unwrap();
-            let name = self.identifiers.resolve(name.0).unwrap();
             return Err(self.error_simple(
                 format!("no variant {x} on enum {name}"),
                 "variant not found",
-                id,
+                x.id,
             ));
         };
 
@@ -680,15 +664,6 @@ impl TypeChecker<'_> {
                     None,
                 )?;
 
-                let name = Identifier(self.identifiers.get_or_intern("new"));
-                let (function, _sig) = self.find_function(
-                    &FunctionKind::StaticMethod(Type::Primitive(
-                        Primitive::Prefix,
-                    )),
-                    name,
-                ).unwrap();
-                let function = function.clone();
-                self.type_info.function_calls.insert(span, function);
                 return Ok(diverges);
             }
         };
@@ -807,13 +782,10 @@ impl TypeChecker<'_> {
             self.find_function(&FunctionKind::Method(ty.clone()), name.node)
         else {
             let ty = self.resolve_type(&ty);
-            let ty = type_to_string(self.identifiers, &ty);
-            let id = name.id;
-            let name = self.identifiers.resolve(name.0).unwrap();
             return Err(self.error_simple(
                 format!("method `{name}` not found on `{ty}`",),
                 format!("method not found for `{ty}`"),
-                id,
+                name.id,
             ));
         };
 
@@ -855,13 +827,10 @@ impl TypeChecker<'_> {
             name.node,
         ) else {
             let ty = self.resolve_type(ty);
-            let ty = type_to_string(self.identifiers, &ty);
-            let id = name.id;
-            let name = self.identifiers.resolve(name.0).unwrap();
             return Err(self.error_simple(
                 format!("static method `{name}` not found on `{ty}`",),
                 format!("static method not found on `{ty}`"),
-                id,
+                name.id,
             ));
         };
 

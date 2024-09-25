@@ -112,15 +112,13 @@ impl Lowerer<'_> {
         };
 
         let current_label = self.current_label();
-        let lbl_prefix = self.label_store.wrap_internal(
-            current_label,
-            Identifier(self.identifiers.get_or_intern("match")),
-        );
+        let lbl_prefix = self
+            .label_store
+            .wrap_internal(current_label, Identifier::from("match"));
 
-        let default_lbl = self.label_store.wrap_internal(
-            lbl_prefix,
-            Identifier(self.identifiers.get_or_intern("default")),
-        );
+        let default_lbl = self
+            .label_store
+            .wrap_internal(lbl_prefix, Identifier::from("default"));
         let continue_lbl = self.label_store.next(current_label);
 
         // First collect all the information needed to create the switches
@@ -148,9 +146,7 @@ impl Lowerer<'_> {
             .iter()
             .filter_map(|(d, _, _)| *d)
             .map(|d| {
-                let ident = Identifier(
-                    self.identifiers.get_or_intern(format!("case_{d}")),
-                );
+                let ident = Identifier::from(&format!("case_{d}"));
                 let lbl = self.label_store.wrap_internal(lbl_prefix, ident);
                 (d, lbl)
             })
@@ -187,7 +183,7 @@ impl Lowerer<'_> {
             .iter()
             .map(|(_, _, idx)| {
                 let s = format!("arm_{idx}");
-                let ident = Identifier(self.identifiers.get_or_intern(s));
+                let ident = Identifier::from(s);
                 (*idx, self.label_store.wrap_internal(lbl_prefix, ident))
             })
             .collect();
@@ -244,7 +240,7 @@ impl Lowerer<'_> {
     ) {
         self.new_block(lbl);
 
-        let ident = Identifier(self.identifiers.get_or_intern("guard_0"));
+        let ident = Identifier::from("guard_0");
         let guard_lbl = self.label_store.wrap_internal(lbl, ident);
         self.add(Instruction::Jump(guard_lbl));
 
@@ -279,9 +275,7 @@ impl Lowerer<'_> {
                 });
             }
 
-            let ident = Identifier(
-                self.identifiers.get_or_intern(format!("guard_{}", i + 1)),
-            );
+            let ident = Identifier::from(format!("guard_{}", i + 1));
             next_lbl = self.label_store.wrap_internal(lbl, ident);
 
             let arm_label = arm_labels[arm_index];

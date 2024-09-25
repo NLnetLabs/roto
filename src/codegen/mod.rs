@@ -1,7 +1,8 @@
 //! Machine code generation via cranelift
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData,
+    mem::ManuallyDrop, sync::Arc,
 };
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    runtime::ty::{Reflect, TypeRegistry},
+    runtime::ty::{Reflect, GLOBAL_TYPE_REGISTRY},
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
     IrValue,
 };
@@ -38,11 +39,53 @@ use cranelift::{
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{DataDescription, FuncId, Linkage, Module as _};
 use log::info;
-use string_interner::{backend::StringBackend, StringInterner};
 
 pub mod check;
 #[cfg(test)]
 mod tests;
+
+#[derive(Clone)]
+pub struct ModuleData(Arc<ManuallyDrop<JITModule>>);
+
+// Just a simple debug to print _something_. We print the Arc pointer to
+// distinguish different ModuleData instances.
+impl std::fmt::Debug for ModuleData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ModuleData")
+            .field(&Arc::as_ptr(&self.0))
+            .finish()
+    }
+}
+
+impl From<JITModule> for ModuleData {
+    fn from(value: JITModule) -> Self {
+        #[allow(clippy::arc_with_non_send_sync)]
+        Self(Arc::new(ManuallyDrop::new(value)))
+    }
+}
+
+impl Drop for ModuleData {
+    fn drop(&mut self) {
+        // get_mut returns None if we are not the last Arc, so the JITModule
+        // shouldn't be dropped yet.
+        let Some(module) = Arc::get_mut(&mut self.0) else {
+            return;
+        };
+
+        // SAFETY: We only give out functions that hold a ModuleData and
+        // therefore an Arc to this module. By `get_mut`, we know that we are
+        // the last Arc to this memory and hence it is safe to free its
+        // memory. New Arcs cannot have been created in the meantime because
+        // that requires access to the last Arc, which we know that we have.
+        unsafe {
+            let inner = ManuallyDrop::take(module);
+            inner.free_memory();
+        };
+    }
+}
+
+unsafe impl Send for ModuleData {}
+unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
 pub struct Module {
@@ -50,24 +93,29 @@ pub struct Module {
     functions: HashMap<String, FunctionInfo>,
 
     /// The inner cranelift module
-    inner: JITModule,
+    inner: ModuleData,
 
     /// Info from the typechecker for checking types against Rust types
     type_info: TypeInfo,
 }
 
-pub struct TypedFunc<'module, Params, Return> {
+#[derive(Clone, Debug)]
+pub struct TypedFunc<Params, Return> {
     func: *const u8,
     return_by_ref: bool,
-    _ty: PhantomData<&'module (Params, Return)>,
+
+    // The module holds the data for this function, that's why we need
+    // to ensure that it doesn't get dropped. This field is ESSENTIAL
+    // for the safety of calling this function. Without it, the data that
+    // the `func` pointer points to might have been dropped.
+    _module: ModuleData,
+    _ty: PhantomData<(Params, Return)>,
 }
 
-unsafe impl<Params, Return> Send for TypedFunc<'_, Params, Return> {}
-unsafe impl<Params, Return> Sync for TypedFunc<'_, Params, Return> {}
+unsafe impl<Params, Return> Send for TypedFunc<Params, Return> {}
+unsafe impl<Params, Return> Sync for TypedFunc<Params, Return> {}
 
-impl<'module, Params: RotoParams, Return: Reflect>
-    TypedFunc<'module, Params, Return>
-{
+impl<Params: RotoParams, Return: Reflect> TypedFunc<Params, Return> {
     pub fn call_tuple(&self, params: Params) -> Return {
         unsafe { params.invoke::<Return>(self.func, self.return_by_ref) }
     }
@@ -75,7 +123,7 @@ impl<'module, Params: RotoParams, Return: Reflect>
 
 macro_rules! call_impl {
     ($($ty:ident),*) => {
-        impl<'module, $($ty,)* Return: Reflect> TypedFunc<'module, ($($ty,)*), Return>
+        impl<$($ty,)* Return: Reflect> TypedFunc<($($ty,)*), Return>
         where
             ($($ty,)*): RotoParams,
         {
@@ -86,7 +134,7 @@ macro_rules! call_impl {
             }
 
             #[allow(non_snake_case)]
-            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return + 'module {
+            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
                 move |$($ty,)*| self.call($($ty,)*)
             }
         }
@@ -107,7 +155,7 @@ pub struct FunctionInfo {
     signature: types::Signature,
 }
 
-struct ModuleBuilder<'a> {
+struct ModuleBuilder {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -126,9 +174,6 @@ struct ModuleBuilder<'a> {
     /// Instruction set architecture
     isa: Arc<dyn TargetIsa>,
 
-    /// Identifiers are used for debugging and resolving function names.
-    identifiers: &'a StringInterner<StringBackend>,
-
     /// To print labels for debugging.
     #[allow(unused)]
     label_store: LabelStore,
@@ -136,8 +181,8 @@ struct ModuleBuilder<'a> {
     type_info: TypeInfo,
 }
 
-struct FuncGen<'a, 'c> {
-    module: &'c mut ModuleBuilder<'a>,
+struct FuncGen<'c> {
+    module: &'c mut ModuleBuilder,
 
     /// The cranelift function builder
     builder: FunctionBuilder<'c>,
@@ -157,7 +202,6 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 pub fn codegen(
     ir: &[ir::Function],
     runtime_functions: &HashMap<usize, IrFunction>,
-    identifiers: &StringInterner<StringBackend>,
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module {
@@ -187,7 +231,6 @@ pub fn codegen(
         inner: jit,
         isa,
         variable_map: HashMap::new(),
-        identifiers,
         label_store,
         type_info,
     };
@@ -225,7 +268,7 @@ pub fn codegen(
     module.finalize()
 }
 
-impl ModuleBuilder<'_> {
+impl ModuleBuilder {
     /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
@@ -246,11 +289,10 @@ impl ModuleBuilder<'_> {
             None => Vec::new(),
         };
 
-        let name = self.identifiers.resolve(name.0).unwrap();
         let func_id = self
             .inner
             .declare_function(
-                name,
+                name.as_str(),
                 if *public {
                     Linkage::Export
                 } else {
@@ -284,8 +326,7 @@ impl ModuleBuilder<'_> {
             scope,
             ..
         } = func;
-        let name = self.identifiers.resolve(name.0).unwrap();
-        let func_id = self.functions[name].id;
+        let func_id = self.functions[name.as_str()].id;
 
         let mut ctx = self.inner.make_context();
         let mut sig = self.inner.make_signature();
@@ -344,7 +385,7 @@ impl ModuleBuilder<'_> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
-            inner: self.inner,
+            inner: self.inner.into(),
             type_info: self.type_info,
         }
     }
@@ -362,7 +403,7 @@ impl ModuleBuilder<'_> {
     }
 }
 
-impl<'a, 'c> FuncGen<'a, 'c> {
+impl<'c> FuncGen<'c> {
     fn finalize(self) {
         self.builder.finalize()
     }
@@ -470,7 +511,7 @@ impl<'a, 'c> FuncGen<'a, 'c> {
                 self.def(var, val)
             }
             ir::Instruction::Call { to, func, args } => {
-                let func = self.module.identifiers.resolve(func.0).unwrap();
+                let func = func.as_str();
                 let func_id = self.module.functions[func].id;
                 let func_ref = self
                     .module
@@ -807,13 +848,10 @@ impl<'a, 'c> FuncGen<'a, 'c> {
 }
 
 impl Module {
-    pub fn get_function<'module, Params: RotoParams, Return: Reflect>(
-        &'module mut self,
-        type_registry: &mut TypeRegistry,
-        identifiers: &StringInterner<StringBackend>,
+    pub fn get_function<Params: RotoParams, Return: Reflect>(
+        &mut self,
         name: &str,
-    ) -> Result<TypedFunc<'module, Params, Return>, FunctionRetrievalError>
-    {
+    ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
         let function_info = self.functions.get(name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
                 name: name.to_string(),
@@ -824,17 +862,10 @@ impl Module {
         let sig = &function_info.signature;
         let id = function_info.id;
 
-        Params::check(
-            type_registry,
-            &mut self.type_info,
-            identifiers,
-            &sig.parameter_types,
-        )?;
+        Params::check(&mut self.type_info, &sig.parameter_types)?;
 
         check_roto_type_reflect::<Return>(
-            type_registry,
             &mut self.type_info,
-            identifiers,
             &sig.return_type,
         )
         .map_err(|e| {
@@ -844,13 +875,15 @@ impl Module {
             )
         })?;
 
+        let registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
         let return_by_ref =
-            return_type_by_ref(type_registry, TypeId::of::<Return>());
+            return_type_by_ref(&registry, TypeId::of::<Return>());
 
-        let func_ptr = self.inner.get_finalized_function(id);
+        let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
             return_by_ref,
+            _module: self.inner.clone(),
             _ty: PhantomData,
         })
     }

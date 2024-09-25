@@ -11,16 +11,16 @@ pub mod value;
 #[cfg(test)]
 mod test_eval;
 
+use inetnum::addr::Prefix;
 use ir::{Block, Function, Instruction, Operand, Var, VarKind};
 use label::{LabelRef, LabelStore};
-use std::{collections::HashMap, net::IpAddr};
-use string_interner::{backend::StringBackend, StringInterner};
+use std::{any::TypeId, collections::HashMap, net::IpAddr};
 use value::IrType;
 
 use crate::{
     ast::{self, Identifier, Literal},
     parser::meta::Meta,
-    runtime::RuntimeFunction,
+    runtime::{self, RuntimeFunction},
     typechecker::{
         info::TypeInfo,
         scope::{DefinitionRef, ScopeRef},
@@ -28,6 +28,7 @@ use crate::{
             FunctionDefinition, FunctionKind, Primitive, Signature, Type,
         },
     },
+    Runtime,
 };
 
 use self::value::IrValue;
@@ -50,6 +51,8 @@ pub struct IrFunction {
     pub name: Identifier,
     pub ptr: *const u8,
     pub params: Vec<IrType>,
+    // We keep this for completeness.
+    #[allow(dead_code)]
     pub ret: Option<IrType>,
 }
 
@@ -60,24 +63,18 @@ struct Lowerer<'r> {
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
     runtime_functions: &'r mut HashMap<usize, IrFunction>,
-    identifiers: &'r mut StringInterner<StringBackend>,
     label_store: &'r mut LabelStore,
+    runtime: &'r Runtime,
 }
 
 pub fn lower(
     tree: &ast::SyntaxTree,
     type_info: &mut TypeInfo,
     runtime_functions: &mut HashMap<usize, IrFunction>,
-    identifiers: &mut StringInterner<StringBackend>,
     label_store: &mut LabelStore,
+    runtime: &Runtime,
 ) -> Vec<Function> {
-    Lowerer::tree(
-        type_info,
-        runtime_functions,
-        tree,
-        identifiers,
-        label_store,
-    )
+    Lowerer::tree(type_info, runtime_functions, tree, label_store, runtime)
 }
 
 impl<'r> Lowerer<'r> {
@@ -85,8 +82,8 @@ impl<'r> Lowerer<'r> {
         type_info: &'r mut TypeInfo,
         runtime_functions: &'r mut HashMap<usize, IrFunction>,
         function_name: &Meta<Identifier>,
-        identifiers: &'r mut StringInterner<StringBackend>,
         label_store: &'r mut LabelStore,
+        runtime: &'r Runtime,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
         Self {
@@ -96,8 +93,8 @@ impl<'r> Lowerer<'r> {
             function_scope,
             runtime_functions,
             blocks: Vec::new(),
-            identifiers,
             label_store,
+            runtime,
         }
     }
 
@@ -141,8 +138,8 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         runtime_functions: &mut HashMap<usize, IrFunction>,
         tree: &ast::SyntaxTree,
-        identifiers: &mut StringInterner<StringBackend>,
         label_store: &'r mut LabelStore,
+        runtime: &'r Runtime,
     ) -> Vec<Function> {
         let ast::SyntaxTree {
             declarations: expressions,
@@ -158,8 +155,8 @@ impl<'r> Lowerer<'r> {
                             type_info,
                             runtime_functions,
                             &x.ident,
-                            identifiers,
                             label_store,
+                            runtime,
                         )
                         .filter_map(x),
                     );
@@ -175,8 +172,8 @@ impl<'r> Lowerer<'r> {
                             type_info,
                             runtime_functions,
                             ident,
-                            identifiers,
                             label_store,
+                            runtime,
                         )
                         .function(ident, params, ret, body),
                     );
@@ -442,51 +439,20 @@ impl<'r> Lowerer<'r> {
             ast::Expr::FunctionCall(ident, args) => {
                 let func = self.type_info.function(ident).clone();
 
-                match func.definition {
+                match &func.definition {
                     FunctionDefinition::Runtime(runtime_func) => {
-                        let ret = &func.signature.return_type;
-
-                        let to = if self.type_info.size_of(ret) > 0 {
-                            let ty = self.type_info.type_of(id);
-                            let ty = self.lower_type(&ty);
-                            Some((self.new_tmp(), ty))
-                        } else {
-                            None
-                        };
-
-                        let args = args
-                            .node
+                        let args: Vec<_> = args
                             .iter()
-                            .flat_map(|a| self.expr(a))
+                            .map(|e| self.expr(e).unwrap())
                             .collect();
 
-                        let mut params = Vec::new();
-                        for ty in func.signature.parameter_types {
-                            params.push(self.lower_type(&ty))
-                        }
-                        let ret = func.signature.return_type.clone();
-
-                        let ir_func = IrFunction {
-                            name: ident.node,
-                            ptr: runtime_func.description.pointer,
-                            params,
-                            ret: if self.type_info.size_of(&ret) > 0 {
-                                Some(self.lower_type(&ret))
-                            } else {
-                                None
-                            },
-                        };
-
-                        self.runtime_functions
-                            .insert(runtime_func.id, ir_func);
-
-                        self.add(Instruction::CallRuntime {
-                            to: to.clone(),
-                            func: runtime_func,
+                        self.call_runtime_function(
+                            **ident,
+                            runtime_func,
                             args,
-                        });
-
-                        to.map(|(to, _ty)| to.into())
+                            &func.signature.parameter_types,
+                            &func.signature.return_type,
+                        )
                     }
                     FunctionDefinition::Roto => {
                         let ty = self.type_info.type_of(ident);
@@ -523,7 +489,7 @@ impl<'r> Lowerer<'r> {
                     }
                 }
             }
-            ast::Expr::MethodCall(receiver, m, args) => {
+            ast::Expr::MethodCall(receiver, ident, args) => {
                 // Check whether it is in fact not a method call, but an
                 // enum constructor
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
@@ -541,7 +507,7 @@ impl<'r> Lowerer<'r> {
 
                     let idx = variants
                         .iter()
-                        .position(|(f, _)| m.node == *f)
+                        .position(|(f, _)| ident.node == *f)
                         .unwrap();
 
                     let to = self.new_tmp();
@@ -578,62 +544,33 @@ impl<'r> Lowerer<'r> {
 
                 // It's a runtime-defined method, which we compile just like
                 // a function
-                let func = self.type_info.function(m).clone();
+                let func = self.type_info.function(ident).clone();
 
-                let runtime_func = match func.definition {
+                let runtime_func = match &func.definition {
                     FunctionDefinition::Roto => panic!("Not yet supported"),
                     FunctionDefinition::Runtime(rt) => rt,
                 };
 
-                let ret = &func.signature.return_type;
-
-                let to = if self.type_info.size_of(ret) > 0 {
-                    let ty = self.type_info.type_of(id);
-                    let ty = self.lower_type(&ty);
-                    Some((self.new_tmp(), ty))
-                } else {
-                    None
-                };
-
-                // If the function is a method we have to check the receiver
-                // as the first argument. If it's a static method we don't
-                // have to evaluate the receiver at all.
-                let args =
+                let receiver_iter =
                     if let FunctionKind::Method(_) = func.signature.kind {
-                        std::iter::once(&**receiver)
-                            .chain(&args.node)
-                            .flat_map(|a| self.expr(a))
-                            .collect()
-                    } else {
-                        args.node.iter().flat_map(|a| self.expr(a)).collect()
-                    };
-
-                let mut params = Vec::new();
-                for ty in func.signature.parameter_types {
-                    params.push(self.lower_type(&ty))
-                }
-                let ret = func.signature.return_type.clone();
-
-                let ir_func = IrFunction {
-                    name: m.node,
-                    ptr: runtime_func.description.pointer,
-                    params,
-                    ret: if self.type_info.size_of(&ret) > 0 {
-                        Some(self.lower_type(&ret))
+                        Some(&**receiver)
                     } else {
                         None
-                    },
-                };
+                    };
 
-                self.runtime_functions.insert(runtime_func.id, ir_func);
+                let args: Vec<_> = receiver_iter
+                    .into_iter()
+                    .chain(&args.node)
+                    .map(|e| self.expr(e).unwrap())
+                    .collect();
 
-                self.add(Instruction::CallRuntime {
-                    to: to.clone(),
-                    func: runtime_func,
+                self.call_runtime_function(
+                    **ident,
+                    runtime_func,
                     args,
-                });
-
-                to.map(|(to, _ty)| to.into())
+                    &func.signature.parameter_types,
+                    &func.signature.return_type,
+                )
             }
             ast::Expr::Access(e, field) => {
                 if let Some(ty) = self.type_info.enum_variant_constructor(id)
@@ -762,62 +699,63 @@ impl<'r> Lowerer<'r> {
                         _,
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
-                        let function = self.type_info.function(id);
-                        let FunctionDefinition::Runtime(runtime_func) =
-                            function.definition.clone()
-                        else {
-                            panic!()
-                        };
+                        let type_id = TypeId::of::<Prefix>();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::StaticMethod(type_id),
+                                "new",
+                            )
+                            .clone();
 
-                        let size = self
-                            .type_info
-                            .size_of(&Type::Primitive(Primitive::Prefix));
-                        let alignment = self.type_info.alignment_of(
-                            &Type::Primitive(Primitive::Prefix),
-                        );
-                        let align_shift = alignment.ilog2() as u8;
-                        self.add(Instruction::Alloc {
+                        let out = self
+                            .call_runtime_function(
+                                Identifier::from("new"),
+                                &runtime_func,
+                                [left, right],
+                                &[
+                                    Type::Primitive(Primitive::IpAddr),
+                                    Type::Primitive(Primitive::U8),
+                                ],
+                                &Type::Primitive(Primitive::Prefix),
+                            )
+                            .unwrap();
+                        self.add(Instruction::Assign {
                             to: place.clone(),
-                            size,
-                            align_shift,
-                        });
-
-                        let ident =
-                            Identifier(self.identifiers.get_or_intern("new"));
-                        let ir_func = IrFunction {
-                            name: ident,
-                            ptr: runtime_func.description.pointer,
-                            params: vec![
-                                IrType::Pointer,
-                                IrType::Pointer,
-                                IrType::U8,
-                            ],
-                            ret: None,
-                        };
-
-                        self.runtime_functions
-                            .insert(runtime_func.id, ir_func);
-
-                        self.add(Instruction::CallRuntime {
-                            to: None,
-                            func: runtime_func,
-                            args: vec![place.clone().into(), left, right],
-                        });
+                            val: out,
+                            ty: IrType::Pointer,
+                        })
                     }
                     (
                         ast::BinOp::Eq,
                         _,
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
-                        let tmp = self.ip_memcmp(left, right);
+                        let ip_addr_type_id = TypeId::of::<IpAddr>();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::Method(
+                                    ip_addr_type_id,
+                                ),
+                                "eq",
+                            )
+                            .clone();
 
-                        // And then of course compare with 0 to get true if
-                        // memcmp returns 0.
-                        self.add(Instruction::Cmp {
+                        let out = self
+                            .call_runtime_function(
+                                Identifier::from("eq"),
+                                &runtime_func,
+                                [left, right],
+                                &[
+                                    Type::Primitive(Primitive::IpAddr),
+                                    Type::Primitive(Primitive::IpAddr),
+                                ],
+                                &Type::Primitive(Primitive::Bool),
+                            )
+                            .unwrap();
+                        self.add(Instruction::Assign {
                             to: place.clone(),
-                            cmp: ir::IntCmp::Eq,
-                            left: tmp.into(),
-                            right: IrValue::U32(0).into(),
+                            val: out,
+                            ty: IrType::Bool,
                         })
                     }
                     (
@@ -825,15 +763,32 @@ impl<'r> Lowerer<'r> {
                         _,
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
-                        let tmp = self.ip_memcmp(left, right);
+                        let ip_addr_type_id = TypeId::of::<IpAddr>();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::Method(
+                                    ip_addr_type_id,
+                                ),
+                                "eq",
+                            )
+                            .clone();
 
-                        // And then of course compare with 0 to get true if
-                        // memcmp returns 0.
-                        self.add(Instruction::Cmp {
+                        let out = self
+                            .call_runtime_function(
+                                Identifier::from("eq"),
+                                &runtime_func,
+                                [left, right],
+                                &[
+                                    Type::Primitive(Primitive::IpAddr),
+                                    Type::Primitive(Primitive::IpAddr),
+                                ],
+                                &Type::Primitive(Primitive::Bool),
+                            )
+                            .unwrap();
+
+                        self.add(Instruction::Not {
                             to: place.clone(),
-                            cmp: ir::IntCmp::Ne,
-                            left: tmp.into(),
-                            right: IrValue::U32(0).into(),
+                            val: out,
                         })
                     }
                     (ast::BinOp::Eq, _, ty)
@@ -935,11 +890,11 @@ impl<'r> Lowerer<'r> {
                 let lbl_cont = self.label_store.next(current_label);
                 let lbl_then = self.label_store.wrap_internal(
                     current_label,
-                    Identifier(self.identifiers.get_or_intern("if-then")),
+                    Identifier::from("if-then"),
                 );
                 let lbl_else = self.label_store.wrap_internal(
                     current_label,
-                    Identifier(self.identifiers.get_or_intern("if-else")),
+                    Identifier::from("if-else"),
                 );
 
                 let branches = vec![(1, lbl_then)];
@@ -997,56 +952,16 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn ip_memcmp(&mut self, left: Operand, right: Operand) -> Var {
-        // For an ip addr, we need to be clever, because we can
-        // only compare the bytes that are used the current
-        // variant. Therefore, we read the discriminant of the
-        // left value. If that's 0, we compare 5 bytes,
-        // otherwise, we compare 17 bytes. In other words we
-        // compare 5 + 12 * discriminant bytes.
-
-        // Read discriminant
-        let discriminant = self.new_tmp();
-        self.add(Instruction::Read {
-            to: discriminant.clone(),
-            from: left.clone(),
-            ty: IrType::U8,
-        });
-
-        // Multiply with 12 (so we get 0 or 12)
-        let difference = self.new_tmp();
-        self.add(Instruction::Mul {
-            to: difference.clone(),
-            left: discriminant.into(),
-            right: IrValue::U8(12).into(),
-        });
-
-        // Add 5 (so we get 5 or 17)
-        let size = self.new_tmp();
-        self.add(Instruction::Add {
-            to: size.clone(),
-            left: difference.into(),
-            right: IrValue::U8(5).into(),
-        });
-
-        // Cast the u8 to a usize
-        let size2 = self.new_tmp();
-        self.add(Instruction::Extend {
-            to: size2.clone(),
-            ty: IrType::Pointer,
-            from: size.into(),
-        });
-
-        // Do the actual memcmp
-        let tmp = self.new_tmp();
-        self.add(Instruction::MemCmp {
-            to: tmp.clone(),
-            size: size2.into(),
-            left,
-            right,
-        });
-
-        tmp
+    fn find_runtime_function(
+        &self,
+        kind: runtime::FunctionKind,
+        name: &str,
+    ) -> &RuntimeFunction {
+        self.runtime
+            .functions
+            .iter()
+            .find(|f| f.kind == kind && f.name == name)
+            .unwrap()
     }
 
     /// Lower a literal
@@ -1189,6 +1104,59 @@ impl<'r> Lowerer<'r> {
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => panic!("could not lower: {ty:?}"),
+        }
+    }
+
+    fn call_runtime_function(
+        &mut self,
+        ident: Identifier,
+        runtime_func: &RuntimeFunction,
+        args: impl IntoIterator<Item = Operand>,
+        parameter_types: &[Type],
+        return_type: &Type,
+    ) -> Option<Operand> {
+        let out_ptr = self.new_tmp();
+        let size = self.type_info.size_of(return_type);
+
+        let alignment = self.type_info.alignment_of(return_type);
+        self.add(Instruction::Alloc {
+            to: out_ptr.clone(),
+            size,
+            align_shift: alignment.ilog2() as u8,
+        });
+
+        let mut params = Vec::new();
+        params.push(IrType::Pointer);
+
+        for ty in parameter_types {
+            params.push(self.lower_type(ty))
+        }
+
+        let args = std::iter::once(Operand::Place(out_ptr.clone()))
+            .chain(args)
+            .collect();
+
+        let ir_func = IrFunction {
+            name: ident,
+            ptr: runtime_func.description.pointer(),
+            params,
+            ret: None,
+        };
+
+        self.runtime_functions.insert(runtime_func.id, ir_func);
+
+        self.add(Instruction::CallRuntime {
+            to: None,
+            func: runtime_func.clone(),
+            args,
+        });
+
+        if self.is_reference_type(return_type) {
+            Some(out_ptr.into())
+        } else if size > 0 {
+            Some(self.read_field(out_ptr.into(), 0, return_type))
+        } else {
+            None
         }
     }
 }

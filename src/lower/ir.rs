@@ -25,8 +25,6 @@
 
 use std::fmt::Display;
 
-use string_interner::{backend::StringBackend, StringInterner};
-
 use crate::{
     ast::Identifier,
     runtime,
@@ -292,17 +290,16 @@ pub struct Block {
 
 pub struct IrPrinter<'a> {
     pub scope_graph: &'a ScopeGraph,
-    pub identifiers: &'a StringInterner<StringBackend>,
     pub label_store: &'a LabelStore,
 }
 
 impl<'a> IrPrinter<'a> {
     pub fn ident(&self, ident: &Identifier) -> &'a str {
-        self.identifiers.resolve(ident.0).unwrap()
+        ident.as_str()
     }
 
     pub fn scope(&self, scope: ScopeRef) -> String {
-        self.scope_graph.print_scope(scope, self.identifiers)
+        self.scope_graph.print_scope(scope)
     }
 
     pub fn var(&self, var: &Var) -> String {
