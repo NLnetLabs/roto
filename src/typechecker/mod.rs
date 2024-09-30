@@ -61,12 +61,7 @@ pub fn typecheck(
     tree: &ast::SyntaxTree,
     pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
-    TypeChecker::check_syntax_tree(
-        runtime,
-        scope_graph,
-        tree,
-        pointer_bytes,
-    )
+    TypeChecker::check_syntax_tree(runtime, scope_graph, tree, pointer_bytes)
 }
 
 enum MaybeDeclared {
@@ -214,22 +209,15 @@ impl TypeChecker<'_> {
                 kind,
             } = func;
 
-            let parameter_types: Vec<_> = description
-                .parameter_types()
-                .iter()
-                .map(|ty| {
+            let mut rust_parameters =
+                description.parameter_types().iter().map(|ty| {
                     let name = &runtime.get_runtime_type(*ty).unwrap().name;
                     let name = Identifier::from(name);
                     Type::Name(name)
-                })
-                .collect();
+                });
 
-            let ret_name = &runtime
-                .get_runtime_type(description.return_type())
-                .unwrap()
-                .name;
-            let ret_name = Identifier::from(ret_name);
-            let return_type = Type::Name(ret_name);
+            let return_type = rust_parameters.next().unwrap();
+            let parameter_types: Vec<_> = rust_parameters.collect();
 
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,

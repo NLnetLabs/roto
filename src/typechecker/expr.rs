@@ -41,7 +41,8 @@ impl TypeChecker<'_> {
                 return Err(self.error_unreachable_expression(expr));
             }
 
-            let ctx = ctx.with_type(Type::Primitive(Primitive::Unit));
+            let var = self.fresh_var();
+            let ctx = ctx.with_type(var);
             diverged |= self.expr(scope, &ctx, expr)?;
         }
 

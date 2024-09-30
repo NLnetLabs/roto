@@ -1,16 +1,18 @@
 [package]
 name = "roto"
-version = "0.2.1-dev"
-edition = "2021"
-authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
+version.workspace = true 
+edition.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+license.workspace = true
 description = "strongly-typed, compiled language for Rotonda"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
 homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
 keywords = ["routing", "bgp"]
 categories = ["network-programming"]
-license = "BSD-3-Clause"
-rust-version = "1.80"
+
+
 
 [dependencies]
 # ariadne is set to git because of some unpublished contributions made on
@@ -28,6 +30,8 @@ log = "0.4"
 logos = "0.14.0"
 inetnum = "0.1.0"
 symbol_table = { version = "0.3.0", features = ["global"] }
+string-interner = "0.17.0"
+roto-macros = { path = "macros" }
 
 [dev-dependencies]
 bytes = "1"
@@ -38,3 +42,13 @@ inherits = "release"
 lto = true
 strip = "none"
 debug = "full"
+
+[workspace]
+members = ["macros"]
+
+[workspace.package]
+version = "0.2.1-dev"
+edition = "2021"
+authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
+license = "BSD-3-Clause"
+rust-version = "1.80"

@@ -287,9 +287,7 @@ impl Files {
             .files
             .iter()
             .enumerate()
-            .map(|(i, f)| {
-                Parser::parse(i, &mut spans, &f.contents)
-            })
+            .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
             .collect();
 
         let mut trees = Vec::new();
@@ -420,9 +418,7 @@ impl Lowered {
             self.label_store,
             self.type_info,
         );
-        Compiled {
-            module,
-        }
+        Compiled { module }
     }
 }
 

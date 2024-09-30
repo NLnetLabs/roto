@@ -47,6 +47,16 @@ mod tests;
 #[derive(Clone)]
 pub struct ModuleData(Arc<ManuallyDrop<JITModule>>);
 
+// Just a simple debug to print _something_. We print the Arc pointer to
+// distinguish different ModuleData instances.
+impl std::fmt::Debug for ModuleData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ModuleData")
+            .field(&Arc::as_ptr(&self.0))
+            .finish()
+    }
+}
+
 impl From<JITModule> for ModuleData {
     fn from(value: JITModule) -> Self {
         #[allow(clippy::arc_with_non_send_sync)]
@@ -89,7 +99,7 @@ pub struct Module {
     type_info: TypeInfo,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TypedFunc<Params, Return> {
     func: *const u8,
     return_by_ref: bool,

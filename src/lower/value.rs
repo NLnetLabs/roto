@@ -473,3 +473,14 @@ impl<T> TryFrom<&IrValue> for *mut T {
         }
     }
 }
+
+impl<T> TryFrom<IrValue> for *mut T {
+    type Error = ();
+
+    fn try_from(value: IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::ExtPointer(x) => Ok(x as *mut T),
+            _ => Err(()),
+        }
+    }
+}

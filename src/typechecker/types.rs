@@ -80,7 +80,7 @@ impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let fmt_args = |args: &[(_, Type)]| {
             use std::fmt::Write;
-            let mut iter = args.into_iter();
+            let mut iter = args.iter();
             let mut s = String::new();
             if let Some((_, i)) = iter.next() {
                 write!(s, "{i}")?;
