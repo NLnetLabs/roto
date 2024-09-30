@@ -20,11 +20,6 @@ categories = ["network-programming"]
 # is released
 ariadne = { version = "0.4.0", git = "https://github.com/zesterer/ariadne.git", rev = "4e5987cd55d954858da4a4130255eca1bf0bee5f" }
 clap = { version = "4.4.6", features = ["derive"] }
-cranelift = "0.107.0"
-cranelift-codegen = { version = "0.107.0", features = ["disas"] }
-cranelift-jit = "0.107.0"
-cranelift-module = "0.107.0"
-cranelift-native = "0.107.0"
 env_logger = "0.10"
 log = "0.4"
 logos = "0.14.0"
@@ -32,6 +27,18 @@ inetnum = "0.1.0"
 symbol_table = { version = "0.3.0", features = ["global"] }
 string-interner = "0.17.0"
 roto-macros = { path = "macros" }
+
+[dependencies.cranelift]
+version = "0.113.0"
+features = ["frontend", "jit", "module", "native"]
+git = "https://github.com/bytecodealliance/wasmtime.git"
+rev = "1af294ea2d6c18c5a8fa9b4f272398b7c98e0c48"
+
+[dependencies.cranelift-codegen]
+version = "0.113.0"
+features = ["disas"]
+git = "https://github.com/bytecodealliance/wasmtime.git"
+rev = "1af294ea2d6c18c5a8fa9b4f272398b7c98e0c48"
 
 [dev-dependencies]
 bytes = "1"

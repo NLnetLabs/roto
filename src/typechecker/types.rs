@@ -46,6 +46,7 @@ pub enum Primitive {
     Bool,
     Asn,
     IpAddr,
+    Prefix,
 }
 
 impl From<Primitive> for Type {
@@ -73,6 +74,7 @@ impl Display for Primitive {
                 Primitive::Bool => "bool",
                 Primitive::Asn => "Asn",
                 Primitive::IpAddr => "IpAddr",
+                Primitive::Prefix => "Prefix",
             }
         )
     }
@@ -185,6 +187,7 @@ impl Primitive {
             Unit => 0,
             String => 4,
             IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
+            Prefix => std::mem::size_of::<inetnum::addr::Prefix>() as u32,
         }
     }
 }
@@ -285,6 +288,7 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
         ("Unit", Unit),
         ("Asn", Asn),
         ("IpAddr", IpAddr),
+        ("Prefix", Prefix),
     ];
 
     let mut types = Vec::new();

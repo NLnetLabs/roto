@@ -207,6 +207,7 @@ impl TypeChecker<'_> {
                 name,
                 description,
                 kind,
+                id: _,
             } = func;
 
             let mut rust_parameters =

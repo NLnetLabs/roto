@@ -34,10 +34,8 @@ use cranelift::{
     frontend::{
         FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
         Variable,
-    },
+    }, jit::{JITBuilder, JITModule}, module::{DataDescription, FuncId, Linkage, Module as _},
 };
-use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{DataDescription, FuncId, Linkage, Module as _};
 use log::info;
 
 pub mod check;
@@ -160,7 +158,7 @@ struct ModuleBuilder {
     functions: HashMap<String, FunctionInfo>,
 
     /// External functions
-    runtime_functions: HashMap<String, FuncId>,
+    runtime_functions: HashMap<usize, FuncId>,
 
     /// The inner cranelift module
     inner: JITModule,
@@ -201,7 +199,7 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen(
     ir: &[ir::Function],
-    runtime_functions: &HashMap<String, IrFunction>,
+    runtime_functions: &HashMap<usize, IrFunction>,
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module {
@@ -212,15 +210,15 @@ pub fn codegen(
     let mut settings = settings::builder();
     settings.set("opt_level", "speed").unwrap();
     let flags = settings::Flags::new(settings);
-    let isa = cranelift_native::builder().unwrap().finish(flags).unwrap();
+    let isa = cranelift::native::builder().unwrap().finish(flags).unwrap();
 
     let mut builder = JITBuilder::with_isa(
         isa.to_owned(),
-        cranelift_module::default_libcall_names(),
+        cranelift::module::default_libcall_names(),
     );
 
     for (name, func) in runtime_functions {
-        builder.symbol(name, func.ptr);
+        builder.symbol(format!("runtime_function_{name}"), func.ptr);
     }
 
     let jit = JITModule::new(builder);
@@ -235,7 +233,7 @@ pub fn codegen(
         type_info,
     };
 
-    for (name, func) in runtime_functions {
+    for (roto_func_id, func) in runtime_functions {
         let mut sig = module.inner.make_signature();
         for ty in &func.params {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
@@ -243,12 +241,14 @@ pub fn codegen(
         if let Some(ty) = &func.ret {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
-        let Ok(func_id) =
-            module.inner.declare_function(name, Linkage::Import, &sig)
-        else {
+        let Ok(func_id) = module.inner.declare_function(
+            &format!("runtime_function_{roto_func_id}"),
+            Linkage::Import,
+            &sig,
+        ) else {
             panic!()
         };
-        module.runtime_functions.insert(name.clone(), func_id);
+        module.runtime_functions.insert(*roto_func_id, func_id);
     }
 
     // Our functions might call each other, so we declare them before we
@@ -528,7 +528,7 @@ impl<'c> FuncGen<'c> {
                 }
             }
             ir::Instruction::CallRuntime { to, func, args } => {
-                let func_id = self.module.runtime_functions[&func.name];
+                let func_id = self.module.runtime_functions[&func.id];
                 let func_ref = self
                     .module
                     .inner
@@ -644,22 +644,34 @@ impl<'c> FuncGen<'c> {
                 self.def(var, val)
             }
             ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::Alloc { to, size } => {
-                let slot = self.builder.create_sized_stack_slot(
-                    StackSlotData::new(StackSlotKind::ExplicitSlot, *size),
-                );
+            ir::Instruction::Alloc {
+                to,
+                size,
+                align_shift,
+            } => {
+                let slot =
+                    self.builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        *size,
+                        *align_shift,
+                    ));
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
-            ir::Instruction::Initialize { to, bytes } => {
+            ir::Instruction::Initialize {
+                to,
+                bytes,
+                align_shift,
+            } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
                         bytes.len() as u32,
+                        *align_shift,
                     ));
 
                 let data_id = self

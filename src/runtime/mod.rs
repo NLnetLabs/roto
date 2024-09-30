@@ -33,8 +33,8 @@ pub mod verdict;
 use std::{any::TypeId, net::IpAddr};
 
 use func::{Func, FunctionDescription};
-use inetnum::asn::Asn;
-use roto_macros::roto_method;
+use inetnum::{addr::Prefix, asn::Asn};
+use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
@@ -72,9 +72,17 @@ pub enum FunctionKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeFunction {
+    /// Name that the function can be referenced by
     pub name: String,
+
+    /// Description of the signature of the function
     pub description: FunctionDescription,
+
+    /// Whether it's a free function, method or a static method
     pub kind: FunctionKind,
+
+    /// Unique identifier for this function
+    pub id: usize,
 }
 
 impl Runtime {
@@ -188,10 +196,12 @@ impl Runtime {
         let description = f.to_function_description(self)?;
         self.check_description(&description)?;
 
+        let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::Free,
+            id,
         });
         Ok(())
     }
@@ -230,10 +240,12 @@ impl Runtime {
             );
         }
 
+        let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
+            id,
         });
 
         Ok(())
@@ -247,10 +259,12 @@ impl Runtime {
         let description = f.to_function_description(self).unwrap();
         self.check_description(&description)?;
 
+        let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
+            id,
         });
         Ok(())
     }
@@ -315,6 +329,13 @@ impl Runtime {
         rt.register_copy_type::<i64>()?;
         rt.register_copy_type::<Asn>()?;
         rt.register_type::<IpAddr>()?;
+        rt.register_type::<Prefix>()?;
+
+        #[roto_static_method(rt, Prefix, new)]
+        fn prefix_new(ip: *const IpAddr, len: u8) -> Prefix {
+            let ip = unsafe { *ip };
+            Prefix::new(ip, len).unwrap()
+        } 
 
         #[roto_method(rt, IpAddr, eq)]
         fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
@@ -358,16 +379,13 @@ impl Runtime {
 pub mod tests {
     use super::Runtime;
     use roto_macros::{roto_function, roto_method};
-    use routecore::{
-        addr::Prefix,
-        bgp::{
-            aspath::{AsPath, HopPath},
-            communities::Community,
-            path_attributes::{
-                Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
-            },
-            types::{LocalPref, OriginType},
+    use routecore::bgp::{
+        aspath::{AsPath, HopPath},
+        communities::Community,
+        path_attributes::{
+            Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
         },
+        types::{LocalPref, OriginType},
     };
 
     pub fn routecore_runtime() -> Result<Runtime, String> {
@@ -380,7 +398,6 @@ pub mod tests {
         rt.register_type::<Aggregator>()?;
         rt.register_type::<AtomicAggregate>()?;
         rt.register_type::<Community>()?;
-        rt.register_type::<Prefix>()?;
         rt.register_type::<HopPath>()?;
         rt.register_type::<AsPath<Vec<u8>>>()?;
 
@@ -418,6 +435,7 @@ pub mod tests {
                 "i64",
                 "Asn",
                 "IpAddr",
+                "Prefix",
                 "OriginType",
                 "NextHop",
                 "MultiExitDisc",
@@ -425,7 +443,6 @@ pub mod tests {
                 "Aggregator",
                 "AtomicAggregate",
                 "Community",
-                "Prefix",
                 "HopPath",
                 "AsPath"
             ]

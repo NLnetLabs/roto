@@ -83,7 +83,7 @@ pub struct TypeChecked {
 /// Compiler stage: HIR
 pub struct Lowered {
     pub ir: Vec<ir::Function>,
-    runtime_functions: HashMap<String, IrFunction>,
+    runtime_functions: HashMap<usize, IrFunction>,
     label_store: LabelStore,
     type_info: TypeInfo,
 }

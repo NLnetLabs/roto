@@ -1,4 +1,7 @@
-use inetnum::asn::Asn;
+use inetnum::{
+    asn::Asn,
+    addr::Prefix,
+};
 
 use crate::{
     runtime::ty::{
@@ -39,7 +42,7 @@ impl Display for FunctionRetrievalError {
                 expected,
                 got,
             } => {
-                writeln!(f, "The numer of arguments do not match")?;
+                writeln!(f, "The number of arguments do not match")?;
                 writeln!(f, "The Roto function has {expected} arguments, but the Rust function has {got}.")
             }
             FunctionRetrievalError::TypeMismatch(
@@ -85,6 +88,7 @@ fn check_roto_type(
     let UNIT: TypeId = TypeId::of::<()>();
     let ASN: TypeId = TypeId::of::<Asn>();
     let IPADDR: TypeId = TypeId::of::<IpAddr>();
+    let PREFIX: TypeId = TypeId::of::<Prefix>();
 
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
@@ -119,6 +123,7 @@ fn check_roto_type(
                 x if x == UNIT => Type::Primitive(Primitive::Unit),
                 x if x == ASN => Type::Primitive(Primitive::Asn),
                 x if x == IPADDR => Type::Primitive(Primitive::IpAddr),
+                x if x == PREFIX => Type::Primitive(Primitive::Prefix),
                 _ => panic!(),
             };
             if expected_roto == roto_ty {

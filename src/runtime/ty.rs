@@ -16,7 +16,7 @@ use std::{
     sync::{LazyLock, Mutex},
 };
 
-use inetnum::asn::Asn;
+use inetnum::{addr::Prefix, asn::Asn};
 
 use super::verdict::Verdict;
 
@@ -204,6 +204,18 @@ impl<T: 'static> Reflect for *const T {
 }
 
 impl Reflect for IpAddr {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
+        registry.store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+impl Reflect for Prefix {
     type AsParam = *mut Self;
 
     fn as_param(&mut self) -> Self::AsParam {
