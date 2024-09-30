@@ -11,6 +11,7 @@
 use std::{
     any::{type_name, TypeId},
     collections::HashMap,
+    net::IpAddr,
     ops::DerefMut,
     sync::{LazyLock, Mutex},
 };
@@ -73,7 +74,7 @@ impl Ty {
 pub static GLOBAL_TYPE_REGISTRY: LazyLock<Mutex<TypeRegistry>> =
     LazyLock::new(|| Mutex::new(TypeRegistry::default()));
 
-/// A map from TypeId to a [`Ty`], which is a description of the type
+/// A map from [`TypeId`] to a [`Ty`], which is a description of the type
 #[derive(Default)]
 pub struct TypeRegistry {
     map: HashMap<TypeId, Ty>,
@@ -89,12 +90,34 @@ impl TypeRegistry {
         self.map.get(&id)
     }
 
+    /// Register a type implementing [`Reflect`]
     pub fn resolve<T: Reflect>(&mut self) -> Ty {
         T::resolve(self)
     }
 }
 
+/// A type that can register itself into a [`TypeRegistry`].
+///
+/// Via the [`TypeRegistry`], it is then possible to query for information
+/// about this type. Reflection is recursive for types such as [`Verdict`],
+/// [`Result`] and [`Option`].
+///
+/// Pointers are explicitly _not_ recursive, because they can be used to pass
+/// pointers to types that have been registered to Roto and therefore don't
+/// need to implement this trait.
+///
+/// Additionally, this trait specifies how a type should be passed to Roto, via
+/// the `AsParam` associated type.
 pub trait Reflect: 'static {
+    /// The type that this type should be converted into when passed to Roto
+    type AsParam;
+
+    /// Convert the type to its `AsParam`
+    fn as_param(&mut self) -> Self::AsParam;
+
+    /// Put information about this type into the [`TypeRegistry`]
+    ///
+    /// The information is also returned for direct use.
     fn resolve(registry: &mut TypeRegistry) -> Ty;
 
     fn resolve_global() -> Ty {
@@ -104,6 +127,12 @@ pub trait Reflect: 'static {
 }
 
 impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = A::resolve(registry).type_id;
         let e = R::resolve(registry).type_id;
@@ -114,6 +143,12 @@ impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
 }
 
 impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = T::resolve(registry).type_id;
         let e = E::resolve(registry).type_id;
@@ -124,6 +159,12 @@ impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
 }
 
 impl<T: Reflect> Reflect for Option<T> {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = T::resolve(registry).type_id;
 
@@ -133,6 +174,12 @@ impl<T: Reflect> Reflect for Option<T> {
 }
 
 impl<T: 'static> Reflect for *mut T {
+    type AsParam = Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        *self
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
@@ -142,6 +189,12 @@ impl<T: 'static> Reflect for *mut T {
 }
 
 impl<T: 'static> Reflect for *const T {
+    type AsParam = Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        *self
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
@@ -150,9 +203,27 @@ impl<T: 'static> Reflect for *const T {
     }
 }
 
+impl Reflect for IpAddr {
+    type AsParam = *mut Self;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        self as _
+    }
+
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
+        registry.store::<Self>(TypeDescription::Leaf)
+    }
+}
+
 macro_rules! simple_reflect {
     ($t:ty) => {
         impl Reflect for $t {
+            type AsParam = Self;
+
+            fn as_param(&mut self) -> Self::AsParam {
+                *self
+            }
+
             fn resolve(registry: &mut TypeRegistry) -> Ty {
                 registry.store::<Self>(TypeDescription::Leaf)
             }

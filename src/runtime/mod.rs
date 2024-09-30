@@ -30,10 +30,11 @@ pub mod func;
 pub mod ty;
 pub mod verdict;
 
-use std::any::TypeId;
+use std::{any::TypeId, net::IpAddr};
 
 use func::{Func, FunctionDescription};
 use inetnum::asn::Asn;
+use roto_macros::roto_method;
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
@@ -313,6 +314,32 @@ impl Runtime {
         rt.register_copy_type::<i32>()?;
         rt.register_copy_type::<i64>()?;
         rt.register_copy_type::<Asn>()?;
+        rt.register_type::<IpAddr>()?;
+
+        #[roto_method(rt, IpAddr, eq)]
+        fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
+            let a = unsafe { *a };
+            let b = unsafe { *b };
+            a == b
+        }
+
+        #[roto_method(rt, IpAddr)]
+        fn is_ipv4(ip: *const IpAddr) -> bool {
+            let ip = unsafe { &*ip };
+            ip.is_ipv4()
+        }
+
+        #[roto_method(rt, IpAddr)]
+        fn is_ipv6(ip: *const IpAddr) -> bool {
+            let ip = unsafe { &*ip };
+            ip.is_ipv6()
+        }
+
+        #[roto_method(rt, IpAddr)]
+        fn to_canonical(ip: *const IpAddr) -> IpAddr {
+            let ip = unsafe { &*ip };
+            ip.to_canonical()
+        }
 
         Ok(rt)
     }
@@ -329,10 +356,8 @@ impl Runtime {
 
 #[cfg(test)]
 pub mod tests {
-    use std::net::IpAddr;
-
     use super::Runtime;
-    use roto_macros::roto_function;
+    use roto_macros::{roto_function, roto_method};
     use routecore::{
         addr::Prefix,
         bgp::{
@@ -348,7 +373,6 @@ pub mod tests {
     pub fn routecore_runtime() -> Result<Runtime, String> {
         let mut rt = Runtime::basic()?;
 
-        rt.register_type::<IpAddr>()?;
         rt.register_type::<OriginType>()?;
         rt.register_type::<NextHop>()?;
         rt.register_type::<MultiExitDisc>()?;
@@ -360,43 +384,15 @@ pub mod tests {
         rt.register_type::<HopPath>()?;
         rt.register_type::<AsPath<Vec<u8>>>()?;
 
-        #[roto_function]
+        #[roto_function(rt)]
         fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
 
-        rt.register_function("pow", pow)?;
-
-        #[roto_function]
+        #[roto_method(rt, u32)]
         fn is_even(x: u32) -> bool {
             x % 2 == 0
         }
-
-        rt.register_method::<u32, _, _>("is_even", is_even)?;
-
-        #[roto_function]
-        fn is_ipv4(ip: *const IpAddr) -> bool {
-            let ip = unsafe { &*ip };
-            ip.is_ipv4()
-        }
-
-        rt.register_method::<IpAddr, _, _>("is_ipv4", is_ipv4)?;
-
-        #[roto_function]
-        fn is_ipv6(ip: *const IpAddr) -> bool {
-            let ip = unsafe { &*ip };
-            ip.is_ipv6()
-        }
-
-        rt.register_method::<IpAddr, _, _>("is_ipv6", is_ipv6)?;
-
-        #[roto_function]
-        fn to_canonical(ip: *const IpAddr) -> IpAddr {
-            let ip = unsafe { &*ip };
-            ip.to_canonical()
-        }
-
-        rt.register_method::<IpAddr, _, _>("to_canonical", to_canonical)?;
 
         Ok(rt)
     }

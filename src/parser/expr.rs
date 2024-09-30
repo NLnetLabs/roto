@@ -1,9 +1,11 @@
+use std::net::IpAddr;
+
 use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, IpAddress, Literal, Match, MatchArm, Pattern,
-        Record, ReturnKind,
+        BinOp, Block, Expr, Literal, Match, MatchArm, Pattern, Record,
+        ReturnKind,
     },
     parser::ParseError,
 };
@@ -387,6 +389,9 @@ impl<'source> Parser<'source, '_> {
                 | Token::Bool(_)
                 | Token::Integer(_)
                 | Token::Hyphen
+                | Token::IpV4(_)
+                | Token::IpV6(_)
+                | Token::Asn(_)
         )
     }
 
@@ -506,19 +511,19 @@ impl<'source> Parser<'source, '_> {
         self.simple_literal()
     }
 
-    fn ip_address(&mut self) -> ParseResult<Meta<IpAddress>> {
+    fn ip_address(&mut self) -> ParseResult<Meta<IpAddr>> {
         let (token, span) = self.next()?;
         let addr = match token {
-            Token::IpV4(s) => IpAddress::Ipv4(
-                s.parse::<std::net::Ipv4Addr>().map_err(|e| {
+            Token::IpV4(s) => {
+                IpAddr::V4(s.parse::<std::net::Ipv4Addr>().map_err(|e| {
                     ParseError::invalid_literal("Ipv4 addresses", s, e, span)
-                })?,
-            ),
-            Token::IpV6(s) => IpAddress::Ipv6(
-                s.parse::<std::net::Ipv6Addr>().map_err(|e| {
+                })?)
+            }
+            Token::IpV6(s) => {
+                IpAddr::V6(s.parse::<std::net::Ipv6Addr>().map_err(|e| {
                     ParseError::invalid_literal("Ipv6 addresses", s, e, span)
-                })?,
-            ),
+                })?)
+            }
             _ => {
                 return Err(ParseError::expected(
                     "an IP address",

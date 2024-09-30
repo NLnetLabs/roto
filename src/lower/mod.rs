@@ -13,21 +13,21 @@ mod test_eval;
 
 use ir::{Block, Function, Instruction, Operand, Var, VarKind};
 use label::{LabelRef, LabelStore};
-use std::{collections::HashMap, net::IpAddr};
+use std::{any::TypeId, collections::HashMap, net::IpAddr};
 use value::IrType;
 
 use crate::{
-    ast::{self, Expr, Identifier, Literal},
-    parser::meta::{Meta, MetaId},
-    runtime::RuntimeFunction,
+    ast::{self, Identifier, Literal},
+    parser::meta::Meta,
+    runtime::{self, RuntimeFunction},
     typechecker::{
-        self,
         info::TypeInfo,
         scope::{DefinitionRef, ScopeRef},
         types::{
             FunctionDefinition, FunctionKind, Primitive, Signature, Type,
         },
     },
+    Runtime,
 };
 
 use self::value::IrValue;
@@ -63,6 +63,7 @@ struct Lowerer<'r> {
     type_info: &'r mut TypeInfo,
     runtime_functions: &'r mut HashMap<String, IrFunction>,
     label_store: &'r mut LabelStore,
+    runtime: &'r Runtime,
 }
 
 pub fn lower(
@@ -70,8 +71,9 @@ pub fn lower(
     type_info: &mut TypeInfo,
     runtime_functions: &mut HashMap<String, IrFunction>,
     label_store: &mut LabelStore,
+    runtime: &Runtime,
 ) -> Vec<Function> {
-    Lowerer::tree(type_info, runtime_functions, tree, label_store)
+    Lowerer::tree(type_info, runtime_functions, tree, label_store, runtime)
 }
 
 impl<'r> Lowerer<'r> {
@@ -80,6 +82,7 @@ impl<'r> Lowerer<'r> {
         runtime_functions: &'r mut HashMap<String, IrFunction>,
         function_name: &Meta<Identifier>,
         label_store: &'r mut LabelStore,
+        runtime: &'r Runtime,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
         Self {
@@ -90,6 +93,7 @@ impl<'r> Lowerer<'r> {
             runtime_functions,
             blocks: Vec::new(),
             label_store,
+            runtime,
         }
     }
 
@@ -134,6 +138,7 @@ impl<'r> Lowerer<'r> {
         runtime_functions: &mut HashMap<String, IrFunction>,
         tree: &ast::SyntaxTree,
         label_store: &'r mut LabelStore,
+        runtime: &'r Runtime,
     ) -> Vec<Function> {
         let ast::SyntaxTree {
             declarations: expressions,
@@ -150,6 +155,7 @@ impl<'r> Lowerer<'r> {
                             runtime_functions,
                             &x.ident,
                             label_store,
+                            runtime,
                         )
                         .filter_map(x),
                     );
@@ -166,6 +172,7 @@ impl<'r> Lowerer<'r> {
                             runtime_functions,
                             ident,
                             label_store,
+                            runtime,
                         )
                         .function(ident, params, ret, body),
                     );
@@ -432,14 +439,20 @@ impl<'r> Lowerer<'r> {
                 let func = self.type_info.function(ident).clone();
 
                 match &func.definition {
-                    FunctionDefinition::Runtime(runtime_func) => self
-                        .call_runtime_function(
-                            ident,
-                            id,
-                            &func,
+                    FunctionDefinition::Runtime(runtime_func) => {
+                        let args: Vec<_> = args
+                            .iter()
+                            .map(|e| self.expr(e).unwrap())
+                            .collect();
+
+                        self.call_runtime_function(
+                            **ident,
                             runtime_func,
-                            &args.node,
-                        ),
+                            args,
+                            &func.signature.parameter_types,
+                            &func.signature.return_type,
+                        )
+                    }
                     FunctionDefinition::Roto => {
                         let ty = self.type_info.type_of(ident);
                         let DefinitionRef(_, ident) =
@@ -540,14 +553,18 @@ impl<'r> Lowerer<'r> {
                         None
                     };
 
-                let args = receiver_iter.into_iter().chain(&args.node);
+                let args: Vec<_> = receiver_iter
+                    .into_iter()
+                    .chain(&args.node)
+                    .map(|e| self.expr(e).unwrap())
+                    .collect();
 
                 self.call_runtime_function(
-                    ident,
-                    id,
-                    &func,
+                    **ident,
                     runtime_func,
                     args,
+                    &func.signature.parameter_types,
+                    &func.signature.return_type,
                 )
             }
             ast::Expr::Access(e, field) => {
@@ -666,15 +683,88 @@ impl<'r> Lowerer<'r> {
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
+                    (
+                        ast::BinOp::Eq,
+                        _,
+                        Type::Primitive(Primitive::IpAddr),
+                    ) => {
+                        let ip_addr_type_id = TypeId::of::<IpAddr>();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::Method(
+                                    ip_addr_type_id,
+                                ),
+                                "eq",
+                            )
+                            .clone();
+
+                        let out = self
+                            .call_runtime_function(
+                                Identifier::from("eq"),
+                                &runtime_func,
+                                [left, right],
+                                &[
+                                    Type::Primitive(Primitive::IpAddr),
+                                    Type::Primitive(Primitive::IpAddr),
+                                ],
+                                &Type::Primitive(Primitive::Bool),
+                            )
+                            .unwrap();
+                        self.add(Instruction::Assign {
+                            to: place.clone(),
+                            val: out,
+                            ty: IrType::Bool,
+                        })
+                    }
+                    (
+                        ast::BinOp::Ne,
+                        _,
+                        Type::Primitive(Primitive::IpAddr),
+                    ) => {
+                        let ip_addr_type_id = TypeId::of::<IpAddr>();
+                        let runtime_func = self
+                            .find_runtime_function(
+                                runtime::FunctionKind::Method(
+                                    ip_addr_type_id,
+                                ),
+                                "eq",
+                            )
+                            .clone();
+
+                        let out = self
+                            .call_runtime_function(
+                                Identifier::from("eq"),
+                                &runtime_func,
+                                [left, right],
+                                &[
+                                    Type::Primitive(Primitive::IpAddr),
+                                    Type::Primitive(Primitive::IpAddr),
+                                ],
+                                &Type::Primitive(Primitive::Bool),
+                            )
+                            .unwrap();
+
+                        self.add(Instruction::Not {
+                            to: place.clone(),
+                            val: out,
+                        })
+                    }
                     (ast::BinOp::Eq, _, ty)
                         if self.is_reference_type(&ty) =>
                     {
                         let size = self.type_info.size_of(&ty);
+                        let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
+                            to: tmp.clone(),
+                            size: IrValue::Pointer(size as usize).into(),
+                            left: left.clone(),
+                            right: right.clone(),
+                        });
+                        self.add(Instruction::Cmp {
                             to: place.clone(),
-                            size,
-                            left,
-                            right,
+                            cmp: ir::IntCmp::Eq,
+                            left: tmp.into(),
+                            right: IrValue::Pointer(0).into(),
                         })
                     }
                     (ast::BinOp::Ne, _, ty)
@@ -684,13 +774,15 @@ impl<'r> Lowerer<'r> {
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
                             to: tmp.clone(),
-                            size,
-                            left,
-                            right,
+                            size: IrValue::Pointer(size as usize).into(),
+                            left: left.clone(),
+                            right: right.clone(),
                         });
-                        self.add(Instruction::Not {
+                        self.add(Instruction::Cmp {
                             to: place.clone(),
-                            val: tmp.into(),
+                            cmp: ir::IntCmp::Ne,
+                            left: tmp.into(),
+                            right: IrValue::Pointer(0).into(),
                         })
                     }
                     (_, Some(cmp), _) => {
@@ -818,16 +910,33 @@ impl<'r> Lowerer<'r> {
         }
     }
 
+    fn find_runtime_function(
+        &self,
+        kind: runtime::FunctionKind,
+        name: &str,
+    ) -> &RuntimeFunction {
+        self.runtime
+            .functions
+            .iter()
+            .find(|f| f.kind == kind && f.name == name)
+            .unwrap()
+    }
+
     /// Lower a literal
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(_) => todo!(),
             Literal::Asn(n) => IrValue::Asn(*n).into(),
-            Literal::IpAddress(addr) => IrValue::IpAddr(match addr {
-                ast::IpAddress::Ipv4(x) => IpAddr::V4(*x),
-                ast::IpAddress::Ipv6(x) => IpAddr::V6(*x),
-            })
-            .into(),
+            Literal::IpAddress(addr) => {
+                let to = self.new_tmp();
+                const SIZE: usize = std::mem::size_of::<IpAddr>();
+                let x: [u8; SIZE] = unsafe { std::mem::transmute_copy(addr) };
+                self.add(Instruction::Initialize {
+                    to: to.clone(),
+                    bytes: x.into(),
+                });
+                to.into()
+            }
             Literal::Integer(x) => {
                 let ty = self.type_info.type_of(lit);
                 match ty {
@@ -927,6 +1036,7 @@ impl<'r> Lowerer<'r> {
                 | Type::NamedRecord(..)
                 | Type::Enum(..)
                 | Type::Verdict(..)
+                | Type::Primitive(Primitive::IpAddr)
         )
     }
 
@@ -943,6 +1053,7 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::Primitive(Primitive::Asn) => IrType::Asn,
+            Type::Primitive(Primitive::IpAddr) => IrType::Pointer,
             Type::IntVar(_) => IrType::I32,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
@@ -950,36 +1061,34 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn call_runtime_function<'a>(
+    fn call_runtime_function(
         &mut self,
-        ident: &Meta<Identifier>,
-        id: MetaId,
-        func: &typechecker::types::Function,
+        ident: Identifier,
         runtime_func: &RuntimeFunction,
-        args: impl IntoIterator<Item = &'a Meta<Expr>>,
+        args: impl IntoIterator<Item = Operand>,
+        parameter_types: &[Type],
+        return_type: &Type,
     ) -> Option<Operand> {
-        let ret = &func.signature.return_type;
-        let ty = self.type_info.type_of(id);
         let out_ptr = self.new_tmp();
-        let size = self.type_info.size_of(ret);
+        let size = self.type_info.size_of(return_type);
         self.add(Instruction::Alloc {
             to: out_ptr.clone(),
             size,
         });
 
-        let args = std::iter::once(Operand::Place(out_ptr.clone()))
-            .chain(args.into_iter().flat_map(|a| self.expr(a)))
-            .collect();
-
         let mut params = Vec::new();
         params.push(IrType::Pointer);
 
-        for ty in &func.signature.parameter_types {
+        for ty in parameter_types {
             params.push(self.lower_type(ty))
         }
 
+        let args = std::iter::once(Operand::Place(out_ptr.clone()))
+            .chain(args)
+            .collect();
+
         let ir_func = IrFunction {
-            name: ident.node,
+            name: ident,
             ptr: runtime_func.description.pointer(),
             params,
             ret: None,
@@ -994,10 +1103,12 @@ impl<'r> Lowerer<'r> {
             args,
         });
 
-        if self.is_reference_type(&ty) {
+        if self.is_reference_type(return_type) {
             Some(out_ptr.into())
+        } else if size > 0 {
+            Some(self.read_field(out_ptr.into(), 0, return_type))
         } else {
-            Some(self.read_field(out_ptr.into(), 0, &ty))
+            None
         }
     }
 }
@@ -1010,6 +1121,7 @@ fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
             | Primitive::U16
             | Primitive::U8
             | Primitive::Asn
+            | Primitive::IpAddr
             | Primitive::Bool => false,
             Primitive::I64
             | Primitive::I32

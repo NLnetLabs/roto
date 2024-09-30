@@ -13,6 +13,7 @@ use crate::{
     },
     runtime::RuntimeFunction,
 };
+use log::trace;
 use std::collections::HashMap;
 
 /// Memory for the IR evaluation
@@ -308,6 +309,7 @@ pub fn eval(
 
     loop {
         let instruction = &instructions[program_counter];
+        trace!("{:?}", &instruction);
         match instruction {
             Instruction::Jump(b) => {
                 program_counter = block_map[b];
@@ -490,6 +492,11 @@ pub fn eval(
                 debug_assert_eq!(*ty, res.get_type());
                 vars.insert(to.clone(), res);
             }
+            Instruction::Extend { to, ty, from } => {
+                let val = eval_operand(&vars, from);
+                let val = val.as_vec();
+                vars.insert(to.clone(), IrValue::from_slice(ty, &val));
+            }
             Instruction::Offset { to, from, offset } => {
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)
                 else {
@@ -500,6 +507,11 @@ pub fn eval(
             }
             Instruction::Alloc { to, size } => {
                 let pointer = mem.allocate(*size as usize);
+                vars.insert(to.clone(), IrValue::Pointer(pointer));
+            }
+            Instruction::Initialize { to, bytes } => {
+                let pointer = mem.allocate(bytes.len());
+                mem.write(pointer, bytes);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
             Instruction::Write { to, val } => {
@@ -543,10 +555,18 @@ pub fn eval(
                 else {
                     panic!()
                 };
-                let left = mem.read_slice(left, *size as usize);
-                let right = mem.read_slice(right, *size as usize);
-                let res = left == right;
-                vars.insert(to.clone(), IrValue::Bool(res));
+                let &IrValue::Pointer(size) = eval_operand(&vars, size)
+                else {
+                    panic!()
+                };
+                let left = mem.read_slice(left, size);
+                let right = mem.read_slice(right, size);
+                let res = match left.cmp(right) {
+                    std::cmp::Ordering::Less => -1isize as usize,
+                    std::cmp::Ordering::Equal => 0,
+                    std::cmp::Ordering::Greater => 1,
+                };
+                vars.insert(to.clone(), IrValue::Pointer(res));
             }
         }
 

@@ -84,7 +84,7 @@ pub trait Func<A, R>: Sized {
 
 macro_rules! func_impl {
     ($($arg:ident),*) => {
-        impl<$($arg,)* Ret> Func<($($arg,)*), Ret> for extern "C" fn($($arg),*) -> Ret
+        impl<$($arg,)* Ret> Func<($($arg,)*), Ret> for for<'a> extern "C" fn($($arg),*) -> Ret
         where
             $(
                 $arg: Reflect + for<'a> TryFrom<&'a IrValue> + 'static,
