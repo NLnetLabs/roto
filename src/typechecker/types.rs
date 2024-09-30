@@ -45,6 +45,8 @@ pub enum Primitive {
     String,
     Bool,
     Asn,
+    IpAddr,
+    Prefix,
 }
 
 impl From<Primitive> for Type {
@@ -71,6 +73,8 @@ impl Display for Primitive {
                 Primitive::String => "String",
                 Primitive::Bool => "bool",
                 Primitive::Asn => "Asn",
+                Primitive::IpAddr => "IpAddr",
+                Primitive::Prefix => "Prefix",
             }
         )
     }
@@ -174,20 +178,16 @@ impl Type {
 impl Primitive {
     /// Size of the type in bytes
     pub fn size(&self) -> u32 {
+        use Primitive::*;
         match self {
-            Primitive::U8 => 1,
-            Primitive::U16 => 2,
-            Primitive::U32 => 4,
-            Primitive::U64 => 8,
-            Primitive::I8 => 1,
-            Primitive::I16 => 2,
-            Primitive::I32 => 4,
-            Primitive::I64 => 8,
-            Primitive::Unit => 0,
-            Primitive::String => 4,
-            Primitive::Bool => 1,
-            // Asn has the same size as u32, which is 4 bytes
-            Primitive::Asn => 4,
+            U8 | I8 | Bool => 1,
+            U16 | I16 => 2,
+            U32 | I32 | Asn => 4,
+            U64 | I64 => 8,
+            Unit => 0,
+            String => 4,
+            IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
+            Prefix => std::mem::size_of::<inetnum::addr::Prefix>() as u32,
         }
     }
 }
@@ -287,6 +287,8 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
         ("String", String),
         ("Unit", Unit),
         ("Asn", Asn),
+        ("IpAddr", IpAddr),
+        ("Prefix", Prefix),
     ];
 
     let mut types = Vec::new();

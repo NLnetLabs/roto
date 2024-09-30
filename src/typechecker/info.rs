@@ -1,10 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::IpAddr};
+
+use inetnum::addr::Prefix;
 
 use crate::{ast::Identifier, parser::meta::MetaId};
 
 use super::{
     scope::{DefinitionRef, ScopeRef},
-    types::{Function, Type},
+    types::{Function, Primitive, Type},
     unionfind::UnionFind,
 };
 
@@ -145,6 +147,12 @@ impl TypeInfo {
                 .map(|f| self.alignment_of(f))
                 .max()
                 .unwrap_or(4),
+            Type::Primitive(Primitive::IpAddr) => {
+                std::mem::align_of::<IpAddr>() as u32
+            }
+            Type::Primitive(Primitive::Prefix) => {
+                std::mem::align_of::<Prefix>() as u32
+            }
             ty => self.size_of(&ty),
         };
         // Alignment must be guaranteed to be at least 1

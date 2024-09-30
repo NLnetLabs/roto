@@ -252,7 +252,7 @@ pub enum Literal {
     #[allow(dead_code)]
     String(String),
     Asn(Asn),
-    IpAddress(IpAddress),
+    IpAddress(std::net::IpAddr),
     Integer(i64),
     Bool(bool),
 }
@@ -312,10 +312,4 @@ impl std::fmt::Display for BinOp {
             }
         )
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum IpAddress {
-    Ipv4(std::net::Ipv4Addr),
-    Ipv6(std::net::Ipv6Addr),
 }

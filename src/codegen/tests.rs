@@ -1,5 +1,7 @@
-use inetnum::asn::Asn;
-use roto_macros::roto_function;
+use std::net::IpAddr;
+
+use inetnum::{addr::Prefix, asn::Asn};
+use roto_macros::{roto_function, roto_static_method};
 
 use crate::{
     pipeline::Compiled, runtime::tests::routecore_runtime, src, Files,
@@ -543,19 +545,17 @@ fn int_var() {
 
 #[test]
 fn issue_52() {
-    let mut rt = Runtime::basic().unwrap();
-
     struct Foo {
         _x: i32,
     }
 
-    #[roto_function]
+    let mut rt = Runtime::basic().unwrap();
+    rt.register_type::<Foo>().unwrap();
+
+    #[roto_static_method(rt, Foo)]
     fn bar(_x: u32) -> u32 {
         2
     }
-
-    rt.register_type::<Foo>().unwrap();
-    rt.register_static_method::<Foo, _, _>("bar", bar).unwrap();
 
     let s = src!(
         "
@@ -664,6 +664,191 @@ fn multiply() {
 
     let res = f.call(20);
     assert_eq!(res, Verdict::Accept(40));
+}
+
+#[test]
+fn ip_output() {
+    let s = src!(
+        "
+        filter-map main() {
+            apply { accept 1.2.3.4 }
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), Verdict<IpAddr, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call();
+    assert_eq!(res, Verdict::Accept(ip));
+}
+
+#[test]
+fn ip_passthrough() {
+    let s = src!(
+        "
+        filter-map main(x: IpAddr) {
+            apply { accept x }
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(IpAddr,), Verdict<IpAddr, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+}
+
+#[test]
+fn ipv4_compare() {
+    let s = src!(
+        "
+        filter-map main(x: IpAddr) {
+            apply { 
+                if x == 0.0.0.0 {
+                    accept x
+                } else if x == 192.168.0.0 {
+                    accept x
+                } else {
+                    reject x
+                }
+            }
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([0, 0, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+    let ip = IpAddr::from([192, 168, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Reject(ip));
+
+    let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Reject(ip));
+}
+
+#[test]
+fn ipv6_compare() {
+    let s = src!(
+        "
+        filter-map main(x: IpAddr) {
+            apply { 
+                if x == :: {
+                    accept x
+                } else if x == 192.168.0.0 {
+                    accept x
+                } else if x == ::1 {
+                    accept x
+                } else {
+                    reject x
+                }
+            }
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([192, 168, 0, 0]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Accept(ip));
+
+    let ip = IpAddr::from([1, 2, 3, 4]);
+    let res = f.call(ip);
+    assert_eq!(res, Verdict::Reject(ip));
+}
+
+#[test]
+fn construct_prefix() {
+    let s = src!(
+        "
+        filter-map main() {
+            apply { 
+                accept 192.168.0.0 / 16
+            }
+        }
+    "
+    );
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), Verdict<Prefix, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let p = Prefix::new("192.168.0.0".parse().unwrap(), 16).unwrap();
+    let res = f.call();
+    assert_eq!(res, Verdict::Accept(p));
+}
+
+#[test]
+fn function_returning_unit() {
+    let mut runtime = Runtime::basic().unwrap();
+
+    #[roto_function(runtime)]
+    fn unit_unit() {}
+
+    let s = src!(
+        "
+        filter-map main() {
+            apply { 
+                accept unit_unit()
+            }
+        }
+    "
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), Verdict<(), ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call();
+    assert_eq!(res, Verdict::Accept(()));
+}
+
+#[test]
+fn functions_with_lifetimes() {
+    struct Foo<'a> {
+        _x: &'a u32,
+    }
+
+    let mut rt = Runtime::basic().unwrap();
+    rt.register_type::<Foo>().unwrap();
+
+    #[roto_function(rt)]
+    fn funcy(_foo: *const Foo) {}
+
+    #[allow(clippy::needless_lifetimes)]
+    #[roto_function(rt)]
+    fn funcy2<'a>(_foo: *const Foo<'a>) {}
 }
 
 // #[test]

@@ -30,10 +30,11 @@ pub mod func;
 pub mod ty;
 pub mod verdict;
 
-use std::any::TypeId;
+use std::{any::TypeId, net::IpAddr};
 
 use func::{Func, FunctionDescription};
-use inetnum::asn::Asn;
+use inetnum::{addr::Prefix, asn::Asn};
+use roto_macros::roto_method;
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
@@ -71,9 +72,17 @@ pub enum FunctionKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeFunction {
+    /// Name that the function can be referenced by
     pub name: String,
+
+    /// Description of the signature of the function
     pub description: FunctionDescription,
+
+    /// Whether it's a free function, method or a static method
     pub kind: FunctionKind,
+
+    /// Unique identifier for this function
+    pub id: usize,
 }
 
 impl Runtime {
@@ -187,10 +196,12 @@ impl Runtime {
         let description = f.to_function_description(self)?;
         self.check_description(&description)?;
 
+        let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::Free,
+            id,
         });
         Ok(())
     }
@@ -229,10 +240,12 @@ impl Runtime {
             );
         }
 
+        let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
+            id,
         });
 
         Ok(())
@@ -246,10 +259,12 @@ impl Runtime {
         let description = f.to_function_description(self).unwrap();
         self.check_description(&description)?;
 
+        let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name: name.into(),
             description,
             kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
+            id,
         });
         Ok(())
     }
@@ -313,6 +328,53 @@ impl Runtime {
         rt.register_copy_type::<i32>()?;
         rt.register_copy_type::<i64>()?;
         rt.register_copy_type::<Asn>()?;
+        rt.register_type::<IpAddr>()?;
+        rt.register_type::<Prefix>()?;
+
+        extern "C" fn prefix_new(out: *mut Prefix, ip: *mut IpAddr, len: u8) {
+            let ip = unsafe { *ip };
+
+            let p = Prefix::new(ip, len).unwrap();
+            let p = unsafe {
+                std::mem::transmute::<Prefix, [u8; std::mem::size_of::<Prefix>()]>(p)
+            };
+
+            let out = out as *mut [u8; std::mem::size_of::<Prefix>()];
+            unsafe {
+                *out = p;
+            }
+        }
+
+        rt.register_static_method::<Prefix, _, _>(
+            "new",
+            prefix_new as extern "C" fn(_, _, _) -> _,
+        )
+        .unwrap();
+
+        #[roto_method(rt, IpAddr, eq)]
+        fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
+            let a = unsafe { *a };
+            let b = unsafe { *b };
+            a == b
+        }
+
+        #[roto_method(rt, IpAddr)]
+        fn is_ipv4(ip: *const IpAddr) -> bool {
+            let ip = unsafe { &*ip };
+            ip.is_ipv4()
+        }
+
+        #[roto_method(rt, IpAddr)]
+        fn is_ipv6(ip: *const IpAddr) -> bool {
+            let ip = unsafe { &*ip };
+            ip.is_ipv6()
+        }
+
+        #[roto_method(rt, IpAddr)]
+        fn to_canonical(ip: *const IpAddr) -> IpAddr {
+            let ip = unsafe { &*ip };
+            ip.to_canonical()
+        }
 
         Ok(rt)
     }
@@ -329,26 +391,20 @@ impl Runtime {
 
 #[cfg(test)]
 pub mod tests {
-    use std::net::IpAddr;
-
     use super::Runtime;
-    use roto_macros::roto_function;
-    use routecore::{
-        addr::Prefix,
-        bgp::{
-            aspath::{AsPath, HopPath},
-            communities::Community,
-            path_attributes::{
-                Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
-            },
-            types::{LocalPref, OriginType},
+    use roto_macros::{roto_function, roto_method};
+    use routecore::bgp::{
+        aspath::{AsPath, HopPath},
+        communities::Community,
+        path_attributes::{
+            Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
         },
+        types::{LocalPref, OriginType},
     };
 
     pub fn routecore_runtime() -> Result<Runtime, String> {
         let mut rt = Runtime::basic()?;
 
-        rt.register_type::<IpAddr>()?;
         rt.register_type::<OriginType>()?;
         rt.register_type::<NextHop>()?;
         rt.register_type::<MultiExitDisc>()?;
@@ -356,47 +412,18 @@ pub mod tests {
         rt.register_type::<Aggregator>()?;
         rt.register_type::<AtomicAggregate>()?;
         rt.register_type::<Community>()?;
-        rt.register_type::<Prefix>()?;
         rt.register_type::<HopPath>()?;
         rt.register_type::<AsPath<Vec<u8>>>()?;
 
-        #[roto_function]
+        #[roto_function(rt)]
         fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
 
-        rt.register_function("pow", pow)?;
-
-        #[roto_function]
+        #[roto_method(rt, u32)]
         fn is_even(x: u32) -> bool {
             x % 2 == 0
         }
-
-        rt.register_method::<u32, _, _>("is_even", is_even)?;
-
-        #[roto_function]
-        fn is_ipv4(ip: *const IpAddr) -> bool {
-            let ip = unsafe { &*ip };
-            ip.is_ipv4()
-        }
-
-        rt.register_method::<IpAddr, _, _>("is_ipv4", is_ipv4)?;
-
-        #[roto_function]
-        fn is_ipv6(ip: *const IpAddr) -> bool {
-            let ip = unsafe { &*ip };
-            ip.is_ipv6()
-        }
-
-        rt.register_method::<IpAddr, _, _>("is_ipv6", is_ipv6)?;
-
-        #[roto_function]
-        fn to_canonical(ip: *const IpAddr) -> IpAddr {
-            let ip = unsafe { &*ip };
-            ip.to_canonical()
-        }
-
-        rt.register_method::<IpAddr, _, _>("to_canonical", to_canonical)?;
 
         Ok(rt)
     }
@@ -422,6 +449,7 @@ pub mod tests {
                 "i64",
                 "Asn",
                 "IpAddr",
+                "Prefix",
                 "OriginType",
                 "NextHop",
                 "MultiExitDisc",
@@ -429,7 +457,6 @@ pub mod tests {
                 "Aggregator",
                 "AtomicAggregate",
                 "Community",
-                "Prefix",
                 "HopPath",
                 "AsPath"
             ]
