@@ -1,13 +1,12 @@
-filter-map main(bla: Bla) {
+filter-map main(x: IpAddr) {
+    define {
+        y = 0.0.0.0;
+    }
     apply {
-        if bla.y() > 10 {
-            accept 2 * bla.y()
+        if x == y {
+            accept
         } else {
             reject
         }
     }
-}
-
-filter-map just_reject(x: u32) {
-    apply { reject }
 }

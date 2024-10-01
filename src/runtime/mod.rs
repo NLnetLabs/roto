@@ -396,9 +396,6 @@ pub mod tests {
     use routecore::bgp::{
         aspath::{AsPath, HopPath},
         communities::Community,
-        path_attributes::{
-            Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
-        },
         types::{LocalPref, OriginType},
     };
 
@@ -406,11 +403,7 @@ pub mod tests {
         let mut rt = Runtime::basic()?;
 
         rt.register_type::<OriginType>()?;
-        rt.register_type::<NextHop>()?;
-        rt.register_type::<MultiExitDisc>()?;
         rt.register_type::<LocalPref>()?;
-        rt.register_type::<Aggregator>()?;
-        rt.register_type::<AtomicAggregate>()?;
         rt.register_type::<Community>()?;
         rt.register_type::<HopPath>()?;
         rt.register_type::<AsPath<Vec<u8>>>()?;
@@ -451,11 +444,7 @@ pub mod tests {
                 "IpAddr",
                 "Prefix",
                 "OriginType",
-                "NextHop",
-                "MultiExitDisc",
                 "LocalPref",
-                "Aggregator",
-                "AtomicAggregate",
                 "Community",
                 "HopPath",
                 "AsPath"
