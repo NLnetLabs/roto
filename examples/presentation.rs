@@ -2,7 +2,7 @@ use std::error::Error;
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
-use roto::roto_method;
+use roto::{roto_method, TypedFunc, Val, Verdict};
 use routecore::bgp::aspath::{Hop, HopPath};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::workshop::route::RouteWorkshop;
@@ -18,6 +18,7 @@ mod hidden {
         workshop::route::RouteWorkshop,
     };
 
+    #[allow(dead_code)]
     pub enum RotondaRoute {
         Ipv4Unicast(RouteWorkshop<Ipv4UnicastNlri>),
         Ipv6Unicast(RouteWorkshop<Ipv6UnicastNlri>),
@@ -65,13 +66,17 @@ mod hidden {
 
 use hidden::*;
 
+type Log = *mut OutputStream<Output>;
+type Func = TypedFunc<(Val<Log>, Val<RotondaRoute>), Verdict<(), ()>>;
+
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rt = roto::Runtime::basic()?;
 
     // Registering types and their methods
 
     rt.register_type_with_name::<RotondaRoute>("Route")?;
-    rt.register_type_with_name::<OutputStream<Output>>("Log")?;
+
+    rt.register_type_with_name::<Log>("Log")?;
 
     #[roto_method(rt, RotondaRoute)]
     fn prefix_matches(
@@ -103,30 +108,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         false
     }
 
-    #[roto_method(rt, OutputStream<Output>)]
-    fn log_prefix(stream: *mut OutputStream<Output>, prefix: *const Prefix) {
-        let stream = unsafe { &mut *stream };
+    #[roto_method(rt, Log)]
+    fn log_prefix(stream: *mut Log, prefix: *const Prefix) {
+        let stream = unsafe { &mut **stream };
         let prefix = unsafe { &*prefix };
         stream.push(Output::Prefix(*prefix));
     }
 
-    #[roto_method(rt, OutputStream<Output>)]
-    fn log_custom(stream: *mut OutputStream<Output>, id: u32, local: u32) {
-        let stream = unsafe { &mut *stream };
+    #[roto_method(rt, Log)]
+    fn log_custom(stream: *mut Log, id: u32, local: u32) {
+        let stream = unsafe { &mut **stream };
         stream.push(Output::Custom(id, local));
     }
-
-    // Compile and call script
 
     let mut compiled = roto::read_files(["examples/presentation.roto"])?
         .compile(rt, usize::BITS / 8)
         .inspect_err(|e| eprintln!("{e}"))?;
 
-    let function = compiled.get_function::<
-        (*mut OutputStream<Output>, *mut RotondaRoute),
-        roto::Verdict<(), ()>
-    >("rib-in-pre")
-    .unwrap();
+    let function = compiled.get_function("rib-in-pre").unwrap();
 
     run_with_prefix(&function, "8.8.8.0/24")?;
     run_with_prefix(&function, "100.40.0.0/17")?;
@@ -135,17 +134,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 fn run_with_prefix(
-    function: &roto::TypedFunc<
-        (*mut OutputStream<Output>, *mut RotondaRoute),
-        roto::Verdict<(), ()>,
-    >,
+    function: &Func,
     prefix: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let mut route =
+    let route =
         RotondaRoute::Ipv4Unicast(RouteWorkshop::new(prefix.parse()?));
     let mut output = OutputStream::default();
+    let log = &mut output as *mut _;
 
-    let verdict = function.call(&mut output as *mut _, &mut route as *mut _);
+    let verdict = function.call(Val(log), Val(route));
 
     println!("Input: {prefix}");
     println!("Verdict: {verdict:?}");

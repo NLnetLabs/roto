@@ -129,8 +129,19 @@ fn check_roto_type(
                 Err(error_message)
             }
         }
-        TypeDescription::ConstPtr(_) => todo!(),
-        TypeDescription::MutPtr(_) => Ok(()), // TODO: actually check this
+        TypeDescription::Val(ty) => {
+            let Type::BuiltIn(_, id) = roto_ty else {
+                return Err(error_message);
+            };
+            
+            if ty != id {
+                return Err(error_message);
+            }
+
+            Ok(())
+        }
+        TypeDescription::ConstPtr(_) => Err(error_message),
+        TypeDescription::MutPtr(_) => Err(error_message), // TODO: actually check this
         TypeDescription::Verdict(rust_accept, rust_reject) => {
             let Type::Verdict(roto_accept, roto_reject) = &roto_ty else {
                 return Err(error_message);

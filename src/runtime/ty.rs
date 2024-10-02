@@ -17,7 +17,7 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use super::verdict::Verdict;
+use super::{val::Val, verdict::Verdict};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -38,6 +38,9 @@ pub enum TypeDescription {
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
+
+    /// `Val<T>`
+    Val(TypeId),
 }
 
 #[derive(Clone)]
@@ -193,6 +196,21 @@ impl<T: 'static> Reflect for *const T {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
         let desc = TypeDescription::ConstPtr(t);
+        registry.store::<Self>(desc)
+    }
+}
+
+impl<T: 'static> Reflect for Val<T> {
+    type AsParam = *mut T;
+
+    fn as_param(&mut self) -> Self::AsParam {
+        &mut self.0 as _
+    }
+
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
+        let t = registry.store::<T>(TypeDescription::Leaf).type_id;
+
+        let desc = TypeDescription::Val(t);
         registry.store::<Self>(desc)
     }
 }

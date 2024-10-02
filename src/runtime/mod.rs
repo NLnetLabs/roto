@@ -29,6 +29,7 @@
 pub mod func;
 pub mod ty;
 pub mod verdict;
+pub mod val;
 
 use std::{any::TypeId, net::IpAddr};
 
