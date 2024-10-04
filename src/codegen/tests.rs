@@ -902,5 +902,4 @@ fn arc_type() {
         output.clones.load(Ordering::Relaxed),
         output.drops.load(Ordering::Relaxed)
     );
-    panic!();
 }
