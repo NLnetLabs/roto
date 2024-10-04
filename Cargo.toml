@@ -23,7 +23,7 @@ clap = { version = "4.4.6", features = ["derive"] }
 env_logger = "0.10"
 log = "0.4"
 logos = "0.14.0"
-inetnum = { version = "0.1.0" }
+inetnum = "0.1.0"
 symbol_table = { version = "0.3.0", features = ["global"] }
 string-interner = "0.17.0"
 roto-macros = { path = "macros" }
