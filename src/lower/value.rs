@@ -416,11 +416,10 @@ impl TryFrom<&IrValue> for Asn {
     fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
         match value {
             IrValue::Asn(x) => Ok(*x),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }
-
 
 impl<T> From<*const T> for IrValue {
     fn from(value: *const T) -> Self {

@@ -205,6 +205,18 @@ pub enum Instruction {
         to: Operand,
         from: Operand,
         size: u32,
+        /// Pointer to the clone implementation of the type
+        clone: Option<unsafe extern "C" fn(*const (), *mut ())>,
+    },
+
+    /// Drop a value
+    ///
+    /// For primitives and copy types, this is a noop. For more complex types
+    /// it matches Rust's Drop.
+    Drop {
+        var: Var,
+        /// Pointer to the drop implementation of the type
+        drop: Option<unsafe extern "C" fn(*mut ())>,
     },
 
     /// Compare chunks of memory
@@ -495,10 +507,21 @@ impl<'a> IrPrinter<'a> {
                     self.label(default)
                 )
             }
-            Alloc { to, size, align_shift } => {
-                format!("{} = mem::alloc(size={size}, align_shift={align_shift})", self.var(to))
+            Alloc {
+                to,
+                size,
+                align_shift,
+            } => {
+                format!(
+                    "{} = mem::alloc(size={size}, align_shift={align_shift})",
+                    self.var(to)
+                )
             }
-            Initialize { to, bytes, align_shift } => {
+            Initialize {
+                to,
+                bytes,
+                align_shift,
+            } => {
                 format!(
                     "{} = mem::initialize([{}], align_shift={align_shift})",
                     self.var(to),
@@ -530,11 +553,28 @@ impl<'a> IrPrinter<'a> {
                     self.operand(val)
                 )
             }
-            Copy { to, from, size } => {
+            Copy {
+                to,
+                from,
+                size,
+                clone: None,
+            } => {
                 format!(
                     "mem::copy({}, {}, {size})",
                     self.operand(to),
-                    self.operand(from)
+                    self.operand(from),
+                )
+            }
+            Copy {
+                to,
+                from,
+                size,
+                clone: Some(clone),
+            } => {
+                format!(
+                    "mem::copy({}, {}, {size}, with={clone:?})",
+                    self.operand(to),
+                    self.operand(from),
                 )
             }
             MemCmp {
@@ -550,6 +590,15 @@ impl<'a> IrPrinter<'a> {
                     self.operand(right),
                     self.operand(size),
                 )
+            }
+            Drop {
+                var,
+                drop: Some(drop),
+            } => {
+                format!("mem::drop({}, with={drop:?})", self.var(var),)
+            }
+            Drop { var, drop: None } => {
+                format!("mem::drop({})", self.var(var),)
             }
         }
     }

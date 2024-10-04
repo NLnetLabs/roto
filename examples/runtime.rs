@@ -1,6 +1,7 @@
 use roto::{read_files, Runtime, Val, Verdict};
 use roto_macros::roto_method;
 
+#[derive(Clone, Copy)]
 struct Bla {
     x: u32,
 }
@@ -10,7 +11,7 @@ fn main() -> Result<(), roto::RotoReport> {
 
     let mut runtime = Runtime::basic().unwrap();
 
-    runtime.register_type::<Bla>().unwrap();
+    runtime.register_copy_type::<Bla>().unwrap();
 
     #[roto_method(runtime, Bla, x)]
     fn get_x(bla: *const Bla) -> u32 {

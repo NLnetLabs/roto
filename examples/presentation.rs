@@ -19,6 +19,7 @@ mod hidden {
     };
 
     #[allow(dead_code)]
+    #[derive(Clone)]
     pub enum RotondaRoute {
         Ipv4Unicast(RouteWorkshop<Ipv4UnicastNlri>),
         Ipv6Unicast(RouteWorkshop<Ipv6UnicastNlri>),
@@ -74,9 +75,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Registering types and their methods
 
-    rt.register_type_with_name::<RotondaRoute>("Route")?;
+    rt.register_clone_type_with_name::<RotondaRoute>("Route")?;
 
-    rt.register_type_with_name::<Log>("Log")?;
+    rt.register_clone_type_with_name::<Log>("Log")?;
 
     #[roto_method(rt, RotondaRoute)]
     fn prefix_matches(

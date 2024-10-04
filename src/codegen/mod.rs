@@ -34,8 +34,12 @@ use cranelift::{
     frontend::{
         FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
         Variable,
-    }, jit::{JITBuilder, JITModule}, module::{DataDescription, FuncId, Linkage, Module as _},
+    },
+    jit::{JITBuilder, JITModule},
+    module::{DataDescription, FuncId, Linkage, Module as _},
+    prelude::Signature,
 };
+use cranelift_codegen::ir::SigRef;
 use log::info;
 
 pub mod check;
@@ -177,6 +181,12 @@ struct ModuleBuilder {
     label_store: LabelStore,
 
     type_info: TypeInfo,
+
+    /// Signature to use for calls to `clone`
+    clone_signature: Signature,
+
+    /// Signature to use for calls to `drop`
+    drop_signature: Signature,
 }
 
 struct FuncGen<'c> {
@@ -190,6 +200,12 @@ struct FuncGen<'c> {
 
     /// Blocks of the function
     block_map: HashMap<LabelRef, Block>,
+
+    /// Signature to use for calls to `clone`
+    clone_signature: SigRef,
+
+    /// Signature to use for calls to `drop`
+    drop_signature: SigRef,
 }
 
 // We use `with_aligned` to make sure that we notice if anything is
@@ -223,6 +239,19 @@ pub fn codegen(
 
     let jit = JITModule::new(builder);
 
+    let mut drop_signature = jit.make_signature();
+    drop_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+
+    let mut clone_signature = jit.make_signature();
+    clone_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+    clone_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+
     let mut module = ModuleBuilder {
         functions: HashMap::new(),
         runtime_functions: HashMap::new(),
@@ -231,6 +260,8 @@ pub fn codegen(
         variable_map: HashMap::new(),
         label_store,
         type_info,
+        drop_signature,
+        clone_signature,
     };
 
     for (roto_func_id, func) in runtime_functions {
@@ -345,9 +376,14 @@ impl ModuleBuilder {
         ctx.func.signature = sig;
         ctx.set_disasm(true);
 
-        let builder = FunctionBuilder::new(&mut ctx.func, builder_context);
+        let mut builder =
+            FunctionBuilder::new(&mut ctx.func, builder_context);
 
         let mut func_gen = FuncGen {
+            drop_signature: builder
+                .import_signature(self.drop_signature.clone()),
+            clone_signature: builder
+                .import_signature(self.clone_signature.clone()),
             module: self,
             builder,
             scope: *scope,
@@ -723,9 +759,30 @@ impl<'c> FuncGen<'c> {
                 let to = self.variable(to, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
-            ir::Instruction::Copy { to, from, size } => {
+            ir::Instruction::Copy {
+                to,
+                from,
+                size,
+                clone,
+            } => {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
+
+                match clone {
+                    Some(clone) => {
+                        let pointer_ty = self.module.isa.pointer_type();
+                        let clone = self.ins().iconst(
+                            pointer_ty,
+                            *clone as *mut u8 as usize as i64,
+                        );
+                        self.builder.ins().call_indirect(
+                            self.clone_signature,
+                            clone,
+                            &[src, dest],
+                        );
+                    }
+                    None => {}
+                }
                 self.builder.emit_small_memory_copy(
                     self.module.isa.frontend_config(),
                     dest,
@@ -736,6 +793,20 @@ impl<'c> FuncGen<'c> {
                     true,
                     MEMFLAGS,
                 )
+            }
+            ir::Instruction::Drop { var, drop } => {
+                if let Some(drop) = drop {
+                    let (var, _) = self.operand(&Operand::Place(var.clone()));
+                    let pointer_ty = self.module.isa.pointer_type();
+                    let drop = self
+                        .ins()
+                        .iconst(pointer_ty, *drop as *mut u8 as usize as i64);
+                    self.builder.ins().call_indirect(
+                        self.drop_signature,
+                        drop,
+                        &[var],
+                    );
+                }
             }
             ir::Instruction::MemCmp {
                 to,
