@@ -1,3 +1,5 @@
+//! Lowering a match expression
+
 use std::collections::{HashMap, HashSet};
 
 use crate::{

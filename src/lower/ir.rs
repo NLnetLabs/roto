@@ -1,20 +1,17 @@
-//! High-level intermediate representation (HIR)
+//! Intermediate representation (IR)
 //!
 //! The IR is the representation between the AST and cranelift. Evaluating
 //! it does not need to be particularly fast yet, but the evaluation is safe
 //! in the sense that it in the case anything unexpected happens (e.g the
 //! wrong type being given) it will panic instead of performing undefined
-//! behavior. By evaluating the HIR, we can run tests to test this
+//! behavior. By evaluating the IR, we can run tests to test this
 //! compilation step.
 //!
 //! The IR has the following characteristics:
 //!
-//!  - Human-readable names for all variables and fields.
 //!  - The names of all variables are global.
 //!  - Blocks are also identified by readable labels.
 //!  - Values are a tagged enum and types are checked at runtime.
-//!  - Records and lists are heap allocated, hence the size of values does
-//!    need to be known to construct the HIR.
 //!  - Expressions are simple (as opposed to complex).
 //!  - Control flow is represented with basic blocks.
 //!

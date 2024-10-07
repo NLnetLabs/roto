@@ -1,3 +1,5 @@
+//! Values and types for the IR
+
 use std::any::Any;
 use std::fmt::{Debug, Display};
 
