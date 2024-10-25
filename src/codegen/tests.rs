@@ -1,11 +1,11 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, sync::atomic::AtomicUsize};
 
 use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_function, roto_static_method};
 
 use crate::{
     pipeline::Compiled, runtime::tests::routecore_runtime, src, Files,
-    Runtime, Verdict,
+    Runtime, Val, Verdict,
 };
 
 #[track_caller]
@@ -545,12 +545,13 @@ fn int_var() {
 
 #[test]
 fn issue_52() {
+    #[derive(Clone)]
     struct Foo {
         _x: i32,
     }
 
     let mut rt = Runtime::basic().unwrap();
-    rt.register_type::<Foo>().unwrap();
+    rt.register_clone_type::<Foo>().unwrap();
 
     #[roto_static_method(rt, Foo)]
     fn bar(_x: u32) -> u32 {
@@ -578,10 +579,10 @@ fn issue_54() {
     struct Foo {
         _x: i32,
     }
-    extern "C" fn bar(_foo: *mut Foo, _x: u32) {} // W: unused variable: `foo`
+    extern "C" fn bar(_foo: *mut Foo, _x: u32) {}
 
     // We 'forget' to register type Foo:
-    //rt.register_type::<Foo>().unwrap();
+    // rt.register_type::<Foo>().unwrap();
 
     // But we do register a method on it:
     rt.register_method::<Foo, _, _>("bar", bar as extern "C" fn(_, _) -> _)
@@ -835,154 +836,70 @@ fn function_returning_unit() {
 }
 
 #[test]
-fn functions_with_lifetimes() {
-    struct Foo<'a> {
-        _x: &'a u32,
+fn arc_type() {
+    use std::sync::atomic::Ordering;
+
+    static CLONES: AtomicUsize = AtomicUsize::new(0);
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+
+    #[derive(Debug)]
+    struct CloneDrop {
+        clones: &'static AtomicUsize,
+        drops: &'static AtomicUsize,
+    }
+
+    impl Clone for CloneDrop {
+        fn clone(&self) -> Self {
+            self.clones.fetch_add(1, Ordering::Relaxed);
+            Self {
+                clones: self.clones,
+                drops: self.drops,
+            }
+        }
+    }
+
+    impl Drop for CloneDrop {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::Relaxed);
+        }
     }
 
     let mut rt = Runtime::basic().unwrap();
-    rt.register_type::<Foo>().unwrap();
 
-    #[roto_function(rt)]
-    fn funcy(_foo: *const Foo) {}
+    rt.register_clone_type::<CloneDrop>().unwrap();
 
-    #[allow(clippy::needless_lifetimes)]
-    #[roto_function(rt)]
-    fn funcy2<'a>(_foo: *const Foo<'a>) {}
+    let s = src!(
+        "
+        filter-map main(choose: bool, x: CloneDrop, y: CloneDrop) {
+            apply { 
+                if choose {
+                    accept x
+                } else {
+                    accept y
+                }
+            }
+        }
+    "
+    );
+
+    let mut p = s.compile(rt, usize::BITS / 8).unwrap();
+    let f = p.get_function::<(bool, Val<CloneDrop>, Val<CloneDrop>), Verdict<Val<CloneDrop>, ()>>(
+        "main",
+    ).unwrap();
+
+    let input = CloneDrop {
+        clones: &CLONES,
+        drops: &DROPS,
+    };
+
+    println!("{input:?}");
+
+    let output = f.call(true, Val(input.clone()), Val(input));
+
+    let output = output.into_result().unwrap().0;
+    println!("{output:?}");
+    assert_eq!(
+        output.clones.load(Ordering::Relaxed),
+        output.drops.load(Ordering::Relaxed)
+    );
 }
-
-// #[test]
-// fn bmp_message() {
-//     let s = "
-//     filter-map main(a: i32) {
-//         define {
-//             header = {
-//                 is_ipv6: true,
-//                 is_ipv4: true,
-//                 is_legacy_format: false,
-//                 is_post_policy: false,
-//                 is_pre_policy: false,
-//                 peer_type: 0,
-//                 asn: 0,
-//                 address: 1.1.1.1,
-//             };
-//             bmp = if a == 1 {
-//                 BmpMessage.PeerUpNotification({
-//                     local_port: 80,
-//                     local_address: 1.1.1.1,
-//                     remote_port: 80,
-//                     per_peer_header: header,
-//                 })
-//             } else if a == 2 {
-//                 BmpMessage.PeerUpNotification({
-//                     local_port: 10,
-//                     local_address: 1.1.1.1,
-//                     remote_port: 80,
-//                     per_peer_header: header,
-//                 })
-//             } else {
-//                 BmpMessage.InitiationMessage({})
-//             };
-//         }
-
-//         apply {
-//             match bmp {
-//                 PeerUpNotification(x) -> {
-//                     if x.local_port == 80 {
-//                         accept
-//                     }
-//                 },
-//                 InitiationMessage(x) -> {},
-//                 RouteMonitoring(x) -> {},
-//                 PeerDownNotification(x) -> {},
-//                 StatisticsReport(x) -> {},
-//                 TerminationMessage(x) -> {},
-//             }
-//             reject
-//         }
-//     }
-//     ";
-
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(*mut u8, i32), ()>("main")
-//         .expect("No function found (or mismatched types)");
-
-//     let mut verdict: u8 = 0;
-//     f.call((&mut verdict as *mut _, 1));
-//     assert_eq!(verdict, true as u8);
-
-//     let mut verdict: u8 = 0;
-//     f.call((&mut verdict as *mut _, 2));
-//     assert_eq!(verdict, false as u8);
-
-//     let mut verdict: u8 = 0;
-//     f.call((&mut verdict as *mut _, 3));
-//     assert_eq!(verdict, false as u8);
-// }
-
-// #[test]
-// fn can_we_misalign_stack_slots() {
-//     let s = "
-//     type Foo { x: I8 }
-//     type Bar { x: i32, y: I16 }
-
-//     filter-map main() {
-//         define {
-//             foo = Foo { x: 1 };
-//             bar = Bar { x: 2, y: 3 };
-//         }
-
-//         apply {
-//             if foo.x == 1 && bar.x == 2 && bar.y == 3 {
-//                 accept
-//             } else {
-//                 reject
-//             }
-//         }
-//     }
-//     ";
-
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(), i8>("main")
-//         .expect("No function found (or mismatched types)");
-
-//     assert_eq!(f.call(()), true as i8);
-// }
-
-// #[test]
-// fn returning_a_record() {
-//     let s = "
-//         type Foo { x: i32, y: i32, z: i32 }
-
-//         function make_foo(x: i32) -> Foo {
-//             Foo { x: x, y: 1, z: 2 }
-//         }
-
-//         filter-map main(rx: i32) {
-//             define {
-//                 x = make_foo(rx);
-//                 y = make_foo(1);
-//             }
-//             apply {
-//                 if rx == x.x {
-//                     accept
-//                 } else {
-//                     reject
-//                 }
-//             }
-//         }
-//     ";
-
-//     let p = compile(s);
-//     let f = p
-//         .module
-//         .get_function::<(i32,), i8>("main")
-//         .expect("No function found (or mismatched types)");
-
-//     assert_eq!(f.call((5,)), true as i8);
-//     assert_eq!(f.call((4,)), true as i8);
-// }

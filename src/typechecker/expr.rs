@@ -665,12 +665,14 @@ impl TypeChecker<'_> {
                 )?;
 
                 let name = Identifier::from("new");
-                let (function, _sig) = self.find_function(
-                    &FunctionKind::StaticMethod(Type::Primitive(
-                        Primitive::Prefix,
-                    )),
-                    name,
-                ).unwrap();
+                let (function, _sig) = self
+                    .find_function(
+                        &FunctionKind::StaticMethod(Type::Primitive(
+                            Primitive::Prefix,
+                        )),
+                        name,
+                    )
+                    .unwrap();
                 let function = function.clone();
                 self.type_info.function_calls.insert(span, function);
                 return Ok(diverges);

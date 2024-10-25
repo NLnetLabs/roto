@@ -193,7 +193,7 @@ impl std::error::Error for RotoReport {}
 #[macro_export]
 macro_rules! src {
     ($code:literal) => {
-        $crate::pipeline::test_file(file!(), $code, line!() as usize - 1)
+        $crate::test_file(file!(), $code, line!() as usize - 1)
     };
 }
 

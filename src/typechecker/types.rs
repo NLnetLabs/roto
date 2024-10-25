@@ -299,8 +299,8 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
     }
 
     for ty in &runtime.runtime_types {
-        let name = Identifier::from(&ty.name);
-        types.push((name, Type::BuiltIn(name, ty.type_id)))
+        let name = Identifier::from(ty.name());
+        types.push((name, Type::BuiltIn(name, ty.type_id())))
     }
 
     enum RecordOrEnum {

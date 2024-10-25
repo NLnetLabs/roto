@@ -26,8 +26,10 @@
 //!
 //! We might need polymorphism over the number of arguments.
 //! The IR needs typed variables to do this correctly.
+
 pub mod func;
 pub mod ty;
+pub mod val;
 pub mod verdict;
 
 use std::{any::TypeId, net::IpAddr};
@@ -50,17 +52,68 @@ pub struct Runtime {
 }
 
 #[derive(Debug)]
+pub enum Movability {
+    Copy,
+    CloneDrop {
+        clone: unsafe extern "C" fn(*const (), *mut ()),
+        drop: unsafe extern "C" fn(*mut ()),
+    },
+}
+
+unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
+    let from = from as *const T;
+    let to = to as *mut T;
+
+    let from = unsafe { &*from };
+
+    // *to is uninitialized so we *must* use std::ptr::write instead of using
+    // a pointer assignment.
+    unsafe { std::ptr::write(to, from.clone()) };
+}
+
+unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
+    let x = x as *mut T;
+    std::ptr::read(x);
+}
+
+#[derive(Debug)]
 pub struct RuntimeType {
     /// The name the type can be referenced by from Roto
-    pub name: String,
+    name: String,
 
     /// [`TypeId`] of the registered type
     ///
     /// This can be used to index into the [`TypeRegistry`]
-    pub type_id: TypeId,
+    type_id: TypeId,
 
     /// Whether this type is `Copy`
-    pub is_copy_type: bool,
+    movability: Movability,
+
+    size: usize,
+
+    alignment: usize,
+}
+
+impl RuntimeType {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        self.type_id
+    }
+
+    pub fn movability(&self) -> &Movability {
+        &self.movability
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
+    pub fn alignment(&self) -> usize {
+        self.alignment
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -88,6 +141,10 @@ pub struct RuntimeFunction {
 impl Runtime {
     /// Register a type with a default name
     ///
+    /// This type will be cloned and dropped many times, so make sure to have
+    /// a cheap [`Clone`] and [`Drop`](std::ops::Drop) implementations, for example an
+    /// [`Rc`](std::rc::Rc) or an [`Arc`](std::sync::Arc).
+    ///
     /// The default type name is based on [`std::any::type_name`]. The string
     /// returned from that consists of a path with possibly some generics.
     /// Neither full paths and generics make sense in Roto, so we just want
@@ -98,15 +155,17 @@ impl Runtime {
     ///  - Then split at the last `::` and take the last part.
     ///
     /// If that doesn't work for the type you want, use
-    /// [`Runtime::register_type_with_name] instead.
-    pub fn register_type<T: 'static>(&mut self) -> Result<(), String> {
+    /// [`Runtime::register_clone_type_with_name`] instead.
+    pub fn register_clone_type<T: 'static + Clone>(
+        &mut self,
+    ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        self.register_type_with_name::<T>(name)
+        self.register_clone_type_with_name::<T>(name)
     }
 
     /// Register a `Copy` type with a default name
     ///
-    /// See [`Runtime::register_type`]
+    /// See [`Runtime::register_clone_type`]
     pub fn register_copy_type<T: Copy + 'static>(
         &mut self,
     ) -> Result<(), String> {
@@ -118,18 +177,22 @@ impl Runtime {
         &mut self,
         name: &str,
     ) -> Result<(), String> {
-        self.register_type_with_name_internal::<T>(name, true)
+        self.register_type_with_name_internal::<T>(name, Movability::Copy)
     }
 
     /// Register a reference type with a given name
     ///
     /// This makes the type available for use in Roto. However, Roto will
     /// only store pointers to this type.
-    pub fn register_type_with_name<T: 'static>(
+    pub fn register_clone_type_with_name<T: 'static + Clone>(
         &mut self,
         name: &str,
     ) -> Result<(), String> {
-        self.register_type_with_name_internal::<T>(name, false)
+        let movability = Movability::CloneDrop {
+            clone: extern_clone::<T> as _,
+            drop: extern_drop::<T> as _,
+        };
+        self.register_type_with_name_internal::<T>(name, movability)
     }
 
     fn extract_name<T: 'static>() -> &'static str {
@@ -149,7 +212,7 @@ impl Runtime {
     fn register_type_with_name_internal<T: 'static>(
         &mut self,
         name: &str,
-        is_copy_type: bool,
+        movability: Movability,
     ) -> Result<(), String> {
         if let Some(ty) = self.runtime_types.iter().find(|ty| ty.name == name)
         {
@@ -183,7 +246,9 @@ impl Runtime {
         self.runtime_types.push(RuntimeType {
             name: name.into(),
             type_id: TypeId::of::<T>(),
-            is_copy_type,
+            movability,
+            size: std::mem::size_of::<T>(),
+            alignment: std::mem::align_of::<T>(),
         });
         Ok(())
     }
@@ -328,15 +393,18 @@ impl Runtime {
         rt.register_copy_type::<i32>()?;
         rt.register_copy_type::<i64>()?;
         rt.register_copy_type::<Asn>()?;
-        rt.register_type::<IpAddr>()?;
-        rt.register_type::<Prefix>()?;
+        rt.register_copy_type::<IpAddr>()?;
+        rt.register_copy_type::<Prefix>()?;
 
         extern "C" fn prefix_new(out: *mut Prefix, ip: *mut IpAddr, len: u8) {
             let ip = unsafe { *ip };
 
             let p = Prefix::new(ip, len).unwrap();
             let p = unsafe {
-                std::mem::transmute::<Prefix, [u8; std::mem::size_of::<Prefix>()]>(p)
+                std::mem::transmute::<
+                    Prefix,
+                    [u8; std::mem::size_of::<Prefix>()],
+                >(p)
             };
 
             let out = out as *mut [u8; std::mem::size_of::<Prefix>()];
@@ -396,24 +464,17 @@ pub mod tests {
     use routecore::bgp::{
         aspath::{AsPath, HopPath},
         communities::Community,
-        path_attributes::{
-            Aggregator, AtomicAggregate, MultiExitDisc, NextHop,
-        },
         types::{LocalPref, OriginType},
     };
 
     pub fn routecore_runtime() -> Result<Runtime, String> {
         let mut rt = Runtime::basic()?;
 
-        rt.register_type::<OriginType>()?;
-        rt.register_type::<NextHop>()?;
-        rt.register_type::<MultiExitDisc>()?;
-        rt.register_type::<LocalPref>()?;
-        rt.register_type::<Aggregator>()?;
-        rt.register_type::<AtomicAggregate>()?;
-        rt.register_type::<Community>()?;
-        rt.register_type::<HopPath>()?;
-        rt.register_type::<AsPath<Vec<u8>>>()?;
+        rt.register_clone_type::<OriginType>()?;
+        rt.register_clone_type::<LocalPref>()?;
+        rt.register_clone_type::<Community>()?;
+        rt.register_clone_type::<HopPath>()?;
+        rt.register_clone_type::<AsPath<Vec<u8>>>()?;
 
         #[roto_function(rt)]
         fn pow(x: u32, y: u32) -> u32 {
@@ -451,11 +512,7 @@ pub mod tests {
                 "IpAddr",
                 "Prefix",
                 "OriginType",
-                "NextHop",
-                "MultiExitDisc",
                 "LocalPref",
-                "Aggregator",
-                "AtomicAggregate",
                 "Community",
                 "HopPath",
                 "AsPath"

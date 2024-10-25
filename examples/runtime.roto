@@ -1,0 +1,9 @@
+filter-map main(bla: Bla) {
+    apply {
+        if bla.x() > 10 {
+            accept 2 * bla.x()
+        } else {
+            reject
+        }
+    }
+}

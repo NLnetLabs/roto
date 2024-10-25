@@ -13,4 +13,4 @@ pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;
 pub use roto_macros::{roto_function, roto_method, roto_static_method};
-pub use runtime::{verdict::Verdict, Runtime, RuntimeType};
+pub use runtime::{val::Val, verdict::Verdict, Runtime, RuntimeType};

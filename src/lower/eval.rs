@@ -506,11 +506,19 @@ pub fn eval(
                 let new = mem.offset_by(from, *offset as usize);
                 vars.insert(to.clone(), IrValue::Pointer(new));
             }
-            Instruction::Alloc { to, size, align_shift: _ } => {
+            Instruction::Alloc {
+                to,
+                size,
+                align_shift: _,
+            } => {
                 let pointer = mem.allocate(*size as usize);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
-            Instruction::Initialize { to, bytes, align_shift: _ } => {
+            Instruction::Initialize {
+                to,
+                bytes,
+                align_shift: _,
+            } => {
                 let pointer = mem.allocate(bytes.len());
                 mem.write(pointer, bytes);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
@@ -532,15 +540,39 @@ pub fn eval(
                 let val = IrValue::from_slice(ty, res);
                 vars.insert(to.clone(), val);
             }
-            Instruction::Copy { to, from, size } => {
+            Instruction::Copy {
+                to,
+                from,
+                size,
+                clone,
+            } => {
                 let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
                     panic!()
                 };
+
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)
                 else {
                     panic!()
                 };
-                mem.copy(to, from, *size as usize);
+
+                match clone {
+                    Some(clone) => {
+                        let to = mem.get(to);
+                        let from = mem.get(from);
+                        unsafe { (clone)(to, from) }
+                    }
+                    None => mem.copy(to, from, *size as usize),
+                }
+            }
+            Instruction::Drop { var, drop } => {
+                if let Some(drop) = drop {
+                    let Some(&IrValue::Pointer(val)) = vars.get(var) else {
+                        panic!()
+                    };
+
+                    let p = mem.get(val);
+                    unsafe { (drop)(p) }
+                }
             }
             Instruction::MemCmp {
                 to,

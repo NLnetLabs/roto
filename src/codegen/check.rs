@@ -129,8 +129,19 @@ fn check_roto_type(
                 Err(error_message)
             }
         }
-        TypeDescription::ConstPtr(_) => todo!(),
-        TypeDescription::MutPtr(_) => Ok(()), // TODO: actually check this
+        TypeDescription::Val(ty) => {
+            let Type::BuiltIn(_, id) = roto_ty else {
+                return Err(error_message);
+            };
+
+            if ty != id {
+                return Err(error_message);
+            }
+
+            Ok(())
+        }
+        TypeDescription::ConstPtr(_) => Err(error_message),
+        TypeDescription::MutPtr(_) => Err(error_message), // TODO: actually check this
         TypeDescription::Verdict(rust_accept, rust_reject) => {
             let Type::Verdict(roto_accept, roto_reject) = &roto_ty else {
                 return Err(error_message);
@@ -244,6 +255,12 @@ macro_rules! params {
 
             unsafe fn invoke<R: Reflect>(mut self, func_ptr: *const u8, return_by_ref: bool) -> R {
                 let ($($t,)*) = self.as_params();
+
+                // We forget values that we pass into Roto. The script is responsible
+                // for cleaning them op. Forgetting copy types does nothing, but that's
+                // fine.
+                #[allow(forgetting_copy_types)]
+                std::mem::forget(self);
                 if return_by_ref {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, fn(*mut R, $($t::AsParam),*) -> ()>(func_ptr)

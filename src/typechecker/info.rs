@@ -2,7 +2,7 @@ use std::{collections::HashMap, net::IpAddr};
 
 use inetnum::addr::Prefix;
 
-use crate::{ast::Identifier, parser::meta::MetaId};
+use crate::{ast::Identifier, parser::meta::MetaId, Runtime};
 
 use super::{
     scope::{DefinitionRef, ScopeRef},
@@ -100,6 +100,7 @@ impl TypeInfo {
         &mut self,
         record: &Type,
         field: Identifier,
+        rt: &Runtime,
     ) -> (Type, u32) {
         let record = self.resolve(record);
 
@@ -114,17 +115,22 @@ impl TypeInfo {
         for (name, ty) in fields {
             // Here, we align the offset to the natural alignment of each
             // type.
-            offset += self.padding_of(&ty, offset);
+            offset += self.padding_of(&ty, offset, rt);
             if name.node == field {
                 return (ty, offset);
             }
-            offset += self.size_of(&ty);
+            offset += self.size_of(&ty, rt);
         }
         panic!("Field not found")
     }
 
-    pub fn padding_of(&mut self, ty: &Type, offset: u32) -> u32 {
-        let alignment = self.alignment_of(ty);
+    pub fn padding_of(
+        &mut self,
+        ty: &Type,
+        offset: u32,
+        rt: &Runtime,
+    ) -> u32 {
+        let alignment = self.alignment_of(ty, rt);
         if offset % alignment > 0 {
             alignment - (offset % alignment)
         } else {
@@ -132,19 +138,19 @@ impl TypeInfo {
         }
     }
 
-    pub fn alignment_of(&mut self, ty: &Type) -> u32 {
+    pub fn alignment_of(&mut self, ty: &Type, rt: &Runtime) -> u32 {
         let align = match self.resolve(ty) {
             Type::RecordVar(_, fields)
             | Type::Record(fields)
             | Type::NamedRecord(_, fields) => fields
                 .iter()
-                .map(|f| self.alignment_of(&f.1))
+                .map(|f| self.alignment_of(&f.1, rt))
                 .max()
                 .unwrap_or(1),
             Type::Enum(_, variants) => variants
                 .iter()
                 .flat_map(|(_, opt)| opt)
-                .map(|f| self.alignment_of(f))
+                .map(|f| self.alignment_of(f, rt))
                 .max()
                 .unwrap_or(4),
             Type::Primitive(Primitive::IpAddr) => {
@@ -153,7 +159,10 @@ impl TypeInfo {
             Type::Primitive(Primitive::Prefix) => {
                 std::mem::align_of::<Prefix>() as u32
             }
-            ty => self.size_of(&ty),
+            Type::BuiltIn(_, id) => {
+                rt.get_runtime_type(id).unwrap().alignment() as u32
+            }
+            ty => self.size_of(&ty, rt),
         };
         // Alignment must be guaranteed to be at least 1
         align.max(1)
@@ -180,7 +189,7 @@ impl TypeInfo {
         t
     }
 
-    pub fn size_of(&mut self, t: &Type) -> u32 {
+    pub fn size_of(&mut self, t: &Type, rt: &Runtime) -> u32 {
         let t = self.resolve(t);
         match t {
             // Never is zero-sized
@@ -193,7 +202,8 @@ impl TypeInfo {
             | Type::RecordVar(_, fields) => {
                 let mut size = 0;
                 for (_, ty) in &fields {
-                    size += self.size_of(ty) + self.padding_of(ty, size);
+                    size +=
+                        self.size_of(ty, rt) + self.padding_of(ty, size, rt);
                 }
                 size
             }
@@ -201,24 +211,28 @@ impl TypeInfo {
                 fields
                     .iter()
                     .flat_map(|f| &f.1)
-                    .map(|ty| self.size_of(ty) + self.padding_of(ty, 1))
+                    .map(|ty| {
+                        self.size_of(ty, rt) + self.padding_of(ty, 1, rt)
+                    })
                     .max()
                     .unwrap_or(0)
                     + 1 // add the discriminant
             }
             Type::Verdict(accept, reject) => {
-                let accept =
-                    self.size_of(&accept) + self.padding_of(&accept, 1);
-                let reject =
-                    self.size_of(&reject) + self.padding_of(&reject, 1);
+                let accept = self.size_of(&accept, rt)
+                    + self.padding_of(&accept, 1, rt);
+                let reject = self.size_of(&reject, rt)
+                    + self.padding_of(&reject, 1, rt);
                 1 + accept.max(reject)
+            }
+            Type::BuiltIn(_, id) => {
+                rt.get_runtime_type(id).unwrap().size() as u32
             }
             Type::Primitive(p) => p.size(),
             Type::List(_)
             | Type::Table(_)
             | Type::OutputStream(_)
-            | Type::Rib(_)
-            | Type::BuiltIn(..) => self.pointer_bytes,
+            | Type::Rib(_) => self.pointer_bytes,
             _ => 0,
         }
     }

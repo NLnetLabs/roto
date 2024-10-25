@@ -212,7 +212,7 @@ impl TypeChecker<'_> {
 
             let mut rust_parameters =
                 description.parameter_types().iter().map(|ty| {
-                    let name = &runtime.get_runtime_type(*ty).unwrap().name;
+                    let name = runtime.get_runtime_type(*ty).unwrap().name();
                     let name = Identifier::from(name);
                     Type::Name(name)
                 });
@@ -223,12 +223,12 @@ impl TypeChecker<'_> {
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
                 FunctionKind::Method(id) => {
-                    let name = &runtime.get_runtime_type(*id).unwrap().name;
+                    let name = runtime.get_runtime_type(*id).unwrap().name();
                     let name = Identifier::from(name);
                     types::FunctionKind::Method(Type::Name(name))
                 }
                 FunctionKind::StaticMethod(id) => {
-                    let name = &runtime.get_runtime_type(*id).unwrap().name;
+                    let name = runtime.get_runtime_type(*id).unwrap().name();
                     let name = Identifier::from(name);
                     types::FunctionKind::StaticMethod(Type::Name(name))
                 }

@@ -19,7 +19,7 @@ use value::IrType;
 use crate::{
     ast::{self, Identifier, Literal},
     parser::meta::Meta,
-    runtime::{self, RuntimeFunction},
+    runtime::{self, Movability, RuntimeFunction},
     typechecker::{
         info::TypeInfo,
         scope::{DefinitionRef, ScopeRef},
@@ -64,6 +64,7 @@ struct Lowerer<'r> {
     runtime_functions: &'r mut HashMap<usize, IrFunction>,
     label_store: &'r mut LabelStore,
     runtime: &'r Runtime,
+    stack_slots: Vec<(Var, Type)>,
 }
 
 pub fn lower(
@@ -92,6 +93,7 @@ impl<'r> Lowerer<'r> {
             function_scope,
             runtime_functions,
             blocks: Vec::new(),
+            stack_slots: Vec::new(),
             label_store,
             runtime,
         }
@@ -137,7 +139,7 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         runtime_functions: &mut HashMap<usize, IrFunction>,
         tree: &ast::SyntaxTree,
-        label_store: &'r mut LabelStore,
+        label_store: &mut LabelStore,
         runtime: &'r Runtime,
     ) -> Vec<Function> {
         let ast::SyntaxTree {
@@ -207,11 +209,19 @@ impl<'r> Lowerer<'r> {
             })
             .collect();
 
+        for (def, ty) in &parameter_types {
+            let var = Var {
+                scope: def.0,
+                kind: VarKind::Explicit(def.1),
+            };
+            self.stack_slots.push((var, ty.clone()))
+        }
+
         for (ident, expr) in define {
             let val = self.expr(expr);
             let name = self.type_info.resolved_name(ident);
             let ty = self.type_info.type_of(ident);
-            if self.type_info.size_of(&ty) > 0 {
+            if self.type_info.size_of(&ty, self.runtime) > 0 {
                 let val = val.unwrap();
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
@@ -241,7 +251,9 @@ impl<'r> Lowerer<'r> {
         };
 
         let (return_type, return_ptr) = match return_type {
-            x if self.type_info.size_of(&x) == 0 => (None, false),
+            x if self.type_info.size_of(&x, self.runtime) == 0 => {
+                (None, false)
+            }
             x if self.is_reference_type(&x) => (None, true),
             x => (Some(self.lower_type(&x)), false),
         };
@@ -365,6 +377,7 @@ impl<'r> Lowerer<'r> {
                 match kind {
                     ast::ReturnKind::Return => {
                         // TODO: Return reference types
+                        self.drop_locals();
                         self.add(Instruction::Return(op))
                     }
                     ast::ReturnKind::Accept => {
@@ -385,8 +398,11 @@ impl<'r> Lowerer<'r> {
                         );
 
                         if let Some(op) = op {
-                            let offset =
-                                1 + self.type_info.padding_of(&accept_ty, 1);
+                            let offset = 1 + self.type_info.padding_of(
+                                &accept_ty,
+                                1,
+                                self.runtime,
+                            );
 
                             self.write_field(
                                 var.into(),
@@ -395,7 +411,7 @@ impl<'r> Lowerer<'r> {
                                 &accept_ty,
                             )
                         }
-
+                        self.drop_locals();
                         self.add(Instruction::Return(None));
                     }
                     ast::ReturnKind::Reject => {
@@ -416,8 +432,11 @@ impl<'r> Lowerer<'r> {
                         );
 
                         if let Some(op) = op {
-                            let offset =
-                                1 + self.type_info.padding_of(&reject_ty, 1);
+                            let offset = 1 + self.type_info.padding_of(
+                                &reject_ty,
+                                1,
+                                self.runtime,
+                            );
 
                             self.write_field(
                                 var.into(),
@@ -427,6 +446,7 @@ impl<'r> Lowerer<'r> {
                             )
                         }
 
+                        self.drop_locals();
                         self.add(Instruction::Return(None));
                     }
                 };
@@ -470,7 +490,9 @@ impl<'r> Lowerer<'r> {
                             })
                             .collect();
 
-                        let to = if self.type_info.size_of(&ret) > 0 {
+                        let to = if self.type_info.size_of(&ret, self.runtime)
+                            > 0
+                        {
                             let ty = self.type_info.type_of(id);
                             let ty = self.lower_type(&ty);
                             Some((self.new_tmp(), ty))
@@ -510,9 +532,12 @@ impl<'r> Lowerer<'r> {
                         .unwrap();
 
                     let to = self.new_tmp();
-                    let size = self.type_info.size_of(&ty);
-                    let alignment = self.type_info.alignment_of(&ty);
+                    let size = self.type_info.size_of(&ty, self.runtime);
+                    let alignment =
+                        self.type_info.alignment_of(&ty, self.runtime);
                     let align_shift = alignment.ilog2() as u8;
+
+                    self.stack_slots.push((to.clone(), ty.clone()));
 
                     self.add(Instruction::Alloc {
                         to: to.clone(),
@@ -525,7 +550,11 @@ impl<'r> Lowerer<'r> {
                     });
 
                     if let Some(arg) = arg {
-                        let offset = 1 + self.type_info.padding_of(&ty, 1);
+                        let offset = 1 + self.type_info.padding_of(
+                            &ty,
+                            1,
+                            self.runtime,
+                        );
                         let tmp = self.new_tmp();
                         self.add(Instruction::Offset {
                             to: tmp.clone(),
@@ -579,8 +608,9 @@ impl<'r> Lowerer<'r> {
                         ice!("it's an enum variant constructor, so the type must be an enum")
                     };
 
-                    let size = self.type_info.size_of(&ty);
-                    let alignment = self.type_info.alignment_of(&ty);
+                    let size = self.type_info.size_of(&ty, self.runtime);
+                    let alignment =
+                        self.type_info.alignment_of(&ty, self.runtime);
                     let align_shift = alignment.ilog2() as u8;
 
                     let Some(idx) =
@@ -605,9 +635,12 @@ impl<'r> Lowerer<'r> {
                 } else {
                     let record_ty = self.type_info.type_of(&**e);
                     let op = self.expr(e)?;
-                    let (ty, offset) =
-                        self.type_info.offset_of(&record_ty, **field);
-                    if self.type_info.size_of(&ty) > 0 {
+                    let (ty, offset) = self.type_info.offset_of(
+                        &record_ty,
+                        **field,
+                        self.runtime,
+                    );
+                    if self.type_info.size_of(&ty, self.runtime) > 0 {
                         Some(self.read_field(op, offset, &ty))
                     } else {
                         None
@@ -627,8 +660,9 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);
-                let size = self.type_info.size_of(&ty);
-                let alignment = self.type_info.alignment_of(&ty);
+                let size = self.type_info.size_of(&ty, self.runtime);
+                let alignment =
+                    self.type_info.alignment_of(&ty, self.runtime);
                 let align_shift = alignment.ilog2() as u8;
 
                 let fields: Vec<_> = record
@@ -649,8 +683,11 @@ impl<'r> Lowerer<'r> {
                 });
 
                 for (field_name, field_operand) in fields {
-                    let (ty, offset) =
-                        self.type_info.offset_of(&ty, field_name.node);
+                    let (ty, offset) = self.type_info.offset_of(
+                        &ty,
+                        field_name.node,
+                        self.runtime,
+                    );
                     self.write_field(
                         to.clone().into(),
                         offset,
@@ -677,7 +714,7 @@ impl<'r> Lowerer<'r> {
                 let left = self.expr(left);
                 let right = self.expr(right);
 
-                if self.type_info.size_of(&ty) == 0 {
+                if self.type_info.size_of(&ty, self.runtime) == 0 {
                     return Some(
                         IrValue::Bool(match op {
                             ast::BinOp::Eq => true,
@@ -705,11 +742,13 @@ impl<'r> Lowerer<'r> {
                             panic!()
                         };
 
-                        let size = self
-                            .type_info
-                            .size_of(&Type::Primitive(Primitive::Prefix));
+                        let size = self.type_info.size_of(
+                            &Type::Primitive(Primitive::Prefix),
+                            self.runtime,
+                        );
                         let alignment = self.type_info.alignment_of(
                             &Type::Primitive(Primitive::Prefix),
+                            self.runtime,
                         );
                         let align_shift = alignment.ilog2() as u8;
                         self.add(Instruction::Alloc {
@@ -808,7 +847,7 @@ impl<'r> Lowerer<'r> {
                     (ast::BinOp::Eq, _, ty)
                         if self.is_reference_type(&ty) =>
                     {
-                        let size = self.type_info.size_of(&ty);
+                        let size = self.type_info.size_of(&ty, self.runtime);
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
                             to: tmp.clone(),
@@ -826,7 +865,7 @@ impl<'r> Lowerer<'r> {
                     (ast::BinOp::Ne, _, ty)
                         if self.is_reference_type(&ty) =>
                     {
-                        let size = self.type_info.size_of(&ty);
+                        let size = self.type_info.size_of(&ty, self.runtime);
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
                             to: tmp.clone(),
@@ -1037,12 +1076,15 @@ impl<'r> Lowerer<'r> {
             offset,
         });
 
-        if self.is_reference_type(ty) {
-            let size = self.type_info.size_of(ty);
+        let ty = self.type_info.resolve(ty);
+        if self.is_reference_type(&ty) {
+            let size = self.type_info.size_of(&ty, self.runtime);
+            let clone = self.get_clone_function(&ty);
             self.add(Instruction::Copy {
                 to: tmp.into(),
                 from: val,
                 size,
+                clone,
             });
         } else {
             self.add(Instruction::Write {
@@ -1097,6 +1139,7 @@ impl<'r> Lowerer<'r> {
                 | Type::Enum(..)
                 | Type::Verdict(..)
                 | Type::Primitive(Primitive::IpAddr | Primitive::Prefix)
+                | Type::BuiltIn(..)
         )
     }
 
@@ -1130,7 +1173,7 @@ impl<'r> Lowerer<'r> {
         return_type: &Type,
     ) -> Option<Operand> {
         let out_ptr = self.new_tmp();
-        let size = self.type_info.size_of(return_type);
+        let size = self.type_info.size_of(return_type, self.runtime);
         self.add(Instruction::Alloc {
             to: out_ptr.clone(),
             size,
@@ -1169,6 +1212,54 @@ impl<'r> Lowerer<'r> {
             Some(self.read_field(out_ptr.into(), 0, return_type))
         } else {
             None
+        }
+    }
+
+    fn get_clone_function(
+        &self,
+        ty: &Type,
+    ) -> Option<unsafe extern "C" fn(*const (), *mut ())> {
+        let Type::BuiltIn(_, id) = ty else {
+            return None;
+        };
+
+        let ty = self.runtime.get_runtime_type(*id)?;
+
+        let &Movability::CloneDrop { clone, .. } = ty.movability() else {
+            return None;
+        };
+
+        Some(clone)
+    }
+
+    fn get_drop_function(
+        &self,
+        ty: &Type,
+    ) -> Option<unsafe extern "C" fn(*mut ())> {
+        let Type::BuiltIn(_, id) = ty else {
+            return None;
+        };
+
+        let ty = self.runtime.get_runtime_type(*id)?;
+
+        let &Movability::CloneDrop { drop, .. } = ty.movability() else {
+            return None;
+        };
+
+        Some(drop)
+    }
+
+    fn drop_locals(&mut self) {
+        let mut instructions = Vec::new();
+        for (var, ty) in &self.stack_slots {
+            let drop = self.get_drop_function(ty);
+            instructions.push(Instruction::Drop {
+                var: var.clone(),
+                drop,
+            })
+        }
+        for inst in instructions {
+            self.add(inst)
         }
     }
 }
