@@ -513,6 +513,17 @@ impl Runtime {
     }
 }
 
+macro_rules! int_docs {
+    ($t:ty) => {{
+        #[allow(unused_comparisons)]
+        let signed = if <$t>::MIN < 0 { "signed" } else { "unsigned" };
+        let bits = <$t>::BITS;
+        let min = <$t>::MIN;
+        let max = <$t>::MAX;
+        &format!("The {signed} {bits}-bit integer type\n\nThis type can represent integers from {min} up to (and including) {max}.")
+    }};
+}
+
 impl Runtime {
     /// A Runtime that is as empty as possible.
     ///
@@ -526,30 +537,59 @@ impl Runtime {
 
         rt.register_copy_type_with_name::<()>(
             "Unit",
-            "The unit type that has just 1 value.",
+            "The unit type that has just one possible value. It can be used \
+            when there is nothing meaningful to be returned.",
         )?;
         rt.register_copy_type::<bool>(
             "The boolean type\n\n\
-            The size of this type is 1 byte and it has two \
-            possible values: `true` and `false`.",
+            This type has two possible values: `true` and `false`. Several \
+            boolean operations can be used with booleans, such as `&&` (\
+            logical and), `||` (logical or) and `not`.",
         )?;
-        rt.register_copy_type::<u8>("An unsigned 8-bit integer")?;
-        rt.register_copy_type::<u16>("An unsigned 16-bit integer")?;
-        rt.register_copy_type::<u32>("An unsigned 32-bit integer")?;
-        rt.register_copy_type::<u64>("An unsigned 64-bit integer")?;
-        rt.register_copy_type::<i8>("A signed 8-bit integer")?;
-        rt.register_copy_type::<i16>("A signed 16-bit integer")?;
-        rt.register_copy_type::<i32>("A signed 32-bit integer")?;
-        rt.register_copy_type::<i64>("A signed 64-bit integer")?;
+        rt.register_copy_type::<u8>(int_docs!(u8))?;
+        rt.register_copy_type::<u16>(int_docs!(u16))?;
+        rt.register_copy_type::<u32>(int_docs!(u32))?;
+        rt.register_copy_type::<u64>(int_docs!(u64))?;
+        rt.register_copy_type::<i8>(int_docs!(i8))?;
+        rt.register_copy_type::<i16>(int_docs!(i16))?;
+        rt.register_copy_type::<i32>(int_docs!(i32))?;
+        rt.register_copy_type::<i64>(int_docs!(i64))?;
         rt.register_copy_type::<Asn>("An ASN: an Autonomous System Number")?;
         rt.register_copy_type::<IpAddr>(
-            "An IP address\n\nCan be both IPv4 or IPv6.",
+            "An IP address\n\nCan be either IPv4 or IPv6.\n\
+            \n\
+            ```roto\n\
+            # IPv4 examples\n\
+            127.0.0.1\n\
+            0.0.0.0\n\
+            255.255.255.255\n\
+            \n\
+            # IPv6 examples\n\
+            0:0:0:0:0:0:0:1\n\
+            ::1\n\
+            ::\n\
+            ```\n\
+            ",
         )?;
         rt.register_copy_type::<Prefix>(
-            "An IP address prefix: an IP address and a prefix length",
+            "An IP address prefix: an IP address and a prefix length\n\n\
+            A prefix can be constructed with the `/` operator or with the \
+            `Prefix.new` function.\n\
+            \n\
+            ```roto\n\
+            1.1.1.0 / 8\n\
+            192.0.0.0.0 / 24\n\
+            ```\n\
+            ",
         )?;
 
         /// Construct a new prefix
+        ///
+        /// A prefix can also be constructed with a prefix literal.
+        ///
+        /// ```roto
+        /// Prefix.new(192.169.0.0)
+        /// ```
         #[roto_static_method(rt, Prefix, new)]
         fn prefix_new(ip: *mut IpAddr, len: u8) -> Prefix {
             let ip = unsafe { *ip };
