@@ -293,8 +293,8 @@ fn record_with_fields_flipped() {
 
         filter-map main(x: i32) {
             define {
-                // These are flipped, to ensure that the order in which
-                // the fields are given doesn't matter:
+                # These are flipped, to ensure that the order in which
+                # the fields are given doesn't matter:
                 foo = Foo { b: 20, a: x };
             }
             apply {
