@@ -75,9 +75,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Registering types and their methods
 
-    rt.register_clone_type_with_name::<RotondaRoute>("Route")?;
+    rt.register_clone_type_with_name::<RotondaRoute>("Route", "A route")?;
 
-    rt.register_clone_type_with_name::<Log>("Log")?;
+    rt.register_clone_type_with_name::<Log>("Log", "A thing to log to")?;
 
     #[roto_method(rt, RotondaRoute)]
     fn prefix_matches(

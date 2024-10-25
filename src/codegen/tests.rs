@@ -551,7 +551,7 @@ fn issue_52() {
     }
 
     let mut rt = Runtime::basic().unwrap();
-    rt.register_clone_type::<Foo>().unwrap();
+    rt.register_clone_type::<Foo>("A Foo!").unwrap();
 
     #[roto_static_method(rt, Foo)]
     fn bar(_x: u32) -> u32 {
@@ -866,7 +866,8 @@ fn arc_type() {
 
     let mut rt = Runtime::basic().unwrap();
 
-    rt.register_clone_type::<CloneDrop>().unwrap();
+    rt.register_clone_type::<CloneDrop>("A CloneDrop type")
+        .unwrap();
 
     let s = src!(
         "

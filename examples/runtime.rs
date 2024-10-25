@@ -11,7 +11,9 @@ fn main() -> Result<(), roto::RotoReport> {
 
     let mut runtime = Runtime::basic().unwrap();
 
-    runtime.register_copy_type::<Bla>().unwrap();
+    runtime
+        .register_copy_type::<Bla>("Some random type")
+        .unwrap();
 
     #[roto_method(runtime, Bla, x)]
     fn get_x(bla: *const Bla) -> u32 {
