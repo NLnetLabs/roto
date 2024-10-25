@@ -1,3 +1,6 @@
+// Needed for the roto macros
+extern crate self as roto;
+
 pub(crate) mod ast;
 
 pub(crate) mod codegen;
@@ -13,4 +16,6 @@ pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;
 pub use roto_macros::{roto_function, roto_method, roto_static_method};
-pub use runtime::{val::Val, verdict::Verdict, Runtime, RuntimeType};
+pub use runtime::{
+    val::Val, verdict::Verdict, DocumentedFunc, Runtime, RuntimeType,
+};

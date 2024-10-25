@@ -2,7 +2,10 @@ use std::{any::TypeId, sync::Arc};
 
 use crate::{lower::value::ReturnValue, IrValue, Runtime};
 
-use super::ty::{Reflect, TypeRegistry};
+use super::{
+    ty::{Reflect, TypeRegistry},
+    DocumentedFunc,
+};
 
 #[derive(Clone)]
 pub struct FunctionDescription {
@@ -59,10 +62,18 @@ impl std::fmt::Debug for FunctionDescription {
 }
 
 pub trait Func<A, R>: Sized {
+    type FunctionType;
+
     fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId>;
     fn return_type(reg: &mut TypeRegistry) -> TypeId;
     fn ptr(&self) -> *const u8;
     fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
+    fn docstring(&self) -> &'static str {
+        ""
+    }
+    fn argument_names(&self) -> &'static [&'static str] {
+        &[]
+    }
 
     fn to_function_description(
         self,
@@ -82,6 +93,37 @@ pub trait Func<A, R>: Sized {
     }
 }
 
+impl<F, A, R> Func<A, R> for DocumentedFunc<F>
+where
+    F: Func<A, R>,
+{
+    type FunctionType = F;
+
+    fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId> {
+        F::parameter_types(reg)
+    }
+
+    fn return_type(reg: &mut TypeRegistry) -> TypeId {
+        F::return_type(reg)
+    }
+
+    fn ptr(&self) -> *const u8 {
+        self.func.ptr()
+    }
+
+    fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
+        self.func.wrapped()
+    }
+
+    fn docstring(&self) -> &'static str {
+        self.docstring
+    }
+
+    fn argument_names(&self) -> &'static [&'static str] {
+        self.argument_names
+    }
+}
+
 macro_rules! func_impl {
     ($($arg:ident),*) => {
         impl<$($arg,)* Ret> Func<($($arg,)*), Ret> for for<'a> extern "C" fn($($arg),*) -> Ret
@@ -91,6 +133,8 @@ macro_rules! func_impl {
             )*
             Ret: Reflect + Into<ReturnValue> + 'static,
         {
+            type FunctionType = Self;
+
             #[allow(unused_variables)]
             fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId> {
                 vec![$(reg.resolve::<$arg>().type_id),*]
