@@ -409,7 +409,7 @@ impl Runtime {
         Ok(())
     }
 
-    fn print_function(&self, f: &RuntimeFunction, indent: &str) {
+    fn print_function(&self, f: &RuntimeFunction) {
         let print_ty = |ty: TypeId| {
             let ty = self.get_runtime_type(ty).unwrap();
             ty.name.as_ref()
@@ -432,12 +432,16 @@ impl Runtime {
 
         let mut argument_names = argument_names.iter();
         let mut params = params.iter();
-        let receiver = if *kind == FunctionKind::Free {
-            "".into()
-        } else {
-            // Discard the name of the receiver
-            let _ = argument_names.next();
-            format!("{}.", params.next().unwrap())
+        let receiver = match *kind {
+            FunctionKind::Method(_) => {
+                // Discard the name of the receiver from the arguments
+                let _ = argument_names.next();
+                format!("{}.", params.next().unwrap())
+            }
+            FunctionKind::StaticMethod(id) => {
+                format!("{}.", print_ty(id))
+            }
+            FunctionKind::Free => "".into(),
         };
 
         let mut parameter_string = String::new();
@@ -459,25 +463,24 @@ impl Runtime {
             FunctionKind::StaticMethod(_) => "static_method",
         };
         println!(
-            "{indent}.. roto:{kind}:: {receiver}{name}({parameter_string}) -> {ret}"
+            "````{{roto:{kind}}} {receiver}{name}({parameter_string}) -> {ret}"
         );
-        println!();
         for line in docstring.lines() {
-            println!("{indent}    {line}")
+            println!("{line}")
         }
+        println!("````");
         println!();
     }
 
     pub fn print_documentation(&self) {
-        println!("Standard Library");
-        println!("================");
+        println!("# Standard Library");
         println!();
 
         for f in &self.functions {
             if f.kind != FunctionKind::Free {
                 continue;
             }
-            self.print_function(f, "");
+            self.print_function(f);
         }
 
         for RuntimeType {
@@ -487,10 +490,9 @@ impl Runtime {
             ..
         } in &self.runtime_types
         {
-            println!(".. roto:type:: {name}");
-            println!();
+            println!("`````{{roto:type}} {name}");
             for line in docstring.lines() {
-                println!("    {line}")
+                println!("{line}")
             }
             println!();
 
@@ -503,8 +505,10 @@ impl Runtime {
                 if id != *type_id {
                     continue;
                 }
-                self.print_function(f, "    ");
+                self.print_function(f);
             }
+
+            println!("`````\n")
         }
     }
 }
@@ -554,6 +558,21 @@ impl Runtime {
         }
 
         /// Check whether two IP addresses are equal
+        ///
+        /// A more convenient but equivalent method for checking equality is via the `==` operator.
+        ///
+        /// An IPv4 address is never equal to an IPv6 address. IP addresses are considered equal if
+        /// all their bits are equal.
+        ///
+        /// ```roto
+        /// 192.0.0.0 == 192.0.0.0   # -> true
+        /// ::0 == ::0               # -> true
+        /// 192.0.0.0 == 192.0.0.1   # -> false
+        /// 0.0.0.0 == 0::0          # -> false
+        ///
+        /// # or equivalently:
+        /// 192.0.0.0.eq(192.0.0.0)  # -> true
+        /// ```
         #[roto_method(rt, IpAddr, eq)]
         fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
             let a = unsafe { *a };
@@ -562,6 +581,11 @@ impl Runtime {
         }
 
         /// Returns true if this address is an IPv4 address, and false otherwise.
+        ///
+        /// ```roto
+        /// 1.1.1.1.is_ipv4() # -> true
+        /// ::.is_ipv4()      # -> false
+        /// ```
         #[roto_method(rt, IpAddr)]
         fn is_ipv4(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
@@ -569,6 +593,11 @@ impl Runtime {
         }
 
         /// Returns true if this address is an IPv6 address, and false otherwise.
+        ///
+        /// ```roto
+        /// 1.1.1.1.is_ipv6() # -> false
+        /// ::.is_ipv6()      # -> true
+        /// ```
         #[roto_method(rt, IpAddr)]
         fn is_ipv6(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
