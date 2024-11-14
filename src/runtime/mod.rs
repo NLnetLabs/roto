@@ -36,7 +36,7 @@ use std::{any::TypeId, net::IpAddr};
 
 use func::{Func, FunctionDescription};
 use inetnum::{addr::Prefix, asn::Asn};
-use roto_macros::roto_method;
+use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 /// Provides the types and functions that Roto can access via FFI
@@ -89,9 +89,14 @@ pub struct RuntimeType {
     /// Whether this type is `Copy`
     movability: Movability,
 
+    /// Size of the type in bytes
     size: usize,
 
+    /// Alignment of the type in bytes
     alignment: usize,
+
+    /// Docstring of the type to display in documentation
+    docstring: String,
 }
 
 impl RuntimeType {
@@ -136,6 +141,16 @@ pub struct RuntimeFunction {
 
     /// Unique identifier for this function
     pub id: usize,
+
+    pub docstring: &'static str,
+
+    pub argument_names: &'static [&'static str],
+}
+
+pub struct DocumentedFunc<F> {
+    pub func: F,
+    pub docstring: &'static str,
+    pub argument_names: &'static [&'static str],
 }
 
 impl Runtime {
@@ -158,9 +173,10 @@ impl Runtime {
     /// [`Runtime::register_clone_type_with_name`] instead.
     pub fn register_clone_type<T: 'static + Clone>(
         &mut self,
+        docstring: &str,
     ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        self.register_clone_type_with_name::<T>(name)
+        self.register_clone_type_with_name::<T>(name, docstring)
     }
 
     /// Register a `Copy` type with a default name
@@ -168,16 +184,22 @@ impl Runtime {
     /// See [`Runtime::register_clone_type`]
     pub fn register_copy_type<T: Copy + 'static>(
         &mut self,
+        docstring: &str,
     ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        self.register_copy_type_with_name::<T>(name)
+        self.register_copy_type_with_name::<T>(name, docstring)
     }
 
     pub fn register_copy_type_with_name<T: Copy + 'static>(
         &mut self,
         name: &str,
+        docstring: &str,
     ) -> Result<(), String> {
-        self.register_type_with_name_internal::<T>(name, Movability::Copy)
+        self.register_type_with_name_internal::<T>(
+            name,
+            Movability::Copy,
+            docstring,
+        )
     }
 
     /// Register a reference type with a given name
@@ -187,12 +209,15 @@ impl Runtime {
     pub fn register_clone_type_with_name<T: 'static + Clone>(
         &mut self,
         name: &str,
+        docstring: &str,
     ) -> Result<(), String> {
         let movability = Movability::CloneDrop {
             clone: extern_clone::<T> as _,
             drop: extern_drop::<T> as _,
         };
-        self.register_type_with_name_internal::<T>(name, movability)
+        self.register_type_with_name_internal::<T>(
+            name, movability, docstring,
+        )
     }
 
     fn extract_name<T: 'static>() -> &'static str {
@@ -213,6 +238,7 @@ impl Runtime {
         &mut self,
         name: &str,
         movability: Movability,
+        docstring: &str,
     ) -> Result<(), String> {
         if let Some(ty) = self.runtime_types.iter().find(|ty| ty.name == name)
         {
@@ -249,6 +275,7 @@ impl Runtime {
             movability,
             size: std::mem::size_of::<T>(),
             alignment: std::mem::align_of::<T>(),
+            docstring: String::from(docstring),
         });
         Ok(())
     }
@@ -258,6 +285,8 @@ impl Runtime {
         name: impl Into<String>,
         f: impl Func<A, R>,
     ) -> Result<(), String> {
+        let docstring = f.docstring();
+        let argument_names = f.argument_names();
         let description = f.to_function_description(self)?;
         self.check_description(&description)?;
 
@@ -267,6 +296,8 @@ impl Runtime {
             description,
             kind: FunctionKind::Free,
             id,
+            docstring,
+            argument_names,
         });
         Ok(())
     }
@@ -276,6 +307,8 @@ impl Runtime {
         name: impl Into<String>,
         f: impl Func<A, R>,
     ) -> Result<(), String> {
+        let docstring = f.docstring();
+        let argument_names = f.argument_names();
         let description = f.to_function_description(self).unwrap();
         self.check_description(&description)?;
 
@@ -311,6 +344,8 @@ impl Runtime {
             description,
             kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
             id,
+            docstring,
+            argument_names,
         });
 
         Ok(())
@@ -321,6 +356,8 @@ impl Runtime {
         name: impl Into<String>,
         f: impl Func<A, R>,
     ) -> Result<(), String> {
+        let docstring = f.docstring();
+        let argument_names = f.argument_names();
         let description = f.to_function_description(self).unwrap();
         self.check_description(&description)?;
 
@@ -330,6 +367,8 @@ impl Runtime {
             description,
             kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
             id,
+            docstring,
+            argument_names,
         });
         Ok(())
     }
@@ -369,6 +408,120 @@ impl Runtime {
         }
         Ok(())
     }
+
+    fn print_function(&self, f: &RuntimeFunction) {
+        let print_ty = |ty: TypeId| {
+            let ty = self.get_runtime_type(ty).unwrap();
+            ty.name.as_ref()
+        };
+
+        let RuntimeFunction {
+            name,
+            description,
+            kind,
+            id: _,
+            docstring,
+            argument_names,
+        } = f;
+        let mut params = description
+            .parameter_types()
+            .iter()
+            .map(|ty| print_ty(*ty))
+            .collect::<Vec<_>>();
+        let ret = params.remove(0);
+
+        let mut argument_names = argument_names.iter();
+        let mut params = params.iter();
+        let receiver = match *kind {
+            FunctionKind::Method(_) => {
+                // Discard the name of the receiver from the arguments
+                let _ = argument_names.next();
+                format!("{}.", params.next().unwrap())
+            }
+            FunctionKind::StaticMethod(id) => {
+                format!("{}.", print_ty(id))
+            }
+            FunctionKind::Free => "".into(),
+        };
+
+        let mut parameter_string = String::new();
+        let mut first = true;
+        for param in params {
+            if !first {
+                parameter_string.push_str(", ");
+            }
+            let name = argument_names.next().map_or("_", |v| v);
+            parameter_string.push_str(name);
+            parameter_string.push_str(": ");
+            parameter_string.push_str(param);
+            first = false;
+        }
+
+        let kind = match kind {
+            FunctionKind::Free => "function",
+            FunctionKind::Method(_) => "method",
+            FunctionKind::StaticMethod(_) => "static_method",
+        };
+        println!(
+            "````{{roto:{kind}}} {receiver}{name}({parameter_string}) -> {ret}"
+        );
+        for line in docstring.lines() {
+            println!("{line}")
+        }
+        println!("````");
+        println!();
+    }
+
+    pub fn print_documentation(&self) {
+        println!("# Standard Library");
+        println!();
+
+        for f in &self.functions {
+            if f.kind != FunctionKind::Free {
+                continue;
+            }
+            self.print_function(f);
+        }
+
+        for RuntimeType {
+            name,
+            type_id,
+            docstring,
+            ..
+        } in &self.runtime_types
+        {
+            println!("`````{{roto:type}} {name}");
+            for line in docstring.lines() {
+                println!("{line}")
+            }
+            println!();
+
+            for f in &self.functions {
+                let id = match f.kind {
+                    FunctionKind::Free => continue,
+                    FunctionKind::Method(id)
+                    | FunctionKind::StaticMethod(id) => id,
+                };
+                if id != *type_id {
+                    continue;
+                }
+                self.print_function(f);
+            }
+
+            println!("`````\n")
+        }
+    }
+}
+
+macro_rules! int_docs {
+    ($t:ty) => {{
+        #[allow(unused_comparisons)]
+        let signed = if <$t>::MIN < 0 { "signed" } else { "unsigned" };
+        let bits = <$t>::BITS;
+        let min = <$t>::MIN;
+        let max = <$t>::MAX;
+        &format!("The {signed} {bits}-bit integer type\n\nThis type can represent integers from {min} up to (and including) {max}.")
+    }};
 }
 
 impl Runtime {
@@ -382,43 +535,84 @@ impl Runtime {
             type_registry: Default::default(),
         };
 
-        rt.register_copy_type_with_name::<()>("Unit")?;
-        rt.register_copy_type::<bool>()?;
-        rt.register_copy_type::<u8>()?;
-        rt.register_copy_type::<u16>()?;
-        rt.register_copy_type::<u32>()?;
-        rt.register_copy_type::<u64>()?;
-        rt.register_copy_type::<i8>()?;
-        rt.register_copy_type::<i16>()?;
-        rt.register_copy_type::<i32>()?;
-        rt.register_copy_type::<i64>()?;
-        rt.register_copy_type::<Asn>()?;
-        rt.register_copy_type::<IpAddr>()?;
-        rt.register_copy_type::<Prefix>()?;
+        rt.register_copy_type_with_name::<()>(
+            "Unit",
+            "The unit type that has just one possible value. It can be used \
+            when there is nothing meaningful to be returned.",
+        )?;
+        rt.register_copy_type::<bool>(
+            "The boolean type\n\n\
+            This type has two possible values: `true` and `false`. Several \
+            boolean operations can be used with booleans, such as `&&` (\
+            logical and), `||` (logical or) and `not`.",
+        )?;
+        rt.register_copy_type::<u8>(int_docs!(u8))?;
+        rt.register_copy_type::<u16>(int_docs!(u16))?;
+        rt.register_copy_type::<u32>(int_docs!(u32))?;
+        rt.register_copy_type::<u64>(int_docs!(u64))?;
+        rt.register_copy_type::<i8>(int_docs!(i8))?;
+        rt.register_copy_type::<i16>(int_docs!(i16))?;
+        rt.register_copy_type::<i32>(int_docs!(i32))?;
+        rt.register_copy_type::<i64>(int_docs!(i64))?;
+        rt.register_copy_type::<Asn>("An ASN: an Autonomous System Number")?;
+        rt.register_copy_type::<IpAddr>(
+            "An IP address\n\nCan be either IPv4 or IPv6.\n\
+            \n\
+            ```roto\n\
+            # IPv4 examples\n\
+            127.0.0.1\n\
+            0.0.0.0\n\
+            255.255.255.255\n\
+            \n\
+            # IPv6 examples\n\
+            0:0:0:0:0:0:0:1\n\
+            ::1\n\
+            ::\n\
+            ```\n\
+            ",
+        )?;
+        rt.register_copy_type::<Prefix>(
+            "An IP address prefix: an IP address and a prefix length\n\n\
+            A prefix can be constructed with the `/` operator or with the \
+            `Prefix.new` function.\n\
+            \n\
+            ```roto\n\
+            1.1.1.0 / 8\n\
+            192.0.0.0.0 / 24\n\
+            ```\n\
+            ",
+        )?;
 
-        extern "C" fn prefix_new(out: *mut Prefix, ip: *mut IpAddr, len: u8) {
+        /// Construct a new prefix
+        ///
+        /// A prefix can also be constructed with a prefix literal.
+        ///
+        /// ```roto
+        /// Prefix.new(192.169.0.0)
+        /// ```
+        #[roto_static_method(rt, Prefix, new)]
+        fn prefix_new(ip: *mut IpAddr, len: u8) -> Prefix {
             let ip = unsafe { *ip };
 
-            let p = Prefix::new(ip, len).unwrap();
-            let p = unsafe {
-                std::mem::transmute::<
-                    Prefix,
-                    [u8; std::mem::size_of::<Prefix>()],
-                >(p)
-            };
-
-            let out = out as *mut [u8; std::mem::size_of::<Prefix>()];
-            unsafe {
-                *out = p;
-            }
+            Prefix::new(ip, len).unwrap()
         }
 
-        rt.register_static_method::<Prefix, _, _>(
-            "new",
-            prefix_new as extern "C" fn(_, _, _) -> _,
-        )
-        .unwrap();
-
+        /// Check whether two IP addresses are equal
+        ///
+        /// A more convenient but equivalent method for checking equality is via the `==` operator.
+        ///
+        /// An IPv4 address is never equal to an IPv6 address. IP addresses are considered equal if
+        /// all their bits are equal.
+        ///
+        /// ```roto
+        /// 192.0.0.0 == 192.0.0.0   # -> true
+        /// ::0 == ::0               # -> true
+        /// 192.0.0.0 == 192.0.0.1   # -> false
+        /// 0.0.0.0 == 0::0          # -> false
+        ///
+        /// # or equivalently:
+        /// 192.0.0.0.eq(192.0.0.0)  # -> true
+        /// ```
         #[roto_method(rt, IpAddr, eq)]
         fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
             let a = unsafe { *a };
@@ -426,18 +620,31 @@ impl Runtime {
             a == b
         }
 
+        /// Returns true if this address is an IPv4 address, and false otherwise.
+        ///
+        /// ```roto
+        /// 1.1.1.1.is_ipv4() # -> true
+        /// ::.is_ipv4()      # -> false
+        /// ```
         #[roto_method(rt, IpAddr)]
         fn is_ipv4(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv4()
         }
 
+        /// Returns true if this address is an IPv6 address, and false otherwise.
+        ///
+        /// ```roto
+        /// 1.1.1.1.is_ipv6() # -> false
+        /// ::.is_ipv6()      # -> true
+        /// ```
         #[roto_method(rt, IpAddr)]
         fn is_ipv6(ip: *const IpAddr) -> bool {
             let ip = unsafe { &*ip };
             ip.is_ipv6()
         }
 
+        /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address, otherwise it returns self as-is.
         #[roto_method(rt, IpAddr)]
         fn to_canonical(ip: *const IpAddr) -> IpAddr {
             let ip = unsafe { &*ip };
@@ -470,11 +677,11 @@ pub mod tests {
     pub fn routecore_runtime() -> Result<Runtime, String> {
         let mut rt = Runtime::basic()?;
 
-        rt.register_clone_type::<OriginType>()?;
-        rt.register_clone_type::<LocalPref>()?;
-        rt.register_clone_type::<Community>()?;
-        rt.register_clone_type::<HopPath>()?;
-        rt.register_clone_type::<AsPath<Vec<u8>>>()?;
+        rt.register_clone_type::<OriginType>("TODO")?;
+        rt.register_clone_type::<LocalPref>("TODO")?;
+        rt.register_clone_type::<Community>("TODO")?;
+        rt.register_clone_type::<HopPath>("TODO")?;
+        rt.register_clone_type::<AsPath<Vec<u8>>>("TODO")?;
 
         #[roto_function(rt)]
         fn pow(x: u32, y: u32) -> u32 {

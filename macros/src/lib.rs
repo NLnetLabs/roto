@@ -147,16 +147,45 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         block: _,
     } = item.clone();
 
+    let mut docstring = String::new();
+
+    for attr in &attrs {
+        if attr.path().is_ident("doc") {
+            let value = match &attr.meta {
+                syn::Meta::NameValue(name_value) => &name_value.value,
+                _ => panic!("doc attribute must be a name and a value"),
+            };
+            let lit = match value {
+                syn::Expr::Lit(expr_lit) => &expr_lit.lit,
+                _ => panic!(
+                    "argument to doc attribute must be a string literal"
+                ),
+            };
+            let litstr = match lit {
+                syn::Lit::Str(litstr) => litstr,
+                _ => panic!(
+                    "argument to doc attribute must be a string literal"
+                ),
+            };
+            docstring.push_str(litstr.value().trim());
+            docstring.push('\n');
+        }
+    }
+
     assert!(sig.unsafety.is_none());
     assert!(sig.variadic.is_none());
 
     let ident = sig.ident;
-    let args = sig.inputs.iter().map(|i| {
-        let syn::FnArg::Typed(syn::PatType { pat, .. }) = i else {
-            panic!()
-        };
-        pat
-    });
+    let args: Vec<_> = sig
+        .inputs
+        .iter()
+        .map(|i| {
+            let syn::FnArg::Typed(syn::PatType { pat, .. }) = i else {
+                panic!()
+            };
+            pat
+        })
+        .collect();
 
     let generics = sig.generics;
     let inputs = sig.inputs.clone().into_iter();
@@ -190,7 +219,11 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
     };
 
     let identifier = quote! {
-        #ident as extern "C" fn(#arg_types)
+        roto::DocumentedFunc {
+            func: #ident as extern "C" fn(#arg_types),
+            docstring: #docstring,
+            argument_names: &[#(stringify!(#args)),*]
+        }
     };
 
     Intermediate {
