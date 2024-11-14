@@ -743,7 +743,7 @@ fn return_keyword() {
 fn unit_block() {
     let s = src!(
         "
-        // workaround for not having a ()
+        # workaround for not having a ()
         function unit() {}
 
         function bar() -> Bool {

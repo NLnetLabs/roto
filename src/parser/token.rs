@@ -3,7 +3,7 @@ use std::fmt::Display;
 use logos::Logos;
 
 #[derive(Logos, Clone, Debug, PartialEq)]
-#[logos(skip r"([ \t\n\f]|(//[^\n]*))+")]
+#[logos(skip r"([ \t\n\f]|(#[^\n]*))+")]
 pub enum Token<'s> {
     #[regex("[a-zA-Z_][a-zA-Z0-9_-]*")]
     Ident(&'s str),
