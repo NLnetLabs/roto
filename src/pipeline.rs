@@ -133,8 +133,7 @@ impl std::fmt::Display for RotoReport {
 
                     let report = Report::build(
                         ReportKind::Error,
-                        file,
-                        error.location.start,
+                        (file, error.location.start..error.location.end),
                     )
                     .with_message(format!("Parse error: {}", error))
                     .with_label(label)
@@ -158,10 +157,10 @@ impl std::fmt::Display for RotoReport {
 
                     let file = self.filename(self.spans.get(error.location));
 
+                    let span = self.spans.get(error.location);
                     let report = Report::build(
                         ReportKind::Error,
-                        file,
-                        self.spans.get(error.location).start,
+                        (file, span.start..span.end),
                     )
                     .with_message(format!(
                         "Type error: {}",

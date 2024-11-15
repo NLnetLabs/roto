@@ -18,7 +18,7 @@ categories = ["network-programming"]
 # ariadne is set to git because of some unpublished contributions made on
 # Aug 5 2024. It should revert to crates.io when a version later than 4.1.0
 # is released
-ariadne = { version = "0.4.0", git = "https://github.com/zesterer/ariadne.git", rev = "4e5987cd55d954858da4a4130255eca1bf0bee5f" }
+ariadne = "0.5.0"
 clap = { version = "4.4.6", features = ["derive"] }
 env_logger = "0.10"
 log = "0.4"
