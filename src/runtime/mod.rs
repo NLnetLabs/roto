@@ -554,7 +554,19 @@ impl Runtime {
         rt.register_copy_type::<i16>(int_docs!(i16))?;
         rt.register_copy_type::<i32>(int_docs!(i32))?;
         rt.register_copy_type::<i64>(int_docs!(i64))?;
-        rt.register_copy_type::<Asn>("An ASN: an Autonomous System Number")?;
+        rt.register_copy_type::<Asn>(
+            "An ASN: an Autonomous System Number\n\
+            \n\
+            An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32). \
+            However, AS numbers cannot be manipulated with arithmetic operations. An AS number \
+            is constructed with the `AS` prefix followed by a number.\n\
+            \n\
+            ```roto\n\
+            AS0\n\
+            AS1010\n\
+            AS4294967295\n\
+            ```\n\
+            ")?;
         rt.register_copy_type::<IpAddr>(
             "An IP address\n\nCan be either IPv4 or IPv6.\n\
             \n\
@@ -572,9 +584,10 @@ impl Runtime {
             ",
         )?;
         rt.register_copy_type::<Prefix>(
-            "An IP address prefix: an IP address and a prefix length\n\n\
+            "An IP address prefix: the combination of an IP address and a prefix length\n\n\
             A prefix can be constructed with the `/` operator or with the \
-            `Prefix.new` function.\n\
+            [`Prefix.new`](Prefix.new) function. This operator takes an [`IpAddr`](IpAddr) \
+            and a [`u8`](u8) as operands.\n
             \n\
             ```roto\n\
             1.1.1.0 / 8\n\
@@ -585,10 +598,13 @@ impl Runtime {
 
         /// Construct a new prefix
         ///
-        /// A prefix can also be constructed with a prefix literal.
+        /// A prefix can also be constructed with the `/` operator.
         ///
         /// ```roto
-        /// Prefix.new(192.169.0.0)
+        /// Prefix.new(192.169.0.0, 16)
+        ///
+        /// # or equivalently
+        /// 192.169.0.0 / 16
         /// ```
         #[roto_static_method(rt, Prefix, new)]
         fn prefix_new(ip: *mut IpAddr, len: u8) -> Prefix {
