@@ -778,20 +778,17 @@ impl<'c> FuncGen<'c> {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
 
-                match clone {
-                    Some(clone) => {
-                        let pointer_ty = self.module.isa.pointer_type();
-                        let clone = self.ins().iconst(
-                            pointer_ty,
-                            *clone as *mut u8 as usize as i64,
-                        );
-                        self.builder.ins().call_indirect(
-                            self.clone_signature,
-                            clone,
-                            &[src, dest],
-                        );
-                    }
-                    None => {}
+                if let Some(clone) = clone {
+                    let pointer_ty = self.module.isa.pointer_type();
+                    let clone = self.ins().iconst(
+                        pointer_ty,
+                        *clone as *mut u8 as usize as i64,
+                    );
+                    self.builder.ins().call_indirect(
+                        self.clone_signature,
+                        clone,
+                        &[src, dest],
+                    );
                 }
                 self.builder.emit_small_memory_copy(
                     self.module.isa.frontend_config(),
