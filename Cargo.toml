@@ -5,12 +5,12 @@ edition.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "strongly-typed, compiled language for Rotonda"
-documentation = "https://docs.rs/roto/"
-repository = "https://github.com/NLnetLabs/roto/"
-homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
-keywords = ["routing", "bgp"]
-categories = ["network-programming"]
+description.workspace = true
+documentation.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 ariadne = "0.5.0"
@@ -21,7 +21,7 @@ logos = "0.14.0"
 inetnum = "0.1.0"
 symbol_table = { version = "0.3.0", features = ["global"] }
 string-interner = "0.17.0"
-roto-macros = { path = "macros", version = "0.3.0"}
+roto-macros = { workspace = true }
 
 [dependencies.cranelift]
 version = "0.113.0"
@@ -54,3 +54,16 @@ edition = "2021"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
 rust-version = "1.80"
+description = "strongly-typed, compiled language for Rotonda"
+documentation = "https://docs.rs/roto/"
+repository = "https://github.com/NLnetLabs/roto/"
+homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
+keywords = ["routing", "bgp"]
+categories = ["network-programming"]
+readme = "README.md"
+
+[workspace.dependencies]
+roto-macros = { path = "macros" }
+proc-macro2 = "1.0.86"
+quote = "1.0.37"
+syn = { version = "2.0.77", features = ["full"] }
