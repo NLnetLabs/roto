@@ -15,9 +15,6 @@ categories = ["network-programming"]
 
 
 [dependencies]
-# ariadne is set to git because of some unpublished contributions made on
-# Aug 5 2024. It should revert to crates.io when a version later than 4.1.0
-# is released
 ariadne = "0.5.0"
 clap = { version = "4.4.6", features = ["derive"] }
 env_logger = "0.10"
@@ -42,7 +39,7 @@ rev = "1af294ea2d6c18c5a8fa9b4f272398b7c98e0c48"
 
 [dev-dependencies]
 bytes = "1"
-routecore = { version = "0.5.0-rc2-dev", features = ["bgp", "bmp", "serde"], git = "https://github.com/NLnetLabs/routecore.git"}
+routecore = { version = "0.5", features = ["bgp", "bmp", "serde"] }
 
 [profile.profiling]
 inherits = "release"
