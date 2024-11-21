@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased new version
+
+Release yyyy-mm-dd.
+
+### Breaking changes
+
+### New
+
+### Bug fixes
+
 ## 0.3.0
 
 Released 2024-11-21.
