@@ -1,26 +1,26 @@
 `Roto`
 ======
 
-`roto` is the strongly-typed, compiled language for creating route filters.
+`Roto` is a full programming language that is fast, safe and easy to use. It
+is made to integrate especially well with Rotonda, so that writing filters is
+as simple as possible.
 
 Used by [Rotonda], the composable, programmable routing BGP engine.
 
-Key:
+Scripts are compiled to machine code by Rotonda before they are executed. This
+means that they run quickly and introduce minimal latency into your system.
 
-    ✅ -- phase complete
-    🦀 -- phase in progress
-    💤 -- phase not started yet
+A strong and static type system ensures that every expression must be of a
+well defined, unambiguous type. Roto scripts therefore cannot crash Rotonda
+and can be used safely. This does not mean that the user has to specify types
+everywhere, most types can be inferred by the Roto compiler. When the compiler
+detects a mistake in your script, it will emit a friendly message.
 
-
-| Stage | State | Artifacts |
-|:----:|:----:|:--------:|
-| Proposal | ✅ | this document |
-| Experimental | ✅ | this repo |
-| Development | 🦀 | [crate] |
-| Feature complete | 🦀 | this repo |
-| Stabilized | 💤 | |
+Roto has no facilities to create loops. The reason for this is that scripts
+need to run only for a short time and should not slow down the application.
 
 Read more about in the [documentation].
+
 ## Contributing
 
 If you have comments, proposed changes, or would like to contribute,
