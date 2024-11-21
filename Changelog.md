@@ -1,32 +1,32 @@
 # Changelog
 
-## Unreleased new version
+## 0.3.0
 
-Breaking changes
+Released 2024-11-21.
 
-New
+This is a completely rewritten version of Roto. The API and the language
+itself are both completely different. See the API docs and the `examples/`
+folder to see how to use it.
 
-* `set` method for AsPath type.
-* Better error message for BytesRecord types.
+### Breaking changes
 
-  Errors on BytesMessage now return the actual type of BytesRecord we're talking about.
+- There is no `VM` anymore.
+- A script needs a `Runtime` with Rust objects to reference
+- Many syntax changes to the Roto language.
+- The `TypeValue` enum no longer exists, instead native Rust types are used
+- No macros are used anymore for Roto types, they _can_ still be used for
+  functions and methods, but they can also be added programmatically.
+- As a corollary, the definitions for Roto types that are specific to
+  Rotonda have moved to Rotonda.
+- And more changes.
 
-* `len`, `first` and `pop` methods for List types.
-* Nlri type added, with `set`, `afi`, `safi` methods.
+### New
 
-  Nlri is now a first-class citizen, that can be interrogated.
-
-* `announcements` (returning [Nlri]) method on BgpMessage.
-
-  announcements is a pass-through to the routecore method on a BgpUpdateMessage.
-
-Bug fixes
-
-* Parse all available type definitions.
-
-  Several types that could be used inside blocks, weren't available in Type and Anonymous Record definitions.
-
-Other changes
+- Types, functions and methods can be registered via `Runtime`.
+- `Runtime::print_documentation` prints the documentation for all items
+  registered in the Runtime.
+- Roto is now compiled using cranelift and runs as native machine code.
+- Parsing and type error messages have improved.
 
 
 ## 0.2.0
