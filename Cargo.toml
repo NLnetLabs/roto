@@ -63,7 +63,7 @@ categories = ["network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
-roto-macros = { path = "macros" }
+roto-macros = { path = "macros", version = "0.3.0" }
 proc-macro2 = "1.0.86"
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }
