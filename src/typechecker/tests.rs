@@ -872,3 +872,18 @@ fn issue_51() {
 
     typecheck(s).unwrap_err();
 }
+
+#[test]
+fn use_globals() {
+    let s = src!(
+        "
+        filter-map main() {
+            apply {
+                accept BLACKHOLE
+            }
+        }
+        "
+    );
+
+    typecheck(s).unwrap();
+}

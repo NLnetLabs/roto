@@ -21,7 +21,7 @@ use crate::{
         meta::{Span, Spans},
         ParseError, Parser,
     },
-    runtime::{ty::Reflect, Runtime},
+    runtime::{ty::Reflect, Runtime, RuntimeConstant},
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
@@ -84,6 +84,7 @@ pub struct TypeChecked {
 pub struct Lowered {
     pub ir: Vec<ir::Function>,
     runtime_functions: HashMap<usize, IrFunction>,
+    runtime_constants: Vec<RuntimeConstant>,
     label_store: LabelStore,
     type_info: TypeInfo,
 }
@@ -397,9 +398,12 @@ impl TypeChecked {
             println!("{s}");
         }
 
+        let runtime_constants = runtime.constants.values().cloned().collect();
+
         Lowered {
             ir,
             runtime_functions,
+            runtime_constants,
             label_store,
             type_info: type_infos.remove(0),
         }
@@ -412,13 +416,14 @@ impl Lowered {
         mem: &mut Memory,
         rx: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(&self.ir, "main", mem, rx)
+        eval::eval(&self.ir, "main", mem, &self.runtime_constants, rx)
     }
 
     pub fn codegen(self) -> Compiled {
         let module = codegen::codegen(
             &self.ir,
             &self.runtime_functions,
+            &self.runtime_constants,
             self.label_store,
             self.type_info,
         );

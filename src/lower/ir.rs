@@ -82,6 +82,13 @@ pub enum Instruction {
         ty: IrType,
     },
 
+    /// Load a constant
+    LoadConstant {
+        to: Var,
+        name: Identifier,
+        ty: IrType,
+    },
+
     /// Call a function.
     Call {
         to: Option<(Var, IrType)>,
@@ -338,6 +345,9 @@ impl<'a> IrPrinter<'a> {
         match instruction {
             Assign { to, val, ty } => {
                 format!("{}: {ty} = {}", self.var(to), self.operand(val),)
+            }
+            LoadConstant { to, name, ty } => {
+                format!("{}: {ty} = LoadConstant(\"{}\")", self.var(to), name)
             }
             Call {
                 to: Some((to, ty)),

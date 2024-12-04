@@ -13,6 +13,10 @@ use super::Type;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ScopeRef(Option<usize>);
 
+impl ScopeRef {
+    pub const ROOT: Self = Self(None);
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DefinitionRef(pub ScopeRef, pub Identifier);
 
@@ -47,7 +51,7 @@ impl ScopeGraph {
 
     /// Create a new root scope
     pub fn root(&mut self) -> ScopeRef {
-        ScopeRef(None)
+        ScopeRef::ROOT
     }
 
     /// Create a new scope over `scope`

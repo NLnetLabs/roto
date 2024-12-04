@@ -13,7 +13,10 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    runtime::ty::{Reflect, GLOBAL_TYPE_REGISTRY},
+    runtime::{
+        ty::{Reflect, GLOBAL_TYPE_REGISTRY},
+        RuntimeConstant,
+    },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
     IrValue,
 };
@@ -36,7 +39,7 @@ use cranelift::{
         Variable,
     },
     jit::{JITBuilder, JITModule},
-    module::{DataDescription, FuncId, Linkage, Module as _},
+    module::{DataDescription, FuncId, FuncOrDataId, Linkage, Module as _},
     prelude::Signature,
 };
 use cranelift_codegen::ir::SigRef;
@@ -47,7 +50,7 @@ pub mod check;
 mod tests;
 
 /// A wrapper around a cranelift [`JITModule`] that cleans up after itself
-/// 
+///
 /// This is achieved by wrapping the module in an [`Arc`].
 #[derive(Clone)]
 pub struct ModuleData(Arc<ManuallyDrop<JITModule>>);
@@ -105,10 +108,10 @@ pub struct Module {
 }
 
 /// A function extracted from Roto
-/// 
+///
 /// A [`TypedFunc`] can be retrieved from a compiled script using
 /// [`Compiled::get_function`](crate::Compiled::get_function).
-/// 
+///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone, Debug)]
 pub struct TypedFunc<Params, Return> {
@@ -226,6 +229,7 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 pub fn codegen(
     ir: &[ir::Function],
     runtime_functions: &HashMap<usize, IrFunction>,
+    constants: &[RuntimeConstant],
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module {
@@ -274,6 +278,10 @@ pub fn codegen(
         clone_signature,
     };
 
+    for constant in constants {
+        module.declare_constant(constant);
+    }
+
     for (roto_func_id, func) in runtime_functions {
         let mut sig = module.inner.make_signature();
         for ty in &func.params {
@@ -308,6 +316,23 @@ pub fn codegen(
 }
 
 impl ModuleBuilder {
+    fn declare_constant(&mut self, constant: &RuntimeConstant) {
+        let data_id = self
+            .inner
+            .declare_data(
+                constant.name.as_str(),
+                Linkage::Local,
+                false,
+                false,
+            )
+            .unwrap();
+
+        let mut description = DataDescription::new();
+        description.define(constant.bytes.clone());
+
+        self.inner.define_data(data_id, &description).unwrap();
+    }
+
     /// Declare a function and its signature (without the body)
     fn declare_function(&mut self, func: &ir::Function) {
         let ir::Function {
@@ -836,6 +861,21 @@ impl<'c> FuncGen<'c> {
 
                 let var = self.variable(to, I32);
                 self.def(var, val);
+            }
+            ir::Instruction::LoadConstant { to, name, ty } => {
+                let Some(FuncOrDataId::Data(data_id)) =
+                    self.module.inner.get_name(name.as_str())
+                else {
+                    panic!();
+                };
+                let val = self
+                    .module
+                    .inner
+                    .declare_data_in_func(data_id, self.builder.func);
+                let ty = self.module.cranelift_type(ty);
+                let val = self.ins().global_value(ty, val);
+                let to = self.variable(to, ty);
+                self.def(to, val);
             }
         }
     }

@@ -102,14 +102,16 @@ impl TypeChecker<'_> {
 
         let root_scope = checker.scope_graph.root();
 
-        for (v, t) in types::globals() {
+        for (v, t) in runtime.iter_constants() {
             checker.insert_var(
                 root_scope,
                 Meta {
                     id: MetaId(0),
                     node: v,
                 },
-                t,
+                Type::Name(
+                    runtime.get_runtime_type(t).unwrap().name().into(),
+                ),
             )?;
         }
 
