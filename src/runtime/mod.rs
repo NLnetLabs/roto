@@ -32,12 +32,18 @@ pub mod ty;
 pub mod val;
 pub mod verdict;
 
-use std::{any::TypeId, net::IpAddr};
+use std::{
+    any::{type_name, TypeId},
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+};
 
 use func::{Func, FunctionDescription};
 use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
+
+use crate::ast::Identifier;
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -48,6 +54,7 @@ use ty::{Ty, TypeDescription, TypeRegistry};
 pub struct Runtime {
     pub runtime_types: Vec<RuntimeType>,
     pub functions: Vec<RuntimeFunction>,
+    pub constants: HashMap<Identifier, RuntimeConstant>,
     pub type_registry: TypeRegistry,
 }
 
@@ -151,6 +158,14 @@ pub struct DocumentedFunc<F> {
     pub func: F,
     pub docstring: &'static str,
     pub argument_names: &'static [&'static str],
+}
+
+#[derive(Clone)]
+pub struct RuntimeConstant {
+    pub name: Identifier,
+    pub ty: TypeId,
+    pub docstring: String,
+    pub bytes: Box<[u8]>,
 }
 
 impl Runtime {
@@ -373,6 +388,43 @@ impl Runtime {
         Ok(())
     }
 
+    pub fn register_constant<T: 'static>(
+        &mut self,
+        name: impl Into<String>,
+        docstring: &str,
+        x: T,
+    ) -> Result<(), String> {
+        let type_id = TypeId::of::<T>();
+        self.find_type(type_id, type_name::<T>())?;
+        let mut bytes: Vec<u8> = vec![0; size_of::<T>()];
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                &x as *const T as *const _,
+                bytes.as_mut_ptr(),
+                bytes.len(),
+            )
+        };
+
+        let symbol = Identifier::from(name.into());
+        self.constants.insert(
+            symbol,
+            RuntimeConstant {
+                name: symbol,
+                ty: type_id,
+                docstring: docstring.into(),
+                bytes: bytes.into_boxed_slice(),
+            },
+        );
+
+        Ok(())
+    }
+
+    pub fn iter_constants(
+        &self,
+    ) -> impl Iterator<Item = (Identifier, TypeId)> + '_ {
+        self.constants.values().map(|g| (g.name, g.ty))
+    }
+
     pub fn get_runtime_type(&self, id: TypeId) -> Option<&RuntimeType> {
         let ty = self.type_registry.get(id)?;
         let id = match ty.description {
@@ -409,12 +461,12 @@ impl Runtime {
         Ok(())
     }
 
-    fn print_function(&self, f: &RuntimeFunction) {
-        let print_ty = |ty: TypeId| {
-            let ty = self.get_runtime_type(ty).unwrap();
-            ty.name.as_ref()
-        };
+    fn print_ty(&self, ty: TypeId) -> &str {
+        let ty = self.get_runtime_type(ty).unwrap();
+        ty.name.as_ref()
+    }
 
+    fn print_function(&self, f: &RuntimeFunction) {
         let RuntimeFunction {
             name,
             description,
@@ -426,7 +478,7 @@ impl Runtime {
         let mut params = description
             .parameter_types()
             .iter()
-            .map(|ty| print_ty(*ty))
+            .map(|ty| self.print_ty(*ty))
             .collect::<Vec<_>>();
         let ret = params.remove(0);
 
@@ -439,7 +491,7 @@ impl Runtime {
                 format!("{}.", params.next().unwrap())
             }
             FunctionKind::StaticMethod(id) => {
-                format!("{}.", print_ty(id))
+                format!("{}.", self.print_ty(id))
             }
             FunctionKind::Free => "".into(),
         };
@@ -483,6 +535,22 @@ impl Runtime {
             self.print_function(f);
         }
 
+        for RuntimeConstant {
+            name,
+            ty,
+            docstring,
+            ..
+        } in self.constants.values()
+        {
+            println!(
+                "`````{{roto::constant}} {name}: {}",
+                self.print_ty(*ty)
+            );
+            for line in docstring.lines() {
+                println!("{line}");
+            }
+            println!("`````\n");
+        }
         for RuntimeType {
             name,
             type_id,
@@ -492,7 +560,7 @@ impl Runtime {
         {
             println!("`````{{roto:type}} {name}");
             for line in docstring.lines() {
-                println!("{line}")
+                println!("{line}");
             }
             println!();
 
@@ -533,6 +601,7 @@ impl Runtime {
             runtime_types: Default::default(),
             functions: Default::default(),
             type_registry: Default::default(),
+            constants: Default::default(),
         };
 
         rt.register_copy_type_with_name::<()>(
@@ -667,6 +736,20 @@ impl Runtime {
             ip.to_canonical()
         }
 
+        rt.register_constant(
+            "LOCALHOSTV4",
+            "The IPv4 address pointing to localhost: `127.0.0.1`",
+            IpAddr::from(Ipv4Addr::LOCALHOST),
+        )
+        .unwrap();
+
+        rt.register_constant(
+            "LOCALHOSTV6",
+            "The IPv6 address pointing to localhost: `::1`",
+            IpAddr::from(Ipv6Addr::LOCALHOST),
+        )
+        .unwrap();
+
         Ok(rt)
     }
 
@@ -686,7 +769,7 @@ pub mod tests {
     use roto_macros::{roto_function, roto_method};
     use routecore::bgp::{
         aspath::{AsPath, HopPath},
-        communities::Community,
+        communities::{Community, Wellknown},
         types::{LocalPref, OriginType},
     };
 
@@ -708,6 +791,13 @@ pub mod tests {
         fn is_even(x: u32) -> bool {
             x % 2 == 0
         }
+
+        rt.register_constant(
+            "BLACKHOLE",
+            "The well-known BLACKHOLE community.",
+            Community::from(Wellknown::Blackhole),
+        )
+        .unwrap();
 
         Ok(rt)
     }

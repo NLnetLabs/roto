@@ -904,3 +904,26 @@ fn arc_type() {
         output.drops.load(Ordering::Relaxed)
     );
 }
+
+#[test]
+fn use_constant() {
+    let s = src!(
+        "
+        filter-map main() {
+            define {
+                safi = 127.0.0.1;
+            }
+            apply {
+                if safi == LOCALHOSTV4 {
+                    reject
+                }
+                accept
+            }
+        }"
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), Verdict<(), ()>>("main").unwrap();
+    let output = f.call();
+    assert_eq!(output, Verdict::Reject(()));
+}

@@ -650,13 +650,26 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Var(x) => {
                 let DefinitionRef(scope, ident) =
                     self.type_info.resolved_name(x);
-                Some(
-                    Var {
-                        scope,
-                        kind: VarKind::Explicit(ident),
-                    }
-                    .into(),
-                )
+
+                if ScopeRef::ROOT == scope {
+                    let var = self.new_tmp();
+                    let ty = self.type_info.type_of(id);
+                    let ty = self.lower_type(&ty);
+                    self.add(Instruction::LoadConstant {
+                        to: var.clone(),
+                        name: ident,
+                        ty,
+                    });
+                    Some(var.into())
+                } else {
+                    Some(
+                        Var {
+                            scope,
+                            kind: VarKind::Explicit(ident),
+                        }
+                        .into(),
+                    )
+                }
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);

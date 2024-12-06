@@ -252,25 +252,6 @@ impl Function {
     }
 }
 
-pub fn globals() -> Vec<(Identifier, Type)> {
-    let community = Identifier::from("Community");
-    let safi = Identifier::from("Safi");
-    let afi = Identifier::from("Afi");
-
-    [
-        ("BLACKHOLE", Type::Name(community)),
-        ("UNICAST", Type::Name(safi)),
-        ("MULTICAST", Type::Name(safi)),
-        ("IPV4", Type::Name(afi)),
-        ("IPV6", Type::Name(afi)),
-        ("VPNV4", Type::Name(afi)),
-        ("VPNV6", Type::Name(afi)),
-    ]
-    .into_iter()
-    .map(|(s, t)| (Identifier::from(s), t))
-    .collect()
-}
-
 pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
     use Primitive::*;
 

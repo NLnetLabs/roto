@@ -448,38 +448,3 @@ fn ip_addr_method() {
         assert_eq!(expected, u8::from_ne_bytes(res));
     }
 }
-
-// #[test]
-// fn prefix_addr() {
-//     let s = "
-//         filter-map main(x: Prefix) {
-//             apply {
-//                 if x.address() == 0.0.0.0 {
-//                     accept
-//                 }
-//                 reject
-//             }
-//         }
-//     ";
-
-//     assert_eq!(
-//         p(IrValue::from_any(Box::new(
-//             Prefix::from_str("0.0.0.0/8").unwrap()
-//         ))),
-//         Ok(())
-//     );
-
-//     assert_eq!(
-//         p(IrValue::from_any(Box::new(
-//             Prefix::from_str("127.0.0.0/8").unwrap()
-//         ))),
-//         Err(())
-//     );
-
-//     let mut mem = Memory::new();
-//     let program = compile(s);
-//     let pointer = mem.allocate(1);
-//     program.eval(&mut mem, vec![IrValue::Pointer(pointer), IrValue::U32(0)]);
-//     let res = mem.read(pointer, 1);
-//     assert_eq!(&[1], res);
-// }

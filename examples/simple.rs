@@ -9,11 +9,11 @@ fn main() -> Result<(), roto::RotoReport> {
 
     let mut arguments = args();
     let _program_name = arguments.next().unwrap();
-    
+
     let subcommand = arguments.next();
     if Some("doc") == subcommand.as_deref() {
         runtime.print_documentation();
-        return Ok(())
+        return Ok(());
     }
 
     let mut compiled = read_files(["examples/simple.roto"])?

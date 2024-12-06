@@ -13,7 +13,7 @@ use crate::{
         ir::{Instruction, IntCmp, VarKind},
         value::IrValue,
     },
-    runtime::RuntimeFunction,
+    runtime::{RuntimeConstant, RuntimeFunction},
 };
 use std::collections::HashMap;
 
@@ -247,6 +247,7 @@ pub fn eval(
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
+    constants: &[RuntimeConstant],
     rx: Vec<IrValue>,
 ) -> Option<IrValue> {
     let filter_map_ident = Identifier::from(filter_map);
@@ -266,6 +267,11 @@ pub fn eval(
         block_map.insert(block.label, instructions.len());
         instructions.extend(block.instructions.clone());
     }
+
+    let constants: HashMap<Identifier, &[u8]> = constants
+        .iter()
+        .map(|g| (g.name, g.bytes.as_ref()))
+        .collect();
 
     // This is our working memory for the interpreter
     let mut vars = HashMap::<Var, IrValue>::new();
@@ -333,6 +339,11 @@ pub fn eval(
             }
             Instruction::Assign { to, val, .. } => {
                 let val = eval_operand(&vars, val);
+                vars.insert(to.clone(), val.clone());
+            }
+            Instruction::LoadConstant { to, name, ty } => {
+                let val = constants.get(name).unwrap();
+                let val = IrValue::from_slice(ty, val);
                 vars.insert(to.clone(), val.clone());
             }
             Instruction::Call { to, func, args } => {
