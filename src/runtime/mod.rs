@@ -164,6 +164,7 @@ pub struct DocumentedFunc<F> {
 pub struct RuntimeConstant {
     pub name: Identifier,
     pub ty: TypeId,
+    pub docstring: String,
     pub bytes: Box<[u8]>,
 }
 
@@ -389,7 +390,8 @@ impl Runtime {
 
     pub fn register_constant<T: 'static>(
         &mut self,
-        name: &str,
+        name: impl Into<String>,
+        docstring: &str,
         x: T,
     ) -> Result<(), String> {
         let type_id = TypeId::of::<T>();
@@ -403,12 +405,13 @@ impl Runtime {
             )
         };
 
-        let symbol = Identifier::from(name);
+        let symbol = Identifier::from(name.into());
         self.constants.insert(
             symbol,
             RuntimeConstant {
                 name: symbol,
                 ty: type_id,
+                docstring: docstring.into(),
                 bytes: bytes.into_boxed_slice(),
             },
         );
@@ -458,12 +461,12 @@ impl Runtime {
         Ok(())
     }
 
-    fn print_function(&self, f: &RuntimeFunction) {
-        let print_ty = |ty: TypeId| {
-            let ty = self.get_runtime_type(ty).unwrap();
-            ty.name.as_ref()
-        };
+    fn print_ty(&self, ty: TypeId) -> &str {
+        let ty = self.get_runtime_type(ty).unwrap();
+        ty.name.as_ref()
+    }
 
+    fn print_function(&self, f: &RuntimeFunction) {
         let RuntimeFunction {
             name,
             description,
@@ -475,7 +478,7 @@ impl Runtime {
         let mut params = description
             .parameter_types()
             .iter()
-            .map(|ty| print_ty(*ty))
+            .map(|ty| self.print_ty(*ty))
             .collect::<Vec<_>>();
         let ret = params.remove(0);
 
@@ -488,7 +491,7 @@ impl Runtime {
                 format!("{}.", params.next().unwrap())
             }
             FunctionKind::StaticMethod(id) => {
-                format!("{}.", print_ty(id))
+                format!("{}.", self.print_ty(id))
             }
             FunctionKind::Free => "".into(),
         };
@@ -532,6 +535,22 @@ impl Runtime {
             self.print_function(f);
         }
 
+        for RuntimeConstant {
+            name,
+            ty,
+            docstring,
+            ..
+        } in self.constants.values()
+        {
+            println!(
+                "`````{{roto::constant}} {name}: {}",
+                self.print_ty(*ty)
+            );
+            for line in docstring.lines() {
+                println!("{line}");
+            }
+            println!("`````\n");
+        }
         for RuntimeType {
             name,
             type_id,
@@ -541,7 +560,7 @@ impl Runtime {
         {
             println!("`````{{roto:type}} {name}");
             for line in docstring.lines() {
-                println!("{line}")
+                println!("{line}");
             }
             println!();
 
@@ -719,12 +738,14 @@ impl Runtime {
 
         rt.register_constant(
             "LOCALHOSTV4",
+            "The IPv4 address pointing to localhost: `127.0.0.1`",
             IpAddr::from(Ipv4Addr::LOCALHOST),
         )
         .unwrap();
 
         rt.register_constant(
             "LOCALHOSTV6",
+            "The IPv6 address pointing to localhost: `::1`",
             IpAddr::from(Ipv6Addr::LOCALHOST),
         )
         .unwrap();
@@ -773,6 +794,7 @@ pub mod tests {
 
         rt.register_constant(
             "BLACKHOLE",
+            "The well-known BLACKHOLE community.",
             Community::from(Wellknown::Blackhole),
         )
         .unwrap();
