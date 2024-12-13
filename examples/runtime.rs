@@ -25,14 +25,14 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(Val<Bla>,), Verdict<u32, ()>>("main")
+        .get_function::<(), (Val<Bla>,), Verdict<u32, ()>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
     for x in 0..20 {
         let bla = Bla { x };
 
-        let res = func.call(Val(bla));
+        let res = func.call(&mut (), Val(bla));
         let expected = if x > 10 {
             Verdict::Accept(x * 2)
         } else {

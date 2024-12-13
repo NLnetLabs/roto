@@ -1,9 +1,17 @@
 use crate::runtime::tests::routecore_runtime;
-use crate::src;
 use crate::{pipeline::RotoReport, Files};
+use crate::{src, Context, Runtime};
 
 #[track_caller]
 fn typecheck(loaded: Files) -> Result<(), RotoReport> {
+    typecheck_with_runtime(loaded, routecore_runtime().unwrap())
+}
+
+#[track_caller]
+fn typecheck_with_runtime(
+    loaded: Files,
+    rt: Runtime,
+) -> Result<(), RotoReport> {
     let res = loaded.parse();
 
     let res = match res {
@@ -14,12 +22,11 @@ fn typecheck(loaded: Files) -> Result<(), RotoReport> {
         }
     };
 
-    let runtime = routecore_runtime().unwrap();
     let pointer_bytes = usize::BITS / 8;
 
     // Unwrap on parse because a parse error in this file is never correct.
     // We only want to test for type errors.
-    if let Err(e) = res.typecheck(runtime, pointer_bytes) {
+    if let Err(e) = res.typecheck(rt, pointer_bytes) {
         println!("{e}");
         Err(e)
     } else {
@@ -886,4 +893,28 @@ fn use_globals() {
     );
 
     typecheck(s).unwrap();
+}
+
+#[test]
+fn use_context() {
+    let mut rt = Runtime::basic().unwrap();
+
+    #[derive(Context)]
+    struct Ctx {
+        pub foo: u8,
+    }
+
+    rt.register_context_type::<Ctx>().unwrap();
+
+    let s = src!(
+        "
+        filter-map main() {
+            apply {
+                accept foo;
+            }
+        }
+        "
+    );
+
+    typecheck_with_runtime(s, rt).unwrap();
 }

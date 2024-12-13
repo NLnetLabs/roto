@@ -1,6 +1,58 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Token};
+use syn::{parse_macro_input, Token, Visibility};
+
+#[proc_macro_derive(Context)]
+pub fn roto_context(item: TokenStream) -> TokenStream {
+    let item = parse_macro_input!(item as syn::DeriveInput);
+
+    let struct_name = &item.ident;
+
+    let syn::Data::Struct(s) = &item.data else {
+        panic!("Only structs can be used as context");
+    };
+
+    let syn::Fields::Named(fields) = &s.fields else {
+        panic!("Fields must be named");
+    };
+
+    let fields: Vec<_> = fields
+        .named
+        .iter()
+        .map(|f| {
+            if !matches!(f.vis, Visibility::Public(_)) {
+                panic!("All fields must be marked pub")
+            }
+
+            let field_name = f.ident.as_ref().unwrap();
+            let field_ty = &f.ty;
+            let offset = quote!(std::mem::offset_of!(Self, #field_name));
+            let type_name = quote!(std::any::type_name::<#field_ty>());
+            let type_id = quote!(std::any::TypeId::of::<#field_ty>());
+
+            quote!(
+                roto::ContextField {
+                    name: stringify!(#field_name),
+                    offset: #offset,
+                    type_name: #type_name,
+                    type_id: #type_id
+                }
+            )
+        })
+        .collect();
+
+    let expanded = quote!(
+        impl Context for #struct_name {
+            fn fields() -> Vec<roto::ContextField> {
+                vec![
+                    #(#fields),*
+                ]
+            }
+        }
+    );
+
+    TokenStream::from(expanded)
+}
 
 struct Intermediate {
     function: proc_macro2::TokenStream,

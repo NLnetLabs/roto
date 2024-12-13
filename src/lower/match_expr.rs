@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     ast::{self, Identifier, Match, Pattern},
     parser::meta::Meta,
-    typechecker::{scope::DefinitionRef, types::Type},
+    typechecker::types::Type,
 };
 
 use super::{
@@ -258,8 +258,8 @@ impl Lowerer<'_> {
             } = &arm.pattern.node
             {
                 let ty = self.type_info.type_of(var);
-                let DefinitionRef(scope, ident) =
-                    self.type_info.resolved_name(var);
+                let (scope, ident) =
+                    self.type_info.resolved_name(var).to_scope_and_name();
 
                 // The offset of the field is (at least) 1 because of the
                 // discriminant.

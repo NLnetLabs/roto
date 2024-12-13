@@ -1,8 +1,11 @@
 //! Machine code generation via cranelift
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData,
-    mem::ManuallyDrop, sync::Arc,
+    any::{type_name, TypeId},
+    collections::HashMap,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    sync::Arc,
 };
 
 use crate::{
@@ -14,6 +17,7 @@ use crate::{
         IrFunction,
     },
     runtime::{
+        context::ContextDescription,
         ty::{Reflect, GLOBAL_TYPE_REGISTRY},
         RuntimeConstant,
     },
@@ -22,7 +26,7 @@ use crate::{
 };
 use check::{
     check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
-    RotoParams,
+    RotoParams, TypeMismatch,
 };
 use cranelift::{
     codegen::{
@@ -100,6 +104,8 @@ pub struct Module {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
+    context_description: ContextDescription,
+
     /// The inner cranelift module
     inner: ModuleData,
 
@@ -114,7 +120,7 @@ pub struct Module {
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone, Debug)]
-pub struct TypedFunc<Params, Return> {
+pub struct TypedFunc<Ctx, Params, Return> {
     func: *const u8,
     return_by_ref: bool,
 
@@ -123,33 +129,37 @@ pub struct TypedFunc<Params, Return> {
     // for the safety of calling this function. Without it, the data that
     // the `func` pointer points to might have been dropped.
     _module: ModuleData,
-    _ty: PhantomData<(Params, Return)>,
+    _ty: PhantomData<(Ctx, Params, Return)>,
 }
 
-unsafe impl<Params, Return> Send for TypedFunc<Params, Return> {}
-unsafe impl<Params, Return> Sync for TypedFunc<Params, Return> {}
+unsafe impl<Ctx, Params, Return> Send for TypedFunc<Ctx, Params, Return> {}
+unsafe impl<Ctx, Params, Return> Sync for TypedFunc<Ctx, Params, Return> {}
 
-impl<Params: RotoParams, Return: Reflect> TypedFunc<Params, Return> {
-    pub fn call_tuple(&self, params: Params) -> Return {
-        unsafe { params.invoke::<Return>(self.func, self.return_by_ref) }
+impl<Ctx: 'static, Params: RotoParams, Return: Reflect>
+    TypedFunc<Ctx, Params, Return>
+{
+    pub fn call_tuple(&self, ctx: &mut Ctx, params: Params) -> Return {
+        unsafe {
+            params.invoke::<Ctx, Return>(ctx, self.func, self.return_by_ref)
+        }
     }
 }
 
 macro_rules! call_impl {
     ($($ty:ident),*) => {
-        impl<$($ty,)* Return: Reflect> TypedFunc<($($ty,)*), Return>
+        impl<Ctx: 'static, $($ty,)* Return: Reflect> TypedFunc<Ctx, ($($ty,)*), Return>
         where
             ($($ty,)*): RotoParams,
         {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
-            pub fn call(&self, $($ty: $ty,)*) -> Return {
-                self.call_tuple(($($ty,)*))
+            pub fn call(&self, ctx: &mut Ctx, $($ty: $ty,)*) -> Return {
+                self.call_tuple(ctx, ($($ty,)*))
             }
 
             #[allow(non_snake_case)]
-            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
-                move |$($ty,)*| self.call($($ty,)*)
+            pub fn into_func(self) -> impl Fn(&mut Ctx, $($ty,)*) -> Return {
+                move |ctx, $($ty,)*| self.call(ctx, $($ty,)*)
             }
         }
     }
@@ -200,6 +210,8 @@ struct ModuleBuilder {
 
     /// Signature to use for calls to `drop`
     drop_signature: Signature,
+
+    context_description: ContextDescription,
 }
 
 struct FuncGen<'c> {
@@ -232,6 +244,7 @@ pub fn codegen(
     constants: &[RuntimeConstant],
     label_store: LabelStore,
     type_info: TypeInfo,
+    context_description: ContextDescription,
 ) -> Module {
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
@@ -276,6 +289,7 @@ pub fn codegen(
         type_info,
         drop_signature,
         clone_signature,
+        context_description,
     };
 
     for constant in constants {
@@ -344,6 +358,10 @@ impl ModuleBuilder {
         } = func;
 
         let mut sig = self.inner.make_signature();
+
+        sig.params
+            .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+
         for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
         }
@@ -399,6 +417,10 @@ impl ModuleBuilder {
             sig.params
                 .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
         }
+
+        // This is the context
+        sig.params
+            .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
 
         for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
@@ -456,6 +478,7 @@ impl ModuleBuilder {
             functions: self.functions,
             inner: self.inner.into(),
             type_info: self.type_info,
+            context_description: self.context_description,
         }
     }
 
@@ -487,6 +510,15 @@ impl<'c> FuncGen<'c> {
         let entry_block = self.get_block(block.label);
         self.builder.switch_to_block(entry_block);
 
+        let ty = self.module.cranelift_type(&IrType::Pointer);
+        self.variable(
+            &Var {
+                scope: self.scope,
+                kind: VarKind::Context,
+            },
+            ty,
+        );
+
         if return_ptr {
             let ty = self.module.cranelift_type(&IrType::Pointer);
             self.variable(
@@ -514,7 +546,16 @@ impl<'c> FuncGen<'c> {
 
         let args = self.builder.block_params(entry_block).to_owned();
         let mut args = args.into_iter();
-        if return_ptr {
+        self.def(
+            self.module.variable_map[&Var {
+                scope: self.scope,
+                kind: VarKind::Context,
+            }]
+                .0,
+            args.next().unwrap(),
+        );
+
+        if dbg!(return_ptr) {
             self.def(
                 self.module.variable_map[&Var {
                     scope: self.scope,
@@ -579,7 +620,12 @@ impl<'c> FuncGen<'c> {
                 let (val, _) = self.operand(val);
                 self.def(var, val)
             }
-            ir::Instruction::Call { to, func, args } => {
+            ir::Instruction::Call {
+                to,
+                ctx,
+                func,
+                args,
+            } => {
                 let func = func.as_str();
                 let func_id = self.module.functions[func].id;
                 let func_ref = self
@@ -587,10 +633,14 @@ impl<'c> FuncGen<'c> {
                     .inner
                     .declare_func_in_func(func_id, self.builder.func);
 
-                let args: Vec<_> =
-                    args.iter().map(|(_, a)| self.operand(a).0).collect();
+                let mut new_args = Vec::new();
+                new_args.push(self.operand(ctx).0);
 
-                let inst = self.ins().call(func_ref, &args);
+                for (_, arg) in args {
+                    new_args.push(self.operand(arg).0);
+                }
+
+                let inst = self.ins().call(func_ref, &new_args);
 
                 if let Some((to, ty)) = to {
                     let ty = self.module.cranelift_type(ty);
@@ -964,10 +1014,10 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
-    pub fn get_function<Params: RotoParams, Return: Reflect>(
+    pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
         &mut self,
         name: &str,
-    ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
+    ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
         let function_info = self.functions.get(name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
                 name: name.to_string(),
@@ -977,6 +1027,16 @@ impl Module {
 
         let sig = &function_info.signature;
         let id = function_info.id;
+
+        if self.context_description.type_id != TypeId::of::<Ctx>() {
+            return Err(FunctionRetrievalError::TypeMismatch(
+                "context type".into(),
+                TypeMismatch {
+                    rust_ty: type_name::<Ctx>().into(),
+                    roto_ty: self.context_description.type_name.into(),
+                },
+            ));
+        }
 
         Params::check(&mut self.type_info, &sig.parameter_types)?;
 
