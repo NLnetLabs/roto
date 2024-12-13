@@ -993,3 +993,54 @@ fn string() {
     let res = f.call(&mut ());
     assert_eq!(res, Verdict::Accept("hello".into()));
 }
+
+#[test]
+fn string_append() {
+    let s = src!(
+        r#"
+        filter-map main(name: String) {
+            apply {
+                accept "Hello ".append(name)
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "Martin".into());
+    assert_eq!(res, Verdict::Accept("Hello Martin".into()));
+}
+
+#[test]
+fn string_contains() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            apply {
+                if "incomprehensibilities".contains(s) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "pre".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "post".into());
+    assert_eq!(res, Verdict::Reject(()));
+}

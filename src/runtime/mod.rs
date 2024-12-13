@@ -713,11 +713,6 @@ impl Runtime {
             ",
         )?;
 
-        rt.register_clone_type_with_name::<Arc<str>>(
-            "String",
-            "The string type",
-        )?;
-
         /// Construct a new prefix
         ///
         /// A prefix can also be constructed with the `/` operator.
@@ -802,6 +797,28 @@ impl Runtime {
             IpAddr::from(Ipv6Addr::LOCALHOST),
         )
         .unwrap();
+
+        rt.register_clone_type_with_name::<Arc<str>>(
+            "String",
+            "The string type",
+        )?;
+
+        #[roto_method(rt, Arc<str>)]
+        fn append(a: *const Arc<str>, b: *const Arc<str>) -> Arc<str> {
+            let a = unsafe { &*a };
+            let b = unsafe { &*b };
+            format!("{a}{b}").into()
+        }
+
+        #[roto_method(rt, Arc<str>)]
+        fn contains(
+            haystack: *const Arc<str>,
+            needle: *const Arc<str>,
+        ) -> bool {
+            let haystack = unsafe { &*haystack };
+            let needle = unsafe { &*needle };
+            haystack.contains(needle.as_ref())
+        }
 
         Ok(rt)
     }

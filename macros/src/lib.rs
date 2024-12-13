@@ -266,7 +266,7 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         #vis extern "C" fn #ident #generics ( out: *mut #ret, #(#inputs,)* ) {
             #item
 
-            unsafe { *out = #ident(#(#args),*) };
+            unsafe { std::ptr::write(out, #ident(#(#args),*)) };
         }
     };
 
