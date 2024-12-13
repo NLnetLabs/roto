@@ -375,7 +375,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
 }
 
 /// # Parsing identifiers
-impl<'source> Parser<'source, '_> {
+impl Parser<'_, '_> {
     /// Parse an identifier
     ///
     /// The `contains` and `type` keywords are treated as identifiers,
@@ -400,7 +400,7 @@ impl<'source> Parser<'source, '_> {
     }
 }
 
-impl<'source, 'spans> Parser<'source, 'spans> {
+impl Parser<'_, '_> {
     fn add_span<T>(&mut self, span: Span, x: T) -> Meta<T> {
         self.spans.add(span, x)
     }

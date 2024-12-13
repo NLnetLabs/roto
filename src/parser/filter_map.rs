@@ -5,7 +5,7 @@ use crate::ast::{
 use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
 
 /// # Parsing `filter-map` and `filter` sections
-impl<'source> Parser<'source, '_> {
+impl Parser<'_, '_> {
     /// Parse a filter-map or filter expression
     ///
     /// ```ebnf
