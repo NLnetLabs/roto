@@ -33,10 +33,13 @@ pub mod ty;
 pub mod val;
 pub mod verdict;
 
+use core::{slice, str};
 use std::{
     any::{type_name, TypeId},
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    ptr,
+    sync::Arc,
 };
 
 use context::ContextDescription;
@@ -59,6 +62,8 @@ pub struct Runtime {
     pub functions: Vec<RuntimeFunction>,
     pub constants: HashMap<Identifier, RuntimeConstant>,
     pub type_registry: TypeRegistry,
+    pub string_init_function:
+        unsafe extern "C" fn(*mut Arc<str>, *mut u8, u32),
 }
 
 #[derive(Debug)]
@@ -84,6 +89,12 @@ unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
 unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
     let x = x as *mut T;
     std::ptr::read(x);
+}
+
+unsafe extern "C" fn init_string(s: *mut Arc<str>, data: *mut u8, len: u32) {
+    let slice = unsafe { slice::from_raw_parts(data, len as usize) };
+    let str = unsafe { str::from_utf8_unchecked(slice) };
+    unsafe { ptr::write(s, str.into()) };
 }
 
 #[derive(Debug)]
@@ -632,6 +643,7 @@ impl Runtime {
             functions: Default::default(),
             type_registry: Default::default(),
             constants: Default::default(),
+            string_init_function: init_string as _,
         };
 
         rt.register_copy_type_with_name::<()>(
@@ -639,12 +651,15 @@ impl Runtime {
             "The unit type that has just one possible value. It can be used \
             when there is nothing meaningful to be returned.",
         )?;
+
         rt.register_copy_type::<bool>(
             "The boolean type\n\n\
             This type has two possible values: `true` and `false`. Several \
             boolean operations can be used with booleans, such as `&&` (\
             logical and), `||` (logical or) and `not`.",
         )?;
+
+        // All the integer types
         rt.register_copy_type::<u8>(int_docs!(u8))?;
         rt.register_copy_type::<u16>(int_docs!(u16))?;
         rt.register_copy_type::<u32>(int_docs!(u32))?;
@@ -653,6 +668,7 @@ impl Runtime {
         rt.register_copy_type::<i16>(int_docs!(i16))?;
         rt.register_copy_type::<i32>(int_docs!(i32))?;
         rt.register_copy_type::<i64>(int_docs!(i64))?;
+
         rt.register_copy_type::<Asn>(
             "An ASN: an Autonomous System Number\n\
             \n\
@@ -666,6 +682,7 @@ impl Runtime {
             AS4294967295\n\
             ```\n\
             ")?;
+
         rt.register_copy_type::<IpAddr>(
             "An IP address\n\nCan be either IPv4 or IPv6.\n\
             \n\
@@ -682,6 +699,7 @@ impl Runtime {
             ```\n\
             ",
         )?;
+
         rt.register_copy_type::<Prefix>(
             "An IP address prefix: the combination of an IP address and a prefix length\n\n\
             A prefix can be constructed with the `/` operator or with the \
@@ -693,6 +711,11 @@ impl Runtime {
             192.0.0.0.0 / 24\n\
             ```\n\
             ",
+        )?;
+
+        rt.register_clone_type_with_name::<Arc<str>>(
+            "String",
+            "The string type",
         )?;
 
         /// Construct a new prefix
@@ -854,6 +877,7 @@ pub mod tests {
                 "Asn",
                 "IpAddr",
                 "Prefix",
+                "String",
                 "OriginType",
                 "LocalPref",
                 "Community",

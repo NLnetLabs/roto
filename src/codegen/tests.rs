@@ -1,4 +1,7 @@
-use std::{net::IpAddr, sync::atomic::AtomicUsize};
+use std::{
+    net::IpAddr,
+    sync::{atomic::AtomicUsize, Arc},
+};
 
 use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_function, roto_static_method};
@@ -55,7 +58,6 @@ fn accept() {
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
-    dbg!(std::mem::size_of::<Verdict<(), ()>>());
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -968,4 +970,26 @@ fn use_context() {
     let mut ctx = Ctx { foo: 10, bar: true };
     let output = f.call(&mut ctx);
     assert_eq!(output, Verdict::Accept(11));
+}
+
+#[test]
+fn string() {
+    let s = src!(
+        r#"
+        filter-map main() {
+            apply {
+                accept "hello" 
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, Verdict::Accept("hello".into()));
 }

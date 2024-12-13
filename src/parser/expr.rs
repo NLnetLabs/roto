@@ -392,6 +392,7 @@ impl Parser<'_, '_> {
                 | Token::IpV4(_)
                 | Token::IpV6(_)
                 | Token::Asn(_)
+                | Token::String(_)
         )
     }
 
