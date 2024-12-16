@@ -765,6 +765,54 @@ impl<'r> Lowerer<'r> {
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
                     (
+                        ast::BinOp::Add,
+                        _,
+                        Type::Primitive(Primitive::String),
+                    ) => {
+                        let function = self.type_info.function(id);
+                        let FunctionDefinition::Runtime(runtime_func) =
+                            function.definition.clone()
+                        else {
+                            panic!()
+                        };
+
+                        let size = self.type_info.size_of(
+                            &Type::Primitive(Primitive::String),
+                            self.runtime,
+                        );
+                        let alignment = self.type_info.alignment_of(
+                            &Type::Primitive(Primitive::String),
+                            self.runtime,
+                        );
+                        let align_shift = alignment.ilog2() as u8;
+                        self.add(Instruction::Alloc {
+                            to: place.clone(),
+                            size,
+                            align_shift,
+                        });
+
+                        let ident = Identifier::from("append");
+                        let ir_func = IrFunction {
+                            name: ident,
+                            ptr: runtime_func.description.pointer(),
+                            params: vec![
+                                IrType::Pointer,
+                                IrType::Pointer,
+                                IrType::Pointer,
+                            ],
+                            ret: None,
+                        };
+
+                        self.runtime_functions
+                            .insert(runtime_func.id, ir_func);
+
+                        self.add(Instruction::CallRuntime {
+                            to: None,
+                            func: runtime_func,
+                            args: vec![place.clone().into(), left, right],
+                        });
+                    }
+                    (
                         ast::BinOp::Div,
                         _,
                         Type::Primitive(Primitive::IpAddr),

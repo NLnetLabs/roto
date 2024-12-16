@@ -218,14 +218,14 @@ impl Parser<'_, '_> {
     fn sum(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let left = self.term(r)?;
         if self.next_is(Token::Plus) {
-            let right = self.term(r)?;
+            let right = self.sum(r)?;
             let span = self.merge_spans(&left, &right);
             Ok(self.spans.add(
                 span,
                 Expr::BinOp(Box::new(left), BinOp::Add, Box::new(right)),
             ))
         } else if self.next_is(Token::Hyphen) {
-            let right = self.term(r)?;
+            let right = self.sum(r)?;
             let span = self.merge_spans(&left, &right);
             Ok(self.spans.add(
                 span,
@@ -239,14 +239,14 @@ impl Parser<'_, '_> {
     fn term(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let left = self.negation(r)?;
         if self.next_is(Token::Star) {
-            let right = self.negation(r)?;
+            let right = self.term(r)?;
             let span = self.merge_spans(&left, &right);
             Ok(self.spans.add(
                 span,
                 Expr::BinOp(Box::new(left), BinOp::Mul, Box::new(right)),
             ))
         } else if self.next_is(Token::Slash) {
-            let right = self.negation(r)?;
+            let right = self.term(r)?;
             let span = self.merge_spans(&left, &right);
             Ok(self.spans.add(
                 span,

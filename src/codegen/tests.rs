@@ -1000,7 +1000,7 @@ fn string_append() {
         r#"
         filter-map main(name: String) {
             apply {
-                accept "Hello ".append(name)
+                accept "Hello ".append(name).append("!")
             }
         }
     "#
@@ -1013,7 +1013,29 @@ fn string_append() {
         .unwrap();
 
     let res = f.call(&mut (), "Martin".into());
-    assert_eq!(res, Verdict::Accept("Hello Martin".into()));
+    assert_eq!(res, Verdict::Accept("Hello Martin!".into()));
+}
+
+#[test]
+fn string_plus_operator() {
+    let s = src!(
+        r#"
+        filter-map main(name: String) {
+            apply {
+                accept "Hello " + name + "!"
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "Martin".into());
+    assert_eq!(res, Verdict::Accept("Hello Martin!".into()));
 }
 
 #[test]
