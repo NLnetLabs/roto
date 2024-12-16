@@ -1038,9 +1038,114 @@ fn string_contains() {
         .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
         .unwrap();
 
-    let res = f.call(&mut (), "pre".into());
+    let res = f.call(&mut (), "incompre".into());
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call(&mut (), "post".into());
+    let res = f.call(&mut (), "hensi".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "bilities".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "nananana".into());
     assert_eq!(res, Verdict::Reject(()));
+}
+
+#[test]
+fn string_starts_with() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            apply {
+                if "incomprehensibilities".starts_with(s) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "incompre".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "hensi".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "bilities".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "nananana".into());
+    assert_eq!(res, Verdict::Reject(()));
+}
+
+#[test]
+fn string_ends_with() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            apply {
+                if "incomprehensibilities".ends_with(s) {
+                    accept
+                } else {
+                    reject
+                }
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "incompre".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "hensi".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "bilities".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "nananana".into());
+    assert_eq!(res, Verdict::Reject(()));
+}
+
+#[test]
+fn string_to_lowercase_and_uppercase() {
+    let s = src!(
+        r#"
+        filter-map main(lower: bool, s: String) {
+            apply {
+                if lower { 
+                    accept s.to_lowercase()
+                } else {
+                    accept s.to_uppercase()
+                }
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (bool, Arc<str>), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), true, "WHISPER THIS!".into());
+    assert_eq!(res, Verdict::Accept("whisper this!".into()));
+
+    let res = f.call(&mut (), false, "now shout this!".into());
+    assert_eq!(res, Verdict::Accept("NOW SHOUT THIS!".into()));
 }

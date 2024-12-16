@@ -820,6 +820,32 @@ impl Runtime {
             haystack.contains(needle.as_ref())
         }
 
+        #[roto_method(rt, Arc<str>)]
+        fn starts_with(s: *const Arc<str>, prefix: *const Arc<str>) -> bool {
+            let s = unsafe { &*s };
+            let prefix = unsafe { &*prefix };
+            s.starts_with(prefix.as_ref())
+        }
+
+        #[roto_method(rt, Arc<str>)]
+        fn ends_with(s: *const Arc<str>, prefix: *const Arc<str>) -> bool {
+            let s = unsafe { &*s };
+            let prefix = unsafe { &*prefix };
+            s.ends_with(prefix.as_ref())
+        }
+
+        #[roto_method(rt, Arc<str>)]
+        fn to_lowercase(s: *const Arc<str>) -> Arc<str> {
+            let s = unsafe { &*s };
+            s.to_lowercase().into()
+        }
+
+        #[roto_method(rt, Arc<str>)]
+        fn to_uppercase(s: *const Arc<str>) -> Arc<str> {
+            let s = unsafe { &*s };
+            s.to_uppercase().into()
+        }
+
         Ok(rt)
     }
 
