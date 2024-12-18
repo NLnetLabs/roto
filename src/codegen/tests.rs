@@ -1171,3 +1171,28 @@ fn string_to_lowercase_and_uppercase() {
     let res = f.call(&mut (), false, "now shout this!".into());
     assert_eq!(res, Verdict::Accept("NOW SHOUT THIS!".into()));
 }
+
+#[test]
+fn string_repeat() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            define {
+                exclamation = (s + "!").to_uppercase();
+            }
+            apply {
+                accept (exclamation + " ").repeat(4) + exclamation 
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "boo".into());
+    assert_eq!(res, Verdict::Accept("BOO! BOO! BOO! BOO! BOO!".into()));
+}

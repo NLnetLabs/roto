@@ -574,6 +574,31 @@ impl Runtime {
             self.print_function(f);
         }
 
+        if let Some(ContextDescription {
+            type_id: _,
+            type_name: _,
+            fields,
+        }) = &self.context
+        {
+            for crate::ContextField {
+                name,
+                offset: _,
+                type_name: _,
+                type_id,
+                docstring,
+            } in fields
+            {
+                println!(
+                    "`````{{roto:context}} {name}: {}",
+                    self.print_ty(*type_id)
+                );
+                for line in docstring.lines() {
+                    println!("{line}");
+                }
+                println!("`````\n");
+            }
+        }
+
         for RuntimeConstant {
             name,
             ty,
@@ -581,10 +606,7 @@ impl Runtime {
             ..
         } in self.constants.values()
         {
-            println!(
-                "`````{{roto::constant}} {name}: {}",
-                self.print_ty(*ty)
-            );
+            println!("`````{{roto:constant}} {name}: {}", self.print_ty(*ty));
             for line in docstring.lines() {
                 println!("{line}");
             }
@@ -803,6 +825,11 @@ impl Runtime {
             "The string type",
         )?;
 
+        /// Append a string to another, creating a new string
+        ///
+        /// ```roto
+        /// "hello".append(" ").append("world") # -> "hello world"
+        /// ```
         #[roto_method(rt, Arc<str>)]
         fn append(a: *const Arc<str>, b: *const Arc<str>) -> Arc<str> {
             let a = unsafe { &*a };
@@ -810,6 +837,12 @@ impl Runtime {
             format!("{a}{b}").into()
         }
 
+        /// Check whether a string contains another string
+        ///
+        /// ```roto
+        /// "haystack".contains("hay")  # -> true
+        /// "haystack".contains("corn") # -> false
+        /// ```
         #[roto_method(rt, Arc<str>)]
         fn contains(
             haystack: *const Arc<str>,
@@ -820,6 +853,12 @@ impl Runtime {
             haystack.contains(needle.as_ref())
         }
 
+        /// Check whether a string starts with a given prefix
+        ///
+        /// ```roto
+        /// "haystack".contains("hay")   # -> true
+        /// "haystack".contains("trees") # -> false
+        /// ```
         #[roto_method(rt, Arc<str>)]
         fn starts_with(s: *const Arc<str>, prefix: *const Arc<str>) -> bool {
             let s = unsafe { &*s };
@@ -827,23 +866,50 @@ impl Runtime {
             s.starts_with(prefix.as_ref())
         }
 
+        /// Check whether a string end with a given suffix
+        ///
+        /// ```roto
+        /// "haystack".contains("stack") # -> true
+        /// "haystack".contains("black") # -> false
+        /// ```
         #[roto_method(rt, Arc<str>)]
-        fn ends_with(s: *const Arc<str>, prefix: *const Arc<str>) -> bool {
+        fn ends_with(s: *const Arc<str>, suffix: *const Arc<str>) -> bool {
             let s = unsafe { &*s };
-            let prefix = unsafe { &*prefix };
-            s.ends_with(prefix.as_ref())
+            let suffix = unsafe { &*suffix };
+            s.ends_with(suffix.as_ref())
         }
 
+        /// Create a new string with all characters converted to lowercase
+        ///
+        /// ```roto
+        /// "LOUD".to_lowercase() # -> "loud"
+        /// ```
         #[roto_method(rt, Arc<str>)]
         fn to_lowercase(s: *const Arc<str>) -> Arc<str> {
             let s = unsafe { &*s };
             s.to_lowercase().into()
         }
 
+        /// Create a new string with all characters converted to lowercase
+        ///
+        /// ```roto
+        /// "quiet".to_uppercase() # -> "QUIET"
+        /// ```
         #[roto_method(rt, Arc<str>)]
         fn to_uppercase(s: *const Arc<str>) -> Arc<str> {
             let s = unsafe { &*s };
             s.to_uppercase().into()
+        }
+
+        /// Repeat a string `n` times and join them
+        ///
+        /// ```roto
+        /// "ha".repeat(6) # -> "hahahahahaha"
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn repeat(s: *const Arc<str>, n: u32) -> Arc<str> {
+            let s = unsafe { &*s };
+            s.repeat(n as usize).into()
         }
 
         Ok(rt)
