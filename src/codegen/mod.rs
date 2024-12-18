@@ -211,6 +211,9 @@ struct ModuleBuilder {
     /// Signature to use for calls to `drop`
     drop_signature: Signature,
 
+    /// Signature to use for calls to `init_string`
+    init_string_signature: Signature,
+
     context_description: ContextDescription,
 }
 
@@ -231,6 +234,9 @@ struct FuncGen<'c> {
 
     /// Signature to use for calls to `drop`
     drop_signature: SigRef,
+
+    /// Signature to use for calls to `init_string`
+    init_string_signature: SigRef,
 }
 
 // We use `with_aligned` to make sure that we notice if anything is
@@ -279,6 +285,17 @@ pub fn codegen(
         .params
         .push(AbiParam::new(isa.pointer_type()));
 
+    let mut init_string_signature = jit.make_signature();
+    init_string_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+    init_string_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+    init_string_signature
+        .params
+        .push(AbiParam::new(cranelift::codegen::ir::types::I32));
+
     let mut module = ModuleBuilder {
         functions: HashMap::new(),
         runtime_functions: HashMap::new(),
@@ -289,6 +306,7 @@ pub fn codegen(
         type_info,
         drop_signature,
         clone_signature,
+        init_string_signature,
         context_description,
     };
 
@@ -441,6 +459,8 @@ impl ModuleBuilder {
                 .import_signature(self.drop_signature.clone()),
             clone_signature: builder
                 .import_signature(self.clone_signature.clone()),
+            init_string_signature: builder
+                .import_signature(self.init_string_signature.clone()),
             module: self,
             builder,
             scope: *scope,
@@ -555,7 +575,7 @@ impl<'c> FuncGen<'c> {
             args.next().unwrap(),
         );
 
-        if dbg!(return_ptr) {
+        if return_ptr {
             self.def(
                 self.module.variable_map[&Var {
                     scope: self.scope,
@@ -926,6 +946,44 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().global_value(ty, val);
                 let to = self.variable(to, ty);
                 self.def(to, val);
+            }
+            ir::Instruction::InitString {
+                to,
+                string,
+                init_func,
+            } => {
+                let data_id = self
+                    .module
+                    .inner
+                    .declare_anonymous_data(false, false)
+                    .unwrap();
+
+                let mut description = DataDescription::new();
+                description.define(string.clone().into_bytes().into());
+                self.module
+                    .inner
+                    .define_data(data_id, &description)
+                    .unwrap();
+
+                let global_value = self
+                    .module
+                    .inner
+                    .declare_data_in_func(data_id, self.builder.func);
+
+                let pointer_ty = self.module.isa.pointer_type();
+                let init_func = self.ins().iconst(
+                    pointer_ty,
+                    *init_func as *mut u8 as usize as i64,
+                );
+                let data = self.ins().global_value(pointer_ty, global_value);
+                let len = self.ins().iconst(I32, string.len() as u64 as i64);
+
+                let (to, _) = self.operand(&Operand::Place(to.clone()));
+                self.builder.ins().call_indirect(
+                    self.init_string_signature,
+                    init_func,
+                    &[to, data, len],
+                );
             }
         }
     }

@@ -633,6 +633,11 @@ pub fn eval(
                 };
                 vars.insert(to.clone(), IrValue::Pointer(res));
             }
+            Instruction::InitString {
+                to: _,
+                string: _,
+                init_func: _,
+            } => todo!(),
         }
 
         program_counter += 1;

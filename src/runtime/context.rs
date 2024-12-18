@@ -30,6 +30,7 @@ pub struct ContextField {
     pub offset: usize,
     pub type_name: &'static str,
     pub type_id: TypeId,
+    pub docstring: String,
 }
 
 impl Context for () {
