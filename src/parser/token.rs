@@ -158,7 +158,7 @@ pub enum Token<'s> {
     Bool(bool),
 }
 
-impl<'source> Display for Token<'source> {
+impl Display for Token<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Token::Ident(s) => s,

@@ -4,8 +4,8 @@ use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_function, roto_static_method};
 
 use crate::{
-    pipeline::Compiled, runtime::tests::routecore_runtime, src, Files,
-    Runtime, Val, Verdict,
+    pipeline::Compiled, runtime::tests::routecore_runtime, src, Context,
+    Files, Runtime, Val, Verdict,
 };
 
 #[track_caller]
@@ -51,10 +51,10 @@ fn accept() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), Verdict<(), ()>>("main")
+        .get_function::<(), (), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call(&mut ());
     dbg!(std::mem::size_of::<Verdict<(), ()>>());
     assert_eq!(res, Verdict::Accept(()));
 }
@@ -73,10 +73,10 @@ fn reject() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), Verdict<(), ()>>("main")
+        .get_function::<(), (), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call(&mut ());
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -98,13 +98,13 @@ fn equal_to_10() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(u32,), Verdict<(), ()>>("main")
+        .get_function::<(), (u32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(&mut (), 5);
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call(10);
+    let res = f.call(&mut (), 10);
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -130,13 +130,13 @@ fn equal_to_10_with_function() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(&mut (), 5);
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call(10);
+    let res = f.call(&mut (), 10);
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -168,13 +168,13 @@ fn equal_to_10_with_two_functions() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(u32,), Verdict<(), ()>>("main")
+        .get_function::<(), (u32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(5), Verdict::Reject(()));
-    assert_eq!(f.call(10), Verdict::Accept(()));
-    assert_eq!(f.call(15), Verdict::Reject(()));
-    assert_eq!(f.call(20), Verdict::Accept(()));
+    assert_eq!(f.call(&mut (), 5), Verdict::Reject(()));
+    assert_eq!(f.call(&mut (), 10), Verdict::Accept(()));
+    assert_eq!(f.call(&mut (), 15), Verdict::Reject(()));
+    assert_eq!(f.call(&mut (), 20), Verdict::Accept(()));
 }
 
 #[test]
@@ -195,11 +195,11 @@ fn negation() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..20 {
-        let res = f.call(x);
+        let res = f.call(&mut (), x);
         let exp = if x != 10 {
             Verdict::Accept(())
         } else {
@@ -231,7 +231,7 @@ fn a_bunch_of_comparisons() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -243,7 +243,7 @@ fn a_bunch_of_comparisons() {
                 Verdict::Reject(())
             };
 
-        let res = f.call(x);
+        let res = f.call(&mut (), x);
         assert_eq!(res, expected);
     }
 }
@@ -271,7 +271,7 @@ fn record() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -280,7 +280,7 @@ fn record() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call(x);
+        let res = f.call(&mut (), x);
         assert_eq!(res, expected);
     }
 }
@@ -310,7 +310,7 @@ fn record_with_fields_flipped() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)")
         .into_func();
 
@@ -320,7 +320,7 @@ fn record_with_fields_flipped() {
         } else {
             Verdict::Reject(())
         };
-        let res = f(x);
+        let res = f(&mut (), x);
         assert_eq!(res, expected);
     }
 }
@@ -350,7 +350,7 @@ fn nested_record() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -359,7 +359,7 @@ fn nested_record() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call(x);
+        let res = f.call(&mut (), x);
         assert_eq!(res, expected, "for {x}");
     }
 }
@@ -388,7 +388,7 @@ fn misaligned_fields() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -397,7 +397,7 @@ fn misaligned_fields() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call(x);
+        let res = f.call(&mut (), x);
         assert_eq!(res, expected, "for {x}");
     }
 }
@@ -427,11 +427,11 @@ fn enum_match() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(bool,), Verdict<(), ()>>("main")
+        .get_function::<(), (bool,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(true), Verdict::Accept(()));
-    assert_eq!(f.call(false), Verdict::Reject(()));
+    assert_eq!(f.call(&mut (), true), Verdict::Accept(()));
+    assert_eq!(f.call(&mut (), false), Verdict::Reject(()));
 }
 
 #[test]
@@ -452,16 +452,16 @@ fn arithmetic() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(i32,), Verdict<(), ()>>("main")
+        .get_function::<(), (i32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(&mut (), 5);
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call(20);
+    let res = f.call(&mut (), 20);
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call(100);
+    let res = f.call(&mut (), 100);
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -483,13 +483,13 @@ fn call_runtime_function() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(u32,), Verdict<(), ()>>("main")
+        .get_function::<(), (u32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for (value, expected) in
         [(5, Verdict::Reject(())), (11, Verdict::Accept(()))]
     {
-        let res = f.call(value);
+        let res = f.call(&mut (), value);
         assert_eq!(res, expected);
     }
 }
@@ -512,13 +512,13 @@ fn call_runtime_method() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(u32,), Verdict<(), ()>>("main")
+        .get_function::<(), (u32,), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for (value, expected) in
         [(5, Verdict::Reject(())), (10, Verdict::Accept(()))]
     {
-        let res = f.call(value);
+        let res = f.call(&mut (), value);
         assert_eq!(res, expected);
     }
 }
@@ -537,10 +537,10 @@ fn int_var() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), Verdict<i32, ()>>("main")
+        .get_function::<(), (), Verdict<i32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), Verdict::Accept(32));
+    assert_eq!(f.call(&mut ()), Verdict::Accept(32));
 }
 
 #[test]
@@ -607,15 +607,15 @@ fn asn() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(Asn,), Verdict<Asn, Asn>>("main")
+        .get_function::<(), (Asn,), Verdict<Asn, Asn>>("main")
         .expect("No function found (or mismatched types)");
 
     assert_eq!(
-        f.call(Asn::from_u32(1000)),
+        f.call(&mut (), Asn::from_u32(1000)),
         Verdict::Accept(Asn::from_u32(1000))
     );
     assert_eq!(
-        f.call(Asn::from_u32(2000)),
+        f.call(&mut (), Asn::from_u32(2000)),
         Verdict::Reject(Asn::from_u32(2000))
     );
 }
@@ -635,7 +635,7 @@ fn mismatched_types() {
     let mut p = compile(s);
 
     let err = p
-        .get_function::<(i8,), Verdict<i8, ()>>("main")
+        .get_function::<(), (i8,), Verdict<i8, ()>>("main")
         .unwrap_err();
 
     eprintln!("{err}");
@@ -660,10 +660,10 @@ fn multiply() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(u8,), Verdict<u8, ()>>("main")
+        .get_function::<(), (u8,), Verdict<u8, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20);
+    let res = f.call(&mut (), 20);
     assert_eq!(res, Verdict::Accept(40));
 }
 
@@ -679,11 +679,11 @@ fn ip_output() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), Verdict<IpAddr, ()>>("main")
+        .get_function::<(), (), Verdict<IpAddr, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call();
+    let res = f.call(&mut ());
     assert_eq!(res, Verdict::Accept(ip));
 }
 
@@ -699,11 +699,11 @@ fn ip_passthrough() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(IpAddr,), Verdict<IpAddr, ()>>("main")
+        .get_function::<(), (IpAddr,), Verdict<IpAddr, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Accept(ip));
 }
 
@@ -727,22 +727,22 @@ fn ipv4_compare() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .get_function::<(), (IpAddr,), Verdict<IpAddr, IpAddr>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([0, 0, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Accept(ip));
     let ip = IpAddr::from([192, 168, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Reject(ip));
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Reject(ip));
 }
 
@@ -768,23 +768,23 @@ fn ipv6_compare() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .get_function::<(), (IpAddr,), Verdict<IpAddr, IpAddr>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([192, 168, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call(ip);
+    let res = f.call(&mut (), ip);
     assert_eq!(res, Verdict::Reject(ip));
 }
 
@@ -801,11 +801,11 @@ fn construct_prefix() {
     );
     let mut p = compile(s);
     let f = p
-        .get_function::<(), Verdict<Prefix, ()>>("main")
+        .get_function::<(), (), Verdict<Prefix, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let p = Prefix::new("192.168.0.0".parse().unwrap(), 16).unwrap();
-    let res = f.call();
+    let res = f.call(&mut ());
     assert_eq!(res, Verdict::Accept(p));
 }
 
@@ -828,10 +828,10 @@ fn function_returning_unit() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), Verdict<(), ()>>("main")
+        .get_function::<(), (), Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call(&mut ());
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -884,7 +884,7 @@ fn arc_type() {
     );
 
     let mut p = s.compile(rt, usize::BITS / 8).unwrap();
-    let f = p.get_function::<(bool, Val<CloneDrop>, Val<CloneDrop>), Verdict<Val<CloneDrop>, ()>>(
+    let f = p.get_function::<(), (bool, Val<CloneDrop>, Val<CloneDrop>), Verdict<Val<CloneDrop>, ()>>(
         "main",
     ).unwrap();
 
@@ -895,7 +895,7 @@ fn arc_type() {
 
     println!("{input:?}");
 
-    let output = f.call(true, Val(input.clone()), Val(input));
+    let output = f.call(&mut (), true, Val(input.clone()), Val(input));
 
     let output = output.into_result().unwrap().0;
     println!("{output:?}");
@@ -923,7 +923,49 @@ fn use_constant() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<(), Verdict<(), ()>>("main").unwrap();
-    let output = f.call();
+    let f = p.get_function::<(), (), Verdict<(), ()>>("main").unwrap();
+    let output = f.call(&mut ());
     assert_eq!(output, Verdict::Reject(()));
+}
+
+#[test]
+fn use_context() {
+    #[derive(Context)]
+    struct Ctx {
+        pub foo: i32,
+        pub bar: bool,
+    }
+
+    let mut rt = Runtime::basic().unwrap();
+    rt.register_context_type::<Ctx>().unwrap();
+
+    let s = src!(
+        "
+        filter-map main() {
+            apply {
+                if bar {
+                    accept foo + 1
+                } else {
+                    accept foo
+                } 
+            }
+        }"
+    );
+
+    let mut p = compile_with_runtime(s, rt);
+
+    // Try getting the wrong ctx, which should fail
+    p.get_function::<(), (), Verdict<i32, ()>>("main")
+        .unwrap_err();
+
+    // And then with the correct ctx type
+    let f = p.get_function::<Ctx, (), Verdict<i32, ()>>("main").unwrap();
+
+    let mut ctx = Ctx { foo: 9, bar: false };
+    let output = f.call(&mut ctx);
+    assert_eq!(output, Verdict::Accept(9));
+
+    let mut ctx = Ctx { foo: 10, bar: true };
+    let output = f.call(&mut ctx);
+    assert_eq!(output, Verdict::Accept(11));
 }

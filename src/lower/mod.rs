@@ -210,24 +210,26 @@ impl<'r> Lowerer<'r> {
             .collect();
 
         for (def, ty) in &parameter_types {
+            let (scope, name) = def.to_scope_and_name();
             let var = Var {
-                scope: def.0,
-                kind: VarKind::Explicit(def.1),
+                scope,
+                kind: VarKind::Explicit(name),
             };
             self.stack_slots.push((var, ty.clone()))
         }
 
         for (ident, expr) in define {
             let val = self.expr(expr);
-            let name = self.type_info.resolved_name(ident);
+            let def = self.type_info.resolved_name(ident);
+            let (scope, name) = def.to_scope_and_name();
             let ty = self.type_info.type_of(ident);
             if self.type_info.size_of(&ty, self.runtime) > 0 {
                 let val = val.unwrap();
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
                     to: Var {
-                        scope: name.0,
-                        kind: VarKind::Explicit(name.1),
+                        scope,
+                        kind: VarKind::Explicit(name),
                     },
                     val,
                     ty,
@@ -258,10 +260,14 @@ impl<'r> Lowerer<'r> {
             x => (Some(self.lower_type(&x)), false),
         };
 
+        dbg!(return_ptr);
+
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| (def.1, self.lower_type(ty)))
+                .map(|(def, ty)| {
+                    (def.to_scope_and_name().1, self.lower_type(ty))
+                })
                 .collect(),
             return_ptr,
             return_type,
@@ -298,14 +304,12 @@ impl<'r> Lowerer<'r> {
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
 
-        let parameter_types: Vec<_> = params
-            .0
-            .iter()
-            .map(|(x, _)| {
-                let ty = self.type_info.type_of(x);
-                (self.type_info.resolved_name(x), ty)
-            })
-            .collect();
+        let mut parameter_types = Vec::new();
+
+        for (x, _) in &params.0 {
+            let ty = self.type_info.type_of(x);
+            parameter_types.push((self.type_info.resolved_name(x), ty));
+        }
 
         let return_type = return_type
             .as_ref()
@@ -328,7 +332,9 @@ impl<'r> Lowerer<'r> {
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| (def.1, self.lower_type(ty)))
+                .map(|(def, ty)| {
+                    (def.to_scope_and_name().1, self.lower_type(ty))
+                })
                 .collect(),
             return_ptr: false, // TODO: check this
             return_type,
@@ -475,20 +481,23 @@ impl<'r> Lowerer<'r> {
                     }
                     FunctionDefinition::Roto => {
                         let ty = self.type_info.type_of(ident);
-                        let DefinitionRef(_, ident) =
-                            self.type_info.resolved_name(ident);
+                        let ident = self
+                            .type_info
+                            .resolved_name(ident)
+                            .to_scope_and_name()
+                            .1;
 
                         let Type::Function(params, ret) = ty else {
                             ice!("can only call functions");
                         };
 
-                        let args = params
-                            .iter()
-                            .zip(&args.node)
-                            .flat_map(|(p, a)| {
-                                Some((p.0.node, self.expr(a)?))
-                            })
-                            .collect();
+                        let mut new_args = Vec::new();
+
+                        for (p, a) in params.iter().zip(&args.node) {
+                            if let Some(e) = self.expr(a) {
+                                new_args.push((p.0.node, e));
+                            }
+                        }
 
                         let to = if self.type_info.size_of(&ret, self.runtime)
                             > 0
@@ -500,10 +509,16 @@ impl<'r> Lowerer<'r> {
                             None
                         };
 
+                        let ctx = Var {
+                            scope: self.function_scope,
+                            kind: VarKind::Context,
+                        };
+
                         self.add(Instruction::Call {
                             to: to.clone(),
+                            ctx: ctx.into(),
                             func: ident,
-                            args,
+                            args: new_args,
                         });
 
                         to.map(|(to, _ty)| to.into())
@@ -648,27 +663,35 @@ impl<'r> Lowerer<'r> {
                 }
             }
             ast::Expr::Var(x) => {
-                let DefinitionRef(scope, ident) =
-                    self.type_info.resolved_name(x);
+                let def = self.type_info.resolved_name(x);
 
-                if ScopeRef::ROOT == scope {
-                    let var = self.new_tmp();
-                    let ty = self.type_info.type_of(id);
-                    let ty = self.lower_type(&ty);
-                    self.add(Instruction::LoadConstant {
-                        to: var.clone(),
-                        name: ident,
-                        ty,
-                    });
-                    Some(var.into())
-                } else {
-                    Some(
+                match def {
+                    DefinitionRef::Context(_, offset) => {
+                        let ty = self.type_info.type_of(id);
+                        let var = Var {
+                            scope: self.function_scope,
+                            kind: VarKind::Context,
+                        };
+                        Some(self.read_field(var.into(), offset as u32, &ty))
+                    }
+                    DefinitionRef::Constant(ident) => {
+                        let var = self.new_tmp();
+                        let ty = self.type_info.type_of(id);
+                        let ty = self.lower_type(&ty);
+                        self.add(Instruction::LoadConstant {
+                            to: var.clone(),
+                            name: ident,
+                            ty,
+                        });
+                        Some(var.into())
+                    }
+                    DefinitionRef::Local(scope, ident) => Some(
                         Var {
-                            scope,
+                            scope: scope.into(),
                             kind: VarKind::Explicit(ident),
                         }
                         .into(),
-                    )
+                    ),
                 }
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {

@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     expr::Context,
-    scope::{ScopeRef, ScopeType},
+    scope::{LocalScopeRef, ScopeType},
     types::{Primitive, Type},
     TypeChecker, TypeResult,
 };
@@ -13,7 +13,7 @@ use super::{
 impl TypeChecker<'_> {
     pub fn filter_map(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
@@ -26,7 +26,9 @@ impl TypeChecker<'_> {
         let scope = self
             .scope_graph
             .wrap(scope, ScopeType::Function(ident.node));
-        self.type_info.function_scopes.insert(ident.id, scope);
+        self.type_info
+            .function_scopes
+            .insert(ident.id, scope.into());
 
         let params = self.params(params)?;
         for (v, t) in &params {
@@ -73,7 +75,7 @@ impl TypeChecker<'_> {
 
     fn define_section(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         define: &[(Meta<Identifier>, Meta<ast::Expr>)],
     ) -> TypeResult<()> {
         for (ident, expr) in define {
@@ -102,7 +104,7 @@ impl TypeChecker<'_> {
 
     pub fn function(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         function: &ast::FunctionDeclaration,
     ) -> TypeResult<()> {
         let ast::FunctionDeclaration {
@@ -116,7 +118,9 @@ impl TypeChecker<'_> {
             .scope_graph
             .wrap(scope, ScopeType::Function(ident.node));
 
-        self.type_info.function_scopes.insert(ident.id, scope);
+        self.type_info
+            .function_scopes
+            .insert(ident.id, scope.into());
 
         let params = self.params(params)?;
         for (v, t) in &params {

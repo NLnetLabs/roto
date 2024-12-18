@@ -248,7 +248,8 @@ pub fn eval(
     filter_map: &str,
     mem: &mut Memory,
     constants: &[RuntimeConstant],
-    rx: Vec<IrValue>,
+    ctx: IrValue,
+    args: Vec<IrValue>,
 ) -> Option<IrValue> {
     let filter_map_ident = Identifier::from(filter_map);
     let f = p
@@ -276,22 +277,28 @@ pub fn eval(
     // This is our working memory for the interpreter
     let mut vars = HashMap::<Var, IrValue>::new();
 
-    // Insert the rx value
     if f.ir_signature.return_ptr {
         assert_eq!(
             parameters.len(),
-            rx.len() - 1,
+            args.len() - 1,
             "incorrect number of arguments"
         );
     } else {
         assert_eq!(
             parameters.len(),
-            rx.len(),
+            args.len(),
             "incorrect number of arguments"
         );
     }
 
-    let mut values = rx.into_iter();
+    vars.insert(
+        Var {
+            scope: f.scope,
+            kind: VarKind::Context,
+        },
+        ctx,
+    );
+    let mut values = args.into_iter();
     if f.ir_signature.return_ptr {
         vars.insert(
             Var {
@@ -346,10 +353,24 @@ pub fn eval(
                 let val = IrValue::from_slice(ty, val);
                 vars.insert(to.clone(), val.clone());
             }
-            Instruction::Call { to, func, args } => {
+            Instruction::Call {
+                to,
+                ctx,
+                func,
+                args,
+            } => {
                 let f = p.iter().find(|f| f.name == *func).unwrap();
 
                 mem.push_frame(program_counter, to.clone().map(|to| to.0));
+
+                let ctx_val = eval_operand(&vars, ctx);
+                vars.insert(
+                    Var {
+                        scope: f.scope,
+                        kind: VarKind::Context,
+                    },
+                    ctx_val.clone(),
+                );
 
                 for (name, arg) in args {
                     let val = eval_operand(&vars, arg);

@@ -49,6 +49,7 @@ pub enum VarKind {
     Tmp(usize),
     NamedTmp(Identifier, usize),
     Return,
+    Context,
 }
 
 impl From<Var> for Operand {
@@ -92,6 +93,7 @@ pub enum Instruction {
     /// Call a function.
     Call {
         to: Option<(Var, IrType)>,
+        ctx: Operand,
         func: Identifier,
         args: Vec<(Identifier, Operand)>,
     },
@@ -329,6 +331,7 @@ impl<'a> IrPrinter<'a> {
                 VarKind::NamedTmp(name, idx) =>
                     format!("${}-{idx}", self.ident(name)),
                 VarKind::Return => "$return".to_string(),
+                VarKind::Context => "$context".to_string(),
             }
         )
     }
@@ -351,11 +354,13 @@ impl<'a> IrPrinter<'a> {
             }
             Call {
                 to: Some((to, ty)),
+                ctx,
                 func,
                 args,
             } => format!(
-                "{}: {ty} = {}({})",
+                "{}: {ty} = {}({}, {})",
                 self.var(to),
+                self.operand(ctx),
                 self.ident(func),
                 args.iter()
                     .map(|a| format!(
@@ -368,11 +373,13 @@ impl<'a> IrPrinter<'a> {
             ),
             Call {
                 to: None,
+                ctx,
                 func,
                 args,
             } => format!(
-                "{}({})",
+                "{}({}, {})",
                 self.ident(func),
+                self.operand(ctx),
                 args.iter()
                     .map(|a| format!(
                         "{} = {}",

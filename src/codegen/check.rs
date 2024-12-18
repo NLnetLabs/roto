@@ -20,8 +20,8 @@ pub enum FunctionRetrievalError {
 
 #[derive(Debug)]
 pub struct TypeMismatch {
-    rust_ty: String,
-    roto_ty: String,
+    pub rust_ty: String,
+    pub roto_ty: String,
 }
 
 impl Display for FunctionRetrievalError {
@@ -200,11 +200,12 @@ pub trait RotoParams {
     ///
     /// A [`TypedFunc`](super::TypedFunc) is a safe abstraction around this
     /// function.
-    unsafe fn invoke<R: Reflect>(
+    unsafe fn invoke<Ctx: 'static, Return: Reflect>(
         self,
+        ctx: &mut Ctx,
         func_ptr: *const u8,
         return_by_ref: bool,
-    ) -> R;
+    ) -> Return;
 }
 
 /// Little helper macro to create a unit
@@ -253,7 +254,7 @@ macro_rules! params {
                 Ok(())
             }
 
-            unsafe fn invoke<R: Reflect>(mut self, func_ptr: *const u8, return_by_ref: bool) -> R {
+            unsafe fn invoke<Ctx: 'static, Return: Reflect>(mut self, ctx: &mut Ctx, func_ptr: *const u8, return_by_ref: bool) -> Return {
                 let ($($t,)*) = self.as_params();
 
                 // We forget values that we pass into Roto. The script is responsible
@@ -263,16 +264,16 @@ macro_rules! params {
                 std::mem::forget(self);
                 if return_by_ref {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut R, $($t::AsParam),*) -> ()>(func_ptr)
+                        std::mem::transmute::<*const u8, fn(*mut Ctx, *mut Return, $($t::AsParam),*) -> ()>(func_ptr)
                     };
-                    let mut ret = MaybeUninit::<R>::uninit();
-                    func_ptr(ret.as_mut_ptr(), $($t),*);
+                    let mut ret = MaybeUninit::<Return>::uninit();
+                    func_ptr(ctx as *mut Ctx, ret.as_mut_ptr(), $($t),*);
                     unsafe { ret.assume_init() }
                 } else {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn($($t::AsParam),*) -> R>(func_ptr)
+                        std::mem::transmute::<*const u8, fn(*mut Ctx, $($t::AsParam),*) -> Return>(func_ptr)
                     };
-                    func_ptr($($t),*)
+                    func_ptr(ctx as *mut Ctx, $($t),*)
                 }
             }
         }

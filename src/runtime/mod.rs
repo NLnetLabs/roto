@@ -27,6 +27,7 @@
 //! We might need polymorphism over the number of arguments.
 //! The IR needs typed variables to do this correctly.
 
+pub mod context;
 pub mod func;
 pub mod ty;
 pub mod val;
@@ -38,12 +39,13 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
 
+use context::ContextDescription;
 use func::{Func, FunctionDescription};
 use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
-use crate::ast::Identifier;
+use crate::{ast::Identifier, Context};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -52,6 +54,7 @@ use crate::ast::Identifier;
 /// of these types in different applications. The type checker will yield an
 /// error if a literal is provided for an undeclared type.
 pub struct Runtime {
+    pub context: Option<ContextDescription>,
     pub runtime_types: Vec<RuntimeType>,
     pub functions: Vec<RuntimeFunction>,
     pub constants: HashMap<Identifier, RuntimeConstant>,
@@ -292,6 +295,31 @@ impl Runtime {
             alignment: std::mem::align_of::<T>(),
             docstring: String::from(docstring),
         });
+        Ok(())
+    }
+
+    pub fn register_context_type<Ctx: Context + 'static>(
+        &mut self,
+    ) -> Result<(), String> {
+        if self.context.is_some() {
+            return Err("Only 1 context type can be set".into());
+        }
+
+        let description = Ctx::description();
+
+        // The context type likely hasn't been registered yet in the
+        // type registry, so we do that, so that we can reason about
+        // it more easily and make better error messages.
+        self.type_registry.resolve::<*mut Ctx>();
+
+        // All fields in the context must be known because they'll
+        // be accessible from Roto.
+        for field in &description.fields {
+            self.find_type(field.type_id, field.type_name)?;
+        }
+
+        self.context = Some(description);
+
         Ok(())
     }
 
@@ -551,6 +579,7 @@ impl Runtime {
             }
             println!("`````\n");
         }
+
         for RuntimeType {
             name,
             type_id,
@@ -598,6 +627,7 @@ impl Runtime {
     /// This contains only type information for Roto primitives.
     pub fn basic() -> Result<Self, String> {
         let mut rt = Runtime {
+            context: None,
             runtime_types: Default::default(),
             functions: Default::default(),
             type_registry: Default::default(),

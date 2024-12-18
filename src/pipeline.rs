@@ -21,7 +21,11 @@ use crate::{
         meta::{Span, Spans},
         ParseError, Parser,
     },
-    runtime::{ty::Reflect, Runtime, RuntimeConstant},
+    runtime::{
+        context::{Context, ContextDescription},
+        ty::Reflect,
+        Runtime, RuntimeConstant,
+    },
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
@@ -78,6 +82,7 @@ pub struct TypeChecked {
     type_infos: Vec<TypeInfo>,
     scope_graph: ScopeGraph,
     runtime: Runtime,
+    context_type: ContextDescription,
 }
 
 /// Compiler stage: HIR
@@ -87,6 +92,7 @@ pub struct Lowered {
     runtime_constants: Vec<RuntimeConstant>,
     label_store: LabelStore,
     type_info: TypeInfo,
+    context_type: ContextDescription,
 }
 
 pub struct Compiled {
@@ -198,11 +204,12 @@ macro_rules! src {
 }
 
 /// Compile and run a Roto script from a file
-pub fn run(
+pub fn interpret(
     runtime: Runtime,
     files: impl IntoIterator<Item = String>,
     mem: &mut Memory,
-    rx: Vec<IrValue>,
+    ctx: IrValue,
+    args: Vec<IrValue>,
 ) -> Result<Option<IrValue>, RotoReport> {
     let pointer_bytes = usize::BITS / 8;
 
@@ -211,7 +218,7 @@ pub fn run(
         .typecheck(runtime, pointer_bytes)?
         .lower();
 
-    let res = lowered.eval(mem, rx);
+    let res = lowered.eval(mem, ctx, args);
     Ok(res)
 }
 
@@ -330,6 +337,9 @@ impl Parsed {
 
         let mut scope_graph = ScopeGraph::new();
 
+        let context_type =
+            runtime.context.clone().unwrap_or_else(<()>::description);
+
         let results: Vec<_> = trees
             .iter()
             .map(|f| {
@@ -359,6 +369,7 @@ impl Parsed {
                 type_infos,
                 scope_graph,
                 runtime,
+                context_type,
             })
         } else {
             Err(RotoReport {
@@ -377,6 +388,7 @@ impl TypeChecked {
             mut type_infos,
             scope_graph,
             runtime,
+            context_type,
         } = self;
         let mut runtime_functions = HashMap::new();
         let mut label_store = LabelStore::default();
@@ -405,6 +417,7 @@ impl TypeChecked {
             runtime_functions,
             runtime_constants,
             label_store,
+            context_type,
             type_info: type_infos.remove(0),
         }
     }
@@ -414,9 +427,10 @@ impl Lowered {
     pub fn eval(
         &self,
         mem: &mut Memory,
-        rx: Vec<IrValue>,
+        ctx: IrValue,
+        args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(&self.ir, "main", mem, &self.runtime_constants, rx)
+        eval::eval(&self.ir, "main", mem, &self.runtime_constants, ctx, args)
     }
 
     pub fn codegen(self) -> Compiled {
@@ -426,16 +440,17 @@ impl Lowered {
             &self.runtime_constants,
             self.label_store,
             self.type_info,
+            self.context_type,
         );
         Compiled { module }
     }
 }
 
 impl Compiled {
-    pub fn get_function<Params: RotoParams, Return: Reflect>(
+    pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
         &mut self,
         name: &str,
-    ) -> Result<TypedFunc<Params, Return>, FunctionRetrievalError> {
+    ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
         self.module.get_function(name)
     }
 }

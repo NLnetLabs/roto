@@ -15,7 +15,12 @@ pub use codegen::TypedFunc;
 pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;
-pub use roto_macros::{roto_function, roto_method, roto_static_method};
+pub use roto_macros::{
+    roto_function, roto_method, roto_static_method, Context,
+};
 pub use runtime::{
-    val::Val, verdict::Verdict, DocumentedFunc, Runtime, RuntimeType,
+    context::{Context, ContextField},
+    val::Val,
+    verdict::Verdict,
+    DocumentedFunc, Runtime, RuntimeType,
 };

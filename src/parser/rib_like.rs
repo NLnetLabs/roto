@@ -10,7 +10,7 @@ use crate::ast::{
 };
 
 /// # Rib-like declarations
-impl<'source> Parser<'source, '_> {
+impl Parser<'_, '_> {
     /// Parse a rib declaration
     ///
     /// ```ebnf
