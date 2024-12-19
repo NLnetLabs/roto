@@ -496,12 +496,16 @@ impl TypeChecker<'_> {
             (Never, x) | (x, Never) => x,
             (
                 IntVar(a),
-                b @ (Primitive(U8 | U16 | U32 | I8 | I16 | I32) | IntVar(_)),
+                b @ (Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64)
+                | IntVar(_)),
             ) => {
                 self.type_info.unionfind.set(a, b.clone());
                 b.clone()
             }
-            (a @ Primitive(U8 | U16 | U32 | I8 | I16 | I32), IntVar(b)) => {
+            (
+                a @ Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64),
+                IntVar(b),
+            ) => {
                 self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }

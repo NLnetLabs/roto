@@ -1148,6 +1148,9 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::U32) => {
                         IrValue::U32(*x as u32)
                     }
+                    Type::Primitive(Primitive::U64) => {
+                        IrValue::U64(*x as u64)
+                    }
                     Type::Primitive(Primitive::I8) => IrValue::I8(*x as i8),
                     Type::Primitive(Primitive::I16) => {
                         IrValue::I16(*x as i16)
@@ -1155,6 +1158,7 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::I32) => {
                         IrValue::I32(*x as i32)
                     }
+                    Type::Primitive(Primitive::I64) => IrValue::I64(*x),
                     Type::IntVar(_) => IrValue::I32(*x as i32),
                     _ => ice!("should be a type error"),
                 }
