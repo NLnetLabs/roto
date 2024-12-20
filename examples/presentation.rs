@@ -68,7 +68,7 @@ mod hidden {
 use hidden::*;
 
 type Log = *mut OutputStream<Output>;
-type Func = TypedFunc<(Val<Log>, Val<RotondaRoute>), Verdict<(), ()>>;
+type Func = TypedFunc<(), (Val<Log>, Val<RotondaRoute>), Verdict<(), ()>>;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rt = roto::Runtime::basic()?;
@@ -143,7 +143,7 @@ fn run_with_prefix(
     let mut output = OutputStream::default();
     let log = &mut output as *mut _;
 
-    let verdict = function.call(Val(log), Val(route));
+    let verdict = function.call(&mut (), Val(log), Val(route));
 
     println!("Input: {prefix}");
     println!("Verdict: {verdict:?}");

@@ -20,7 +20,7 @@ use crate::{
     runtime::{FunctionKind, Runtime, RuntimeFunction},
 };
 use cycle::detect_type_cycles;
-use scope::{ScopeGraph, ScopeRef};
+use scope::{LocalScopeRef, ScopeGraph, ScopeType};
 use std::{
     borrow::Borrow,
     collections::{hash_map::Entry, HashMap},
@@ -101,10 +101,12 @@ impl TypeChecker<'_> {
         };
 
         let root_scope = checker.scope_graph.root();
+        let module_scope = checker
+            .scope_graph
+            .wrap(root_scope, ScopeType::Module("main".into()));
 
         for (v, t) in runtime.iter_constants() {
-            checker.insert_var(
-                root_scope,
+            checker.insert_global_constant(
                 Meta {
                     id: MetaId(0),
                     node: v,
@@ -113,6 +115,24 @@ impl TypeChecker<'_> {
                     runtime.get_runtime_type(t).unwrap().name().into(),
                 ),
             )?;
+        }
+
+        if let Some(ctx) = &runtime.context {
+            for field in &ctx.fields {
+                let ty = runtime
+                    .get_runtime_type(field.type_id)
+                    .unwrap()
+                    .name()
+                    .into();
+                checker.insert_context(
+                    Meta {
+                        id: MetaId(0),
+                        node: Identifier::from(field.name),
+                    },
+                    Type::Name(ty),
+                    field.offset,
+                )?;
+            }
         }
 
         // We go over the expressions three times:
@@ -129,7 +149,7 @@ impl TypeChecker<'_> {
                     let ty = checker
                         .create_contains_type(&mut types, contain_ty, body)?;
                     checker.insert_var(
-                        root_scope,
+                        module_scope,
                         ident.clone(),
                         Type::Rib(Box::new(ty)),
                     )?;
@@ -142,7 +162,7 @@ impl TypeChecker<'_> {
                     let ty = checker
                         .create_contains_type(&mut types, contain_ty, body)?;
                     checker.insert_var(
-                        root_scope,
+                        module_scope,
                         ident.clone(),
                         Type::Table(Box::new(ty)),
                     )?;
@@ -155,7 +175,7 @@ impl TypeChecker<'_> {
                     let ty = checker
                         .create_contains_type(&mut types, contain_ty, body)?;
                     checker.insert_var(
-                        root_scope,
+                        module_scope,
                         ident.clone(),
                         Type::OutputStream(Box::new(ty)),
                     )?;
@@ -258,7 +278,7 @@ impl TypeChecker<'_> {
         for expr in &tree.declarations {
             if let ast::Declaration::Function(x) = expr {
                 let ty = checker.function_type(x)?;
-                checker.insert_var(root_scope, x.ident.clone(), &ty)?;
+                checker.insert_var(module_scope, x.ident.clone(), &ty)?;
                 checker.type_info.expr_types.insert(x.ident.id, ty.clone());
             }
         }
@@ -268,15 +288,15 @@ impl TypeChecker<'_> {
                 ast::Declaration::FilterMap(f) => {
                     let ty = checker.fresh_var();
                     checker.insert_var(
-                        root_scope,
+                        module_scope,
                         f.ident.clone(),
                         ty.clone(),
                     )?;
-                    let ty2 = checker.filter_map(root_scope, f)?;
+                    let ty2 = checker.filter_map(module_scope, f)?;
                     checker.unify(&ty, &ty2, f.ident.id, None)?;
                 }
                 ast::Declaration::Function(x) => {
-                    checker.function(root_scope, x)?;
+                    checker.function(module_scope, x)?;
                 }
                 _ => {}
             }
@@ -390,13 +410,44 @@ impl TypeChecker<'_> {
         true
     }
 
+    fn insert_context(
+        &mut self,
+        k: Meta<Identifier>,
+        ty: impl Borrow<Type>,
+        offset: usize,
+    ) -> TypeResult<()> {
+        match self.scope_graph.insert_context(&k, ty, offset) {
+            Ok((name, t)) => {
+                self.type_info.resolved_names.insert(k.id, name);
+                self.type_info.expr_types.insert(k.id, t.clone());
+                Ok(())
+            }
+            Err(()) => Err(self.error_declared_twice(&k, MetaId(0))),
+        }
+    }
+
+    fn insert_global_constant(
+        &mut self,
+        k: Meta<Identifier>,
+        ty: impl Borrow<Type>,
+    ) -> TypeResult<()> {
+        match self.scope_graph.insert_global_constant(&k, ty) {
+            Ok((name, t)) => {
+                self.type_info.resolved_names.insert(k.id, name);
+                self.type_info.expr_types.insert(k.id, t.clone());
+                Ok(())
+            }
+            Err(()) => Err(self.error_declared_twice(&k, MetaId(0))),
+        }
+    }
+
     fn insert_var(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         k: Meta<Identifier>,
-        t: impl Borrow<Type>,
+        ty: impl Borrow<Type>,
     ) -> TypeResult<()> {
-        match self.scope_graph.insert_var(scope, &k, t) {
+        match self.scope_graph.insert_var(scope, &k, ty) {
             Ok((name, t)) => {
                 self.type_info.resolved_names.insert(k.id, name);
                 self.type_info.expr_types.insert(k.id, t.clone());
@@ -408,7 +459,7 @@ impl TypeChecker<'_> {
 
     fn get_var<'a>(
         &'a mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         k: &Meta<Identifier>,
     ) -> TypeResult<&'a Type> {
         let Some((name, t)) = self.scope_graph.get_var(scope, k) else {

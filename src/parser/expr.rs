@@ -21,7 +21,7 @@ struct Restrictions {
 }
 
 /// # Parsing value expressions
-impl<'source> Parser<'source, '_> {
+impl Parser<'_, '_> {
     pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 

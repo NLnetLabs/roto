@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    scope::{ScopeRef, ScopeType},
+    scope::{LocalScopeRef, ScopeType},
     types::{Function, FunctionKind, Primitive, Signature, Type},
     TypeChecker, TypeResult,
 };
@@ -32,7 +32,7 @@ impl Context {
 impl TypeChecker<'_> {
     pub fn block(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         block: &Meta<ast::Block>,
     ) -> TypeResult<bool> {
@@ -79,7 +79,7 @@ impl TypeChecker<'_> {
 
     pub fn expr(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         expr: &Meta<ast::Expr>,
     ) -> TypeResult<bool> {
@@ -490,7 +490,7 @@ impl TypeChecker<'_> {
 
     fn match_expr(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         mat: &Meta<ast::Match>,
     ) -> TypeResult<bool> {
@@ -631,7 +631,7 @@ impl TypeChecker<'_> {
 
     fn binop(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         op: &ast::BinOp,
         span: MetaId,
@@ -780,7 +780,7 @@ impl TypeChecker<'_> {
     fn method_call(
         &mut self,
         _meta_id: MetaId,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         receiver: &Meta<ast::Expr>,
         name: &Meta<Identifier>,
@@ -827,7 +827,7 @@ impl TypeChecker<'_> {
 
     fn static_method_call(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         ty: &Type,
         name: &Meta<Identifier>,
@@ -869,7 +869,7 @@ impl TypeChecker<'_> {
 
     fn check_arguments(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         call_type: &str,
         name: &Meta<Identifier>,
@@ -924,7 +924,7 @@ impl TypeChecker<'_> {
 
     fn record_fields(
         &mut self,
-        scope: ScopeRef,
+        scope: LocalScopeRef,
         ctx: &Context,
         field_types: Vec<(Meta<Identifier>, Type)>,
         record: &ast::Record,

@@ -21,14 +21,14 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(IpAddr,), Verdict<(), ()>>("main")
+        .get_function::<(), (IpAddr,), Verdict<(), ()>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
-    let res = func.call("0.0.0.0".parse().unwrap());
+    let res = func.call(&mut (), "0.0.0.0".parse().unwrap());
     println!("main(0.0.0.0) = {res:?}");
 
-    let res = func.call("1.1.1.1".parse().unwrap());
+    let res = func.call(&mut (), "1.1.1.1".parse().unwrap());
     println!("main(1.1.1.1) = {res:?}");
 
     Ok(())
