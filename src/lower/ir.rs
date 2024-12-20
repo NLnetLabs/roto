@@ -20,7 +20,7 @@
 //!
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/
 
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use crate::{
     ast::Identifier,
@@ -88,6 +88,13 @@ pub enum Instruction {
         to: Var,
         name: Identifier,
         ty: IrType,
+    },
+
+    /// Create string
+    InitString {
+        to: Var,
+        string: String,
+        init_func: unsafe extern "C" fn(*mut Arc<str>, *mut u8, u32),
     },
 
     /// Call a function.
@@ -414,6 +421,13 @@ impl<'a> IrPrinter<'a> {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
+            InitString {
+                to,
+                string,
+                init_func: _,
+            } => {
+                format!("{}: String = \"{string}\"", self.var(to),)
+            }
             Return(None) => "return".to_string(),
             Return(Some(v)) => {
                 format!("return {}", self.operand(v))
