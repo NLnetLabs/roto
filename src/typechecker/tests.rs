@@ -815,6 +815,56 @@ fn reference_variable_later_declared() {
 }
 
 #[test]
+fn reference_variable_from_parent_scope() {
+    let s = src!(
+        "
+        filter-map main() {
+            let a = 10;
+            if true {
+                accept a
+            }
+            let b = 20;
+            accept b
+        }
+    "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn reference_variable_from_child_scope() {
+    let s = src!(
+        "
+        filter-map main() {
+            if true {
+                let a = 10;
+            }
+            let b = a;
+            accept
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn shadow_variable() {
+    let s = src!(
+        "
+        filter-map main() {
+            let a = 10;
+            let a = a + 1;
+            accept
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
 fn use_globals() {
     let s = src!(
         "

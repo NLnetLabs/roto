@@ -414,10 +414,17 @@ impl TypeChecker<'_> {
                     c,
                 )?;
 
+                let idx = self.if_else_counter;
+                self.if_else_counter += 1;
+
                 if let Some(e) = e {
                     let mut diverges = false;
-                    diverges |= self.block(scope, ctx, t)?;
-                    diverges |= self.block(scope, ctx, e)?;
+                    let then_scope =
+                        self.scope_graph.wrap(scope, ScopeType::Then(idx));
+                    diverges |= self.block(then_scope, ctx, t)?;
+                    let else_scope =
+                        self.scope_graph.wrap(scope, ScopeType::Else(idx));
+                    diverges |= self.block(else_scope, ctx, e)?;
 
                     // Record divergence so that we can omit the
                     // block after the if-else while lowering
@@ -433,8 +440,10 @@ impl TypeChecker<'_> {
 
                     // An if without else does not always diverge, because
                     // the condition could be false
+                    let then_scope =
+                        self.scope_graph.wrap(scope, ScopeType::Then(idx));
                     let _ = self.block(
-                        scope,
+                        then_scope,
                         &ctx.with_type(Type::Primitive(Primitive::Unit)),
                         t,
                     )?;

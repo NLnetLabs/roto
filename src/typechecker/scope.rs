@@ -73,6 +73,8 @@ struct LocalDefinition {
 }
 
 pub enum ScopeType {
+    Then(usize),
+    Else(usize),
     Module(Identifier),
     Function(Identifier),
     MatchArm(usize, Option<usize>),
@@ -218,6 +220,12 @@ impl ScopeGraph {
             let ident = match &s.scope_type {
                 ScopeType::Module(name) => name.as_str().to_string(),
                 ScopeType::Function(name) => name.as_str().to_string(),
+                ScopeType::Then(idx) => {
+                    format!("$if_{idx}_then")
+                }
+                ScopeType::Else(idx) => {
+                    format!("$if_{idx}_else")
+                }
                 ScopeType::MatchArm(idx, Some(arm)) => {
                     format!("$match_{idx}_arm_{arm}")
                 }
