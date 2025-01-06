@@ -5,7 +5,7 @@ use inetnum::asn::Asn;
 use crate::{
     ast::{
         BinOp, Block, Expr, Literal, Match, MatchArm, Pattern, Record,
-        ReturnKind,
+        ReturnKind, Stmt,
     },
     parser::ParseError,
 };
@@ -25,21 +25,32 @@ impl Parser<'_, '_> {
     pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 
-        let mut exprs = Vec::new();
+        let mut stmts = Vec::new();
 
         loop {
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
                 return Ok(self
                     .spans
-                    .add(start.merge(end), Block { exprs, last: None }));
+                    .add(start.merge(end), Block { stmts, last: None }));
             }
 
+            if self.peek_is(Token::Let) {
+                let start = self.take(Token::Let)?;
+                let identifier = self.identifier()?;
+                self.take(Token::Eq)?;
+                let expr = self.expr()?;
+                let end = self.take(Token::SemiColon)?;
+                stmts.push(
+                    self.spans
+                        .add(start.merge(end), Stmt::Let(identifier, expr)),
+                )
+            }
             // Edge case: if and match don't have to end in a semicolon
             // but if they appear at the end, they are the last
             // expression. This is what Rust does too and while it looks
             // hacky, it works really well in practice.
-            if self.peek_is(Token::If) {
+            else if self.peek_is(Token::If) {
                 let expr = self.if_else()?;
                 if self.peek_is(Token::CurlyRight) {
                     let end = self.take(Token::CurlyRight)?;
@@ -47,12 +58,17 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            exprs,
+                            stmts,
                             last: Some(Box::new(expr)),
                         },
                     ));
                 }
-                exprs.push(expr);
+
+                let stmt = Meta {
+                    id: expr.id,
+                    node: Stmt::Expr(expr),
+                };
+                stmts.push(stmt);
 
                 // Semicolon is allowed but not mandatory after if
                 self.next_is(Token::SemiColon);
@@ -64,26 +80,34 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            exprs,
+                            stmts,
                             last: Some(Box::new(expr)),
                         },
                     ));
                 }
-                exprs.push(expr);
+                let stmt = Meta {
+                    id: expr.id,
+                    node: Stmt::Expr(expr),
+                };
+                stmts.push(stmt);
 
                 // Semicolon is allowed but not mandatory after match
                 self.next_is(Token::SemiColon);
             } else {
                 let expr = self.expr()?;
                 if self.next_is(Token::SemiColon) {
-                    exprs.push(expr);
+                    let stmt = Meta {
+                        id: expr.id,
+                        node: Stmt::Expr(expr),
+                    };
+                    stmts.push(stmt);
                 } else {
                     let end = self.take(Token::CurlyRight)?;
                     let span = start.merge(end);
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            exprs,
+                            stmts,
                             last: Some(Box::new(expr)),
                         },
                     ));
@@ -406,7 +430,7 @@ impl Parser<'_, '_> {
                 Meta {
                     id: expr.id,
                     node: Block {
-                        exprs: Vec::new(),
+                        stmts: Vec::new(),
                         last: Some(Box::new(expr)),
                     },
                 }
@@ -477,7 +501,7 @@ impl Parser<'_, '_> {
                 Meta {
                     id: expr.id,
                     node: Block {
-                        exprs: Vec::new(),
+                        stmts: Vec::new(),
                         last: Some(Box::new(expr)),
                     },
                 }

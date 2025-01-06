@@ -299,9 +299,9 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn error_unreachable_expression(
+    pub fn error_unreachable_expression<T>(
         &self,
-        expr: &Meta<Expr>,
+        expr: &Meta<T>,
     ) -> TypeError {
         TypeError {
             description: "expression is unreachable".into(),
