@@ -1,6 +1,4 @@
-use crate::ast::{
-    Expr, FilterMap, FilterMapBody, FilterType, Identifier, Params,
-};
+use crate::ast::{FilterMap, FilterType, Identifier, Params};
 
 use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
 
@@ -28,71 +26,14 @@ impl Parser<'_, '_> {
 
         let ident = self.identifier()?;
         let params = self.params()?;
-        let body = self.filter_map_body()?;
+        let block = self.block()?;
 
         Ok(FilterMap {
             filter_type,
             ident,
             params,
-            body,
+            block,
         })
-    }
-
-    /// Parse the body of a filter-map or filter
-    ///
-    /// ```ebnf
-    /// FilterMapBody ::= '{' Define FilterMapExpr+ Apply? '}'
-    /// Define        ::= 'define' For? With? DefineBody
-    /// Apply         ::= 'apply' For? With? ApplyBody
-    /// ```
-    ///
-    /// Not shown in the EBNF above, but the location of the define and apply
-    /// sections doesn't matter, but they can both only appear once.
-    fn filter_map_body(&mut self) -> ParseResult<FilterMapBody> {
-        self.take(Token::CurlyLeft)?;
-
-        let define = if self.next_is(Token::Define) {
-            self.define_body()?
-        } else {
-            Vec::new()
-        };
-
-        self.take(Token::Apply)?;
-        let apply = self.block()?;
-        self.take(Token::CurlyRight)?;
-
-        Ok(FilterMapBody { define, apply })
-    }
-
-    /// Parse the body of a define section
-    ///
-    /// ```ebnf
-    /// DefineBody ::= '{' Assignment* '}'
-    ///
-    /// Assignment ::= Identifier '=' ValueExpr ';'
-    /// ```
-    fn define_body(
-        &mut self,
-    ) -> ParseResult<Vec<(Meta<Identifier>, Meta<Expr>)>> {
-        self.take(Token::CurlyLeft)?;
-
-        let mut use_ext_data = Vec::new();
-        while self.next_is(Token::Use) {
-            use_ext_data
-                .push((self.identifier()?.node, self.identifier()?.node));
-            self.take(Token::SemiColon)?;
-        }
-
-        let mut assignments = Vec::new();
-        while !self.next_is(Token::CurlyRight) {
-            let id = self.identifier()?;
-            self.take(Token::Eq)?;
-            let value = self.expr()?;
-            self.take(Token::SemiColon)?;
-            assignments.push((id, value));
-        }
-
-        Ok(assignments)
     }
 
     /// Parse an optional with clause for filter-map, define and apply

@@ -98,7 +98,7 @@ fn accept() {
     let s = src!(
         "
         filter-map main(msg: u32) {
-            apply { accept }
+            accept
         }
     "
     );
@@ -121,7 +121,7 @@ fn reject() {
     let s = src!(
         "
         filter-map main() {
-            apply { reject }
+            reject
         }
     "
     );
@@ -140,12 +140,10 @@ fn if_else() {
     let s = src!(
         "
         filter-map main() {
-            apply { 
-                if true && true {
-                    accept
-                } else {
-                    reject
-                }
+            if true && true {
+                accept
+            } else {
+                reject
             }
         }      
     "
@@ -164,12 +162,10 @@ fn react_to_rx() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply {
-                if x <= 4 {
-                    accept
-                } else {
-                    reject
-                }
+            if x <= 4 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -196,16 +192,11 @@ fn variable() {
     let s = src!(
         "
     filter-map main() {
-        define {
-            a = 5;
-        }
-
-        apply {
-            if a == 5 {
-                accept
-            } else {
-                reject
-            }
+        let a = 5;
+        if a == 5 {
+            accept
+        } else {
+            reject
         }
     }
     "
@@ -233,10 +224,8 @@ fn calling_function() {
         }
 
         filter-map main(msg: u32) {
-            apply {
-                if small(msg) { accept }
-                reject
-            }
+            if small(msg) { accept }
+            reject
         }
     "
     );
@@ -266,14 +255,9 @@ fn anonymous_record() {
         }
 
         filter-map main(msg: u32) {
-            define {
-                a = { low: 10, high: 20 };
-            }
-
-            apply {
-                if in_range(msg, a.low, a.high) { accept }
-                reject
-            }
+            let a = { low: 10, high: 20 };
+            if in_range(msg, a.low, a.high) { accept }
+            reject
         }
     "
     );
@@ -308,16 +292,11 @@ fn typed_record() {
         }
 
         filter-map main(msg: u32) {
-            define {
-                a = Range { low: 10, high: 20 };
-                b = Range { low: a.low, high: a.high };
-                c = b;
-            }
-
-            apply {
-                if in_range(msg, c) { accept }
-                reject
-            }
+            let a = Range { low: 10, high: 20 };
+            let b = Range { low: a.low, high: a.high };
+            let c = b;
+            if in_range(msg, c) { accept }
+            reject
         }
     "
     );
@@ -346,16 +325,12 @@ fn nested_record() {
         type Bar { a: i32, b: i32 }
 
         filter-map main(x: i32) {
-            define {
-                bar = Bar { a: 20, b: x };
-                foo = Foo { x: bar, y: bar };
-            }
-            apply {
-                if foo.x.a == foo.y.b {
-                    accept
-                } else {
-                    reject
-                }
+            let bar = Bar { a: 20, b: x };
+            let foo = Foo { x: bar, y: bar };
+            if foo.x.a == foo.y.b {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -382,12 +357,10 @@ fn enum_values() {
     let s = src!(
         "
         filter-map main(x: Afi) {
-            apply {
-                if x == Afi.IpV4 {
-                    accept
-                } else {
-                    reject
-                }
+            if x == Afi.IpV4 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -424,12 +397,10 @@ fn call_runtime_function() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply {
-                if pow(x, 2) > 100 {
-                    accept
-                } else {
-                    reject
-                }
+            if pow(x, 2) > 100 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -456,12 +427,10 @@ fn ip_addr_method() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply { 
-                if x.is_even() {
-                    accept
-                } else {
-                    reject
-                }
+            if x.is_even() {
+                accept
+            } else {
+                reject
             }
         }
     "

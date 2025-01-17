@@ -20,7 +20,7 @@ impl TypeChecker<'_> {
             filter_type,
             ident,
             params,
-            body: ast::FilterMapBody { define, apply },
+            block,
         } = filter_map;
 
         let scope = self
@@ -35,8 +35,6 @@ impl TypeChecker<'_> {
             self.insert_var(scope, v.clone(), t)?;
         }
 
-        self.define_section(scope, define)?;
-
         let a = self.fresh_var();
         let r = self.fresh_var();
         let ty = Type::Verdict(Box::new(a.clone()), Box::new(r.clone()));
@@ -46,7 +44,7 @@ impl TypeChecker<'_> {
             function_return_type: Some(ty.clone()),
         };
 
-        self.block(scope, &ctx, apply)?;
+        self.block(scope, &ctx, block)?;
 
         if let Type::Var(x) = self.resolve_type(&a) {
             self.unify(
@@ -71,35 +69,6 @@ impl TypeChecker<'_> {
             ast::FilterType::FilterMap => Type::FilterMap(params),
             ast::FilterType::Filter => Type::Filter(params),
         })
-    }
-
-    fn define_section(
-        &mut self,
-        scope: LocalScopeRef,
-        define: &[(Meta<Identifier>, Meta<ast::Expr>)],
-    ) -> TypeResult<()> {
-        for (ident, expr) in define {
-            let var = self.fresh_var();
-            let ctx = Context {
-                expected_type: var.clone(),
-                function_return_type: None,
-            };
-            let diverges = self.expr(scope, &ctx, expr)?;
-            if diverges {
-                unreachable!(
-                    "Something has gone wrong in the type checker. \
-                    Divergence should have prohibited elsewhere."
-                );
-            }
-            let ty = self.resolve_type(&var);
-            self.insert_var(scope, ident.clone(), ty)?;
-
-            // We want the fully qualified name to be stored, so we do a lookup
-            // This won't fail because we just added it.
-            self.get_var(scope, ident).unwrap();
-        }
-
-        Ok(())
     }
 
     pub fn function(

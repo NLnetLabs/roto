@@ -46,13 +46,7 @@ pub struct FilterMap {
     pub filter_type: FilterType,
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
-    pub body: FilterMapBody,
-}
-
-#[derive(Clone, Debug)]
-pub struct FilterMapBody {
-    pub define: Vec<(Meta<Identifier>, Meta<Expr>)>,
-    pub apply: Meta<Block>,
+    pub block: Meta<Block>,
 }
 
 /// A function declaration, including the [`Block`] forming its definition
@@ -64,11 +58,18 @@ pub struct FunctionDeclaration {
     pub body: Meta<Block>,
 }
 
-/// A block of multiple Roto expressions
+/// A block of multiple statements
 #[derive(Clone, Debug)]
 pub struct Block {
-    pub exprs: Vec<Meta<Expr>>,
+    pub stmts: Vec<Meta<Stmt>>,
     pub last: Option<Box<Meta<Expr>>>,
+}
+
+/// A statement in a block
+#[derive(Clone, Debug)]
+pub enum Stmt {
+    Let(Meta<Identifier>, Meta<Expr>),
+    Expr(Meta<Expr>),
 }
 
 /// A Roto expression

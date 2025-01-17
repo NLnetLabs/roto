@@ -186,13 +186,11 @@ fn filter_map() {
     let s = src!(
         r#"
         filter-map blabla(foo: u32) {
-            define {
-                a = "hello";
-                b = 0.0.0.0/10;
-                c = 192.168.0.0;
-            }
+            let a = "hello";
+            let b = 0.0.0.0/10;
+            let c = 192.168.0.0;
 
-            apply { accept }
+            accept
         }
     "#
     );
@@ -204,12 +202,10 @@ fn filter_map_double_definition() {
     let s = src!(
         r#"
         filter-map blabla(foo: u32) {
-            define {
-                a = "hello";
-                a = 0.0.0.0/10;
-            }
+            let a = "hello";
+            let a = 0.0.0.0/10;
 
-            apply { accept }
+            accept
         }
     "#
     );
@@ -223,11 +219,8 @@ fn using_records() {
         type Foo { a: String }
 
         filter-map bar(r: u32) {
-            define {
-                a = Foo { a: "hello" };
-            }
-
-            apply { accept }
+            let a = Foo { a: "hello" };
+            accept
         }
     "#
     );
@@ -238,11 +231,8 @@ fn using_records() {
         type Foo { a: String }
 
         filter-map bar(r: u32) {
-            define {
-                a = Foo { a: 0.0.0.0 };
-            }
-
-            apply { accept }
+            let a = Foo { a: 0.0.0.0 };
+            accept
         }
     "#
     );
@@ -253,11 +243,8 @@ fn using_records() {
         type Foo { a: string }
 
         filter-map bar(r: u32) {
-            define {
-                a = Foo { };
-            }
-
-            apply { accept }
+            let a = Foo { };
+            accept
         }
     "#
     );
@@ -271,11 +258,8 @@ fn integer_inference() {
         type Foo { x: u8 }
 
         filter-map test(r: u32) {
-            define {
-                foo = Foo { x: 5 };
-            }
-
-            apply { accept }
+            let foo = Foo { x: 5 };
+            accept
         }
     "
     );
@@ -287,12 +271,9 @@ fn integer_inference() {
         type Bar { x: u8 }
 
         filter-map test(r: u32) {
-            define {
-                a = 5;
-                foo = Foo { x: a };
-            }
-
-            apply { accept }
+            let a = 5;
+            let foo = Foo { x: a };
+            accept
         }
     "
     );
@@ -304,13 +285,10 @@ fn integer_inference() {
         type Bar { x: u8 }
 
         filter-map test(r: u32) {
-            define {
-                a = 5;
-                foo = Foo { x: a };
-                bar = Bar { x: a };
-            }
-
-            apply { accept }
+            let a = 5;
+            let foo = Foo { x: a };
+            let bar = Bar { x: a };
+            accept
         }
     "
     );
@@ -322,13 +300,10 @@ fn integer_inference() {
         type Bar { x: u32 }
 
         filter-map test(r: u32) {
-            define {
-                a = 5;
-                foo = Foo { x: a };
-                bar = Bar { x: a };
-            }
-
-            apply { accept }
+            let a = 5;
+            let foo = Foo { x: a };
+            let bar = Bar { x: a };
+            accept
         }
     "
     );
@@ -340,12 +315,9 @@ fn integer_inference() {
         type Bar { x: u32 }
 
         filter-map test(r: u32) {
-            define {
-                foo = Foo { x: 5 };
-                bar = Bar { x: 5 };
-            }
-
-            apply { accept }
+            let foo = Foo { x: 5 };
+            let bar = Bar { x: 5 };
+            accept
         }
     "
     );
@@ -360,12 +332,9 @@ fn assign_field_to_other_record() {
         type Bar { x: u8 }
 
         filter-map test(r: u32) {
-            define {
-                foo = Foo { x: 5 };
-                bar = Bar { x: foo.x };
-            }
-
-            apply { accept }
+            let foo = Foo { x: 5 };
+            let bar = Bar { x: foo.x };
+            accept
         }
     "
     );
@@ -377,12 +346,9 @@ fn assign_field_to_other_record() {
         type Bar { x: u8 }
 
         filter-map test(r: u32) {
-            define {
-                foo = Foo { x: 5 };
-                bar = Bar { x: foo.y };
-            }
-
-            apply { accept }
+            let foo = Foo { x: 5 };
+            let bar = Bar { x: foo.y };
+            accept
         }
     "
     );
@@ -394,12 +360,9 @@ fn assign_field_to_other_record() {
         type Bar { x: u32 }
 
         filter-map test(r: u32) {
-            define {
-                foo = Foo { x: 5 };
-                bar = Bar { x: foo.x };
-            }
-
-            apply { accept }
+            let foo = Foo { x: 5 };
+            let bar = Bar { x: foo.x };
+            accept
         }
     "
     );
@@ -411,12 +374,9 @@ fn ip_addr_method() {
     let s = src!(
         "
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10;
-                is_four = 1 + p.is_ipv4();
-            }
-
-            apply { accept }
+            let p = 10.10.10.10;
+            let is_four = 1 + p.is_ipv4();
+            accept
         }
     "
     );
@@ -425,12 +385,9 @@ fn ip_addr_method() {
     let s = src!(
         "
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10;
-                is_four = true && p.is_ipv4();
-            }
-
-            apply { accept }
+            let p = 10.10.10.10;
+            let is_four = true && p.is_ipv4();
+            accept
         }
     "
     );
@@ -443,12 +400,9 @@ fn ip_addr_method_of_method_return_type() {
     let s = src!(
         "
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10;
-                x = p.to_canonical().is_ipv4();
-            }
-
-            apply { accept }
+            let p = 10.10.10.10;
+            let x = p.to_canonical().is_ipv4();
+            accept
         }
     "
     );
@@ -457,12 +411,9 @@ fn ip_addr_method_of_method_return_type() {
     let s = src!(
         "
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10;
-                x = p.is_ipv4().to_canonical();
-            }
-
-            apply { accept }
+            let p = 10.10.10.10;
+            let x = p.is_ipv4().to_canonical();
+            accept
         }
     "
     );
@@ -475,12 +426,9 @@ fn prefix_method() {
     let s = src!(
         "
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10/20;
-                add = p.address();
-            }
-
-            apply { accept }
+            let p = 10.10.10.10/20;
+            let add = p.address();
+            accept
         }
     "
     );
@@ -497,12 +445,8 @@ fn logical_expr() {
         }
 
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10/10;
-            }
-
-
-            apply { accept }
+            let p = 10.10.10.10/10;
+            accept
         }
     "
     );
@@ -515,11 +459,8 @@ fn logical_expr() {
         }
 
         filter-map test(r: u32) {
-            define {
-                p = 10.10.10.10/10;
-            }
-
-            apply { accept }
+            let p = 10.10.10.10/10;
+            accept
         }
     "#
     );
@@ -542,7 +483,7 @@ fn send_output_stream() {
         }
         
         filter-map test(r: u32) {
-            apply { accept }
+            accept
         }
     "#
     );
@@ -563,7 +504,7 @@ fn send_output_stream() {
         }
 
         filter-map test(r: u32) {
-            apply { accept }
+            accept
         }
     "#
     );
@@ -589,7 +530,7 @@ fn send_output_stream() {
         }
 
         filter-map test(r: u32) {
-            apply { accept }
+            accept
         }
     "#
     );
@@ -615,7 +556,7 @@ fn send_output_stream() {
         }
         
         filter-map test(r: u32) {
-            apply { accept }
+            accept
         }
     "#
     );
@@ -634,14 +575,9 @@ fn record_inference() {
         }
         
         filter-map foo(r: u32) { 
-            define {
-                a = { a: 8 };
-            }
-
-            apply {
-                bar(a);
-                accept
-            }
+            let a = { a: 8 };
+            bar(a);
+            accept
         }
     "
     );
@@ -656,14 +592,9 @@ fn record_inference() {
         }
 
         filter-map foo(r: u32) { 
-            define {
-                a = { b: 8 };
-            }
-
-            apply {
-                bar(a);
-                accept
-            }
+            let a = { b: 8 };
+            bar(a);
+            accept
         }
     "
     );
@@ -678,17 +609,12 @@ fn record_inference() {
         }
         
         filter-map foo(r: u32) { 
-            define {
-                a = { a: 8 };
-                b = A { a: 8 };
+            let a = { a: 8 };
+            let b = A { a: 8 };
+            if bla(a, b) {
+                accept
             }
-
-            apply { 
-                if bla(a, b) {
-                    accept
-                }
-                reject
-            }
+            reject
         }
     "
     );
@@ -704,13 +630,10 @@ fn record_inference() {
         }
 
         filter-map foo(r: u32) { 
-            define {
-                a = { a: 8 };
-                b = A { a: 8 };
-                c = B { a: 8 };
-            }
-
-            apply { accept }
+            let a = { a: 8 };
+            let b = A { a: 8 };
+            let c = B { a: 8 };
+            accept
         }
     "
     );
@@ -726,7 +649,7 @@ fn return_keyword() {
         }
         
         filter-map foo(r: u32) { 
-            apply { accept }
+            accept
         }
     "
     );
@@ -739,7 +662,7 @@ fn return_keyword() {
         }
         
         filter-map foo(r: u32) { 
-            apply { accept }
+            accept
         }
     "
     );
@@ -758,7 +681,7 @@ fn unit_block() {
         }
 
         filter-map foo(r: u32) { 
-            apply { accept }
+            accept
         }
     "
     );
@@ -775,7 +698,7 @@ fn unreachable_expression() {
         }
 
         filter-map foo(r: u32) { 
-            apply { accept }
+            accept
         }
     "
     );
@@ -787,16 +710,11 @@ fn enum_values() {
     let s = src!(
         "
         filter-map main(r: u32) { 
-            define {
-                x = Afi.IpV4;
-            }
-
-            apply {
-                if x == Afi.IpV4 {
-                    accept
-                } else {
-                    reject
-                }
+            let x = Afi.IpV4;
+            if x == Afi.IpV4 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -809,16 +727,11 @@ fn enum_match() {
     let s = src!(
         "
         filter-map foo(r: u32) { 
-            define {
-                x = Afi.IpV4;
-            }
-
-            apply {
-                match x {
-                    IpV4 -> accept,
-                    IpV6 -> accept,
-                    _ -> reject,
-                }
+            let x = Afi.IpV4;
+            match x {
+                IpV4 -> accept,
+                IpV6 -> accept,
+                _ -> reject,
             }
         }
     "
@@ -831,12 +744,10 @@ fn runtime_function() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply {
-                if pow(x, 2) > 100 {
-                    accept
-                } else {
-                    reject
-                }
+            if pow(x, 2) > 100 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -846,15 +757,11 @@ fn runtime_function() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            define {
-                pow = 3;
-            }
-            apply {
-                if pow(x, 2) > 100 {
-                    accept
-                } else {
-                    reject
-                }
+            let pow = 3;
+            if pow(x, 2) > 100 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -867,12 +774,89 @@ fn issue_51() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                if true {
-                    foo;
-                }
-                accept
+            if true {
+                foo;
             }
+            accept
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn self_referential_variable() {
+    let s = src!(
+        "
+        filter-map main() {
+            let a = a;
+            accept
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn reference_variable_later_declared() {
+    let s = src!(
+        "
+        filter-map main() {
+            let a = b;
+            let b = 12;
+            accept
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn reference_variable_from_parent_scope() {
+    let s = src!(
+        "
+        filter-map main() {
+            let a = 10;
+            if true {
+                accept a
+            }
+            let b = 20;
+            accept b
+        }
+    "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn reference_variable_from_child_scope() {
+    let s = src!(
+        "
+        filter-map main() {
+            if true {
+                let a = 10;
+            }
+            let b = a;
+            accept
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn shadow_variable() {
+    let s = src!(
+        "
+        filter-map main() {
+            let a = 10;
+            let a = a + 1;
+            accept
         }
     "
     );
@@ -885,9 +869,7 @@ fn use_globals() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                accept BLACKHOLE
-            }
+            accept BLACKHOLE
         }
         "
     );
@@ -909,9 +891,7 @@ fn use_context() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                accept foo;
-            }
+            accept foo;
         }
         "
     );

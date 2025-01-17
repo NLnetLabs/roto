@@ -191,11 +191,10 @@ impl<'r> Lowerer<'r> {
     fn filter_map(mut self, fm: &ast::FilterMap) -> Function {
         let ast::FilterMap {
             ident,
-            body,
+            block,
             params,
             ..
         } = fm;
-        let ast::FilterMapBody { define, apply } = body;
 
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
@@ -218,27 +217,8 @@ impl<'r> Lowerer<'r> {
             self.stack_slots.push((var, ty.clone()))
         }
 
-        for (ident, expr) in define {
-            let val = self.expr(expr);
-            let def = self.type_info.resolved_name(ident);
-            let (scope, name) = def.to_scope_and_name();
-            let ty = self.type_info.type_of(ident);
-            if self.type_info.size_of(&ty, self.runtime) > 0 {
-                let val = val.unwrap();
-                let ty = self.lower_type(&ty);
-                self.add(Instruction::Assign {
-                    to: Var {
-                        scope,
-                        kind: VarKind::Explicit(name),
-                    },
-                    val,
-                    ty,
-                })
-            }
-        }
-
-        let return_type = self.type_info.type_of(apply);
-        let last = self.block(apply);
+        let return_type = self.type_info.type_of(block);
+        let last = self.block(block);
 
         self.add(Instruction::Return(last));
 
@@ -361,11 +341,37 @@ impl<'r> Lowerer<'r> {
     /// value can be retrieved.
     fn block(&mut self, block: &ast::Block) -> Option<Operand> {
         // Result is ignored
-        for expr in &block.exprs {
-            self.expr(expr);
+        for stmt in &block.stmts {
+            self.stmt(stmt);
         }
 
         block.last.as_ref().and_then(|last| self.expr(last))
+    }
+
+    fn stmt(&mut self, stmt: &ast::Stmt) {
+        match stmt {
+            ast::Stmt::Let(ident, expr) => {
+                let val = self.expr(expr);
+                let def = self.type_info.resolved_name(ident);
+                let (scope, name) = def.to_scope_and_name();
+                let ty = self.type_info.type_of(ident);
+                if self.type_info.size_of(&ty, self.runtime) > 0 {
+                    let val = val.unwrap();
+                    let ty = self.lower_type(&ty);
+                    self.add(Instruction::Assign {
+                        to: Var {
+                            scope,
+                            kind: VarKind::Explicit(name),
+                        },
+                        val,
+                        ty,
+                    })
+                }
+            }
+            ast::Stmt::Expr(expr) => {
+                self.expr(expr);
+            }
+        }
     }
 
     /// Lower an expression
