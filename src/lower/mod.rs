@@ -162,36 +162,31 @@ impl<'r> Lowerer<'r> {
                         .filter_map(x),
                     );
                 }
-                ast::Declaration::Function(ast::FunctionDeclaration {
-                    ident,
-                    params,
-                    body,
-                    ret,
-                }) => {
+                ast::Declaration::Function(x) => {
                     functions.push(
                         Lowerer::new(
                             type_info,
                             runtime_functions,
-                            ident,
+                            &x.ident,
                             label_store,
                             runtime,
                         )
-                        .function(ident, params, ret, body),
+                        .function(x),
                     );
                 }
-                ast::Declaration::Test(ast::Test { ident, body }) => {
+                ast::Declaration::Test(x) => {
                     functions.push(
                         Lowerer::new(
                             type_info,
                             runtime_functions,
                             &Meta {
-                                node: format!("test#{}", ident).into(),
-                                id: ident.id,
+                                node: format!("test#{}", x.ident).into(),
+                                id: x.ident.id,
                             },
                             label_store,
                             runtime,
                         )
-                        .test(ident, body),
+                        .test(x),
                     );
                 }
                 // Ignore the rest
@@ -203,25 +198,61 @@ impl<'r> Lowerer<'r> {
     }
 
     /// Lower a filter-map
-    fn filter_map(mut self, fm: &ast::FilterMap) -> Function {
+    fn filter_map(self, fm: &ast::FilterMap) -> Function {
         let ast::FilterMap {
             ident,
-            block,
+            body,
             params,
             ..
         } = fm;
 
+        let return_type = self.type_info.type_of(body);
+        self.function_like(ident, params, &return_type, body)
+    }
+
+    fn function(self, function: &ast::FunctionDeclaration) -> Function {
+        let return_type = function
+            .ret
+            .as_ref()
+            .map(|t| self.type_info.resolve(&Type::Name(**t)))
+            .unwrap_or(Type::Primitive(Primitive::Unit));
+
+        self.function_like(
+            &function.ident,
+            &function.params,
+            &return_type,
+            &function.body,
+        )
+    }
+
+    fn test(self, test: &ast::Test) -> Function {
+        let ident = Meta {
+            node: format!("test#{}", *test.ident).into(),
+            id: test.ident.id,
+        };
+        let unit = Box::new(Type::Primitive(Primitive::Unit));
+        let return_type = Type::Verdict(unit.clone(), unit);
+        let params = ast::Params(Vec::new());
+        self.function_like(&ident, &params, &return_type, &test.body)
+    }
+
+    /// Lower a function-like construct (i.e. a function, filter-map or test)
+    fn function_like(
+        mut self,
+        ident: &Meta<Identifier>,
+        params: &ast::Params,
+        return_type: &Type,
+        body: &ast::Block,
+    ) -> Function {
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
 
-        let parameter_types: Vec<_> = params
-            .0
-            .iter()
-            .map(|(x, _)| {
-                let ty = self.type_info.type_of(x);
-                (self.type_info.resolved_name(x), ty)
-            })
-            .collect();
+        let mut parameter_types = Vec::new();
+
+        for (x, _) in &params.0 {
+            let ty = self.type_info.type_of(x);
+            parameter_types.push((self.type_info.resolved_name(x), ty));
+        }
 
         for (def, ty) in &parameter_types {
             let (scope, name) = def.to_scope_and_name();
@@ -231,11 +262,6 @@ impl<'r> Lowerer<'r> {
             };
             self.stack_slots.push((var, ty.clone()))
         }
-
-        let return_type = self.type_info.type_of(block);
-        let last = self.block(block);
-
-        self.add(Instruction::Return(last));
 
         let signature = Signature {
             kind: FunctionKind::Free,
@@ -248,11 +274,11 @@ impl<'r> Lowerer<'r> {
         };
 
         let (return_type, return_ptr) = match return_type {
-            x if self.type_info.size_of(&x, self.runtime) == 0 => {
+            x if self.type_info.size_of(x, self.runtime) == 0 => {
                 (None, false)
             }
-            x if self.is_reference_type(&x) => (None, true),
-            x => (Some(self.lower_type(&x)), false),
+            x if self.is_reference_type(x) => (None, true),
+            x => (Some(self.lower_type(x)), false),
         };
 
         let ir_signature = ir::Signature {
@@ -266,118 +292,12 @@ impl<'r> Lowerer<'r> {
             return_type,
         };
 
-        Function {
-            name: ident.node,
-            scope: self.function_scope,
-            entry_block: label,
-            signature,
-            ir_signature,
-            blocks: self.blocks,
-            public: true,
-        }
-    }
-
-    /// Lower a function
-    ///
-    /// We compile functions differently than turing complete languages,
-    /// because we don't have a full stack. Instead, the arguments just
-    /// have fixed locations. The interpreter does have to keep track
-    /// where the function is called and hence where it has to return to
-    ///
-    /// Ultimately, it should be possible to inline all functions, so
-    /// that we don't even need a return instruction. However, this could
-    /// also be done by an optimizing step.
-    fn function(
-        mut self,
-        ident: &Meta<Identifier>,
-        params: &Meta<ast::Params>,
-        return_type: &Option<Meta<Identifier>>,
-        body: &ast::Block,
-    ) -> Function {
-        let label = self.label_store.new_label(self.function_name);
-        self.new_block(label);
-
-        let mut parameter_types = Vec::new();
-
-        for (x, _) in &params.0 {
-            let ty = self.type_info.type_of(x);
-            parameter_types.push((self.type_info.resolved_name(x), ty));
-        }
-
-        let return_type = return_type
-            .as_ref()
-            .map(|t| self.type_info.resolve(&Type::Name(**t)));
-
-        let signature = Signature {
-            kind: FunctionKind::Free,
-            parameter_types: parameter_types
-                .iter()
-                .cloned()
-                .map(|x| x.1)
-                .collect(),
-            return_type: return_type
-                .clone()
-                .unwrap_or(Type::Primitive(Primitive::Unit)),
-        };
-
-        let return_type = return_type.map(|t| self.lower_type(&t));
-
-        let ir_signature = ir::Signature {
-            parameters: parameter_types
-                .iter()
-                .map(|(def, ty)| {
-                    (def.to_scope_and_name().1, self.lower_type(ty))
-                })
-                .collect(),
-            return_ptr: false, // TODO: check this
-            return_type,
-        };
-
         let last = self.block(body);
 
         self.add(Instruction::Return(last));
 
         Function {
             name: ident.node,
-            scope: self.function_scope,
-            entry_block: label,
-            blocks: self.blocks,
-            public: false,
-            signature,
-            ir_signature,
-        }
-    }
-
-    fn test(
-        mut self,
-        ident: &Meta<Identifier>,
-        body: &ast::Block,
-    ) -> Function {
-        let label = self.label_store.new_label(self.function_name);
-        self.new_block(label);
-
-        let unit = Box::new(Type::Primitive(Primitive::Unit));
-
-        let return_type = Type::Verdict(unit.clone(), unit);
-
-        let signature = Signature {
-            kind: FunctionKind::Free,
-            parameter_types: Vec::new(),
-            return_type: return_type.clone(),
-        };
-
-        let ir_signature = ir::Signature {
-            parameters: Vec::new(),
-            return_ptr: true, // TODO: check this
-            return_type: None,
-        };
-
-        let last = self.block(body);
-
-        self.add(Instruction::Return(last));
-
-        Function {
-            name: format!("test#{}", ident.node).into(),
             scope: self.function_scope,
             entry_block: label,
             blocks: self.blocks,
@@ -1224,19 +1144,11 @@ impl<'r> Lowerer<'r> {
     }
 
     fn is_reference_type(&mut self, ty: &Type) -> bool {
-        let ty = self.type_info.resolve(ty);
-        matches!(
-            ty,
-            Type::Record(..)
-                | Type::RecordVar(..)
-                | Type::NamedRecord(..)
-                | Type::Enum(..)
-                | Type::Verdict(..)
-                | Type::Primitive(Primitive::IpAddr | Primitive::Prefix)
-                | Type::BuiltIn(..)
-        )
+        self.type_info.is_reference_type(ty)
     }
 
+    // TODO: This should return Option<IrType> so that zero-sized
+    // types can be put in here.
     fn lower_type(&mut self, ty: &Type) -> IrType {
         let ty = self.type_info.resolve(ty);
         match ty {

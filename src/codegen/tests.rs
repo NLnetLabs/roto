@@ -901,3 +901,66 @@ fn use_context() {
     let output = f.call(&mut ctx);
     assert_eq!(output, Verdict::Accept(11));
 }
+
+#[test]
+fn use_a_roto_function() {
+    let s = src!(
+        "
+        function double(x: i32) -> i32 {
+            2 * x
+        }"
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), (i32,), i32>("double").unwrap();
+    let output = f.call(&mut (), 2);
+    assert_eq!(output, 4);
+
+    let output = f.call(&mut (), 16);
+    assert_eq!(output, 32);
+}
+
+#[test]
+fn use_a_test() {
+    let s = src!(
+        "
+        function double(x: i32) -> i32 {
+            x # oops! not correct
+        }
+        
+        test check_double {
+            if double(4) != 8 {
+                reject;
+            }
+            if double(16) != 32 {
+                reject;
+            }
+            accept
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    p.run_tests(()).unwrap_err();
+
+    let s = src!(
+        "
+        function double(x: i32) -> i32 {
+            2 * x
+        }
+        
+        test check_double {
+            if double(4) != 8 {
+                reject;
+            }
+            if double(16) != 32 {
+                reject;
+            }
+            accept
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    p.run_tests(()).unwrap();
+}

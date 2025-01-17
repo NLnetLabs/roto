@@ -16,17 +16,12 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    runtime::{
-        context::ContextDescription,
-        ty::{Reflect, GLOBAL_TYPE_REGISTRY},
-        RuntimeConstant,
-    },
+    runtime::{context::ContextDescription, ty::Reflect, RuntimeConstant},
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
     IrValue, Verdict,
 };
 use check::{
-    check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
-    RotoParams, TypeMismatch,
+    check_roto_type_reflect, FunctionRetrievalError, RotoParams, TypeMismatch,
 };
 use cranelift::{
     codegen::{
@@ -1054,9 +1049,9 @@ impl Module {
         );
 
         if failures == 0 {
-            Result::Err(())
-        } else {
             Result::Ok(())
+        } else {
+            Result::Err(())
         }
     }
 
@@ -1097,9 +1092,8 @@ impl Module {
             )
         })?;
 
-        let registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
         let return_by_ref =
-            return_type_by_ref(&registry, TypeId::of::<Return>());
+            self.type_info.is_reference_type(&sig.return_type);
 
         let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {

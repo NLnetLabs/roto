@@ -26,13 +26,13 @@ impl Parser<'_, '_> {
 
         let ident = self.identifier()?;
         let params = self.params()?;
-        let block = self.block()?;
+        let body = self.block()?;
 
         Ok(FilterMap {
             filter_type,
             ident,
             params,
-            block,
+            body,
         })
     }
 

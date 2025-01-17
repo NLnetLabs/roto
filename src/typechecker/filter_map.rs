@@ -20,7 +20,7 @@ impl TypeChecker<'_> {
             filter_type,
             ident,
             params,
-            block,
+            body,
         } = filter_map;
 
         let scope = self
@@ -44,7 +44,7 @@ impl TypeChecker<'_> {
             function_return_type: Some(ty.clone()),
         };
 
-        self.block(scope, &ctx, block)?;
+        self.block(scope, &ctx, body)?;
 
         if let Type::Var(x) = self.resolve_type(&a) {
             self.unify(

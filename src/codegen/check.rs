@@ -158,18 +158,6 @@ fn check_roto_type(
     }
 }
 
-pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
-    let Some(rust_ty) = registry.get(rust_ty) else {
-        return false;
-    };
-
-    #[allow(clippy::match_like_matches_macro)]
-    match rust_ty.description {
-        TypeDescription::Verdict(_, _) => true,
-        _ => todo!(),
-    }
-}
-
 /// Parameters of a Roto function
 ///
 /// This trait allows for checking the types against Roto types and converting

@@ -31,6 +31,13 @@ fn main() -> Result<(), roto::RotoReport> {
     let res = func.call(&mut (), "1.1.1.1".parse().unwrap());
     println!("main(1.1.1.1) = {res:?}");
 
+    let is_zero = compiled
+        .get_function::<(), (IpAddr,), bool>("is_zero")
+        .unwrap();
+
+    let res = is_zero.call(&mut (), "0.0.0.0".parse().unwrap());
+    println!("is_zero(0.0.0.0) = {res:?}");
+
     println!();
     let _ = compiled.run_tests(());
 
