@@ -7,6 +7,7 @@ pub(crate) mod codegen;
 pub(crate) mod lower;
 pub(crate) mod parser;
 pub(crate) mod typechecker;
+pub(crate) mod walker;
 
 pub(crate) mod pipeline;
 pub(crate) mod runtime;

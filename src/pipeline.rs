@@ -1,6 +1,6 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use crate::{
     ast,
@@ -31,19 +31,32 @@ use crate::{
         info::TypeInfo,
         scope::ScopeGraph,
     },
+    walker::ModuleTree,
 };
 
 /// A filename with its contents
 #[derive(Clone, Debug)]
 pub struct SourceFile {
     name: String,
-    contents: String,
+    pub contents: String,
     /// The line offset that should be added to the location in error
     /// messages.
     ///
     /// This is used to add the offset of a string of source text in a test,
     /// so that Roto errors can refer to locations in Rust files accurately.
     location_offset: usize,
+}
+
+impl SourceFile {
+    pub fn read(path: &Path) -> Self {
+        let name = path.to_string_lossy().to_string();
+        let contents = std::fs::read_to_string(path).unwrap();
+        Self {
+            name,
+            contents,
+            location_offset: 0,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -70,10 +83,9 @@ pub struct Files {
 
 /// Compiler stage: Files loaded and parsed
 pub struct Parsed {
-    /// Interned strings for identifiers and such
-    files: Vec<SourceFile>,
-    trees: Vec<ast::SyntaxTree>,
-    spans: Spans,
+    pub files: Vec<SourceFile>,
+    pub modules: ModuleTree,
+    pub spans: Spans,
 }
 
 /// Compiler stage: loaded, parsed and type checked
@@ -277,52 +289,6 @@ where
     }
 }
 
-impl Files {
-    pub fn compile(
-        self,
-        runtime: Runtime,
-        pointer_bytes: u32,
-    ) -> Result<Compiled, RotoReport> {
-        let x = self.parse()?;
-        let x = x.typecheck(runtime, pointer_bytes)?;
-        Ok(x.lower().codegen())
-    }
-
-    pub fn parse(self) -> Result<Parsed, RotoReport> {
-        let mut spans = Spans::default();
-
-        let results: Vec<_> = self
-            .files
-            .iter()
-            .enumerate()
-            .map(|(i, f)| Parser::parse(i, &mut spans, &f.contents))
-            .collect();
-
-        let mut trees = Vec::new();
-        let mut errors = Vec::new();
-        for result in results {
-            match result {
-                Ok(tree) => trees.push(tree),
-                Err(err) => errors.push(RotoError::Parse(err)),
-            };
-        }
-
-        if errors.is_empty() {
-            Ok(Parsed {
-                trees,
-                spans,
-                files: self.files,
-            })
-        } else {
-            Err(RotoReport {
-                files: self.files.to_vec(),
-                errors,
-                spans,
-            })
-        }
-    }
-}
-
 impl Parsed {
     pub fn typecheck(
         self,
@@ -331,7 +297,7 @@ impl Parsed {
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
             files,
-            trees,
+            modules,
             spans,
         } = self;
 
