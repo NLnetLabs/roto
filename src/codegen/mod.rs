@@ -22,7 +22,7 @@ use crate::{
         RuntimeConstant,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue,
+    IrValue, Verdict,
 };
 use check::{
     check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
@@ -555,7 +555,7 @@ impl<'c> FuncGen<'c> {
             args.next().unwrap(),
         );
 
-        if dbg!(return_ptr) {
+        if return_ptr {
             self.def(
                 self.module.variable_map[&Var {
                     scope: self.scope,
@@ -1014,6 +1014,52 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
+    pub fn run_tests<Ctx: 'static>(
+        &mut self,
+        mut ctx: Ctx,
+    ) -> Result<(), ()> {
+        let tests: Vec<_> = self
+            .functions
+            .keys()
+            .filter(|x| x.starts_with("test#"))
+            .map(Clone::clone)
+            .collect();
+
+        let total = tests.len();
+        let total_width = total.to_string().len();
+        let mut successes = 0;
+        let mut failures = 0;
+
+        for (n, test) in tests.into_iter().enumerate() {
+            let n = n + 1;
+            let test_display = test.strip_prefix("test#").unwrap();
+            print!("Test {n:>total_width$} / {total}: {test_display}... ");
+            let test_fn = self
+                .get_function::<Ctx, (), Verdict<(), ()>>(&test)
+                .unwrap();
+
+            match test_fn.call(&mut ctx) {
+                Verdict::Accept(()) => {
+                    successes += 1;
+                    println!("\x1B[92mok\x1B[m");
+                }
+                Verdict::Reject(()) => {
+                    failures += 1;
+                    println!("\x1B[91mfail\x1B[m");
+                }
+            }
+        }
+        println!(
+            "Ran {total} tests, {successes} succeeded, {failures} failed"
+        );
+
+        if failures == 0 {
+            Result::Err(())
+        } else {
+            Result::Ok(())
+        }
+    }
+
     pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
         &mut self,
         name: &str,

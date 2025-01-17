@@ -31,5 +31,8 @@ fn main() -> Result<(), roto::RotoReport> {
     let res = func.call(&mut (), "1.1.1.1".parse().unwrap());
     println!("main(1.1.1.1) = {res:?}");
 
+    println!();
+    let _ = compiled.run_tests(());
+
     Ok(())
 }

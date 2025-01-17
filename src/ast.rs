@@ -23,6 +23,7 @@ pub enum Declaration {
     OutputStream(OutputStream),
     Record(RecordTypeDeclaration),
     Function(FunctionDeclaration),
+    Test(Test),
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +56,12 @@ pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
     pub ret: Option<Meta<Identifier>>,
+    pub body: Meta<Block>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Test {
+    pub ident: Meta<Identifier>,
     pub body: Meta<Block>,
 }
 

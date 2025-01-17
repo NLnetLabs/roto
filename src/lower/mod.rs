@@ -179,6 +179,21 @@ impl<'r> Lowerer<'r> {
                         .function(ident, params, ret, body),
                     );
                 }
+                ast::Declaration::Test(ast::Test { ident, body }) => {
+                    functions.push(
+                        Lowerer::new(
+                            type_info,
+                            runtime_functions,
+                            &Meta {
+                                node: format!("test#{}", ident).into(),
+                                id: ident.id,
+                            },
+                            label_store,
+                            runtime,
+                        )
+                        .test(ident, body),
+                    );
+                }
                 // Ignore the rest
                 _ => {}
             }
@@ -239,8 +254,6 @@ impl<'r> Lowerer<'r> {
             x if self.is_reference_type(&x) => (None, true),
             x => (Some(self.lower_type(&x)), false),
         };
-
-        dbg!(return_ptr);
 
         let ir_signature = ir::Signature {
             parameters: parameter_types
@@ -330,6 +343,45 @@ impl<'r> Lowerer<'r> {
             entry_block: label,
             blocks: self.blocks,
             public: false,
+            signature,
+            ir_signature,
+        }
+    }
+
+    fn test(
+        mut self,
+        ident: &Meta<Identifier>,
+        body: &ast::Block,
+    ) -> Function {
+        let label = self.label_store.new_label(self.function_name);
+        self.new_block(label);
+
+        let unit = Box::new(Type::Primitive(Primitive::Unit));
+
+        let return_type = Type::Verdict(unit.clone(), unit);
+
+        let signature = Signature {
+            kind: FunctionKind::Free,
+            parameter_types: Vec::new(),
+            return_type: return_type.clone(),
+        };
+
+        let ir_signature = ir::Signature {
+            parameters: Vec::new(),
+            return_ptr: true, // TODO: check this
+            return_type: None,
+        };
+
+        let last = self.block(body);
+
+        self.add(Instruction::Return(last));
+
+        Function {
+            name: format!("test#{}", ident.node).into(),
+            scope: self.function_scope,
+            entry_block: label,
+            blocks: self.blocks,
+            public: true,
             signature,
             ir_signature,
         }

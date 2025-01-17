@@ -53,7 +53,6 @@ fn accept() {
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
-    dbg!(std::mem::size_of::<Verdict<(), ()>>());
     assert_eq!(res, Verdict::Accept(()));
 }
 

@@ -115,6 +115,8 @@ pub enum Token<'s> {
     Some,
     #[token("table")]
     Table,
+    #[token("test")]
+    Test,
     #[token("through")]
     Through,
     #[token("type")]
@@ -211,6 +213,7 @@ impl Display for Token<'_> {
             Token::Rib => "rib",
             Token::Some => "some",
             Token::Table => "table",
+            Token::Test => "test",
             Token::Through => "through",
             Token::Type => "type",
             Token::UpTo => "up-to",

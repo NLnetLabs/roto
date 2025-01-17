@@ -1,12 +1,25 @@
+function is_zero(x: IpAddr) -> bool {
+    x == 0.0.0.0
+}
+
 filter-map main(x: IpAddr) {
-    define {
-        y = 0.0.0.0;
+    if is_zero(x) {
+        accept
+    } else {
+        reject
     }
-    apply {
-        if x == y {
-            accept
-        } else {
-            reject
-        }
+}
+
+test is_zero_true {
+    if is_zero(1.1.1.1) {
+        reject
     }
+    accept
+}
+
+test is_zero_false {
+    if not is_zero(0.0.0.0) {
+        reject
+    }
+    accept
 }
