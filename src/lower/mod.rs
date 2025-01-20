@@ -274,18 +274,16 @@ impl<'r> Lowerer<'r> {
         };
 
         let (return_type, return_ptr) = match return_type {
-            x if self.type_info.size_of(x, self.runtime) == 0 => {
-                (None, false)
-            }
             x if self.is_reference_type(x) => (None, true),
-            x => (Some(self.lower_type(x)), false),
+            x => (self.lower_type(x), false),
         };
 
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| {
-                    (def.to_scope_and_name().1, self.lower_type(ty))
+                .filter_map(|(def, ty)| {
+                    let ty = self.lower_type(ty)?;
+                    Some((def.to_scope_and_name().1, ty))
                 })
                 .collect(),
             return_ptr,
@@ -327,9 +325,8 @@ impl<'r> Lowerer<'r> {
                 let def = self.type_info.resolved_name(ident);
                 let (scope, name) = def.to_scope_and_name();
                 let ty = self.type_info.type_of(ident);
-                if self.type_info.size_of(&ty, self.runtime) > 0 {
+                if let Some(ty) = self.lower_type(&ty) {
                     let val = val.unwrap();
-                    let ty = self.lower_type(&ty);
                     self.add(Instruction::Assign {
                         to: Var {
                             scope,
@@ -477,15 +474,9 @@ impl<'r> Lowerer<'r> {
                             }
                         }
 
-                        let to = if self.type_info.size_of(&ret, self.runtime)
-                            > 0
-                        {
-                            let ty = self.type_info.type_of(id);
-                            let ty = self.lower_type(&ty);
-                            Some((self.new_tmp(), ty))
-                        } else {
-                            None
-                        };
+                        let to = self
+                            .lower_type(&ret)
+                            .map(|ty| (self.new_tmp(), ty));
 
                         let ctx = Var {
                             scope: self.function_scope,
@@ -633,11 +624,7 @@ impl<'r> Lowerer<'r> {
                         **field,
                         self.runtime,
                     );
-                    if self.type_info.size_of(&ty, self.runtime) > 0 {
-                        Some(self.read_field(op, offset, &ty))
-                    } else {
-                        None
-                    }
+                    self.read_field(op, offset, &ty)
                 }
             }
             ast::Expr::Var(x) => {
@@ -650,12 +637,12 @@ impl<'r> Lowerer<'r> {
                             scope: self.function_scope,
                             kind: VarKind::Context,
                         };
-                        Some(self.read_field(var.into(), offset as u32, &ty))
+                        self.read_field(var.into(), offset as u32, &ty)
                     }
                     DefinitionRef::Constant(ident) => {
                         let var = self.new_tmp();
                         let ty = self.type_info.type_of(id);
-                        let ty = self.lower_type(&ty);
+                        let ty = self.lower_type(&ty)?;
                         self.add(Instruction::LoadConstant {
                             to: var.clone(),
                             name: ident,
@@ -933,7 +920,7 @@ impl<'r> Lowerer<'r> {
                         right,
                     }),
                     (ast::BinOp::Div, _, ty) => {
-                        let ty = self.lower_type(&ty);
+                        let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Div {
                             to: place.clone(),
                             ty,
@@ -979,7 +966,7 @@ impl<'r> Lowerer<'r> {
                 self.new_block(lbl_then);
                 if let Some(op) = self.block(if_true) {
                     let ty = self.type_info.type_of(if_true);
-                    let ty = self.lower_type(&ty);
+                    let ty = self.lower_type(&ty)?;
                     self.add(Instruction::Assign {
                         to: res.clone(),
                         val: op,
@@ -996,7 +983,7 @@ impl<'r> Lowerer<'r> {
                     self.new_block(lbl_else);
                     if let Some(op) = self.block(if_false) {
                         let ty = self.type_info.type_of(if_false);
-                        let ty = self.lower_type(&ty);
+                        let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Assign {
                             to: res.clone(),
                             val: op,
@@ -1113,7 +1100,7 @@ impl<'r> Lowerer<'r> {
         from: Operand,
         offset: u32,
         ty: &Type,
-    ) -> Operand {
+    ) -> Option<Operand> {
         let ty = self.type_info.resolve(ty);
         let to = self.new_tmp();
 
@@ -1126,13 +1113,14 @@ impl<'r> Lowerer<'r> {
         } else {
             let tmp = self.new_tmp();
 
+            let ty = self.lower_type(&ty)?;
+
             self.add(Instruction::Offset {
                 to: tmp.clone(),
                 from,
                 offset,
             });
 
-            let ty = self.lower_type(&ty);
             self.add(Instruction::Read {
                 to: to.clone(),
                 from: tmp.into(),
@@ -1140,18 +1128,19 @@ impl<'r> Lowerer<'r> {
             });
         }
 
-        to.into()
+        Some(to.into())
     }
 
     fn is_reference_type(&mut self, ty: &Type) -> bool {
-        self.type_info.is_reference_type(ty)
+        self.type_info.is_reference_type(ty, self.runtime)
     }
 
-    // TODO: This should return Option<IrType> so that zero-sized
-    // types can be put in here.
-    fn lower_type(&mut self, ty: &Type) -> IrType {
+    fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
         let ty = self.type_info.resolve(ty);
-        match ty {
+        if self.type_info.size_of(&ty, self.runtime) == 0 {
+            return None;
+        }
+        Some(match ty {
             Type::Primitive(Primitive::Bool) => IrType::Bool,
             Type::Primitive(Primitive::U8) => IrType::U8,
             Type::Primitive(Primitive::U16) => IrType::U16,
@@ -1162,12 +1151,11 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::Primitive(Primitive::Asn) => IrType::Asn,
-            Type::Primitive(Primitive::IpAddr) => IrType::Pointer,
             Type::IntVar(_) => IrType::I32,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => panic!("could not lower: {ty:?}"),
-        }
+        })
     }
 
     fn call_runtime_function(
@@ -1189,9 +1177,9 @@ impl<'r> Lowerer<'r> {
         let mut params = Vec::new();
         params.push(IrType::Pointer);
 
-        for ty in parameter_types {
-            params.push(self.lower_type(ty))
-        }
+        params.extend(
+            parameter_types.iter().filter_map(|ty| self.lower_type(ty)),
+        );
 
         let args = std::iter::once(Operand::Place(out_ptr.clone()))
             .chain(args)
@@ -1214,10 +1202,8 @@ impl<'r> Lowerer<'r> {
 
         if self.is_reference_type(return_type) {
             Some(out_ptr.into())
-        } else if size > 0 {
-            Some(self.read_field(out_ptr.into(), 0, return_type))
         } else {
-            None
+            self.read_field(out_ptr.into(), 0, return_type)
         }
     }
 

@@ -213,12 +213,13 @@ impl Lowerer<'_> {
             let ty = self.type_info.type_of(&arm.body);
             let val = self.block(&arm.body);
             if let Some(val) = val {
-                let ty = self.lower_type(&ty);
-                self.add(Instruction::Assign {
-                    to: out.clone(),
-                    val,
-                    ty,
-                });
+                if let Some(ty) = self.lower_type(&ty) {
+                    self.add(Instruction::Assign {
+                        to: out.clone(),
+                        val,
+                        ty,
+                    });
+                }
                 any_assigned = true;
             }
             self.add(Instruction::Jump(continue_lbl));
@@ -267,15 +268,17 @@ impl Lowerer<'_> {
                     1 + self.type_info.padding_of(&ty, 1, self.runtime);
                 let val =
                     self.read_field(examinee.clone().into(), offset, &ty);
-                let ty = self.lower_type(&ty);
-                self.add(Instruction::Assign {
-                    to: Var {
-                        scope,
-                        kind: VarKind::Explicit(ident),
-                    },
-                    val,
-                    ty,
-                });
+                if let Some(val) = val {
+                    let ty = self.lower_type(&ty).unwrap();
+                    self.add(Instruction::Assign {
+                        to: Var {
+                            scope,
+                            kind: VarKind::Explicit(ident),
+                        },
+                        val,
+                        ty,
+                    });
+                }
             }
 
             let ident = Identifier::from(format!("guard_{}", i + 1));

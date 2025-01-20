@@ -96,8 +96,11 @@ impl TypeInfo {
         self.function_scopes[&x.into()]
     }
 
-    pub fn is_reference_type(&mut self, ty: &Type) -> bool {
+    pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
         let ty = self.resolve(ty);
+        if self.size_of(&ty, rt) == 0 {
+            return false;
+        }
         matches!(
             ty,
             Type::Record(..)

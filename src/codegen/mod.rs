@@ -172,6 +172,7 @@ call_impl!(A, B, C, D, E, F, G);
 pub struct FunctionInfo {
     id: FuncId,
     signature: types::Signature,
+    return_by_ref: bool,
 }
 
 struct ModuleBuilder {
@@ -354,6 +355,7 @@ impl ModuleBuilder {
 
         let mut sig = self.inner.make_signature();
 
+        // This is the parameter for the context
         sig.params
             .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
 
@@ -383,6 +385,7 @@ impl ModuleBuilder {
             name.to_string(),
             FunctionInfo {
                 id: func_id,
+                return_by_ref: ir_signature.return_ptr,
                 signature: signature.clone(),
             },
         );
@@ -1092,13 +1095,10 @@ impl Module {
             )
         })?;
 
-        let return_by_ref =
-            self.type_info.is_reference_type(&sig.return_type);
-
         let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
-            return_by_ref,
+            return_by_ref: function_info.return_by_ref,
             _module: self.inner.clone(),
             _ty: PhantomData,
         })
