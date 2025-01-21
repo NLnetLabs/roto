@@ -1,4 +1,7 @@
-use std::{net::IpAddr, sync::atomic::AtomicUsize};
+use std::{
+    net::IpAddr,
+    sync::{atomic::AtomicUsize, Arc},
+};
 
 use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_function, roto_static_method};
@@ -53,7 +56,6 @@ fn accept() {
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
-    dbg!(std::mem::size_of::<Verdict<(), ()>>());
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -901,4 +903,211 @@ fn use_context() {
     let mut ctx = Ctx { foo: 10, bar: true };
     let output = f.call(&mut ctx);
     assert_eq!(output, Verdict::Accept(11));
+}
+
+#[test]
+fn string() {
+    let s = src!(
+        r#"
+        filter-map main() {
+            accept "hello" 
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, Verdict::Accept("hello".into()));
+}
+
+#[test]
+fn string_append() {
+    let s = src!(
+        r#"
+        filter-map main(name: String) {
+            accept "Hello ".append(name).append("!")
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "Martin".into());
+    assert_eq!(res, Verdict::Accept("Hello Martin!".into()));
+}
+
+#[test]
+fn string_plus_operator() {
+    let s = src!(
+        r#"
+        filter-map main(name: String) {
+            accept "Hello " + name + "!"
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "Martin".into());
+    assert_eq!(res, Verdict::Accept("Hello Martin!".into()));
+}
+
+#[test]
+fn string_contains() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            if "incomprehensibilities".contains(s) {
+                accept
+            } else {
+                reject
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "incompre".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "hensi".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "bilities".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "nananana".into());
+    assert_eq!(res, Verdict::Reject(()));
+}
+
+#[test]
+fn string_starts_with() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            if "incomprehensibilities".starts_with(s) {
+                accept
+            } else {
+                reject
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "incompre".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "hensi".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "bilities".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "nananana".into());
+    assert_eq!(res, Verdict::Reject(()));
+}
+
+#[test]
+fn string_ends_with() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            if "incomprehensibilities".ends_with(s) {
+                accept
+            } else {
+                reject
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "incompre".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "hensi".into());
+    assert_eq!(res, Verdict::Reject(()));
+
+    let res = f.call(&mut (), "bilities".into());
+    assert_eq!(res, Verdict::Accept(()));
+
+    let res = f.call(&mut (), "nananana".into());
+    assert_eq!(res, Verdict::Reject(()));
+}
+
+#[test]
+fn string_to_lowercase_and_uppercase() {
+    let s = src!(
+        r#"
+        filter-map main(lower: bool, s: String) {
+            if lower { 
+                accept s.to_lowercase()
+            } else {
+                accept s.to_uppercase()
+            }
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (bool, Arc<str>), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), true, "WHISPER THIS!".into());
+    assert_eq!(res, Verdict::Accept("whisper this!".into()));
+
+    let res = f.call(&mut (), false, "now shout this!".into());
+    assert_eq!(res, Verdict::Accept("NOW SHOUT THIS!".into()));
+}
+
+#[test]
+fn string_repeat() {
+    let s = src!(
+        r#"
+        filter-map main(s: String) {
+            let exclamation = (s + "!").to_uppercase();
+            accept (exclamation + " ").repeat(4) + exclamation 
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "boo".into());
+    assert_eq!(res, Verdict::Accept("BOO! BOO! BOO! BOO! BOO!".into()));
 }

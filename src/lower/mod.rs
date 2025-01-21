@@ -240,8 +240,6 @@ impl<'r> Lowerer<'r> {
             x => (Some(self.lower_type(&x)), false),
         };
 
-        dbg!(return_ptr);
-
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
@@ -773,6 +771,54 @@ impl<'r> Lowerer<'r> {
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
                     (
+                        ast::BinOp::Add,
+                        _,
+                        Type::Primitive(Primitive::String),
+                    ) => {
+                        let function = self.type_info.function(id);
+                        let FunctionDefinition::Runtime(runtime_func) =
+                            function.definition.clone()
+                        else {
+                            panic!()
+                        };
+
+                        let size = self.type_info.size_of(
+                            &Type::Primitive(Primitive::String),
+                            self.runtime,
+                        );
+                        let alignment = self.type_info.alignment_of(
+                            &Type::Primitive(Primitive::String),
+                            self.runtime,
+                        );
+                        let align_shift = alignment.ilog2() as u8;
+                        self.add(Instruction::Alloc {
+                            to: place.clone(),
+                            size,
+                            align_shift,
+                        });
+
+                        let ident = Identifier::from("append");
+                        let ir_func = IrFunction {
+                            name: ident,
+                            ptr: runtime_func.description.pointer(),
+                            params: vec![
+                                IrType::Pointer,
+                                IrType::Pointer,
+                                IrType::Pointer,
+                            ],
+                            ret: None,
+                        };
+
+                        self.runtime_functions
+                            .insert(runtime_func.id, ir_func);
+
+                        self.add(Instruction::CallRuntime {
+                            to: None,
+                            func: runtime_func,
+                            args: vec![place.clone().into(), left, right],
+                        });
+                    }
+                    (
                         ast::BinOp::Div,
                         _,
                         Type::Primitive(Primitive::IpAddr),
@@ -1062,7 +1108,27 @@ impl<'r> Lowerer<'r> {
     /// Lower a literal
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
-            Literal::String(_) => todo!(),
+            Literal::String(s) => {
+                let size = std::mem::size_of::<IpAddr>() as u32;
+                let align = std::mem::align_of::<IpAddr>();
+                let align_shift = align.ilog2() as u8;
+
+                let to = self.new_tmp();
+
+                self.add(Instruction::Alloc {
+                    to: to.clone(),
+                    size,
+                    align_shift,
+                });
+
+                self.add(Instruction::InitString {
+                    to: to.clone(),
+                    string: s.clone(),
+                    init_func: self.runtime.string_init_function,
+                });
+
+                to.into()
+            }
             Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => {
                 let to = self.new_tmp();
@@ -1088,6 +1154,9 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::U32) => {
                         IrValue::U32(*x as u32)
                     }
+                    Type::Primitive(Primitive::U64) => {
+                        IrValue::U64(*x as u64)
+                    }
                     Type::Primitive(Primitive::I8) => IrValue::I8(*x as i8),
                     Type::Primitive(Primitive::I16) => {
                         IrValue::I16(*x as i16)
@@ -1095,6 +1164,7 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::I32) => {
                         IrValue::I32(*x as i32)
                     }
+                    Type::Primitive(Primitive::I64) => IrValue::I64(*x),
                     Type::IntVar(_) => IrValue::I32(*x as i32),
                     _ => ice!("should be a type error"),
                 }
@@ -1180,7 +1250,9 @@ impl<'r> Lowerer<'r> {
                 | Type::NamedRecord(..)
                 | Type::Enum(..)
                 | Type::Verdict(..)
-                | Type::Primitive(Primitive::IpAddr | Primitive::Prefix)
+                | Type::Primitive(
+                    Primitive::IpAddr | Primitive::Prefix | Primitive::String
+                )
                 | Type::BuiltIn(..)
         )
     }
@@ -1199,6 +1271,7 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::Primitive(Primitive::Asn) => IrType::Asn,
             Type::Primitive(Primitive::IpAddr) => IrType::Pointer,
+            Type::Primitive(Primitive::String) => IrType::Pointer,
             Type::IntVar(_) => IrType::I32,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
