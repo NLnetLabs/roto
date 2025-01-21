@@ -38,14 +38,11 @@ impl TypeChecker<'_> {
     ) -> TypeResult<bool> {
         let mut diverged = false;
 
-        for expr in &block.exprs {
+        for stmt in &block.stmts {
             if diverged {
-                return Err(self.error_unreachable_expression(expr));
+                return Err(self.error_unreachable_expression(stmt));
             }
-
-            let var = self.fresh_var();
-            let ctx = ctx.with_type(var);
-            diverged |= self.expr(scope, &ctx, expr)?;
+            diverged |= self.stmt(scope, ctx, stmt)?;
         }
 
         let Some(expr) = &block.last else {
@@ -75,6 +72,25 @@ impl TypeChecker<'_> {
         self.type_info.diverges.insert(block.id, diverged);
 
         Ok(diverged)
+    }
+
+    pub fn stmt(
+        &mut self,
+        scope: LocalScopeRef,
+        ctx: &Context,
+        stmt: &Meta<ast::Stmt>,
+    ) -> TypeResult<bool> {
+        let var = self.fresh_var();
+        let ctx = ctx.with_type(&var);
+        match &stmt.node {
+            ast::Stmt::Let(ident, expr) => {
+                let diverges = self.expr(scope, &ctx, expr)?;
+                let ty = self.resolve_type(&var);
+                self.insert_var(scope, ident.clone(), ty)?;
+                Ok(diverges)
+            }
+            ast::Stmt::Expr(expr) => self.expr(scope, &ctx, expr),
+        }
     }
 
     pub fn expr(
@@ -398,10 +414,17 @@ impl TypeChecker<'_> {
                     c,
                 )?;
 
+                let idx = self.if_else_counter;
+                self.if_else_counter += 1;
+
                 if let Some(e) = e {
                     let mut diverges = false;
-                    diverges |= self.block(scope, ctx, t)?;
-                    diverges |= self.block(scope, ctx, e)?;
+                    let then_scope =
+                        self.scope_graph.wrap(scope, ScopeType::Then(idx));
+                    diverges |= self.block(then_scope, ctx, t)?;
+                    let else_scope =
+                        self.scope_graph.wrap(scope, ScopeType::Else(idx));
+                    diverges |= self.block(else_scope, ctx, e)?;
 
                     // Record divergence so that we can omit the
                     // block after the if-else while lowering
@@ -417,8 +440,10 @@ impl TypeChecker<'_> {
 
                     // An if without else does not always diverge, because
                     // the condition could be false
+                    let then_scope =
+                        self.scope_graph.wrap(scope, ScopeType::Then(idx));
                     let _ = self.block(
-                        scope,
+                        then_scope,
                         &ctx.with_type(Type::Primitive(Primitive::Unit)),
                         t,
                     )?;

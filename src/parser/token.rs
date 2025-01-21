@@ -67,12 +67,8 @@ pub enum Token<'s> {
     // === Keywords ===
     #[token("accept")]
     Accept,
-    #[token("apply")]
-    Apply,
     #[token("contains")]
     Contains,
-    #[token("define")]
-    Define,
     #[token("else")]
     Else,
     #[token("exact")]
@@ -89,6 +85,8 @@ pub enum Token<'s> {
     If,
     #[token("in")]
     In,
+    #[token("let")]
+    Let,
     #[token("longer")]
     Longer,
     #[token("match")]
@@ -189,9 +187,7 @@ impl Display for Token<'_> {
             Token::AngleLeft => "<",
             Token::AngleRight => ">",
             Token::Accept => "accept",
-            Token::Apply => "apply",
             Token::Contains => "contains",
-            Token::Define => "define",
             Token::Else => "else",
             Token::Exact => "exact",
             Token::FilterMap => "filter-map",
@@ -200,6 +196,7 @@ impl Display for Token<'_> {
             Token::Import => "import",
             Token::If => "if",
             Token::In => "in",
+            Token::Let => "let",
             Token::Longer => "longer",
             Token::Match => "match",
             Token::Matching => "matching",

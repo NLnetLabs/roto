@@ -45,9 +45,7 @@ fn accept() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                accept
-            }
+            accept
         }
     "
     );
@@ -66,9 +64,7 @@ fn reject() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                reject
-            }
+            reject
         }
     "
     );
@@ -87,12 +83,10 @@ fn equal_to_10() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply {
-                if x == 10 {
-                    accept
-                } else {
-                    reject
-                }
+            if x == 10 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -119,12 +113,10 @@ fn equal_to_10_with_function() {
         }
         
         filter-map main(x: i32) {
-            apply {
-                if is_10(x) {
-                    accept
-                } else {
-                    reject
-                }
+            if is_10(x) {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -155,14 +147,12 @@ fn equal_to_10_with_two_functions() {
         }
 
         filter-map main(x: u32) {
-            apply {
-                if is_10(x) {
-                    accept
-                } else if equals(x, 20) {
-                    accept
-                } else {
-                    reject
-                }
+            if is_10(x) {
+                accept
+            } else if equals(x, 20) {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -184,12 +174,10 @@ fn negation() {
     let s = src!(
         "
         filter-map main(x: i32) {
-            apply {
-                if not (x == 10) {
-                    accept
-                } else {
-                    reject
-                }
+            if not (x == 10) {
+                accept
+            } else {
+                reject
             }
         } 
     "
@@ -216,16 +204,14 @@ fn a_bunch_of_comparisons() {
     let s = src!(
         "
         filter-map main(x: i32) {
-            apply {
-                if (
-                    (x > 10 && x < 20)
-                    || (x >= 30 && x <= 40)
-                    || x == 55
-                ){
-                    accept
-                } else {
-                    reject
-                }
+            if (
+                (x > 10 && x < 20)
+                || (x >= 30 && x <= 40)
+                || x == 55
+            ){
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -257,15 +243,11 @@ fn record() {
         type Foo { a: i32, b: i32 }
 
         filter-map main(x: i32) {
-            define {
-                foo = Foo { a: x, b: 20 };
-            }
-            apply {
-                if foo.a == foo.b {
-                    accept
-                } else {
-                    reject
-                }
+            let foo = Foo { a: x, b: 20 };
+            if foo.a == foo.b {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -294,17 +276,13 @@ fn record_with_fields_flipped() {
         type Foo { a: i32, b: i32 }
 
         filter-map main(x: i32) {
-            define {
-                # These are flipped, to ensure that the order in which
-                # the fields are given doesn't matter:
-                foo = Foo { b: 20, a: x };
-            }
-            apply {
-                if foo.a == foo.b {
-                    accept
-                } else {
-                    reject
-                }
+            # These are flipped, to ensure that the order in which
+            # the fields are given doesn't matter:
+            let foo = Foo { b: 20, a: x };
+            if foo.a == foo.b {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -335,16 +313,12 @@ fn nested_record() {
         type Bar { a: i32, b: i32 }
 
         filter-map main(x: i32) {
-            define {
-                bar = Bar { a: 20, b: x };
-                foo = Foo { x: bar, y: bar };
-            }
-            apply {
-                if foo.x.a == foo.y.b {
-                    accept
-                } else {
-                    reject
-                }
+            let bar = Bar { a: 20, b: x };
+            let foo = Foo { x: bar, y: bar };
+            if foo.x.a == foo.y.b {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -374,15 +348,11 @@ fn misaligned_fields() {
         type Foo { a: i16, b: i32 }
 
         filter-map main(x: i32) {
-            define {
-                foo = Foo { a: 10, b: x };
-            }
-            apply {
-                if foo.b == 20 {
-                    accept
-                } else {
-                    reject
-                }
+            let foo = Foo { a: 10, b: x };
+            if foo.b == 20 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -409,19 +379,14 @@ fn enum_match() {
     let s = src!(
         "
         filter-map main(r: bool) { 
-            define {
-                x = if r {
-                    Afi.IpV4
-                } else {
-                    Afi.IpV6
-                };
-            }
-
-            apply {
-                match x {
-                    IpV4 -> accept,
-                    _ -> reject,
-                }
+            let x = if r {
+                Afi.IpV4
+            } else {
+                Afi.IpV6
+            };
+            match x {
+                IpV4 -> accept,
+                _ -> reject,
             }
         }
     "
@@ -441,12 +406,10 @@ fn arithmetic() {
     let s = src!(
         "
         filter-map main(x: i32) {
-            apply {
-                if x + 10 * 20 < 250 {
-                    accept
-                } else {
-                    reject
-                }
+            if x + 10 * 20 < 250 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -472,12 +435,10 @@ fn call_runtime_function() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply {
-                if pow(x, 2) > 100 {
-                    accept
-                } else {
-                    reject
-                }
+            if pow(x, 2) > 100 {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -501,12 +462,10 @@ fn call_runtime_method() {
     let s = src!(
         "
         filter-map main(x: u32) {
-            apply {
-                if x.is_even() {
-                    accept
-                } else {
-                    reject
-                }
+            if x.is_even() {
+                accept
+            } else {
+                reject
             }
         }
     "
@@ -530,9 +489,7 @@ fn int_var() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                accept 32
-            }
+            accept 32
         }
     "
     );
@@ -563,10 +520,8 @@ fn issue_52() {
     let s = src!(
         "
         filter-map main(foo: Foo) {
-            apply {
-                Foo.bar(1);
-                accept
-            }
+            Foo.bar(1);
+            accept
         }
     "
     );
@@ -596,12 +551,10 @@ fn asn() {
     let s = src!(
         "
         filter-map main(x: Asn) {
-            apply {
-                if x == AS1000 {
-                    accept x
-                } else {
-                    reject x
-                }
+            if x == AS1000 {
+                accept x
+            } else {
+                reject x
             }
         }
     "
@@ -627,9 +580,7 @@ fn mismatched_types() {
     let s = src!(
         "
         filter-map main(x: i32) {
-            apply {
-                accept x
-            }
+            accept x
         }
     "
     );
@@ -649,12 +600,10 @@ fn multiply() {
     let s = src!(
         "
         filter-map main(x: u8) {
-            apply {
-                if x > 10 {
-                    accept 2 * x
-                } else {
-                    reject
-                }
+            if x > 10 {
+                accept 2 * x
+            } else {
+                reject
             }
         }
     "
@@ -674,7 +623,7 @@ fn ip_output() {
     let s = src!(
         "
         filter-map main() {
-            apply { accept 1.2.3.4 }
+            accept 1.2.3.4
         }
     "
     );
@@ -694,7 +643,7 @@ fn ip_passthrough() {
     let s = src!(
         "
         filter-map main(x: IpAddr) {
-            apply { accept x }
+            accept x
         }
     "
     );
@@ -714,14 +663,12 @@ fn ipv4_compare() {
     let s = src!(
         "
         filter-map main(x: IpAddr) {
-            apply { 
-                if x == 0.0.0.0 {
-                    accept x
-                } else if x == 192.168.0.0 {
-                    accept x
-                } else {
-                    reject x
-                }
+            if x == 0.0.0.0 {
+                accept x
+            } else if x == 192.168.0.0 {
+                accept x
+            } else {
+                reject x
             }
         }
     "
@@ -753,16 +700,14 @@ fn ipv6_compare() {
     let s = src!(
         "
         filter-map main(x: IpAddr) {
-            apply { 
-                if x == :: {
-                    accept x
-                } else if x == 192.168.0.0 {
-                    accept x
-                } else if x == ::1 {
-                    accept x
-                } else {
-                    reject x
-                }
+            if x == :: {
+                accept x
+            } else if x == 192.168.0.0 {
+                accept x
+            } else if x == ::1 {
+                accept x
+            } else {
+                reject x
             }
         }
     "
@@ -795,9 +740,7 @@ fn construct_prefix() {
     let s = src!(
         "
         filter-map main() {
-            apply { 
-                accept 192.168.0.0 / 16
-            }
+            accept 192.168.0.0 / 16
         }
     "
     );
@@ -821,9 +764,7 @@ fn function_returning_unit() {
     let s = src!(
         "
         filter-map main() {
-            apply { 
-                accept unit_unit()
-            }
+            accept unit_unit()
         }
     "
     );
@@ -874,12 +815,10 @@ fn arc_type() {
     let s = src!(
         "
         filter-map main(choose: bool, x: CloneDrop, y: CloneDrop) {
-            apply { 
-                if choose {
-                    accept x
-                } else {
-                    accept y
-                }
+            if choose {
+                accept x
+            } else {
+                accept y
             }
         }
     "
@@ -912,15 +851,11 @@ fn use_constant() {
     let s = src!(
         "
         filter-map main() {
-            define {
-                safi = 127.0.0.1;
+            let safi = 127.0.0.1;
+            if safi == LOCALHOSTV4 {
+                reject
             }
-            apply {
-                if safi == LOCALHOSTV4 {
-                    reject
-                }
-                accept
-            }
+            accept
         }"
     );
 
@@ -944,13 +879,11 @@ fn use_context() {
     let s = src!(
         "
         filter-map main() {
-            apply {
-                if bar {
-                    accept foo + 1
-                } else {
-                    accept foo
-                } 
-            }
+            if bar {
+                accept foo + 1
+            } else {
+                accept foo
+            } 
         }"
     );
 

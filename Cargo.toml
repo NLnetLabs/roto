@@ -1,6 +1,6 @@
 [package]
 name = "roto"
-version.workspace = true 
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 rust-version.workspace = true
@@ -38,6 +38,7 @@ rev = "1af294ea2d6c18c5a8fa9b4f272398b7c98e0c48"
 [dev-dependencies]
 bytes = "1"
 routecore = { version = "0.5", features = ["bgp", "bmp", "serde"] }
+tabled = { version = "0.17.0", default-features = false, features = ["std"] }
 
 [profile.profiling]
 inherits = "release"

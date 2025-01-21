@@ -51,6 +51,7 @@ pub struct TypeChecker<'s> {
     type_info: TypeInfo,
     scope_graph: &'s mut ScopeGraph,
     match_counter: usize,
+    if_else_counter: usize,
 }
 
 pub type TypeResult<T> = Result<T, TypeError>;
@@ -98,6 +99,7 @@ impl TypeChecker<'_> {
             type_info: TypeInfo::new(pointer_bytes),
             scope_graph,
             match_counter: 0,
+            if_else_counter: 0,
         };
 
         let root_scope = checker.scope_graph.root();
