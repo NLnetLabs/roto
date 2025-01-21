@@ -29,13 +29,15 @@ pub fn roto_context(item: TokenStream) -> TokenStream {
             let offset = quote!(std::mem::offset_of!(Self, #field_name));
             let type_name = quote!(std::any::type_name::<#field_ty>());
             let type_id = quote!(std::any::TypeId::of::<#field_ty>());
+            let docstring = gather_docstring(&f.attrs);
 
             quote!(
                 roto::ContextField {
                     name: stringify!(#field_name),
                     offset: #offset,
                     type_name: #type_name,
-                    type_id: #type_id
+                    type_id: #type_id,
+                    docstring: String::from(#docstring),
                 }
             )
         })
@@ -191,17 +193,10 @@ pub fn roto_static_method(
     TokenStream::from(expanded)
 }
 
-fn generate_function(item: syn::ItemFn) -> Intermediate {
-    let syn::ItemFn {
-        attrs,
-        vis,
-        sig,
-        block: _,
-    } = item.clone();
-
+fn gather_docstring(attrs: &[syn::Attribute]) -> String {
     let mut docstring = String::new();
 
-    for attr in &attrs {
+    for attr in attrs {
         if attr.path().is_ident("doc") {
             let value = match &attr.meta {
                 syn::Meta::NameValue(name_value) => &name_value.value,
@@ -223,6 +218,19 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
             docstring.push('\n');
         }
     }
+
+    docstring
+}
+
+fn generate_function(item: syn::ItemFn) -> Intermediate {
+    let syn::ItemFn {
+        attrs,
+        vis,
+        sig,
+        block: _,
+    } = item.clone();
+
+    let docstring = gather_docstring(&attrs);
 
     assert!(sig.unsafety.is_none());
     assert!(sig.variadic.is_none());
@@ -266,7 +274,7 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         #vis extern "C" fn #ident #generics ( out: *mut #ret, #(#inputs,)* ) {
             #item
 
-            unsafe { *out = #ident(#(#args),*) };
+            unsafe { std::ptr::write(out, #ident(#(#args),*)) };
         }
     };
 
