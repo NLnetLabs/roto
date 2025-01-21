@@ -910,9 +910,7 @@ fn string() {
     let s = src!(
         r#"
         filter-map main() {
-            apply {
-                accept "hello" 
-            }
+            accept "hello" 
         }
     "#
     );
@@ -932,9 +930,7 @@ fn string_append() {
     let s = src!(
         r#"
         filter-map main(name: String) {
-            apply {
-                accept "Hello ".append(name).append("!")
-            }
+            accept "Hello ".append(name).append("!")
         }
     "#
     );
@@ -954,9 +950,7 @@ fn string_plus_operator() {
     let s = src!(
         r#"
         filter-map main(name: String) {
-            apply {
-                accept "Hello " + name + "!"
-            }
+            accept "Hello " + name + "!"
         }
     "#
     );
@@ -976,12 +970,10 @@ fn string_contains() {
     let s = src!(
         r#"
         filter-map main(s: String) {
-            apply {
-                if "incomprehensibilities".contains(s) {
-                    accept
-                } else {
-                    reject
-                }
+            if "incomprehensibilities".contains(s) {
+                accept
+            } else {
+                reject
             }
         }
     "#
@@ -1011,12 +1003,10 @@ fn string_starts_with() {
     let s = src!(
         r#"
         filter-map main(s: String) {
-            apply {
-                if "incomprehensibilities".starts_with(s) {
-                    accept
-                } else {
-                    reject
-                }
+            if "incomprehensibilities".starts_with(s) {
+                accept
+            } else {
+                reject
             }
         }
     "#
@@ -1046,12 +1036,10 @@ fn string_ends_with() {
     let s = src!(
         r#"
         filter-map main(s: String) {
-            apply {
-                if "incomprehensibilities".ends_with(s) {
-                    accept
-                } else {
-                    reject
-                }
+            if "incomprehensibilities".ends_with(s) {
+                accept
+            } else {
+                reject
             }
         }
     "#
@@ -1081,12 +1069,10 @@ fn string_to_lowercase_and_uppercase() {
     let s = src!(
         r#"
         filter-map main(lower: bool, s: String) {
-            apply {
-                if lower { 
-                    accept s.to_lowercase()
-                } else {
-                    accept s.to_uppercase()
-                }
+            if lower { 
+                accept s.to_lowercase()
+            } else {
+                accept s.to_uppercase()
             }
         }
     "#
@@ -1110,12 +1096,8 @@ fn string_repeat() {
     let s = src!(
         r#"
         filter-map main(s: String) {
-            define {
-                exclamation = (s + "!").to_uppercase();
-            }
-            apply {
-                accept (exclamation + " ").repeat(4) + exclamation 
-            }
+            let exclamation = (s + "!").to_uppercase();
+            accept (exclamation + " ").repeat(4) + exclamation 
         }
     "#
     );
