@@ -160,23 +160,31 @@ impl<'r> Lowerer<'r> {
                             .filter_map(x),
                         );
                     }
-                    ast::Declaration::Function(
-                        ast::FunctionDeclaration {
-                            ident,
-                            params,
-                            body,
-                            ret,
-                        },
-                    ) => {
+                    ast::Declaration::Function(x) => {
                         functions.push(
                             Lowerer::new(
                                 type_info,
                                 runtime_functions,
-                                ident,
+                                &x.ident,
                                 label_store,
                                 runtime,
                             )
-                            .function(ident, params, ret, body),
+                            .function(x),
+                        );
+                    }
+                    ast::Declaration::Test(x) => {
+                        functions.push(
+                            Lowerer::new(
+                                type_info,
+                                runtime_functions,
+                                &Meta {
+                                    node: format!("test#{}", x.ident).into(),
+                                    id: x.ident.id,
+                                },
+                                label_store,
+                                runtime,
+                            )
+                            .test(x),
                         );
                     }
                     // Ignore the rest
@@ -184,30 +192,70 @@ impl<'r> Lowerer<'r> {
                 }
             }
         }
-
         functions
     }
 
     /// Lower a filter-map
-    fn filter_map(mut self, fm: &ast::FilterMap) -> Function {
+    fn filter_map(self, fm: &ast::FilterMap) -> Function {
         let ast::FilterMap {
             ident,
-            block,
+            body,
             params,
             ..
         } = fm;
 
+        let return_type = self.type_info.type_of(body);
+        self.function_like(ident, params, &return_type, body)
+    }
+
+    fn function(self, function: &ast::FunctionDeclaration) -> Function {
+        let name = self.type_info.resolved_name(&function.ident);
+        let dec = self.type_info.scope_graph.get_declaration(name);
+
+        let DeclarationKind::Function(_, ty) = dec.kind else {
+            unreachable!();
+        };
+
+        let Type::Function(_, ret) = self.type_info.resolve(&ty) else {
+            unreachable!();
+        };
+
+        self.function_like(
+            &function.ident,
+            &function.params,
+            &ret,
+            &function.body,
+        )
+    }
+
+    fn test(self, test: &ast::Test) -> Function {
+        let ident = Meta {
+            node: format!("test#{}", *test.ident).into(),
+            id: test.ident.id,
+        };
+        let unit = Box::new(Type::Primitive(Primitive::Unit));
+        let return_type = Type::Verdict(unit.clone(), unit);
+        let params = ast::Params(Vec::new());
+        self.function_like(&ident, &params, &return_type, &test.body)
+    }
+
+    /// Lower a function-like construct (i.e. a function, filter-map or test)
+    fn function_like(
+        mut self,
+        ident: &Meta<Identifier>,
+        params: &ast::Params,
+        return_type: &Type,
+        body: &ast::Block,
+    ) -> Function {
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
 
-        let parameter_types: Vec<_> = params
-            .0
-            .iter()
-            .map(|(x, _)| {
-                let ty = self.type_info.type_of(x);
-                (self.type_info.resolved_name(x), ty)
-            })
-            .collect();
+        let mut parameter_types = Vec::new();
+
+        for (x, _) in &params.0 {
+            let ty = self.type_info.type_of(x);
+            parameter_types.push((self.type_info.resolved_name(x), ty));
+        }
 
         for (name, ty) in &parameter_types {
             let var = Var {
@@ -216,11 +264,6 @@ impl<'r> Lowerer<'r> {
             };
             self.stack_slots.push((var, ty.clone()))
         }
-
-        let return_type = self.type_info.type_of(block);
-        let last = self.block(block);
-
-        self.add(Instruction::Return(last));
 
         let signature = Signature {
             kind: FunctionKind::Free,
@@ -233,81 +276,19 @@ impl<'r> Lowerer<'r> {
         };
 
         let (return_type, return_ptr) = match return_type {
-            x if self.type_info.size_of(&x, self.runtime) == 0 => {
-                (None, false)
-            }
-            x if self.is_reference_type(&x) => (None, true),
-            x => (Some(self.lower_type(&x)), false),
+            x if self.is_reference_type(x) => (None, true),
+            x => (self.lower_type(x), false),
         };
 
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| (def.ident, self.lower_type(ty)))
+                .filter_map(|(def, ty)| {
+                    let ty = self.lower_type(ty)?;
+                    Some((def.ident, ty))
+                })
                 .collect(),
             return_ptr,
-            return_type,
-        };
-
-        let name = self.type_info.resolved_name(ident);
-        let name = self.type_info.full_name(&name);
-
-        Function {
-            name,
-            scope: self.function_scope,
-            entry_block: label,
-            signature,
-            ir_signature,
-            blocks: self.blocks,
-            public: true,
-        }
-    }
-
-    fn function(
-        mut self,
-        ident: &Meta<Identifier>,
-        params: &Meta<ast::Params>,
-        return_type: &Option<Meta<Identifier>>,
-        body: &ast::Block,
-    ) -> Function {
-        let label = self.label_store.new_label(self.function_name);
-        self.new_block(label);
-
-        let mut parameter_types = Vec::new();
-
-        let name = self.type_info.resolved_name(ident);
-        let declaration = self.type_info.scope_graph.get_declaration(name);
-        let DeclarationKind::Function(_, ty) = declaration.kind else {
-            unreachable!();
-        };
-
-        let Type::Function(params, return_type) = self.type_info.resolve(&ty)
-        else {
-            unreachable!();
-        };
-
-        for (x, ty) in &params {
-            parameter_types.push((self.type_info.resolved_name(x), ty));
-        }
-
-        let signature = Signature {
-            kind: FunctionKind::Free,
-            parameter_types: parameter_types
-                .iter()
-                .map(|x| x.1)
-                .cloned()
-                .collect(),
-            return_type: *return_type.clone(),
-        };
-
-        let return_type = self.lower_type(&return_type);
-
-        let ir_signature = ir::Signature {
-            parameters: parameter_types
-                .iter()
-                .map(|(def, ty)| (def.ident, self.lower_type(ty)))
-                .collect(),
-            return_ptr: false, // TODO: check this
             return_type,
         };
 
@@ -323,7 +304,7 @@ impl<'r> Lowerer<'r> {
             scope: self.function_scope,
             entry_block: label,
             blocks: self.blocks,
-            public: false,
+            public: true,
             signature,
             ir_signature,
         }
@@ -348,9 +329,8 @@ impl<'r> Lowerer<'r> {
                 let val = self.expr(expr);
                 let name = self.type_info.resolved_name(ident);
                 let ty = self.type_info.type_of(ident);
-                if self.type_info.size_of(&ty, self.runtime) > 0 {
+                if let Some(ty) = self.lower_type(&ty) {
                     let val = val.unwrap();
-                    let ty = self.lower_type(&ty);
                     self.add(Instruction::Assign {
                         to: Var {
                             scope: name.scope,
@@ -494,15 +474,9 @@ impl<'r> Lowerer<'r> {
                             }
                         }
 
-                        let to = if self.type_info.size_of(&ret, self.runtime)
-                            > 0
-                        {
-                            let ty = self.type_info.type_of(id);
-                            let ty = self.lower_type(&ty);
-                            Some((self.new_tmp(), ty))
-                        } else {
-                            None
-                        };
+                        let to = self
+                            .lower_type(&ret)
+                            .map(|ty| (self.new_tmp(), ty));
 
                         let ctx = Var {
                             scope: self.function_scope,
@@ -587,7 +561,9 @@ impl<'r> Lowerer<'r> {
                 let func = self.type_info.function(ident).clone();
 
                 let runtime_func = match &func.definition {
-                    FunctionDefinition::Roto => panic!("Not yet supported"),
+                    FunctionDefinition::Roto => {
+                        panic!("Not yet supported")
+                    }
                     FunctionDefinition::Runtime(rt) => rt,
                 };
 
@@ -652,11 +628,7 @@ impl<'r> Lowerer<'r> {
                         **field,
                         self.runtime,
                     );
-                    if self.type_info.size_of(&ty, self.runtime) > 0 {
-                        Some(self.read_field(op, offset, &ty))
-                    } else {
-                        None
-                    }
+                    self.read_field(op, offset, &ty)
                 }
             }
             ast::Expr::Var(x) => {
@@ -670,12 +642,12 @@ impl<'r> Lowerer<'r> {
                             scope: self.function_scope,
                             kind: VarKind::Context,
                         };
-                        Some(self.read_field(var.into(), offset as u32, &ty))
+                        self.read_field(var.into(), offset as u32, &ty)
                     }
                     DeclarationKind::Constant(_) => {
                         let var = self.new_tmp();
                         let ty = self.type_info.type_of(id);
-                        let ty = self.lower_type(&ty);
+                        let ty = self.lower_type(&ty)?;
                         self.add(Instruction::LoadConstant {
                             to: var.clone(),
                             name: full_name,
@@ -766,6 +738,57 @@ impl<'r> Lowerer<'r> {
 
                 let place = self.new_tmp();
                 match (op, binop_to_cmp(op, &ty), ty) {
+                    (
+                        ast::BinOp::Add,
+                        _,
+                        Type::Primitive(Primitive::String),
+                    ) => {
+                        let function = self.type_info.function(id);
+                        let FunctionDefinition::Runtime(runtime_func_ref) =
+                            function.definition.clone()
+                        else {
+                            panic!()
+                        };
+
+                        let size = self.type_info.size_of(
+                            &Type::Primitive(Primitive::String),
+                            self.runtime,
+                        );
+                        let alignment = self.type_info.alignment_of(
+                            &Type::Primitive(Primitive::String),
+                            self.runtime,
+                        );
+                        let align_shift = alignment.ilog2() as u8;
+                        self.add(Instruction::Alloc {
+                            to: place.clone(),
+                            size,
+                            align_shift,
+                        });
+
+                        let runtime_func =
+                            self.runtime.get_function(runtime_func_ref);
+
+                        let ident = Identifier::from("append");
+                        let ir_func = IrFunction {
+                            name: ident,
+                            ptr: runtime_func.description.pointer(),
+                            params: vec![
+                                IrType::Pointer,
+                                IrType::Pointer,
+                                IrType::Pointer,
+                            ],
+                            ret: None,
+                        };
+
+                        self.runtime_functions
+                            .insert(runtime_func_ref, ir_func);
+
+                        self.add(Instruction::CallRuntime {
+                            to: None,
+                            func: runtime_func_ref,
+                            args: vec![place.clone().into(), left, right],
+                        });
+                    }
                     (
                         ast::BinOp::Div,
                         _,
@@ -950,7 +973,7 @@ impl<'r> Lowerer<'r> {
                         right,
                     }),
                     (ast::BinOp::Div, _, ty) => {
-                        let ty = self.lower_type(&ty);
+                        let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Div {
                             to: place.clone(),
                             ty,
@@ -996,7 +1019,7 @@ impl<'r> Lowerer<'r> {
                 self.new_block(lbl_then);
                 if let Some(op) = self.block(if_true) {
                     let ty = self.type_info.type_of(if_true);
-                    let ty = self.lower_type(&ty);
+                    let ty = self.lower_type(&ty)?;
                     self.add(Instruction::Assign {
                         to: res.clone(),
                         val: op,
@@ -1013,7 +1036,7 @@ impl<'r> Lowerer<'r> {
                     self.new_block(lbl_else);
                     if let Some(op) = self.block(if_false) {
                         let ty = self.type_info.type_of(if_false);
-                        let ty = self.lower_type(&ty);
+                        let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Assign {
                             to: res.clone(),
                             val: op,
@@ -1051,7 +1074,27 @@ impl<'r> Lowerer<'r> {
     /// Lower a literal
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
-            Literal::String(_) => todo!(),
+            Literal::String(s) => {
+                let size = std::mem::size_of::<IpAddr>() as u32;
+                let align = std::mem::align_of::<IpAddr>();
+                let align_shift = align.ilog2() as u8;
+
+                let to = self.new_tmp();
+
+                self.add(Instruction::Alloc {
+                    to: to.clone(),
+                    size,
+                    align_shift,
+                });
+
+                self.add(Instruction::InitString {
+                    to: to.clone(),
+                    string: s.clone(),
+                    init_func: self.runtime.string_init_function,
+                });
+
+                to.into()
+            }
             Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => {
                 let to = self.new_tmp();
@@ -1077,6 +1120,9 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::U32) => {
                         IrValue::U32(*x as u32)
                     }
+                    Type::Primitive(Primitive::U64) => {
+                        IrValue::U64(*x as u64)
+                    }
                     Type::Primitive(Primitive::I8) => IrValue::I8(*x as i8),
                     Type::Primitive(Primitive::I16) => {
                         IrValue::I16(*x as i16)
@@ -1084,6 +1130,7 @@ impl<'r> Lowerer<'r> {
                     Type::Primitive(Primitive::I32) => {
                         IrValue::I32(*x as i32)
                     }
+                    Type::Primitive(Primitive::I64) => IrValue::I64(*x),
                     Type::IntVar(_) => IrValue::I32(*x as i32),
                     _ => ice!("should be a type error"),
                 }
@@ -1130,7 +1177,7 @@ impl<'r> Lowerer<'r> {
         from: Operand,
         offset: u32,
         ty: &Type,
-    ) -> Operand {
+    ) -> Option<Operand> {
         let ty = self.type_info.resolve(ty);
         let to = self.new_tmp();
 
@@ -1143,13 +1190,14 @@ impl<'r> Lowerer<'r> {
         } else {
             let tmp = self.new_tmp();
 
+            let ty = self.lower_type(&ty)?;
+
             self.add(Instruction::Offset {
                 to: tmp.clone(),
                 from,
                 offset,
             });
 
-            let ty = self.lower_type(&ty);
             self.add(Instruction::Read {
                 to: to.clone(),
                 from: tmp.into(),
@@ -1157,26 +1205,19 @@ impl<'r> Lowerer<'r> {
             });
         }
 
-        to.into()
+        Some(to.into())
     }
 
     fn is_reference_type(&mut self, ty: &Type) -> bool {
-        let ty = self.type_info.resolve(ty);
-        matches!(
-            ty,
-            Type::Record(..)
-                | Type::RecordVar(..)
-                | Type::NamedRecord(..)
-                | Type::Enum(..)
-                | Type::Verdict(..)
-                | Type::Primitive(Primitive::IpAddr | Primitive::Prefix)
-                | Type::BuiltIn(..)
-        )
+        self.type_info.is_reference_type(ty, self.runtime)
     }
 
-    fn lower_type(&mut self, ty: &Type) -> IrType {
+    fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
         let ty = self.type_info.resolve(ty);
-        match ty {
+        if self.type_info.size_of(&ty, self.runtime) == 0 {
+            return None;
+        }
+        Some(match ty {
             Type::Primitive(Primitive::Bool) => IrType::Bool,
             Type::Primitive(Primitive::U8) => IrType::U8,
             Type::Primitive(Primitive::U16) => IrType::U16,
@@ -1187,12 +1228,11 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
             Type::Primitive(Primitive::Asn) => IrType::Asn,
-            Type::Primitive(Primitive::IpAddr) => IrType::Pointer,
             Type::IntVar(_) => IrType::I32,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => panic!("could not lower: {ty:?}"),
-        }
+        })
     }
 
     fn call_runtime_function(
@@ -1214,9 +1254,9 @@ impl<'r> Lowerer<'r> {
         let mut params = Vec::new();
         params.push(IrType::Pointer);
 
-        for ty in parameter_types {
-            params.push(self.lower_type(ty))
-        }
+        params.extend(
+            parameter_types.iter().filter_map(|ty| self.lower_type(ty)),
+        );
 
         let args = std::iter::once(Operand::Place(out_ptr.clone()))
             .chain(args)
@@ -1241,10 +1281,8 @@ impl<'r> Lowerer<'r> {
 
         if self.is_reference_type(return_type) {
             Some(out_ptr.into())
-        } else if size > 0 {
-            Some(self.read_field(out_ptr.into(), 0, return_type))
         } else {
-            None
+            self.read_field(out_ptr.into(), 0, return_type)
         }
     }
 

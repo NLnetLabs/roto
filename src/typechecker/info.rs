@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::HashMap, net::IpAddr, sync::Arc};
 
 use inetnum::addr::Prefix;
 
@@ -100,6 +100,25 @@ impl TypeInfo {
         s.into()
     }
 
+    pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
+        let ty = self.resolve(ty);
+        if self.size_of(&ty, rt) == 0 {
+            return false;
+        }
+        matches!(
+            ty,
+            Type::Record(..)
+                | Type::RecordVar(..)
+                | Type::NamedRecord(..)
+                | Type::Enum(..)
+                | Type::Verdict(..)
+                | Type::Primitive(
+                    Primitive::IpAddr | Primitive::Prefix | Primitive::String
+                )
+                | Type::BuiltIn(..)
+        )
+    }
+
     pub fn offset_of(
         &mut self,
         record: &Type,
@@ -162,6 +181,9 @@ impl TypeInfo {
             }
             Type::Primitive(Primitive::Prefix) => {
                 std::mem::align_of::<Prefix>() as u32
+            }
+            Type::Primitive(Primitive::String) => {
+                std::mem::align_of::<Arc<str>>() as u32
             }
             Type::BuiltIn(_, id) => {
                 rt.get_runtime_type(id).unwrap().alignment() as u32

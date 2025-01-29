@@ -225,7 +225,7 @@ fn integer_inference() {
         "
         type Foo { x: u8 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let foo = Foo { x: 5 };
             accept
         }
@@ -238,7 +238,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let a = 5;
             let foo = Foo { x: a };
             accept
@@ -252,7 +252,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let a = 5;
             let foo = Foo { x: a };
             let bar = Bar { x: a };
@@ -267,7 +267,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u32 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let a = 5;
             let foo = Foo { x: a };
             let bar = Bar { x: a };
@@ -282,7 +282,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u32 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: 5 };
             accept
@@ -299,7 +299,7 @@ fn assign_field_to_other_record() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: foo.x };
             accept
@@ -313,7 +313,7 @@ fn assign_field_to_other_record() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: foo.y };
             accept
@@ -327,7 +327,7 @@ fn assign_field_to_other_record() {
         type Foo { x: u8 }
         type Bar { x: u32 }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: foo.x };
             accept
@@ -341,7 +341,7 @@ fn assign_field_to_other_record() {
 fn ip_addr_method() {
     let s = src!(
         "
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10;
             let is_four = 1 + p.is_ipv4();
             accept
@@ -352,7 +352,7 @@ fn ip_addr_method() {
 
     let s = src!(
         "
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10;
             let is_four = true && p.is_ipv4();
             accept
@@ -367,7 +367,7 @@ fn ip_addr_method() {
 fn ip_addr_method_of_method_return_type() {
     let s = src!(
         "
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10;
             let x = p.to_canonical().is_ipv4();
             accept
@@ -378,7 +378,7 @@ fn ip_addr_method_of_method_return_type() {
 
     let s = src!(
         "
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10;
             let x = p.is_ipv4().to_canonical();
             accept
@@ -393,7 +393,7 @@ fn ip_addr_method_of_method_return_type() {
 fn prefix_method() {
     let s = src!(
         "
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10/20;
             let add = p.address();
             accept
@@ -412,7 +412,7 @@ fn logical_expr() {
             (10 == 10) || (10 == 11)
         }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10/10;
             accept
         }
@@ -426,7 +426,7 @@ fn logical_expr() {
             (10 == 10) || ("hello" == 11)
         }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             let p = 10.10.10.10/10;
             accept
         }
@@ -450,7 +450,7 @@ fn send_output_stream() {
             });
         }
         
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             accept
         }
     "#
@@ -471,7 +471,7 @@ fn send_output_stream() {
             });
         }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             accept
         }
     "#
@@ -497,7 +497,7 @@ fn send_output_stream() {
             });
         }
 
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             accept
         }
     "#
@@ -523,7 +523,7 @@ fn send_output_stream() {
             });
         }
         
-        filter-map test(r: u32) {
+        filter-map my_map(r: u32) {
             accept
         }
     "#
@@ -851,6 +851,7 @@ fn use_context() {
 
     #[derive(Context)]
     struct Ctx {
+        /// boop
         pub foo: u8,
     }
 

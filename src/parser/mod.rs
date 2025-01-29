@@ -1,4 +1,6 @@
-use crate::ast::{Declaration, FunctionDeclaration, Identifier, SyntaxTree};
+use crate::ast::{
+    Declaration, FunctionDeclaration, Identifier, SyntaxTree, Test,
+};
 use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
 use token::Token;
@@ -331,6 +333,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
                 Declaration::Record(self.record_type_assignment()?)
             }
             Token::Function => Declaration::Function(self.function()?),
+            Token::Test => Declaration::Test(self.test()?),
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
@@ -366,6 +369,13 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             body,
             ret,
         })
+    }
+
+    fn test(&mut self) -> ParseResult<Test> {
+        self.take(Token::Test)?;
+        let ident = self.identifier()?;
+        let body = self.block()?;
+        Ok(Test { ident, body })
     }
 }
 

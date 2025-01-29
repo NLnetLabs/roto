@@ -693,6 +693,40 @@ impl TypeChecker {
             }
         };
 
+        if let Add = op {
+            let var = self.fresh_var();
+            let ctx_new = ctx.with_type(var.clone());
+
+            let mut diverges = false;
+            diverges |= self.expr(scope, &ctx_new, left)?;
+
+            let resolved = self.resolve_type(&var);
+
+            if let Type::Primitive(Primitive::String) = resolved {
+                diverges |= self.expr(scope, &ctx_new, right)?;
+
+                self.unify(
+                    &ctx.expected_type,
+                    &Type::Primitive(Primitive::String),
+                    span,
+                    None,
+                )?;
+
+                let name = Identifier::from("append");
+                let (function, _sig) = self
+                    .find_method(
+                        &FunctionKind::Method(Type::Primitive(
+                            Primitive::String,
+                        )),
+                        name,
+                    )
+                    .unwrap();
+                let function = function.clone();
+                self.type_info.function_calls.insert(span, function);
+                return Ok(diverges);
+            }
+        }
+
         match op {
             And | Or => {
                 self.unify(

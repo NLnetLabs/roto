@@ -17,16 +17,14 @@ use crate::{
         IrFunction,
     },
     runtime::{
-        context::ContextDescription,
-        ty::{Reflect, GLOBAL_TYPE_REGISTRY},
-        RuntimeConstant, RuntimeFunctionRef,
+        context::ContextDescription, ty::Reflect, RuntimeConstant,
+        RuntimeFunctionRef,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue, Runtime,
+    IrValue, Runtime, Verdict,
 };
 use check::{
-    check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
-    RotoParams, TypeMismatch,
+    check_roto_type_reflect, FunctionRetrievalError, RotoParams, TypeMismatch,
 };
 use cranelift::{
     codegen::{
@@ -177,6 +175,7 @@ call_impl!(A, B, C, D, E, F, G);
 pub struct FunctionInfo {
     id: FuncId,
     signature: types::Signature,
+    return_by_ref: bool,
 }
 
 struct ModuleBuilder {
@@ -211,6 +210,9 @@ struct ModuleBuilder {
     /// Signature to use for calls to `drop`
     drop_signature: Signature,
 
+    /// Signature to use for calls to `init_string`
+    init_string_signature: Signature,
+
     context_description: ContextDescription,
 }
 
@@ -231,6 +233,9 @@ struct FuncGen<'c> {
 
     /// Signature to use for calls to `drop`
     drop_signature: SigRef,
+
+    /// Signature to use for calls to `init_string`
+    init_string_signature: SigRef,
 }
 
 // We use `with_aligned` to make sure that we notice if anything is
@@ -281,6 +286,17 @@ pub fn codegen(
         .params
         .push(AbiParam::new(isa.pointer_type()));
 
+    let mut init_string_signature = jit.make_signature();
+    init_string_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+    init_string_signature
+        .params
+        .push(AbiParam::new(isa.pointer_type()));
+    init_string_signature
+        .params
+        .push(AbiParam::new(cranelift::codegen::ir::types::I32));
+
     let mut module = ModuleBuilder {
         functions: HashMap::new(),
         runtime_functions: HashMap::new(),
@@ -291,6 +307,7 @@ pub fn codegen(
         type_info,
         drop_signature,
         clone_signature,
+        init_string_signature,
         context_description,
     };
 
@@ -362,6 +379,7 @@ impl ModuleBuilder {
 
         let mut sig = self.inner.make_signature();
 
+        // This is the parameter for the context
         sig.params
             .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
 
@@ -391,6 +409,7 @@ impl ModuleBuilder {
             name.to_string(),
             FunctionInfo {
                 id: func_id,
+                return_by_ref: ir_signature.return_ptr,
                 signature: signature.clone(),
             },
         );
@@ -444,6 +463,8 @@ impl ModuleBuilder {
                 .import_signature(self.drop_signature.clone()),
             clone_signature: builder
                 .import_signature(self.clone_signature.clone()),
+            init_string_signature: builder
+                .import_signature(self.init_string_signature.clone()),
             module: self,
             builder,
             scope: *scope,
@@ -558,7 +579,7 @@ impl<'c> FuncGen<'c> {
             args.next().unwrap(),
         );
 
-        if dbg!(return_ptr) {
+        if return_ptr {
             self.def(
                 self.module.variable_map[&Var {
                     scope: self.scope,
@@ -930,6 +951,44 @@ impl<'c> FuncGen<'c> {
                 let to = self.variable(to, ty);
                 self.def(to, val);
             }
+            ir::Instruction::InitString {
+                to,
+                string,
+                init_func,
+            } => {
+                let data_id = self
+                    .module
+                    .inner
+                    .declare_anonymous_data(false, false)
+                    .unwrap();
+
+                let mut description = DataDescription::new();
+                description.define(string.clone().into_bytes().into());
+                self.module
+                    .inner
+                    .define_data(data_id, &description)
+                    .unwrap();
+
+                let global_value = self
+                    .module
+                    .inner
+                    .declare_data_in_func(data_id, self.builder.func);
+
+                let pointer_ty = self.module.isa.pointer_type();
+                let init_func = self.ins().iconst(
+                    pointer_ty,
+                    *init_func as *mut u8 as usize as i64,
+                );
+                let data = self.ins().global_value(pointer_ty, global_value);
+                let len = self.ins().iconst(I32, string.len() as u64 as i64);
+
+                let (to, _) = self.operand(&Operand::Place(to.clone()));
+                self.builder.ins().call_indirect(
+                    self.init_string_signature,
+                    init_func,
+                    &[to, data, len],
+                );
+            }
         }
     }
 
@@ -1017,6 +1076,52 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
+    pub fn run_tests<Ctx: 'static>(
+        &mut self,
+        mut ctx: Ctx,
+    ) -> Result<(), ()> {
+        let tests: Vec<_> = self
+            .functions
+            .keys()
+            .filter(|x| x.starts_with("test#"))
+            .map(Clone::clone)
+            .collect();
+
+        let total = tests.len();
+        let total_width = total.to_string().len();
+        let mut successes = 0;
+        let mut failures = 0;
+
+        for (n, test) in tests.into_iter().enumerate() {
+            let n = n + 1;
+            let test_display = test.strip_prefix("test#").unwrap();
+            print!("Test {n:>total_width$} / {total}: {test_display}... ");
+            let test_fn = self
+                .get_function::<Ctx, (), Verdict<(), ()>>(&test)
+                .unwrap();
+
+            match test_fn.call(&mut ctx) {
+                Verdict::Accept(()) => {
+                    successes += 1;
+                    println!("\x1B[92mok\x1B[m");
+                }
+                Verdict::Reject(()) => {
+                    failures += 1;
+                    println!("\x1B[91mfail\x1B[m");
+                }
+            }
+        }
+        println!(
+            "Ran {total} tests, {successes} succeeded, {failures} failed"
+        );
+
+        if failures == 0 {
+            Result::Ok(())
+        } else {
+            Result::Err(())
+        }
+    }
+
     pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
         &mut self,
         name: &str,
@@ -1055,14 +1160,10 @@ impl Module {
             )
         })?;
 
-        let registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
-        let return_by_ref =
-            return_type_by_ref(&registry, TypeId::of::<Return>());
-
         let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
-            return_by_ref,
+            return_by_ref: function_info.return_by_ref,
             _module: self.inner.clone(),
             _ty: PhantomData,
         })

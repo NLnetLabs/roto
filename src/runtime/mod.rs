@@ -33,10 +33,13 @@ pub mod ty;
 pub mod val;
 pub mod verdict;
 
+use core::{slice, str};
 use std::{
     any::{type_name, TypeId},
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    ptr,
+    sync::Arc,
 };
 
 use context::ContextDescription;
@@ -59,6 +62,8 @@ pub struct Runtime {
     pub functions: Vec<RuntimeFunction>,
     pub constants: HashMap<Identifier, RuntimeConstant>,
     pub type_registry: TypeRegistry,
+    pub string_init_function:
+        unsafe extern "C" fn(*mut Arc<str>, *mut u8, u32),
 }
 
 #[derive(Debug)]
@@ -84,6 +89,12 @@ unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
 unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
     let x = x as *mut T;
     std::ptr::read(x);
+}
+
+unsafe extern "C" fn init_string(s: *mut Arc<str>, data: *mut u8, len: u32) {
+    let slice = unsafe { slice::from_raw_parts(data, len as usize) };
+    let str = unsafe { str::from_utf8_unchecked(slice) };
+    unsafe { ptr::write(s, str.into()) };
 }
 
 #[derive(Debug)]
@@ -576,6 +587,31 @@ impl Runtime {
             self.print_function(f);
         }
 
+        if let Some(ContextDescription {
+            type_id: _,
+            type_name: _,
+            fields,
+        }) = &self.context
+        {
+            for crate::ContextField {
+                name,
+                offset: _,
+                type_name: _,
+                type_id,
+                docstring,
+            } in fields
+            {
+                println!(
+                    "`````{{roto:context}} {name}: {}",
+                    self.print_ty(*type_id)
+                );
+                for line in docstring.lines() {
+                    println!("{line}");
+                }
+                println!("`````\n");
+            }
+        }
+
         for RuntimeConstant {
             name,
             ty,
@@ -583,10 +619,7 @@ impl Runtime {
             ..
         } in self.constants.values()
         {
-            println!(
-                "`````{{roto::constant}} {name}: {}",
-                self.print_ty(*ty)
-            );
+            println!("`````{{roto:constant}} {name}: {}", self.print_ty(*ty));
             for line in docstring.lines() {
                 println!("{line}");
             }
@@ -645,6 +678,7 @@ impl Runtime {
             functions: Default::default(),
             type_registry: Default::default(),
             constants: Default::default(),
+            string_init_function: init_string as _,
         };
 
         rt.register_copy_type_with_name::<()>(
@@ -652,12 +686,15 @@ impl Runtime {
             "The unit type that has just one possible value. It can be used \
             when there is nothing meaningful to be returned.",
         )?;
+
         rt.register_copy_type::<bool>(
             "The boolean type\n\n\
             This type has two possible values: `true` and `false`. Several \
             boolean operations can be used with booleans, such as `&&` (\
             logical and), `||` (logical or) and `not`.",
         )?;
+
+        // All the integer types
         rt.register_copy_type::<u8>(int_docs!(u8))?;
         rt.register_copy_type::<u16>(int_docs!(u16))?;
         rt.register_copy_type::<u32>(int_docs!(u32))?;
@@ -666,6 +703,7 @@ impl Runtime {
         rt.register_copy_type::<i16>(int_docs!(i16))?;
         rt.register_copy_type::<i32>(int_docs!(i32))?;
         rt.register_copy_type::<i64>(int_docs!(i64))?;
+
         rt.register_copy_type::<Asn>(
             "An ASN: an Autonomous System Number\n\
             \n\
@@ -679,6 +717,7 @@ impl Runtime {
             AS4294967295\n\
             ```\n\
             ")?;
+
         rt.register_copy_type::<IpAddr>(
             "An IP address\n\nCan be either IPv4 or IPv6.\n\
             \n\
@@ -695,6 +734,7 @@ impl Runtime {
             ```\n\
             ",
         )?;
+
         rt.register_copy_type::<Prefix>(
             "An IP address prefix: the combination of an IP address and a prefix length\n\n\
             A prefix can be constructed with the `/` operator or with the \
@@ -793,6 +833,98 @@ impl Runtime {
         )
         .unwrap();
 
+        rt.register_clone_type_with_name::<Arc<str>>(
+            "String",
+            "The string type",
+        )?;
+
+        /// Append a string to another, creating a new string
+        ///
+        /// ```roto
+        /// "hello".append(" ").append("world") # -> "hello world"
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn append(a: *const Arc<str>, b: *const Arc<str>) -> Arc<str> {
+            let a = unsafe { &*a };
+            let b = unsafe { &*b };
+            format!("{a}{b}").into()
+        }
+
+        /// Check whether a string contains another string
+        ///
+        /// ```roto
+        /// "haystack".contains("hay")  # -> true
+        /// "haystack".contains("corn") # -> false
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn contains(
+            haystack: *const Arc<str>,
+            needle: *const Arc<str>,
+        ) -> bool {
+            let haystack = unsafe { &*haystack };
+            let needle = unsafe { &*needle };
+            haystack.contains(needle.as_ref())
+        }
+
+        /// Check whether a string starts with a given prefix
+        ///
+        /// ```roto
+        /// "haystack".contains("hay")   # -> true
+        /// "haystack".contains("trees") # -> false
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn starts_with(s: *const Arc<str>, prefix: *const Arc<str>) -> bool {
+            let s = unsafe { &*s };
+            let prefix = unsafe { &*prefix };
+            s.starts_with(prefix.as_ref())
+        }
+
+        /// Check whether a string end with a given suffix
+        ///
+        /// ```roto
+        /// "haystack".contains("stack") # -> true
+        /// "haystack".contains("black") # -> false
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn ends_with(s: *const Arc<str>, suffix: *const Arc<str>) -> bool {
+            let s = unsafe { &*s };
+            let suffix = unsafe { &*suffix };
+            s.ends_with(suffix.as_ref())
+        }
+
+        /// Create a new string with all characters converted to lowercase
+        ///
+        /// ```roto
+        /// "LOUD".to_lowercase() # -> "loud"
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn to_lowercase(s: *const Arc<str>) -> Arc<str> {
+            let s = unsafe { &*s };
+            s.to_lowercase().into()
+        }
+
+        /// Create a new string with all characters converted to lowercase
+        ///
+        /// ```roto
+        /// "quiet".to_uppercase() # -> "QUIET"
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn to_uppercase(s: *const Arc<str>) -> Arc<str> {
+            let s = unsafe { &*s };
+            s.to_uppercase().into()
+        }
+
+        /// Repeat a string `n` times and join them
+        ///
+        /// ```roto
+        /// "ha".repeat(6) # -> "hahahahahaha"
+        /// ```
+        #[roto_method(rt, Arc<str>)]
+        fn repeat(s: *const Arc<str>, n: u32) -> Arc<str> {
+            let s = unsafe { &*s };
+            s.repeat(n as usize).into()
+        }
+
         Ok(rt)
     }
 
@@ -867,6 +999,7 @@ pub mod tests {
                 "Asn",
                 "IpAddr",
                 "Prefix",
+                "String",
                 "OriginType",
                 "LocalPref",
                 "Community",

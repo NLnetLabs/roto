@@ -7,6 +7,7 @@ use crate::{
 use std::{
     any::TypeId,
     fmt::{Debug, Display},
+    sync::Arc,
 };
 
 use super::scope::ResolvedName;
@@ -175,7 +176,7 @@ impl Primitive {
             U32 | I32 | Asn => 4,
             U64 | I64 => 8,
             Unit => 0,
-            String => 4,
+            String => std::mem::size_of::<Arc<str>>() as u32,
             IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
             Prefix => std::mem::size_of::<inetnum::addr::Prefix>() as u32,
         }

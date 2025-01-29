@@ -340,6 +340,7 @@ impl TypeChecker {
                     ast::Declaration::FilterMap(x) => {
                         (StubDeclarationKind::Function, x.ident.clone())
                     }
+                    ast::Declaration::Test(_) => continue,
                 };
                 self.type_info.scope_graph.insert_stub(scope, &ident, kind);
             }
@@ -356,7 +357,8 @@ impl TypeChecker {
             for expr in &module.ast.declarations {
                 match expr {
                     ast::Declaration::Function(_)
-                    | ast::Declaration::FilterMap(_) => continue,
+                    | ast::Declaration::FilterMap(_)
+                    | ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(
                         ast::RecordTypeDeclaration { ident, record_type },
                     ) => {
@@ -412,6 +414,7 @@ impl TypeChecker {
                             &ty,
                         )?;
                     }
+                    ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(_) => continue,
                 }
             }
@@ -428,6 +431,9 @@ impl TypeChecker {
                     }
                     ast::Declaration::Function(x) => {
                         self.function(scope, x)?;
+                    }
+                    ast::Declaration::Test(x) => {
+                        self.test(scope, x)?;
                     }
                     _ => {}
                 }
@@ -696,12 +702,16 @@ impl TypeChecker {
             (Never, x) | (x, Never) => x,
             (
                 IntVar(a),
-                b @ (Primitive(U8 | U16 | U32 | I8 | I16 | I32) | IntVar(_)),
+                b @ (Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64)
+                | IntVar(_)),
             ) => {
                 self.type_info.unionfind.set(a, b.clone());
                 b.clone()
             }
-            (a @ Primitive(U8 | U16 | U32 | I8 | I16 | I32), IntVar(b)) => {
+            (
+                a @ Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64),
+                IntVar(b),
+            ) => {
                 self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }

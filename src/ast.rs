@@ -20,6 +20,7 @@ pub enum Declaration {
     FilterMap(Box<FilterMap>),
     Record(RecordTypeDeclaration),
     Function(FunctionDeclaration),
+    Test(Test),
 }
 
 #[derive(Clone, Debug)]
@@ -43,7 +44,7 @@ pub struct FilterMap {
     pub filter_type: FilterType,
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
-    pub block: Meta<Block>,
+    pub body: Meta<Block>,
 }
 
 /// A function declaration, including the [`Block`] forming its definition
@@ -52,6 +53,12 @@ pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
     pub ret: Option<Meta<Identifier>>,
+    pub body: Meta<Block>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Test {
+    pub ident: Meta<Identifier>,
     pub body: Meta<Block>,
 }
 

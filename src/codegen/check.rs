@@ -9,7 +9,9 @@ use crate::{
         types::{Primitive, Type},
     },
 };
-use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
+use std::{
+    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
+};
 
 #[derive(Debug)]
 pub enum FunctionRetrievalError {
@@ -86,6 +88,7 @@ fn check_roto_type(
     let ASN: TypeId = TypeId::of::<Asn>();
     let IPADDR: TypeId = TypeId::of::<IpAddr>();
     let PREFIX: TypeId = TypeId::of::<Prefix>();
+    let STRING: TypeId = TypeId::of::<Arc<str>>();
 
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
@@ -121,6 +124,7 @@ fn check_roto_type(
                 x if x == ASN => Type::Primitive(Primitive::Asn),
                 x if x == IPADDR => Type::Primitive(Primitive::IpAddr),
                 x if x == PREFIX => Type::Primitive(Primitive::Prefix),
+                x if x == STRING => Type::Primitive(Primitive::String),
                 _ => panic!(),
             };
             if expected_roto == roto_ty {
@@ -155,18 +159,6 @@ fn check_roto_type(
         TypeDescription::Option(_) | TypeDescription::Result(_, _) => {
             Err(error_message)
         }
-    }
-}
-
-pub fn return_type_by_ref(registry: &TypeRegistry, rust_ty: TypeId) -> bool {
-    let Some(rust_ty) = registry.get(rust_ty) else {
-        return false;
-    };
-
-    #[allow(clippy::match_like_matches_macro)]
-    match rust_ty.description {
-        TypeDescription::Verdict(_, _) => true,
-        _ => todo!(),
     }
 }
 

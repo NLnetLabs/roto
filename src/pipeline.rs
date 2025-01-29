@@ -313,6 +313,11 @@ impl Lowered {
 }
 
 impl Compiled {
+    #[allow(clippy::result_unit_err)]
+    pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
+        self.module.run_tests(ctx)
+    }
+
     pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
         &mut self,
         name: &str,
