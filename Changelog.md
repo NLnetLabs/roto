@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased new version
+
+Released yyyy-mm-dd.
+
+### Breakin changes
+
+### New
+
+### Bug fixes
+
+### Other changes
+
+
 ## 0.4.0
 
 Release 2025-01-29.
