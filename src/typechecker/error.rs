@@ -5,9 +5,14 @@ use std::fmt::Display;
 use crate::{
     ast::{Expr, Identifier},
     parser::meta::{Meta, MetaId},
+    typechecker::scope::Declaration,
 };
 
-use super::{types::Type, TypeChecker};
+use super::{
+    scope::{DeclarationKind, StubDeclaration, StubDeclarationKind},
+    types::Type,
+    TypeChecker,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -51,7 +56,7 @@ pub struct TypeError {
     pub labels: Vec<Label>,
 }
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     /// Catch all error with a basic format with just one label
     pub fn error_simple(
         &self,
@@ -147,6 +152,25 @@ impl TypeChecker<'_> {
             ),
             location: type_name.id,
             labels: vec![Label::error("declared here", type_name.id)],
+        }
+    }
+
+    pub fn error_not_a_type(
+        &self,
+        ident: &Meta<Identifier>,
+        stub: StubDeclaration,
+    ) -> TypeError {
+        let kind = match stub.kind {
+            StubDeclarationKind::Context => "constant",
+            StubDeclarationKind::Constant => "context variable",
+            StubDeclarationKind::Variable => "variable",
+            StubDeclarationKind::Type => unreachable!(),
+            StubDeclarationKind::Function => "function",
+        };
+        TypeError {
+            description: format!("expected type, but found {kind} `{ident}`",),
+            location: ident.id,
+            labels: vec![Label::error("expected type", ident.id)],
         }
     }
 
@@ -320,6 +344,66 @@ impl TypeChecker<'_> {
             location: expr.id,
             labels: vec![Label::error("not allowed", expr.id)],
         }
+    }
+
+    pub fn error_expected_value(
+        &self,
+        ident: &Meta<Identifier>,
+        declaration: &Declaration,
+    ) -> TypeError {
+        let kind = describe_declaration(declaration);
+        TypeError {
+            description: format!(
+                "expected a value, but found {kind} `{}`",
+                declaration.name.ident
+            ),
+            location: ident.id,
+            labels: vec![
+                Label::error("expected a variable", ident.id),
+                Label::info(
+                    format!(
+                        "{kind} `{}` defined here",
+                        declaration.name.ident
+                    ),
+                    declaration.id,
+                ),
+            ],
+        }
+    }
+
+    pub fn error_expected_function(
+        &self,
+        ident: &Meta<Identifier>,
+        declaration: &Declaration,
+    ) -> TypeError {
+        let kind = describe_declaration(declaration);
+        TypeError {
+            description: format!(
+                "expected a function, but found {kind} `{}`",
+                declaration.name.ident
+            ),
+            location: ident.id,
+            labels: vec![
+                Label::error("expected a function", ident.id),
+                Label::info(
+                    format!(
+                        "{kind} `{}` defined here",
+                        declaration.name.ident
+                    ),
+                    declaration.id,
+                ),
+            ],
+        }
+    }
+}
+
+fn describe_declaration(d: &Declaration) -> &str {
+    match &d.kind {
+        DeclarationKind::Context(_, _) => "context",
+        DeclarationKind::Constant(_) => "constant",
+        DeclarationKind::Variable(_) => "variable",
+        DeclarationKind::Type(_) => "type",
+        DeclarationKind::Function(_, _) => "function",
     }
 }
 

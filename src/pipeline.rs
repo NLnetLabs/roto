@@ -3,12 +3,12 @@
 use std::{collections::HashMap, path::Path};
 
 use crate::{
-    ast,
     codegen::{
         self,
         check::{FunctionRetrievalError, RotoParams},
         Module, TypedFunc,
     },
+    file_tree::SourceFile,
     lower::{
         self,
         eval::{self, Memory},
@@ -17,50 +17,25 @@ use crate::{
         value::IrValue,
         IrFunction,
     },
+    module::{ModuleTree, Parsed},
     parser::{
         meta::{Span, Spans},
-        ParseError, Parser,
+        ParseError,
     },
     runtime::{
         context::{Context, ContextDescription},
         ty::Reflect,
-        Runtime, RuntimeConstant,
+        Runtime, RuntimeConstant, RuntimeFunctionRef,
     },
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
-        scope::ScopeGraph,
     },
-    walker::ModuleTree,
+    FileTree,
 };
 
-/// A filename with its contents
-#[derive(Clone, Debug)]
-pub struct SourceFile {
-    name: String,
-    pub contents: String,
-    /// The line offset that should be added to the location in error
-    /// messages.
-    ///
-    /// This is used to add the offset of a string of source text in a test,
-    /// so that Roto errors can refer to locations in Rust files accurately.
-    location_offset: usize,
-}
-
-impl SourceFile {
-    pub fn read(path: &Path) -> Self {
-        let name = path.to_string_lossy().to_string();
-        let contents = std::fs::read_to_string(path).unwrap();
-        Self {
-            name,
-            contents,
-            location_offset: 0,
-        }
-    }
-}
-
 #[derive(Debug)]
-enum RotoError {
+pub enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
     Type(TypeError),
@@ -71,36 +46,24 @@ enum RotoError {
 /// The errors can be printed with the regular [`std::fmt::Display`].
 #[derive(Debug)]
 pub struct RotoReport {
-    files: Vec<SourceFile>,
-    errors: Vec<RotoError>,
-    spans: Spans,
-}
-
-/// Compiler stage: Files loaded and ready to be parsed
-pub struct Files {
-    files: Vec<SourceFile>,
-}
-
-/// Compiler stage: Files loaded and parsed
-pub struct Parsed {
     pub files: Vec<SourceFile>,
-    pub modules: ModuleTree,
+    pub errors: Vec<RotoError>,
     pub spans: Spans,
 }
 
 /// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked {
-    trees: Vec<ast::SyntaxTree>,
-    type_infos: Vec<TypeInfo>,
-    scope_graph: ScopeGraph,
+    module_tree: ModuleTree,
+    type_info: TypeInfo,
     runtime: Runtime,
     context_type: ContextDescription,
 }
 
 /// Compiler stage: HIR
 pub struct Lowered {
+    runtime: Runtime,
     pub ir: Vec<ir::Function>,
-    runtime_functions: HashMap<usize, IrFunction>,
+    runtime_functions: HashMap<RuntimeFunctionRef, IrFunction>,
     runtime_constants: Vec<RuntimeConstant>,
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -211,82 +174,27 @@ impl std::error::Error for RotoReport {}
 #[macro_export]
 macro_rules! src {
     ($code:literal) => {
-        $crate::test_file(file!(), $code, line!() as usize - 1)
+        $crate::FileTree::test_file(file!(), $code, line!() as usize - 1)
     };
 }
 
 /// Compile and run a Roto script from a file
 pub fn interpret(
     runtime: Runtime,
-    files: impl IntoIterator<Item = String>,
+    path: &Path,
     mem: &mut Memory,
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Result<Option<IrValue>, RotoReport> {
     let pointer_bytes = usize::BITS / 8;
 
-    let lowered = read_files(files)?
+    let lowered = FileTree::read(path)
         .parse()?
         .typecheck(runtime, pointer_bytes)?
         .lower();
 
     let res = lowered.eval(mem, ctx, args);
     Ok(res)
-}
-
-/// Create a test file to compile and run
-pub fn test_file(file: &str, source: &str, location_offset: usize) -> Files {
-    Files {
-        files: vec![SourceFile {
-            location_offset,
-            name: file.into(),
-            contents: source.into(),
-        }],
-    }
-}
-
-pub fn read_files<S>(
-    files: impl IntoIterator<Item = S>,
-) -> Result<Files, RotoReport>
-where
-    S: AsRef<str>,
-{
-    let results: Vec<_> = files
-        .into_iter()
-        .map(|f| {
-            (f.as_ref().to_string(), std::fs::read_to_string(f.as_ref()))
-        })
-        .collect();
-
-    let mut files = Vec::new();
-    let mut errors = Vec::new();
-    for (name, result) in results {
-        match result {
-            Ok(contents) => files.push(SourceFile {
-                location_offset: 0,
-                name,
-                contents,
-            }),
-            Err(err) => {
-                errors.push(RotoError::Read(name.clone(), err));
-                files.push(SourceFile {
-                    name,
-                    location_offset: 0,
-                    contents: String::new(),
-                });
-            }
-        };
-    }
-
-    if errors.is_empty() {
-        Ok(Files { files })
-    } else {
-        Err(RotoReport {
-            files,
-            errors,
-            spans: Spans::default(),
-        })
-    }
 }
 
 impl Parsed {
@@ -296,71 +204,53 @@ impl Parsed {
         pointer_bytes: u32,
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
-            files,
-            modules,
+            file_tree,
+            module_tree,
             spans,
         } = self;
-
-        let mut scope_graph = ScopeGraph::new();
 
         let context_type =
             runtime.context.clone().unwrap_or_else(<()>::description);
 
-        let results: Vec<_> = trees
-            .iter()
-            .map(|f| {
-                crate::typechecker::typecheck(
-                    &runtime,
-                    &mut scope_graph,
-                    f,
-                    pointer_bytes,
-                )
-            })
-            .collect();
+        let result = crate::typechecker::typecheck(
+            &runtime,
+            &module_tree,
+            pointer_bytes,
+        );
 
-        let mut type_infos = Vec::new();
-        let mut errors = Vec::new();
-        for result in results {
-            match result {
-                Ok(type_info) => {
-                    type_infos.push(type_info);
-                }
-                Err(err) => errors.push(RotoError::Type(err)),
+        let type_info = match result {
+            Ok(type_info) => type_info,
+            Err(error) => {
+                return Err(RotoReport {
+                    files: file_tree.files,
+                    errors: vec![RotoError::Type(error)],
+                    spans,
+                });
             }
-        }
+        };
 
-        if errors.is_empty() {
-            Ok(TypeChecked {
-                trees,
-                type_infos,
-                scope_graph,
-                runtime,
-                context_type,
-            })
-        } else {
-            Err(RotoReport {
-                files: files.to_vec(),
-                errors,
-                spans,
-            })
-        }
+        Ok(TypeChecked {
+            module_tree,
+            type_info,
+            runtime,
+            context_type,
+        })
     }
 }
 
 impl TypeChecked {
     pub fn lower(self) -> Lowered {
         let TypeChecked {
-            trees,
-            mut type_infos,
-            scope_graph,
+            module_tree,
+            mut type_info,
             runtime,
             context_type,
         } = self;
         let mut runtime_functions = HashMap::new();
         let mut label_store = LabelStore::default();
         let ir = lower::lower(
-            &trees[0],
-            &mut type_infos[0],
+            &module_tree,
+            &mut type_info,
             &mut runtime_functions,
             &mut label_store,
             &runtime,
@@ -369,7 +259,7 @@ impl TypeChecked {
         let _ = env_logger::try_init();
         if log::log_enabled!(log::Level::Info) {
             let s = IrPrinter {
-                scope_graph: &scope_graph,
+                scope_graph: &type_info.scope_graph,
                 label_store: &label_store,
             }
             .program(&ir);
@@ -380,11 +270,12 @@ impl TypeChecked {
 
         Lowered {
             ir,
+            runtime,
             runtime_functions,
             runtime_constants,
             label_store,
             context_type,
-            type_info: type_infos.remove(0),
+            type_info,
         }
     }
 }
@@ -396,11 +287,20 @@ impl Lowered {
         ctx: IrValue,
         args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(&self.ir, "main", mem, &self.runtime_constants, ctx, args)
+        eval::eval(
+            &self.runtime,
+            &self.ir,
+            "main",
+            mem,
+            &self.runtime_constants,
+            ctx,
+            args,
+        )
     }
 
     pub fn codegen(self) -> Compiled {
         let module = codegen::codegen(
+            &self.runtime,
             &self.ir,
             &self.runtime_functions,
             &self.runtime_constants,

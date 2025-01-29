@@ -19,10 +19,10 @@ use crate::{
     runtime::{
         context::ContextDescription,
         ty::{Reflect, GLOBAL_TYPE_REGISTRY},
-        RuntimeConstant,
+        RuntimeConstant, RuntimeFunctionRef,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue,
+    IrValue, Runtime,
 };
 use check::{
     check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
@@ -184,7 +184,7 @@ struct ModuleBuilder {
     functions: HashMap<String, FunctionInfo>,
 
     /// External functions
-    runtime_functions: HashMap<usize, FuncId>,
+    runtime_functions: HashMap<RuntimeFunctionRef, FuncId>,
 
     /// The inner cranelift module
     inner: JITModule,
@@ -239,8 +239,9 @@ struct FuncGen<'c> {
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen(
+    runtime: &Runtime,
     ir: &[ir::Function],
-    runtime_functions: &HashMap<usize, IrFunction>,
+    runtime_functions: &HashMap<RuntimeFunctionRef, IrFunction>,
     constants: &[RuntimeConstant],
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -260,8 +261,9 @@ pub fn codegen(
         cranelift::module::default_libcall_names(),
     );
 
-    for (name, func) in runtime_functions {
-        builder.symbol(format!("runtime_function_{name}"), func.ptr);
+    for (func_ref, func) in runtime_functions {
+        let f = runtime.get_function(*func_ref);
+        builder.symbol(format!("runtime_function_{}", f.name), func.ptr);
     }
 
     let jit = JITModule::new(builder);
@@ -296,7 +298,7 @@ pub fn codegen(
         module.declare_constant(constant);
     }
 
-    for (roto_func_id, func) in runtime_functions {
+    for (func_ref, func) in runtime_functions {
         let mut sig = module.inner.make_signature();
         for ty in &func.params {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
@@ -304,14 +306,15 @@ pub fn codegen(
         if let Some(ty) = &func.ret {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
+        let f = runtime.get_function(*func_ref);
         let Ok(func_id) = module.inner.declare_function(
-            &format!("runtime_function_{roto_func_id}"),
+            &format!("runtime_function_{}", f.name),
             Linkage::Import,
             &sig,
         ) else {
             panic!()
         };
-        module.runtime_functions.insert(*roto_func_id, func_id);
+        module.runtime_functions.insert(*func_ref, func_id);
     }
 
     // Our functions might call each other, so we declare them before we
@@ -649,7 +652,7 @@ impl<'c> FuncGen<'c> {
                 }
             }
             ir::Instruction::CallRuntime { to, func, args } => {
-                let func_id = self.module.runtime_functions[&func.id];
+                let func_id = self.module.runtime_functions[func];
                 let func_ref = self
                     .module
                     .inner
@@ -1018,7 +1021,8 @@ impl Module {
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
-        let function_info = self.functions.get(name).ok_or_else(|| {
+        let name = format!("lib.{name}");
+        let function_info = self.functions.get(&name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
                 name: name.to_string(),
                 existing: self.functions.keys().cloned().collect(),

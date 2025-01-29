@@ -5,19 +5,21 @@ use inetnum::addr::Prefix;
 use crate::{ast::Identifier, parser::meta::MetaId, Runtime};
 
 use super::{
-    scope::{DefinitionRef, ScopeRef},
+    scope::{ResolvedName, ScopeGraph, ScopeRef},
     types::{Function, Primitive, Type},
     unionfind::UnionFind,
 };
 
 /// The output of the type checker that is used for lowering
-#[derive(Clone)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
 
+    /// All declarations in the program, extracted from the scope graph
+    pub scope_graph: ScopeGraph,
+
     /// Map from type names to types
-    pub(super) types: HashMap<Identifier, Type>,
+    pub(super) types: HashMap<ResolvedName, Type>,
 
     /// The types we inferred for each Expr
     ///
@@ -25,7 +27,7 @@ pub struct TypeInfo {
     pub(super) expr_types: HashMap<MetaId, Type>,
 
     /// The fully qualified (and hence unique) name for each identifier.
-    pub(super) resolved_names: HashMap<MetaId, DefinitionRef>,
+    pub(super) resolved_names: HashMap<MetaId, ResolvedName>,
 
     /// Scopes of functions
     pub(super) function_scopes: HashMap<MetaId, ScopeRef>,
@@ -50,6 +52,7 @@ impl TypeInfo {
     pub fn new(pointer_bytes: u32) -> Self {
         Self {
             unionfind: UnionFind::default(),
+            scope_graph: ScopeGraph::new(),
             types: HashMap::new(),
             expr_types: HashMap::new(),
             resolved_names: HashMap::new(),
@@ -61,16 +64,10 @@ impl TypeInfo {
             pointer_bytes,
         }
     }
-
-    pub fn add_type(&mut self, name: Identifier, ty: Type) {
-        if self.types.insert(name, ty).is_some() {
-            panic!("Type was added to TypeInfo twice");
-        }
-    }
 }
 
 impl TypeInfo {
-    pub fn resolved_name(&self, x: impl Into<MetaId>) -> DefinitionRef {
+    pub fn resolved_name(&self, x: impl Into<MetaId>) -> ResolvedName {
         self.resolved_names[&x.into()]
     }
 
@@ -94,6 +91,13 @@ impl TypeInfo {
 
     pub fn function_scope(&self, x: impl Into<MetaId>) -> ScopeRef {
         self.function_scopes[&x.into()]
+    }
+
+    pub fn full_name(&self, name: &ResolvedName) -> Identifier {
+        let mut s = self.scope_graph.print_scope(name.scope);
+        s.push('.');
+        s.push_str(name.ident.as_str());
+        s.into()
     }
 
     pub fn offset_of(
@@ -229,10 +233,7 @@ impl TypeInfo {
                 rt.get_runtime_type(id).unwrap().size() as u32
             }
             Type::Primitive(p) => p.size(),
-            Type::List(_)
-            | Type::Table(_)
-            | Type::OutputStream(_)
-            | Type::Rib(_) => self.pointer_bytes,
+            Type::List(_) => self.pointer_bytes,
             _ => 0,
         }
     }

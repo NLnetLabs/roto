@@ -5,15 +5,15 @@ use crate::{
 
 use super::{
     expr::Context,
-    scope::{LocalScopeRef, ScopeType},
+    scope::{ScopeRef, ScopeType},
     types::{Primitive, Type},
     TypeChecker, TypeResult,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn filter_map(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
@@ -24,13 +24,12 @@ impl TypeChecker<'_> {
         } = filter_map;
 
         let scope = self
+            .type_info
             .scope_graph
             .wrap(scope, ScopeType::Function(ident.node));
-        self.type_info
-            .function_scopes
-            .insert(ident.id, scope.into());
+        self.type_info.function_scopes.insert(ident.id, scope);
 
-        let params = self.params(params)?;
+        let params = self.params(scope, params)?;
         for (v, t) in &params {
             self.insert_var(scope, v.clone(), t)?;
         }
@@ -73,7 +72,7 @@ impl TypeChecker<'_> {
 
     pub fn function(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         function: &ast::FunctionDeclaration,
     ) -> TypeResult<()> {
         let ast::FunctionDeclaration {
@@ -84,20 +83,24 @@ impl TypeChecker<'_> {
         } = function;
 
         let scope = self
+            .type_info
             .scope_graph
             .wrap(scope, ScopeType::Function(ident.node));
 
-        self.type_info
-            .function_scopes
-            .insert(ident.id, scope.into());
+        self.type_info.function_scopes.insert(ident.id, scope);
 
-        let params = self.params(params)?;
+        let params = self.params(scope, params)?;
         for (v, t) in &params {
             self.insert_var(scope, v.clone(), t)?;
         }
 
         let ret = if let Some(ret) = ret {
-            let Some(ty) = self.get_type(ret.node) else {
+            let Some(ty) = self
+                .type_info
+                .scope_graph
+                .resolve_name(scope, ret)
+                .and_then(|dec| self.get_type(dec.name))
+            else {
                 return Err(self.error_undeclared_type(ret));
             };
             ty.clone()
@@ -116,27 +119,55 @@ impl TypeChecker<'_> {
 
     pub fn function_type(
         &mut self,
+        scope: ScopeRef,
         dec: &ast::FunctionDeclaration,
     ) -> TypeResult<Type> {
         let ret = if let Some(ret) = &dec.ret {
-            let Some(ty) = self.get_type(ret.node) else {
+            let Some(ty) = self
+                .type_info
+                .scope_graph
+                .resolve_name(scope, ret)
+                .and_then(|dec| self.get_type(dec.name))
+            else {
                 return Err(self.error_undeclared_type(ret));
             };
             ty.clone()
         } else {
             Type::Primitive(Primitive::Unit)
         };
-        Ok(Type::Function(self.params(&dec.params)?, Box::new(ret)))
+        Ok(Type::Function(
+            self.params(scope, &dec.params)?,
+            Box::new(ret),
+        ))
+    }
+
+    pub fn filter_map_type(
+        &mut self,
+        scope: ScopeRef,
+        dec: &ast::FilterMap,
+    ) -> TypeResult<Type> {
+        let accept = Box::new(self.fresh_var());
+        let reject = Box::new(self.fresh_var());
+        Ok(Type::Function(
+            self.params(scope, &dec.params)?,
+            Box::new(Type::Verdict(accept, reject)),
+        ))
     }
 
     fn params(
         &mut self,
+        scope: ScopeRef,
         args: &ast::Params,
     ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
         args.0
             .iter()
             .map(|(field_name, ty)| {
-                let Some(ty) = self.get_type(ty.node) else {
+                let Some(ty) = self
+                    .type_info
+                    .scope_graph
+                    .resolve_name(scope, ty)
+                    .and_then(|dec| self.get_type(dec.name))
+                else {
                     return Err(self.error_undeclared_type(ty));
                 };
 

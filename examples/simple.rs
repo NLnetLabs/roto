@@ -1,6 +1,6 @@
 use std::{env::args, net::IpAddr};
 
-use roto::{read_files, Runtime, Verdict};
+use roto::{FileTree, Runtime, Verdict};
 
 fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
@@ -16,7 +16,7 @@ fn main() -> Result<(), roto::RotoReport> {
         return Ok(());
     }
 
-    let mut compiled = read_files(["examples/simple.roto"])?
+    let mut compiled = FileTree::single_file("examples/simple.roto")
         .compile(runtime, usize::BITS / 8)
         .inspect_err(|e| eprintln!("{e}"))?;
 

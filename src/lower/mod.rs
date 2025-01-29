@@ -18,11 +18,12 @@ use value::IrType;
 
 use crate::{
     ast::{self, Identifier, Literal},
+    module::ModuleTree,
     parser::meta::Meta,
-    runtime::{self, Movability, RuntimeFunction},
+    runtime::{self, Movability, RuntimeFunction, RuntimeFunctionRef},
     typechecker::{
         info::TypeInfo,
-        scope::{DefinitionRef, ScopeRef},
+        scope::{DeclarationKind, ScopeRef},
         types::{
             FunctionDefinition, FunctionKind, Primitive, Signature, Type,
         },
@@ -61,16 +62,16 @@ struct Lowerer<'r> {
     tmp_idx: usize,
     blocks: Vec<Block>,
     type_info: &'r mut TypeInfo,
-    runtime_functions: &'r mut HashMap<usize, IrFunction>,
+    runtime_functions: &'r mut HashMap<RuntimeFunctionRef, IrFunction>,
     label_store: &'r mut LabelStore,
     runtime: &'r Runtime,
     stack_slots: Vec<(Var, Type)>,
 }
 
 pub fn lower(
-    tree: &ast::SyntaxTree,
+    tree: &ModuleTree,
     type_info: &mut TypeInfo,
-    runtime_functions: &mut HashMap<usize, IrFunction>,
+    runtime_functions: &mut HashMap<RuntimeFunctionRef, IrFunction>,
     label_store: &mut LabelStore,
     runtime: &Runtime,
 ) -> Vec<Function> {
@@ -80,7 +81,7 @@ pub fn lower(
 impl<'r> Lowerer<'r> {
     fn new(
         type_info: &'r mut TypeInfo,
-        runtime_functions: &'r mut HashMap<usize, IrFunction>,
+        runtime_functions: &'r mut HashMap<RuntimeFunctionRef, IrFunction>,
         function_name: &Meta<Identifier>,
         label_store: &'r mut LabelStore,
         runtime: &'r Runtime,
@@ -137,50 +138,50 @@ impl<'r> Lowerer<'r> {
     /// Lower a syntax tree
     fn tree(
         type_info: &mut TypeInfo,
-        runtime_functions: &mut HashMap<usize, IrFunction>,
-        tree: &ast::SyntaxTree,
+        runtime_functions: &mut HashMap<RuntimeFunctionRef, IrFunction>,
+        tree: &ModuleTree,
         label_store: &mut LabelStore,
         runtime: &'r Runtime,
     ) -> Vec<Function> {
-        let ast::SyntaxTree {
-            declarations: expressions,
-        } = tree;
-
         let mut functions = Vec::new();
 
-        for expr in expressions {
-            match expr {
-                ast::Declaration::FilterMap(x) => {
-                    functions.push(
-                        Lowerer::new(
-                            type_info,
-                            runtime_functions,
-                            &x.ident,
-                            label_store,
-                            runtime,
-                        )
-                        .filter_map(x),
-                    );
-                }
-                ast::Declaration::Function(ast::FunctionDeclaration {
-                    ident,
-                    params,
-                    body,
-                    ret,
-                }) => {
-                    functions.push(
-                        Lowerer::new(
-                            type_info,
-                            runtime_functions,
+        for m in &tree.modules {
+            for d in &m.ast.declarations {
+                match d {
+                    ast::Declaration::FilterMap(x) => {
+                        functions.push(
+                            Lowerer::new(
+                                type_info,
+                                runtime_functions,
+                                &x.ident,
+                                label_store,
+                                runtime,
+                            )
+                            .filter_map(x),
+                        );
+                    }
+                    ast::Declaration::Function(
+                        ast::FunctionDeclaration {
                             ident,
-                            label_store,
-                            runtime,
-                        )
-                        .function(ident, params, ret, body),
-                    );
+                            params,
+                            body,
+                            ret,
+                        },
+                    ) => {
+                        functions.push(
+                            Lowerer::new(
+                                type_info,
+                                runtime_functions,
+                                ident,
+                                label_store,
+                                runtime,
+                            )
+                            .function(ident, params, ret, body),
+                        );
+                    }
+                    // Ignore the rest
+                    _ => {}
                 }
-                // Ignore the rest
-                _ => {}
             }
         }
 
@@ -208,11 +209,10 @@ impl<'r> Lowerer<'r> {
             })
             .collect();
 
-        for (def, ty) in &parameter_types {
-            let (scope, name) = def.to_scope_and_name();
+        for (name, ty) in &parameter_types {
             let var = Var {
-                scope,
-                kind: VarKind::Explicit(name),
+                scope: name.scope,
+                kind: VarKind::Explicit(name.ident),
             };
             self.stack_slots.push((var, ty.clone()))
         }
@@ -240,21 +240,20 @@ impl<'r> Lowerer<'r> {
             x => (Some(self.lower_type(&x)), false),
         };
 
-        dbg!(return_ptr);
-
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| {
-                    (def.to_scope_and_name().1, self.lower_type(ty))
-                })
+                .map(|(def, ty)| (def.ident, self.lower_type(ty)))
                 .collect(),
             return_ptr,
             return_type,
         };
 
+        let name = self.type_info.resolved_name(ident);
+        let name = self.type_info.full_name(&name);
+
         Function {
-            name: ident.node,
+            name,
             scope: self.function_scope,
             entry_block: label,
             signature,
@@ -264,16 +263,6 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    /// Lower a function
-    ///
-    /// We compile functions differently than turing complete languages,
-    /// because we don't have a full stack. Instead, the arguments just
-    /// have fixed locations. The interpreter does have to keep track
-    /// where the function is called and hence where it has to return to
-    ///
-    /// Ultimately, it should be possible to inline all functions, so
-    /// that we don't even need a return instruction. However, this could
-    /// also be done by an optimizing step.
     fn function(
         mut self,
         ident: &Meta<Identifier>,
@@ -286,35 +275,37 @@ impl<'r> Lowerer<'r> {
 
         let mut parameter_types = Vec::new();
 
-        for (x, _) in &params.0 {
-            let ty = self.type_info.type_of(x);
+        let name = self.type_info.resolved_name(ident);
+        let declaration = self.type_info.scope_graph.get_declaration(name);
+        let DeclarationKind::Function(_, ty) = declaration.kind else {
+            unreachable!();
+        };
+
+        let Type::Function(params, return_type) = self.type_info.resolve(&ty)
+        else {
+            unreachable!();
+        };
+
+        for (x, ty) in &params {
             parameter_types.push((self.type_info.resolved_name(x), ty));
         }
-
-        let return_type = return_type
-            .as_ref()
-            .map(|t| self.type_info.resolve(&Type::Name(**t)));
 
         let signature = Signature {
             kind: FunctionKind::Free,
             parameter_types: parameter_types
                 .iter()
-                .cloned()
                 .map(|x| x.1)
+                .cloned()
                 .collect(),
-            return_type: return_type
-                .clone()
-                .unwrap_or(Type::Primitive(Primitive::Unit)),
+            return_type: *return_type.clone(),
         };
 
-        let return_type = return_type.map(|t| self.lower_type(&t));
+        let return_type = self.lower_type(&return_type);
 
         let ir_signature = ir::Signature {
             parameters: parameter_types
                 .iter()
-                .map(|(def, ty)| {
-                    (def.to_scope_and_name().1, self.lower_type(ty))
-                })
+                .map(|(def, ty)| (def.ident, self.lower_type(ty)))
                 .collect(),
             return_ptr: false, // TODO: check this
             return_type,
@@ -324,8 +315,11 @@ impl<'r> Lowerer<'r> {
 
         self.add(Instruction::Return(last));
 
+        let name = self.type_info.resolved_name(ident);
+        let name = self.type_info.full_name(&name);
+
         Function {
-            name: ident.node,
+            name,
             scope: self.function_scope,
             entry_block: label,
             blocks: self.blocks,
@@ -352,16 +346,15 @@ impl<'r> Lowerer<'r> {
         match stmt {
             ast::Stmt::Let(ident, expr) => {
                 let val = self.expr(expr);
-                let def = self.type_info.resolved_name(ident);
-                let (scope, name) = def.to_scope_and_name();
+                let name = self.type_info.resolved_name(ident);
                 let ty = self.type_info.type_of(ident);
                 if self.type_info.size_of(&ty, self.runtime) > 0 {
                     let val = val.unwrap();
                     let ty = self.lower_type(&ty);
                     self.add(Instruction::Assign {
                         to: Var {
-                            scope,
-                            kind: VarKind::Explicit(name),
+                            scope: name.scope,
+                            kind: VarKind::Explicit(**ident),
                         },
                         val,
                         ty,
@@ -479,7 +472,7 @@ impl<'r> Lowerer<'r> {
 
                         self.call_runtime_function(
                             **ident,
-                            runtime_func,
+                            *runtime_func,
                             args,
                             &func.signature.parameter_types,
                             &func.signature.return_type,
@@ -487,11 +480,7 @@ impl<'r> Lowerer<'r> {
                     }
                     FunctionDefinition::Roto => {
                         let ty = self.type_info.type_of(ident);
-                        let ident = self
-                            .type_info
-                            .resolved_name(ident)
-                            .to_scope_and_name()
-                            .1;
+                        let name = self.type_info.resolved_name(ident);
 
                         let Type::Function(params, ret) = ty else {
                             ice!("can only call functions");
@@ -520,10 +509,12 @@ impl<'r> Lowerer<'r> {
                             kind: VarKind::Context,
                         };
 
+                        let name = self.type_info.full_name(&name);
+
                         self.add(Instruction::Call {
                             to: to.clone(),
                             ctx: ctx.into(),
-                            func: ident,
+                            func: name,
                             args: new_args,
                         });
 
@@ -615,7 +606,7 @@ impl<'r> Lowerer<'r> {
 
                 self.call_runtime_function(
                     **ident,
-                    runtime_func,
+                    *runtime_func,
                     args,
                     &func.signature.parameter_types,
                     &func.signature.return_type,
@@ -669,10 +660,11 @@ impl<'r> Lowerer<'r> {
                 }
             }
             ast::Expr::Var(x) => {
-                let def = self.type_info.resolved_name(x);
-
-                match def {
-                    DefinitionRef::Context(_, offset) => {
+                let name = self.type_info.resolved_name(x);
+                let dec = self.type_info.scope_graph.get_declaration(name);
+                let full_name = self.type_info.full_name(&name);
+                match dec.kind {
+                    DeclarationKind::Context(offset, _) => {
                         let ty = self.type_info.type_of(id);
                         let var = Var {
                             scope: self.function_scope,
@@ -680,24 +672,26 @@ impl<'r> Lowerer<'r> {
                         };
                         Some(self.read_field(var.into(), offset as u32, &ty))
                     }
-                    DefinitionRef::Constant(ident) => {
+                    DeclarationKind::Constant(_) => {
                         let var = self.new_tmp();
                         let ty = self.type_info.type_of(id);
                         let ty = self.lower_type(&ty);
                         self.add(Instruction::LoadConstant {
                             to: var.clone(),
-                            name: ident,
+                            name: full_name,
                             ty,
                         });
                         Some(var.into())
                     }
-                    DefinitionRef::Local(scope, ident) => Some(
+                    DeclarationKind::Variable(_) => Some(
                         Var {
-                            scope: scope.into(),
-                            kind: VarKind::Explicit(ident),
+                            scope: dec.name.scope,
+                            kind: VarKind::Explicit(dec.name.ident),
                         }
                         .into(),
                     ),
+                    DeclarationKind::Type(_) => unreachable!(),
+                    DeclarationKind::Function(_, _) => unreachable!(),
                 }
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
@@ -778,7 +772,7 @@ impl<'r> Lowerer<'r> {
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
                         let function = self.type_info.function(id);
-                        let FunctionDefinition::Runtime(runtime_func) =
+                        let FunctionDefinition::Runtime(runtime_func_ref) =
                             function.definition.clone()
                         else {
                             panic!()
@@ -799,6 +793,9 @@ impl<'r> Lowerer<'r> {
                             align_shift,
                         });
 
+                        let runtime_func =
+                            self.runtime.get_function(runtime_func_ref);
+
                         let ident = Identifier::from("new");
                         let ir_func = IrFunction {
                             name: ident,
@@ -812,11 +809,11 @@ impl<'r> Lowerer<'r> {
                         };
 
                         self.runtime_functions
-                            .insert(runtime_func.id, ir_func);
+                            .insert(runtime_func_ref, ir_func);
 
                         self.add(Instruction::CallRuntime {
                             to: None,
-                            func: runtime_func,
+                            func: runtime_func_ref,
                             args: vec![place.clone().into(), left, right],
                         });
                     }
@@ -826,19 +823,15 @@ impl<'r> Lowerer<'r> {
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
                         let ip_addr_type_id = TypeId::of::<IpAddr>();
-                        let runtime_func = self
-                            .find_runtime_function(
-                                runtime::FunctionKind::Method(
-                                    ip_addr_type_id,
-                                ),
-                                "eq",
-                            )
-                            .clone();
+                        let runtime_func = self.find_runtime_function(
+                            runtime::FunctionKind::Method(ip_addr_type_id),
+                            "eq",
+                        );
 
                         let out = self
                             .call_runtime_function(
                                 Identifier::from("eq"),
-                                &runtime_func,
+                                runtime_func.get_ref(),
                                 [left, right],
                                 &[
                                     Type::Primitive(Primitive::IpAddr),
@@ -859,19 +852,15 @@ impl<'r> Lowerer<'r> {
                         Type::Primitive(Primitive::IpAddr),
                     ) => {
                         let ip_addr_type_id = TypeId::of::<IpAddr>();
-                        let runtime_func = self
-                            .find_runtime_function(
-                                runtime::FunctionKind::Method(
-                                    ip_addr_type_id,
-                                ),
-                                "eq",
-                            )
-                            .clone();
+                        let runtime_func = self.find_runtime_function(
+                            runtime::FunctionKind::Method(ip_addr_type_id),
+                            "eq",
+                        );
 
                         let out = self
                             .call_runtime_function(
                                 Identifier::from("eq"),
-                                &runtime_func,
+                                runtime_func.get_ref(),
                                 [left, right],
                                 &[
                                     Type::Primitive(Primitive::IpAddr),
@@ -1209,7 +1198,7 @@ impl<'r> Lowerer<'r> {
     fn call_runtime_function(
         &mut self,
         ident: Identifier,
-        runtime_func: &RuntimeFunction,
+        runtime_func_ref: RuntimeFunctionRef,
         args: impl IntoIterator<Item = Operand>,
         parameter_types: &[Type],
         return_type: &Type,
@@ -1233,6 +1222,8 @@ impl<'r> Lowerer<'r> {
             .chain(args)
             .collect();
 
+        let runtime_func = self.runtime.get_function(runtime_func_ref);
+
         let ir_func = IrFunction {
             name: ident,
             ptr: runtime_func.description.pointer(),
@@ -1240,11 +1231,11 @@ impl<'r> Lowerer<'r> {
             ret: None,
         };
 
-        self.runtime_functions.insert(runtime_func.id, ir_func);
+        self.runtime_functions.insert(runtime_func_ref, ir_func);
 
         self.add(Instruction::CallRuntime {
             to: None,
-            func: runtime_func.clone(),
+            func: runtime_func_ref,
             args,
         });
 

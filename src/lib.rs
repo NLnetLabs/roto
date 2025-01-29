@@ -1,18 +1,19 @@
 // Needed for the roto macros
 extern crate self as roto;
 
-pub(crate) mod ast;
+mod ast;
 
-pub(crate) mod codegen;
-pub(crate) mod lower;
-pub(crate) mod parser;
-pub(crate) mod typechecker;
-pub(crate) mod walker;
-
-pub(crate) mod pipeline;
-pub(crate) mod runtime;
+mod codegen;
+mod file_tree;
+mod lower;
+mod module;
+mod parser;
+mod pipeline;
+mod runtime;
+mod typechecker;
 
 pub use codegen::TypedFunc;
+pub use file_tree::FileTree;
 pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;

@@ -13,7 +13,8 @@ use crate::{
         ir::{Instruction, IntCmp, VarKind},
         value::IrValue,
     },
-    runtime::{RuntimeConstant, RuntimeFunction},
+    runtime::{RuntimeConstant, RuntimeFunctionRef},
+    Runtime,
 };
 use std::collections::HashMap;
 
@@ -244,6 +245,7 @@ impl Allocation {
 /// fairly slow. This is because all variables at this point are identified
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
+    rt: &Runtime,
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
@@ -390,7 +392,7 @@ pub fn eval(
                     .iter()
                     .map(|a| eval_operand(&vars, a).clone())
                     .collect();
-                let ret = call_runtime_function(mem, func, args);
+                let ret = call_runtime_function(rt, mem, *func, args);
                 if let Some((to, _ty)) = to {
                     vars.insert(to.clone(), ret.unwrap());
                 }
@@ -640,10 +642,12 @@ pub fn eval(
 }
 
 fn call_runtime_function(
+    rt: &Runtime,
     mem: &mut Memory,
-    func: &RuntimeFunction,
+    func: RuntimeFunctionRef,
     mut args: Vec<IrValue>,
 ) -> Option<IrValue> {
+    let func = rt.get_function(func);
     assert_eq!(func.description.parameter_types().len(), args.len());
 
     // Runtime functions don't understand our pointers, so we need to resolve

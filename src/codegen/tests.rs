@@ -5,17 +5,17 @@ use roto_macros::{roto_function, roto_static_method};
 
 use crate::{
     pipeline::Compiled, runtime::tests::routecore_runtime, src, Context,
-    Files, Runtime, Val, Verdict,
+    FileTree, Runtime, Val, Verdict,
 };
 
 #[track_caller]
-fn compile(f: Files) -> Compiled {
+fn compile(f: FileTree) -> Compiled {
     let runtime = routecore_runtime().unwrap();
     compile_with_runtime(f, runtime)
 }
 
 #[track_caller]
-fn compile_with_runtime(f: Files, runtime: Runtime) -> Compiled {
+fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
     let _ = env_logger::try_init();
 
     let pointer_bytes = usize::BITS / 8;

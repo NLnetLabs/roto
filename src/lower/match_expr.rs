@@ -258,8 +258,7 @@ impl Lowerer<'_> {
             } = &arm.pattern.node
             {
                 let ty = self.type_info.type_of(var);
-                let (scope, ident) =
-                    self.type_info.resolved_name(var).to_scope_and_name();
+                let name = self.type_info.resolved_name(var);
 
                 // The offset of the field is (at least) 1 because of the
                 // discriminant.
@@ -270,7 +269,7 @@ impl Lowerer<'_> {
                 let ty = self.lower_type(&ty);
                 self.add(Instruction::Assign {
                     to: Var {
-                        scope,
+                        scope: name.scope,
                         kind: VarKind::Explicit(ident),
                     },
                     val,

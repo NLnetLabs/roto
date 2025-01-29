@@ -18,9 +18,6 @@ pub struct SyntaxTree {
 #[derive(Clone, Debug)]
 pub enum Declaration {
     FilterMap(Box<FilterMap>),
-    Rib(Rib),
-    Table(Table),
-    OutputStream(OutputStream),
     Record(RecordTypeDeclaration),
     Function(FunctionDeclaration),
 }
@@ -173,39 +170,6 @@ pub enum Pattern {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct Rib {
-    pub ident: Meta<Identifier>,
-    pub contain_ty: Meta<Identifier>,
-    pub body: RibBody,
-}
-
-#[derive(Clone, Debug)]
-pub struct RibBody {
-    pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum RibFieldType {
-    Identifier(Meta<Identifier>),
-    Record(Meta<RecordType>),
-    List(Meta<Box<RibFieldType>>),
-}
-
-#[derive(Clone, Debug)]
-pub struct Table {
-    pub ident: Meta<Identifier>,
-    pub contain_ty: Meta<Identifier>,
-    pub body: RibBody,
-}
-
-#[derive(Clone, Debug)]
-pub struct OutputStream {
-    pub ident: Meta<Identifier>,
-    pub contain_ty: Meta<Identifier>,
-    pub body: RibBody,
-}
-
 /// An identifier is the name of variables or other things.
 ///
 /// It is a word composed of a leading alphabetic Unicode character, followed
@@ -245,7 +209,14 @@ impl From<String> for Identifier {
 
 #[derive(Clone, Debug)]
 pub struct RecordType {
-    pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
+    pub key_values: Meta<Vec<(Meta<Identifier>, RecordFieldType)>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum RecordFieldType {
+    Identifier(Meta<Identifier>),
+    Record(Meta<RecordType>),
+    List(Meta<Box<RecordFieldType>>),
 }
 
 #[derive(Clone, Debug)]

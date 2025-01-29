@@ -122,9 +122,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         stream.push(Output::Custom(id, local));
     }
 
-    let mut compiled = roto::read_files(["examples/presentation.roto"])?
-        .compile(rt, usize::BITS / 8)
-        .inspect_err(|e| eprintln!("{e}"))?;
+    let mut compiled =
+        roto::FileTree::single_file("examples/presentation.roto")
+            .compile(rt, usize::BITS / 8)
+            .inspect_err(|e| eprintln!("{e}"))?;
 
     let function = compiled.get_function("rib-in-pre").unwrap();
 

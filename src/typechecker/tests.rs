@@ -1,15 +1,16 @@
+use crate::file_tree::FileTree;
+use crate::pipeline::RotoReport;
 use crate::runtime::tests::routecore_runtime;
-use crate::{pipeline::RotoReport, Files};
 use crate::{src, Context, Runtime};
 
 #[track_caller]
-fn typecheck(loaded: Files) -> Result<(), RotoReport> {
+fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
     typecheck_with_runtime(loaded, routecore_runtime().unwrap())
 }
 
 #[track_caller]
 fn typecheck_with_runtime(
-    loaded: Files,
+    loaded: FileTree,
     rt: Runtime,
 ) -> Result<(), RotoReport> {
     let res = loaded.parse();
@@ -142,39 +143,6 @@ fn record_diamond() {
         type B { x: D }
         type C { x: D }
         type D { }
-    "
-    );
-    assert!(typecheck(s).is_ok());
-}
-
-#[test]
-fn table_contains_record() {
-    let s = src!(
-        "
-        table t contains A { b: B }
-        type B { x: u32 }
-    "
-    );
-    assert!(typecheck(s).is_ok());
-}
-
-#[test]
-fn output_stream_contains_record() {
-    let s = src!(
-        "
-        output-stream o contains A { b: B }
-        type B { x: u32 }
-    "
-    );
-    assert!(typecheck(s).is_ok());
-}
-
-#[test]
-fn rib_contains_record() {
-    let s = src!(
-        "
-        rib r contains A { b: B }
-        type B { x: u32 }
     "
     );
     assert!(typecheck(s).is_ok());

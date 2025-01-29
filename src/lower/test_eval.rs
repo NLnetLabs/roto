@@ -1,8 +1,8 @@
 use super::{eval::Memory, value::IrValue};
-use crate::{runtime::tests::routecore_runtime, src, Files, Lowered};
+use crate::{runtime::tests::routecore_runtime, src, FileTree, Lowered};
 
 #[track_caller]
-fn compile(s: Files) -> Lowered {
+fn compile(s: FileTree) -> Lowered {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     let _ = env_logger::builder()

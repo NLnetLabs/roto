@@ -324,11 +324,6 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             ),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Rib => Declaration::Rib(self.rib()?),
-            Token::Table => Declaration::Table(self.table()?),
-            Token::OutputStream => {
-                Declaration::OutputStream(self.output_stream()?)
-            }
             Token::FilterMap | Token::Filter => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
