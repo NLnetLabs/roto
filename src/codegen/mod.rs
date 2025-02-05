@@ -1076,12 +1076,18 @@ impl Module {
         &mut self,
         mut ctx: Ctx,
     ) -> Result<(), ()> {
+        dbg!(self.functions.keys().collect::<Vec<_>>());
         let tests: Vec<_> = self
             .functions
             .keys()
-            .filter(|x| x.starts_with("test#"))
+            .filter(|x| {
+                x.rsplit_once(".")
+                    .map_or(x.as_ref(), |x| x.1)
+                    .starts_with("test#")
+            })
             .map(Clone::clone)
             .collect();
+        dbg!(&tests);
 
         let total = tests.len();
         let total_width = total.to_string().len();
@@ -1090,10 +1096,12 @@ impl Module {
 
         for (n, test) in tests.into_iter().enumerate() {
             let n = n + 1;
-            let test_display = test.strip_prefix("test#").unwrap();
+            let test_display = test.replace("test#", "");
             print!("Test {n:>total_width$} / {total}: {test_display}... ");
             let test_fn = self
-                .get_function::<Ctx, (), Verdict<(), ()>>(&test)
+                .get_function::<Ctx, (), Verdict<(), ()>>(
+                    test.strip_prefix("lib.").unwrap(),
+                )
                 .unwrap();
 
             match test_fn.call(&mut ctx) {

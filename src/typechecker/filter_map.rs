@@ -124,12 +124,27 @@ impl TypeChecker {
     ) -> TypeResult<()> {
         let ast::Test { ident, body } = test;
 
+        let name = Identifier::from(format!("test#{ident}"));
+        let name = Meta {
+            id: ident.id,
+            node: name,
+        };
+        self.insert_function(
+            scope,
+            name.clone(),
+            super::types::FunctionDefinition::Roto,
+            Type::Function(
+                Vec::new(),
+                Box::new(Type::Primitive(Primitive::Unit)),
+            ),
+        )?;
+
         let scope = self
             .type_info
             .scope_graph
-            .wrap(scope, ScopeType::Function(ident.node));
+            .wrap(scope, ScopeType::Function(name.node));
 
-        self.type_info.function_scopes.insert(ident.id, scope);
+        self.type_info.function_scopes.insert(name.id, scope);
 
         let unit = Box::new(Type::Primitive(Primitive::Unit));
         let ret = Type::Verdict(unit.clone(), unit);
