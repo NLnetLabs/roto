@@ -351,14 +351,10 @@ pub fn codegen(
 
 impl ModuleBuilder {
     fn declare_constant(&mut self, constant: &RuntimeConstant) {
+        let full_name = format!(".{}", constant.name);
         let data_id = self
             .inner
-            .declare_data(
-                constant.name.as_str(),
-                Linkage::Local,
-                false,
-                false,
-            )
+            .declare_data(&full_name, Linkage::Local, false, false)
             .unwrap();
 
         let mut description = DataDescription::new();
@@ -940,7 +936,7 @@ impl<'c> FuncGen<'c> {
                 let Some(FuncOrDataId::Data(data_id)) =
                     self.module.inner.get_name(name.as_str())
                 else {
-                    panic!();
+                    panic!("Could not find {name}");
                 };
                 let val = self
                     .module
