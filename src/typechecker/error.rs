@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    scope::{DeclarationKind, StubDeclaration, StubDeclarationKind},
+    scope::{StubDeclaration, StubDeclarationKind},
     types::Type,
     TypeChecker,
 };
@@ -142,31 +142,12 @@ impl TypeChecker {
         }
     }
 
-    pub fn error_tried_to_overwrite_builtin(
-        &self,
-        type_name: &Meta<Identifier>,
-    ) -> TypeError {
-        TypeError {
-            description: format!(
-                "type `{type_name}` is a built-in type and cannot be overwritten"
-            ),
-            location: type_name.id,
-            labels: vec![Label::error("declared here", type_name.id)],
-        }
-    }
-
     pub fn error_not_a_type(
         &self,
         ident: &Meta<Identifier>,
         stub: StubDeclaration,
     ) -> TypeError {
-        let kind = match stub.kind {
-            StubDeclarationKind::Context => "constant",
-            StubDeclarationKind::Constant => "context variable",
-            StubDeclarationKind::Variable => "variable",
-            StubDeclarationKind::Type => unreachable!(),
-            StubDeclarationKind::Function => "function",
-        };
+        let kind = describe_declaration(&stub);
         TypeError {
             description: format!("expected type, but found {kind} `{ident}`",),
             location: ident.id,
@@ -351,7 +332,8 @@ impl TypeChecker {
         ident: &Meta<Identifier>,
         declaration: &Declaration,
     ) -> TypeError {
-        let kind = describe_declaration(declaration);
+        let stub = declaration.to_stub();
+        let kind = describe_declaration(&stub);
         TypeError {
             description: format!(
                 "expected a value, but found {kind} `{}`",
@@ -376,7 +358,8 @@ impl TypeChecker {
         ident: &Meta<Identifier>,
         declaration: &Declaration,
     ) -> TypeError {
-        let kind = describe_declaration(declaration);
+        let stub = declaration.to_stub();
+        let kind = describe_declaration(&stub);
         TypeError {
             description: format!(
                 "expected a function, but found {kind} `{}`",
@@ -397,13 +380,13 @@ impl TypeChecker {
     }
 }
 
-fn describe_declaration(d: &Declaration) -> &str {
+fn describe_declaration(d: &StubDeclaration) -> &str {
     match &d.kind {
-        DeclarationKind::Context(_, _) => "context",
-        DeclarationKind::Constant(_) => "constant",
-        DeclarationKind::Variable(_) => "variable",
-        DeclarationKind::Type(_) => "type",
-        DeclarationKind::Function(_, _) => "function",
+        StubDeclarationKind::Context => "context",
+        StubDeclarationKind::Constant => "constant",
+        StubDeclarationKind::Variable => "variable",
+        StubDeclarationKind::Type => "type",
+        StubDeclarationKind::Function => "function",
     }
 }
 

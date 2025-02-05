@@ -129,9 +129,7 @@ impl TypeChecker {
             .scope_graph
             .wrap(scope, ScopeType::Function(ident.node));
 
-        self.type_info
-            .function_scopes
-            .insert(ident.id, scope.into());
+        self.type_info.function_scopes.insert(ident.id, scope);
 
         let unit = Box::new(Type::Primitive(Primitive::Unit));
         let ret = Type::Verdict(unit.clone(), unit);

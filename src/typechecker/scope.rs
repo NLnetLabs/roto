@@ -78,7 +78,7 @@ pub struct ModuleScope {
 }
 
 impl Declaration {
-    fn to_stub(&self) -> StubDeclaration {
+    pub fn to_stub(&self) -> StubDeclaration {
         StubDeclaration {
             name: self.name,
             kind: self.kind.to_stub(),
