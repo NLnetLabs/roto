@@ -20,7 +20,7 @@ impl TypeChecker<'_> {
             filter_type,
             ident,
             params,
-            block,
+            body,
         } = filter_map;
 
         let scope = self
@@ -44,7 +44,7 @@ impl TypeChecker<'_> {
             function_return_type: Some(ty.clone()),
         };
 
-        self.block(scope, &ctx, block)?;
+        self.block(scope, &ctx, body)?;
 
         if let Type::Var(x) = self.resolve_type(&a) {
             self.unify(
@@ -110,6 +110,31 @@ impl TypeChecker<'_> {
             function_return_type: Some(ret),
         };
 
+        self.block(scope, &ctx, body)?;
+        Ok(())
+    }
+
+    pub fn test(
+        &mut self,
+        scope: LocalScopeRef,
+        test: &ast::Test,
+    ) -> TypeResult<()> {
+        let ast::Test { ident, body } = test;
+
+        let scope = self
+            .scope_graph
+            .wrap(scope, ScopeType::Function(ident.node));
+
+        self.type_info
+            .function_scopes
+            .insert(ident.id, scope.into());
+
+        let unit = Box::new(Type::Primitive(Primitive::Unit));
+        let ret = Type::Verdict(unit.clone(), unit);
+        let ctx = Context {
+            expected_type: ret.clone(),
+            function_return_type: Some(ret),
+        };
         self.block(scope, &ctx, body)?;
         Ok(())
     }

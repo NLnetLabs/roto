@@ -304,6 +304,12 @@ impl TypeChecker<'_> {
             }
         }
 
+        for expr in &tree.declarations {
+            if let ast::Declaration::Test(t) = expr {
+                checker.test(module_scope, t)?
+            }
+        }
+
         Ok(checker.type_info)
     }
 

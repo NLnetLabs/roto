@@ -367,8 +367,8 @@ impl<'a> IrPrinter<'a> {
             } => format!(
                 "{}: {ty} = {}({}, {})",
                 self.var(to),
-                self.operand(ctx),
                 self.ident(func),
+                self.operand(ctx),
                 args.iter()
                     .map(|a| format!(
                         "{} = {}",

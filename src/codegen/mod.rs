@@ -16,17 +16,12 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    runtime::{
-        context::ContextDescription,
-        ty::{Reflect, GLOBAL_TYPE_REGISTRY},
-        RuntimeConstant,
-    },
+    runtime::{context::ContextDescription, ty::Reflect, RuntimeConstant},
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue,
+    IrValue, Verdict,
 };
 use check::{
-    check_roto_type_reflect, return_type_by_ref, FunctionRetrievalError,
-    RotoParams, TypeMismatch,
+    check_roto_type_reflect, FunctionRetrievalError, RotoParams, TypeMismatch,
 };
 use cranelift::{
     codegen::{
@@ -177,6 +172,7 @@ call_impl!(A, B, C, D, E, F, G);
 pub struct FunctionInfo {
     id: FuncId,
     signature: types::Signature,
+    return_by_ref: bool,
 }
 
 struct ModuleBuilder {
@@ -377,6 +373,7 @@ impl ModuleBuilder {
 
         let mut sig = self.inner.make_signature();
 
+        // This is the parameter for the context
         sig.params
             .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
 
@@ -406,6 +403,7 @@ impl ModuleBuilder {
             name.to_string(),
             FunctionInfo {
                 id: func_id,
+                return_by_ref: ir_signature.return_ptr,
                 signature: signature.clone(),
             },
         );
@@ -1072,6 +1070,52 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
+    pub fn run_tests<Ctx: 'static>(
+        &mut self,
+        mut ctx: Ctx,
+    ) -> Result<(), ()> {
+        let tests: Vec<_> = self
+            .functions
+            .keys()
+            .filter(|x| x.starts_with("test#"))
+            .map(Clone::clone)
+            .collect();
+
+        let total = tests.len();
+        let total_width = total.to_string().len();
+        let mut successes = 0;
+        let mut failures = 0;
+
+        for (n, test) in tests.into_iter().enumerate() {
+            let n = n + 1;
+            let test_display = test.strip_prefix("test#").unwrap();
+            print!("Test {n:>total_width$} / {total}: {test_display}... ");
+            let test_fn = self
+                .get_function::<Ctx, (), Verdict<(), ()>>(&test)
+                .unwrap();
+
+            match test_fn.call(&mut ctx) {
+                Verdict::Accept(()) => {
+                    successes += 1;
+                    println!("\x1B[92mok\x1B[m");
+                }
+                Verdict::Reject(()) => {
+                    failures += 1;
+                    println!("\x1B[91mfail\x1B[m");
+                }
+            }
+        }
+        println!(
+            "Ran {total} tests, {successes} succeeded, {failures} failed"
+        );
+
+        if failures == 0 {
+            Result::Ok(())
+        } else {
+            Result::Err(())
+        }
+    }
+
     pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
         &mut self,
         name: &str,
@@ -1109,14 +1153,10 @@ impl Module {
             )
         })?;
 
-        let registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
-        let return_by_ref =
-            return_type_by_ref(&registry, TypeId::of::<Return>());
-
         let func_ptr = self.inner.0.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
-            return_by_ref,
+            return_by_ref: function_info.return_by_ref,
             _module: self.inner.clone(),
             _ty: PhantomData,
         })
