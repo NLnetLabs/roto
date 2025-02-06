@@ -123,7 +123,7 @@ impl Display for Type {
             }
             Type::Filter(args) => write!(f, "filter({})", fmt_args(args)?),
             Type::FilterMap(args) => {
-                write!(f, "filter-map({})", fmt_args(args)?)
+                write!(f, "filtermap({})", fmt_args(args)?)
             }
             Type::Name(x) => write!(f, "{}", x.ident),
         }

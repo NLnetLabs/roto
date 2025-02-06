@@ -112,7 +112,7 @@ pub enum Instruction {
         args: Vec<Operand>,
     },
 
-    /// Return from the current function (or filter-map)
+    /// Return from the current function (or filtermap)
     Return(Option<Operand>),
 
     /// Perform a comparison and store the result in `to`

@@ -195,7 +195,7 @@ impl<'r> Lowerer<'r> {
         functions
     }
 
-    /// Lower a filter-map
+    /// Lower a filtermap
     fn filter_map(self, fm: &ast::FilterMap) -> Function {
         let ast::FilterMap {
             ident,
@@ -239,7 +239,7 @@ impl<'r> Lowerer<'r> {
         self.function_like(&ident, &params, &return_type, &test.body)
     }
 
-    /// Lower a function-like construct (i.e. a function, filter-map or test)
+    /// Lower a function-like construct (i.e. a function, filtermap or test)
     fn function_like(
         mut self,
         ident: &Meta<Identifier>,

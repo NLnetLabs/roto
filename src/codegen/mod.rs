@@ -1076,7 +1076,6 @@ impl Module {
         &mut self,
         mut ctx: Ctx,
     ) -> Result<(), ()> {
-        dbg!(self.functions.keys().collect::<Vec<_>>());
         let tests: Vec<_> = self
             .functions
             .keys()
@@ -1087,7 +1086,6 @@ impl Module {
             })
             .map(Clone::clone)
             .collect();
-        dbg!(&tests);
 
         let total = tests.len();
         let total_width = total.to_string().len();

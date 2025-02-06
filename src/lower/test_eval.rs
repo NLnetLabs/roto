@@ -97,7 +97,7 @@ impl MemVal {
 fn accept() {
     let s = src!(
         "
-        filter-map main(msg: u32) {
+        filtermap main(msg: u32) {
             accept
         }
     "
@@ -120,7 +120,7 @@ fn accept() {
 fn reject() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             reject
         }
     "
@@ -139,7 +139,7 @@ fn reject() {
 fn if_else() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             if true && true {
                 accept
             } else {
@@ -161,7 +161,7 @@ fn if_else() {
 fn react_to_rx() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if x <= 4 {
                 accept
             } else {
@@ -191,7 +191,7 @@ fn react_to_rx() {
 fn variable() {
     let s = src!(
         "
-    filter-map main() {
+    filtermap main() {
         let a = 5;
         if a == 5 {
             accept
@@ -223,7 +223,7 @@ fn calling_function() {
             smaller_than(10, x) && smaller_than(x, 20)
         }
 
-        filter-map main(msg: u32) {
+        filtermap main(msg: u32) {
             if small(msg) { accept }
             reject
         }
@@ -254,7 +254,7 @@ fn anonymous_record() {
             low < x && x < high
         }
 
-        filter-map main(msg: u32) {
+        filtermap main(msg: u32) {
             let a = { low: 10, high: 20 };
             if in_range(msg, a.low, a.high) { accept }
             reject
@@ -291,7 +291,7 @@ fn typed_record() {
             c.low < x && x < c.high
         }
 
-        filter-map main(msg: u32) {
+        filtermap main(msg: u32) {
             let a = Range { low: 10, high: 20 };
             let b = Range { low: a.low, high: a.high };
             let c = b;
@@ -324,7 +324,7 @@ fn nested_record() {
         type Foo { x: Bar, y: Bar }
         type Bar { a: i32, b: i32 }
 
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             let bar = Bar { a: 20, b: x };
             let foo = Foo { x: bar, y: bar };
             if foo.x.a == foo.y.b {
@@ -356,7 +356,7 @@ fn nested_record() {
 fn enum_values() {
     let s = src!(
         "
-        filter-map main(x: Afi) {
+        filtermap main(x: Afi) {
             if x == Afi.IpV4 {
                 accept
             } else {
@@ -396,7 +396,7 @@ fn enum_values() {
 fn call_runtime_function() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if pow(x, 2) > 100 {
                 accept
             } else {
@@ -426,7 +426,7 @@ fn call_runtime_function() {
 fn ip_addr_method() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if x.is_even() {
                 accept
             } else {

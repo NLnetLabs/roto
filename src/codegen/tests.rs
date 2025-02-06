@@ -44,7 +44,7 @@ fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
 fn accept() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept
         }
     "
@@ -63,7 +63,7 @@ fn accept() {
 fn reject() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             reject
         }
     "
@@ -82,7 +82,7 @@ fn reject() {
 fn equal_to_10() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if x == 10 {
                 accept
             } else {
@@ -112,7 +112,7 @@ fn equal_to_10_with_function() {
             x == 10
         }
         
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             if is_10(x) {
                 accept
             } else {
@@ -146,7 +146,7 @@ fn equal_to_10_with_two_functions() {
             equals(x, 10)
         }
 
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if is_10(x) {
                 accept
             } else if equals(x, 20) {
@@ -173,7 +173,7 @@ fn equal_to_10_with_two_functions() {
 fn negation() {
     let s = src!(
         "
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             if not (x == 10) {
                 accept
             } else {
@@ -203,7 +203,7 @@ fn negation() {
 fn a_bunch_of_comparisons() {
     let s = src!(
         "
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             if (
                 (x > 10 && x < 20)
                 || (x >= 30 && x <= 40)
@@ -242,7 +242,7 @@ fn record() {
         "
         type Foo { a: i32, b: i32 }
 
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             let foo = Foo { a: x, b: 20 };
             if foo.a == foo.b {
                 accept
@@ -275,7 +275,7 @@ fn record_with_fields_flipped() {
         "
         type Foo { a: i32, b: i32 }
 
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             # These are flipped, to ensure that the order in which
             # the fields are given doesn't matter:
             let foo = Foo { b: 20, a: x };
@@ -312,7 +312,7 @@ fn nested_record() {
         type Foo { x: Bar, y: Bar }
         type Bar { a: i32, b: i32 }
 
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             let bar = Bar { a: 20, b: x };
             let foo = Foo { x: bar, y: bar };
             if foo.x.a == foo.y.b {
@@ -347,7 +347,7 @@ fn misaligned_fields() {
         "
         type Foo { a: i16, b: i32 }
 
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             let foo = Foo { a: 10, b: x };
             if foo.b == 20 {
                 accept
@@ -378,7 +378,7 @@ fn misaligned_fields() {
 fn enum_match() {
     let s = src!(
         "
-        filter-map main(r: bool) { 
+        filtermap main(r: bool) { 
             let x = if r {
                 Afi.IpV4
             } else {
@@ -405,7 +405,7 @@ fn enum_match() {
 fn arithmetic() {
     let s = src!(
         "
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             if x + 10 * 20 < 250 {
                 accept
             } else {
@@ -434,7 +434,7 @@ fn arithmetic() {
 fn call_runtime_function() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if pow(x, 2) > 100 {
                 accept
             } else {
@@ -461,7 +461,7 @@ fn call_runtime_function() {
 fn call_runtime_method() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if x.is_even() {
                 accept
             } else {
@@ -488,7 +488,7 @@ fn call_runtime_method() {
 fn int_var() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept 32
         }
     "
@@ -519,7 +519,7 @@ fn issue_52() {
 
     let s = src!(
         "
-        filter-map main(foo: Foo) {
+        filtermap main(foo: Foo) {
             Foo.bar(1);
             accept
         }
@@ -550,7 +550,7 @@ fn issue_54() {
 fn asn() {
     let s = src!(
         "
-        filter-map main(x: Asn) {
+        filtermap main(x: Asn) {
             if x == AS1000 {
                 accept x
             } else {
@@ -579,7 +579,7 @@ fn asn() {
 fn mismatched_types() {
     let s = src!(
         "
-        filter-map main(x: i32) {
+        filtermap main(x: i32) {
             accept x
         }
     "
@@ -599,7 +599,7 @@ fn mismatched_types() {
 fn multiply() {
     let s = src!(
         "
-        filter-map main(x: u8) {
+        filtermap main(x: u8) {
             if x > 10 {
                 accept 2 * x
             } else {
@@ -622,7 +622,7 @@ fn multiply() {
 fn ip_output() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept 1.2.3.4
         }
     "
@@ -642,7 +642,7 @@ fn ip_output() {
 fn ip_passthrough() {
     let s = src!(
         "
-        filter-map main(x: IpAddr) {
+        filtermap main(x: IpAddr) {
             accept x
         }
     "
@@ -662,7 +662,7 @@ fn ip_passthrough() {
 fn ipv4_compare() {
     let s = src!(
         "
-        filter-map main(x: IpAddr) {
+        filtermap main(x: IpAddr) {
             if x == 0.0.0.0 {
                 accept x
             } else if x == 192.168.0.0 {
@@ -699,7 +699,7 @@ fn ipv4_compare() {
 fn ipv6_compare() {
     let s = src!(
         "
-        filter-map main(x: IpAddr) {
+        filtermap main(x: IpAddr) {
             if x == :: {
                 accept x
             } else if x == 192.168.0.0 {
@@ -739,7 +739,7 @@ fn ipv6_compare() {
 fn construct_prefix() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept 192.168.0.0 / 16
         }
     "
@@ -763,7 +763,7 @@ fn function_returning_unit() {
 
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept unit_unit()
         }
     "
@@ -814,7 +814,7 @@ fn arc_type() {
 
     let s = src!(
         "
-        filter-map main(choose: bool, x: CloneDrop, y: CloneDrop) {
+        filtermap main(choose: bool, x: CloneDrop, y: CloneDrop) {
             if choose {
                 accept x
             } else {
@@ -850,7 +850,7 @@ fn arc_type() {
 fn use_constant() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             let safi = 127.0.0.1;
             if safi == LOCALHOSTV4 {
                 reject
@@ -878,7 +878,7 @@ fn use_context() {
 
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             if bar {
                 accept foo + 1
             } else {
@@ -972,7 +972,7 @@ fn use_a_test() {
 fn string() {
     let s = src!(
         r#"
-        filter-map main() {
+        filtermap main() {
             accept "hello" 
         }
     "#
@@ -992,7 +992,7 @@ fn string() {
 fn string_append() {
     let s = src!(
         r#"
-        filter-map main(name: String) {
+        filtermap main(name: String) {
             accept "Hello ".append(name).append("!")
         }
     "#
@@ -1012,7 +1012,7 @@ fn string_append() {
 fn string_plus_operator() {
     let s = src!(
         r#"
-        filter-map main(name: String) {
+        filtermap main(name: String) {
             accept "Hello " + name + "!"
         }
     "#
@@ -1032,7 +1032,7 @@ fn string_plus_operator() {
 fn string_contains() {
     let s = src!(
         r#"
-        filter-map main(s: String) {
+        filtermap main(s: String) {
             if "incomprehensibilities".contains(s) {
                 accept
             } else {
@@ -1065,7 +1065,7 @@ fn string_contains() {
 fn string_starts_with() {
     let s = src!(
         r#"
-        filter-map main(s: String) {
+        filtermap main(s: String) {
             if "incomprehensibilities".starts_with(s) {
                 accept
             } else {
@@ -1098,7 +1098,7 @@ fn string_starts_with() {
 fn string_ends_with() {
     let s = src!(
         r#"
-        filter-map main(s: String) {
+        filtermap main(s: String) {
             if "incomprehensibilities".ends_with(s) {
                 accept
             } else {
@@ -1131,7 +1131,7 @@ fn string_ends_with() {
 fn string_to_lowercase_and_uppercase() {
     let s = src!(
         r#"
-        filter-map main(lower: bool, s: String) {
+        filtermap main(lower: bool, s: String) {
             if lower { 
                 accept s.to_lowercase()
             } else {
@@ -1158,7 +1158,7 @@ fn string_to_lowercase_and_uppercase() {
 fn string_repeat() {
     let s = src!(
         r#"
-        filter-map main(s: String) {
+        filtermap main(s: String) {
             let exclamation = (s + "!").to_uppercase();
             accept (exclamation + " ").repeat(4) + exclamation 
         }

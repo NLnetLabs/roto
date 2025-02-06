@@ -10,7 +10,7 @@ fn parse_function(s: &str) -> ParseResult<Declaration> {
 #[test]
 fn function_1() {
     let s = "
-        function my-function() {
+        function myfunction() {
             send-to(a,b);
         }
     ";
@@ -20,7 +20,7 @@ fn function_1() {
 #[test]
 fn function_2() {
     let s = "
-        function my-function() {
+        function myfunction() {
             send_to(a,b);
             pph_asn.asn.set(AS200);
         }
@@ -31,7 +31,7 @@ fn function_2() {
 #[test]
 fn block_with_if() {
     let s = "
-        function my-function() {
+        function myfunction() {
             if true { send_to(a,b); }
             pph_asn.asn.set(AS200);
         }
@@ -42,7 +42,7 @@ fn block_with_if() {
 #[test]
 fn block_with_if_with_semicolon() {
     let s = "
-        function my-function() {
+        function myfunction() {
             if true { send_to(a,b); };
             pph_asn.asn.set(AS200);
         }

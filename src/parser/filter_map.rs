@@ -2,12 +2,12 @@ use crate::ast::{FilterMap, FilterType, Identifier, Params};
 
 use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
 
-/// # Parsing `filter-map` and `filter` sections
+/// # Parsing `filtermap` and `filter` sections
 impl Parser<'_, '_> {
-    /// Parse a filter-map or filter expression
+    /// Parse a filtermap or filter expression
     ///
     /// ```ebnf
-    /// FilterMap ::= ( 'filter-map' | 'filter' ) Identifier
+    /// FilterMap ::= ( 'filtermap' | 'filter' ) Identifier
     ///               FilterMapBody
     /// ```
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
@@ -17,7 +17,7 @@ impl Parser<'_, '_> {
             Token::Filter => FilterType::Filter,
             _ => {
                 return Err(ParseError::expected(
-                    "'filter-map' or 'filter'",
+                    "'filtermap' or 'filter'",
                     token,
                     span,
                 ))
@@ -36,7 +36,7 @@ impl Parser<'_, '_> {
         })
     }
 
-    /// Parse an optional with clause for filter-map, define and apply
+    /// Parse an optional with clause for filtermap, define and apply
     ///
     /// ```ebnf
     /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?

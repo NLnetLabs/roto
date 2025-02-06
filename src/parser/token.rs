@@ -1,161 +1,363 @@
-use std::fmt::Display;
+use core::{ops::Range, str};
+use std::{fmt::Display, ops::ControlFlow};
 
-use logos::Logos;
+use icu::properties::sets::CodePointSetDataBorrowed;
 
-#[derive(Logos, Clone, Debug, PartialEq)]
-#[logos(skip r"([ \t\n\f]|(#[^\n]*))+")]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Token<'s> {
-    #[regex("[a-zA-Z_][a-zA-Z0-9_-]*")]
     Ident(&'s str),
 
     // === Punctuation ===
-    #[token("==")]
     EqEq,
-    #[token("=")]
     Eq,
-    #[token("!=")]
     BangEq,
-    #[token("&&")]
     AmpAmp,
-    #[token("|")]
     Pipe,
-    #[token("||")]
     PipePipe,
-    #[token(">=")]
     AngleRightEq,
-    #[token("<=")]
     AngleLeftEq,
-    #[token("->")]
     Arrow,
-    #[token("-")]
     Hyphen,
-    #[token(":")]
     Colon,
-    #[token(";")]
     SemiColon,
-    #[token(",")]
     Comma,
-    #[token(".")]
     Period,
-    #[token("/")]
     Slash,
-    #[token("!")]
     Bang,
-    #[token("+")]
     Plus,
-    #[token("*")]
     Star,
 
     // === Delimiters ===
-    #[token("{")]
     CurlyLeft,
-    #[token("}")]
     CurlyRight,
-    #[token("[")]
     SquareLeft,
-    #[token("]")]
     SquareRight,
-    #[token("(")]
     RoundLeft,
-    #[token(")")]
     RoundRight,
-    #[token("<")]
     AngleLeft,
-    #[token(">")]
     AngleRight,
 
     // === Keywords ===
-    #[token("accept")]
     Accept,
-    #[token("contains")]
-    Contains,
-    #[token("else")]
     Else,
-    #[token("exact")]
-    Exact,
-    #[token("filter-map")]
     FilterMap,
-    #[token("filter")]
     Filter,
-    #[token("function")]
     Function,
-    #[token("import")]
-    Import,
-    #[token("if")]
     If,
-    #[token("in")]
     In,
-    #[token("let")]
     Let,
-    #[token("longer")]
-    Longer,
-    #[token("match")]
     Match,
-    #[token("matching")]
-    Matching,
-    #[token("module")]
-    Module,
-    #[token("netmask")]
-    NetMask,
-    #[token("not")]
     Not,
-    #[token("orlonger")]
-    OrLonger,
-    #[token("output-stream")]
-    OutputStream,
-    #[token("prefix-length-range")]
-    PrefixLengthRange,
-    #[token("reject")]
     Reject,
-    #[token("return")]
     Return,
-    #[token("rib")]
-    Rib,
-    #[token("some")]
-    Some,
-    #[token("table")]
-    Table,
-    #[token("test")]
     Test,
-    #[token("through")]
-    Through,
-    #[token("type")]
     Type,
-    #[token("upto")]
-    UpTo,
-    #[token("use")]
-    Use,
 
     // === Literals ===
-    // String literal with escape sequences would look like this:
-    // #[regex(r#""([^"\\]|\\["\\bnfrt]|u[a-fA-F0-9]{4})*""#)]
-    // For now, keep it simple and just lex until the next quote.
-    #[regex(r#""[^"]*""#)]
     String(&'s str),
-    // Integers can contain underscores, but cannot start with them.
-    #[regex(r"[0-9][0-9_]*")]
     Integer(&'s str),
-
-    #[regex(r"0x[0-9A-Fa-f]+")]
     Hex(&'s str),
-    #[regex(r"AS[0-9]+")]
     Asn(&'s str),
-    #[regex(r"[0-9]+\.[0-9]*")]
-    Float,
-
-    #[regex(r"([0-9]+\.){3}[0-9]+")]
     IpV4(&'s str),
-    #[regex(r"[0-9a-zA-Z]*(:[0-9a-zA-Z]*){2,6}")]
     IpV6(&'s str),
-
-    // This regex is a super set of all the forms of communities:
-    // standard, large and extended.
-    #[regex(r"([0-9a-zA-Z]+:)?(0x)?[0-9a-fA-F]+:(0x)?[0-9a-fA-F]+")]
-    Community(&'s str),
-
-    #[token("true", |_| true)]
-    #[token("false", |_| false)]
     Bool(bool),
+}
+
+const XID_START: CodePointSetDataBorrowed<'static> =
+    icu::properties::sets::xid_start();
+const XID_CONTINUE: CodePointSetDataBorrowed<'static> =
+    icu::properties::sets::xid_continue();
+
+pub struct Lexer<'a> {
+    input: &'a str,
+    original_length: usize,
+}
+
+impl<'a> Iterator for Lexer<'a> {
+    type Item = (Result<Token<'a>, ()>, Range<usize>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next_token() {
+            ControlFlow::Continue(()) => {
+                if self.input.is_empty() {
+                    None
+                } else {
+                    let start = self.original_length - self.input.len();
+                    let end = start + 1;
+                    Some((Err(()), start..end))
+                }
+            }
+            ControlFlow::Break((tok, span)) => Some((Ok(tok), span)),
+        }
+    }
+}
+
+impl<'s> Lexer<'s> {
+    pub fn new(input: &'s str) -> Self {
+        Self {
+            input,
+            original_length: input.len(),
+        }
+    }
+
+    fn bump(&mut self, n: usize) -> (&'s str, Range<usize>) {
+        let start = self.original_length - self.input.len();
+        let (a, b) = self.input.split_at(n);
+        self.input = b;
+        let end = self.original_length - self.input.len();
+        (a, start..end)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.input.is_empty()
+    }
+
+    fn next_token(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        self.skip_whitespace();
+
+        if self.is_empty() {
+            return ControlFlow::Continue(());
+        }
+
+        self.ipv6()?;
+        self.ipv4()?;
+        self.two_char_punctuation()?;
+        self.one_char_punctuation()?;
+        self.as_number()?;
+        self.hex_number()?;
+        self.numeric()?;
+        self.string()?;
+        self.keyword_or_ident()?;
+
+        ControlFlow::Continue(())
+    }
+
+    fn skip_whitespace(&mut self) {
+        loop {
+            self.input = self.input.trim_start();
+            if self.input.as_bytes().first() == Some(&b'#') {
+                let n = self.input.find('\n').unwrap_or(self.input.len());
+                self.bump(n);
+            } else {
+                return;
+            }
+        }
+    }
+
+    fn two_char_punctuation(
+        &mut self,
+    ) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(x) = self.input.as_bytes().first_chunk() else {
+            return ControlFlow::Continue(());
+        };
+
+        let tok = match *x {
+            [b'=', b'='] => Token::EqEq,
+            [b'!', b'='] => Token::BangEq,
+            [b'&', b'&'] => Token::AmpAmp,
+            [b'|', b'|'] => Token::PipePipe,
+            [b'>', b'='] => Token::AngleRightEq,
+            [b'<', b'='] => Token::AngleLeftEq,
+            [b'-', b'>'] => Token::Arrow,
+            _ => return ControlFlow::Continue(()),
+        };
+
+        let (_, span) = self.bump(2);
+
+        ControlFlow::Break((tok, span))
+    }
+
+    fn one_char_punctuation(
+        &mut self,
+    ) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(x) = self.input.as_bytes().first() else {
+            return ControlFlow::Continue(());
+        };
+
+        let tok = match x {
+            b'=' => Token::Eq,
+            b'|' => Token::Pipe,
+            b'-' => Token::Hyphen,
+            b':' => Token::Colon,
+            b';' => Token::SemiColon,
+            b',' => Token::Comma,
+            b'.' => Token::Period,
+            b'+' => Token::Plus,
+            b'*' => Token::Star,
+            b'/' => Token::Slash,
+            b'!' => Token::Bang,
+            b'{' => Token::CurlyLeft,
+            b'}' => Token::CurlyRight,
+            b'[' => Token::SquareLeft,
+            b']' => Token::SquareRight,
+            b'(' => Token::RoundLeft,
+            b')' => Token::RoundRight,
+            b'<' => Token::AngleLeft,
+            b'>' => Token::AngleRight,
+            _ => return ControlFlow::Continue(()),
+        };
+
+        let (_, span) = self.bump(1);
+
+        ControlFlow::Break((tok, span))
+    }
+
+    fn ipv6(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let end = self
+            .input
+            .find(|c: char| !c.is_ascii_hexdigit() && c != ':')
+            .unwrap_or(self.input.len());
+
+        // An IPv6 literal must have at least 2 colons
+        if self.input[..end].chars().filter(|&c| c == ':').count() < 2 {
+            return ControlFlow::Continue(());
+        }
+
+        let (tok, span) = self.bump(end);
+        ControlFlow::Break((Token::IpV6(tok), span))
+    }
+
+    fn ipv4(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let mut start_idx = 0;
+
+        let mut count = 0;
+        while count < 3 {
+            let rest = &self.input[start_idx..];
+            let digit_idx = rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+            if digit_idx == 0 {
+                return ControlFlow::Continue(());
+            }
+            start_idx += digit_idx;
+            if Some(&b'.') != self.input.as_bytes().get(start_idx) {
+                return ControlFlow::Continue(());
+            }
+            start_idx += 1;
+            count += 1;
+        }
+
+        let rest = &self.input[start_idx..];
+        let digit_idx = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+
+        let final_idx = start_idx + digit_idx;
+        let (tok, span) = self.bump(final_idx);
+        ControlFlow::Break((Token::IpV4(tok), span))
+    }
+
+    fn as_number(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(rest) = self.input.strip_prefix("AS") else {
+            return ControlFlow::Continue(());
+        };
+
+        let digit_idx = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+
+        if digit_idx == 0 {
+            return ControlFlow::Continue(());
+        }
+
+        let (tok, span) = self.bump(digit_idx + 2);
+
+        ControlFlow::Break((Token::Asn(tok), span))
+    }
+
+    fn hex_number(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(rest) = self.input.strip_prefix("0x") else {
+            return ControlFlow::Continue(());
+        };
+
+        let digit_idx = rest
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len());
+
+        let (tok, span) = self.bump(2 + digit_idx);
+        ControlFlow::Break((Token::Hex(tok), span))
+    }
+
+    fn numeric(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let non_numeric_idx = self
+            .input
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(self.input.len());
+
+        if non_numeric_idx == 0 {
+            return ControlFlow::Continue(());
+        }
+
+        let (tok, span) = self.bump(non_numeric_idx);
+        ControlFlow::Break((Token::Integer(tok), span))
+    }
+
+    fn string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(rest) = self.input.strip_prefix('"') else {
+            return ControlFlow::Continue(());
+        };
+
+        let mut last_is_backslash = false;
+        let end_quote = rest.find(|c| {
+            if last_is_backslash {
+                last_is_backslash = false;
+                return false;
+            }
+
+            match c {
+                '"' => true,
+                '\\' => {
+                    last_is_backslash = true;
+                    false
+                }
+                _ => false,
+            }
+        });
+
+        let Some(end_quote) = end_quote else {
+            return ControlFlow::Continue(());
+        };
+
+        let (tok, span) = self.bump(2 + end_quote);
+        ControlFlow::Break((Token::String(tok), span))
+    }
+
+    fn keyword_or_ident(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(c) = self.input.chars().next() else {
+            return ControlFlow::Continue(());
+        };
+
+        if !(XID_START.contains(c) || c == '_') {
+            return ControlFlow::Continue(());
+        }
+
+        let non_ident_idx = self
+            .input
+            .find(|c: char| !XID_CONTINUE.contains(c))
+            .unwrap_or(self.input.len());
+
+        let (ident, span) = self.bump(non_ident_idx);
+        let tok = match ident {
+            "accept" => Token::Accept,
+            "else" => Token::Else,
+            "filtermap" => Token::FilterMap,
+            "filter" => Token::Filter,
+            "function" => Token::Function,
+            "if" => Token::If,
+            "in" => Token::In,
+            "let" => Token::Let,
+            "match" => Token::Match,
+            "not" => Token::Not,
+            "reject" => Token::Reject,
+            "return" => Token::Return,
+            "test" => Token::Test,
+            "type" => Token::Type,
+            "true" => Token::Bool(true),
+            "false" => Token::Bool(false),
+            x => Token::Ident(x),
+        };
+        ControlFlow::Break((tok, span))
+    }
 }
 
 impl Display for Token<'_> {
@@ -189,43 +391,25 @@ impl Display for Token<'_> {
             Token::AngleLeft => "<",
             Token::AngleRight => ">",
             Token::Accept => "accept",
-            Token::Contains => "contains",
             Token::Else => "else",
-            Token::Exact => "exact",
-            Token::FilterMap => "filter-map",
+            Token::FilterMap => "filtermap",
             Token::Filter => "filter",
             Token::Function => "function",
-            Token::Import => "import",
             Token::If => "if",
             Token::In => "in",
             Token::Let => "let",
-            Token::Longer => "longer",
             Token::Match => "match",
-            Token::Matching => "matching",
-            Token::Module => "module",
-            Token::NetMask => "net-mask",
             Token::Not => "not",
-            Token::OrLonger => "or-longer",
-            Token::OutputStream => "output-stream",
-            Token::PrefixLengthRange => "prefix-length-range",
             Token::Reject => "reject",
             Token::Return => "return",
-            Token::Rib => "rib",
-            Token::Some => "some",
-            Token::Table => "table",
             Token::Test => "test",
-            Token::Through => "through",
             Token::Type => "type",
-            Token::UpTo => "up-to",
-            Token::Use => "use",
             Token::String(s) => s,
             Token::Integer(s) => s,
             Token::Hex(s) => s,
             Token::Asn(s) => s,
-            Token::Float => "float",
             Token::IpV4(s) => s,
             Token::IpV6(s) => s,
-            Token::Community(s) => s,
             Token::Bool(true) => "true",
             Token::Bool(false) => "false",
         };

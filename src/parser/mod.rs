@@ -1,9 +1,8 @@
 use crate::ast::{
     Declaration, FunctionDeclaration, Identifier, SyntaxTree, Test,
 };
-use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
-use token::Token;
+use token::{Lexer, Token};
 
 use self::meta::{Meta, Span, Spans};
 
@@ -149,7 +148,7 @@ impl std::error::Error for ParseError {}
 pub struct Parser<'source, 'spans> {
     file: usize,
     file_length: usize,
-    lexer: Peekable<SpannedIter<'source, Token<'source>>>,
+    lexer: Peekable<Lexer<'source>>,
     pub spans: &'spans mut Spans,
 }
 
@@ -280,7 +279,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let mut p = Self {
             file,
             file_length: input.len(),
-            lexer: Lexer::new(input).spanned().peekable(),
+            lexer: Lexer::new(input).peekable(),
             spans,
         };
         let out = parser(&mut p)?;
@@ -315,7 +314,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Parse a root expression
     ///
     /// ```ebnf
-    /// Root ::= Rib | Table | OutputStream | FilterMap | Type
+    /// Root ::= FilterMap | Function | Type
     /// ```
     fn root(&mut self) -> ParseResult<Declaration> {
         let end_of_input = ParseError {
@@ -337,7 +336,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
-                    "a function, rib, table, output-stream, filter or filter-map",
+                    "a function, filter or filtermap",
                     token,
                     span,
                 ));
@@ -390,7 +389,6 @@ impl Parser<'_, '_> {
         let ident = match token {
             Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Contains => "contains",
             Token::Type => "type",
             _ => {
                 return Err(ParseError::expected(

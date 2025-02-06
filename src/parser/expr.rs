@@ -599,9 +599,6 @@ impl Parser<'_, '_> {
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
-            Token::Float => {
-                unimplemented!("Floating point numbers are not supported yet")
-            }
             t => return Err(ParseError::expected("a literal", t, span)),
         };
         Ok(self.spans.add(span, literal))

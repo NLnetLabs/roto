@@ -79,7 +79,7 @@ pub enum Stmt {
 /// A Roto expression
 #[derive(Clone, Debug)]
 pub enum Expr {
-    /// Return from the current function or filter-map
+    /// Return from the current function or filtermap
     ///
     /// Optionally takes an expression for the value being returned.
     Return(ReturnKind, Option<Box<Meta<Expr>>>),
