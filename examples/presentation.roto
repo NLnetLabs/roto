@@ -1,18 +1,13 @@
-filter-map rib-in-pre(
+filtermap rib_in_pre(
     output: Log,
     route: Route,
 ) {
-    define {
-        my_prefix = 100.40.0.0/17;
-    }
-
-    apply {
-        if route.prefix_matches(my_prefix) {
-            output.log_custom(10, 100);
-            reject
-        } else {
-            output.log_prefix(my_prefix);
-            accept
-        }
+    let my_prefix = 100.40.0.0/17;
+    if route.prefix_matches(my_prefix) {
+        output.log_custom(10, 100);
+        reject
+    } else {
+        output.log_prefix(my_prefix);
+        accept
     }
 }

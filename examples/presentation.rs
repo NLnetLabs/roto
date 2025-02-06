@@ -127,7 +127,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .compile(rt, usize::BITS / 8)
             .inspect_err(|e| eprintln!("{e}"))?;
 
-    let function = compiled.get_function("rib-in-pre").unwrap();
+    let function = compiled.get_function("rib_in_pre").unwrap();
 
     run_with_prefix(&function, "8.8.8.0/24")?;
     run_with_prefix(&function, "100.40.0.0/17")?;
