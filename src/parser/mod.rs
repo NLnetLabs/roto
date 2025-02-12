@@ -1,5 +1,5 @@
 use crate::ast::{
-    Declaration, FunctionDeclaration, Identifier, SyntaxTree, Test,
+    Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };
 use std::{fmt::Display, iter::Peekable};
 use token::{Lexer, Token};
@@ -333,10 +333,11 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             }
             Token::Function => Declaration::Function(self.function()?),
             Token::Test => Declaration::Test(self.test()?),
+            Token::Import => Declaration::Import(self.import()?),
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
-                    "a function, filter or filtermap",
+                    "a function, filter, filtermap or import",
                     token,
                     span,
                 ));
@@ -375,6 +376,13 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let ident = self.identifier()?;
         let body = self.block()?;
         Ok(Test { ident, body })
+    }
+
+    fn import(&mut self) -> ParseResult<Meta<Path>> {
+        self.take(Token::Import)?;
+        let path = self.path()?;
+        self.take(Token::SemiColon)?;
+        Ok(path)
     }
 }
 

@@ -68,6 +68,7 @@ pub struct ScopeGraph {
 struct Scope {
     scope_type: ScopeType,
     parent: Option<ScopeRef>,
+    imports: BTreeMap<Identifier, ResolvedName>,
 }
 
 pub enum ScopeType {
@@ -118,6 +119,7 @@ impl ScopeGraph {
             scopes: vec![Scope {
                 scope_type: ScopeType::Root,
                 parent: None,
+                imports: BTreeMap::new(),
             }],
         }
     }
@@ -137,6 +139,7 @@ impl ScopeGraph {
         self.scopes.push(Scope {
             scope_type,
             parent: Some(parent.into()),
+            imports: BTreeMap::new(),
         });
         ScopeRef(idx)
     }

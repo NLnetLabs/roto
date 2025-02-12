@@ -21,6 +21,7 @@ pub enum Declaration {
     Record(RecordTypeDeclaration),
     Function(FunctionDeclaration),
     Test(Test),
+    Import(Meta<Path>),
 }
 
 #[derive(Clone, Debug)]
@@ -65,6 +66,7 @@ pub struct Test {
 /// A block of multiple statements
 #[derive(Clone, Debug)]
 pub struct Block {
+    pub imports: Vec<Meta<Path>>,
     pub stmts: Vec<Meta<Stmt>>,
     pub last: Option<Box<Meta<Expr>>>,
 }

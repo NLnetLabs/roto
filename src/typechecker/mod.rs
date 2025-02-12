@@ -335,6 +335,7 @@ impl TypeChecker {
                     ast::Declaration::FilterMap(x) => {
                         (StubDeclarationKind::Function, x.ident.clone())
                     }
+                    ast::Declaration::Import(_) => todo!(),
                     ast::Declaration::Test(_) => continue,
                 };
                 self.type_info.scope_graph.insert_stub(scope, &ident, kind);
@@ -353,7 +354,8 @@ impl TypeChecker {
                 match expr {
                     ast::Declaration::Function(_)
                     | ast::Declaration::FilterMap(_)
-                    | ast::Declaration::Test(_) => continue,
+                    | ast::Declaration::Test(_)
+                    | ast::Declaration::Import(_) => continue,
                     ast::Declaration::Record(
                         ast::RecordTypeDeclaration { ident, record_type },
                     ) => {
@@ -411,6 +413,7 @@ impl TypeChecker {
                     }
                     ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(_) => continue,
+                    ast::Declaration::Import(_) => continue,
                 }
             }
         }
