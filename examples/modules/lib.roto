@@ -1,0 +1,3 @@
+function main(x: i32) -> i32 {
+    foo.double(foo.double(foo.double(x)))
+}

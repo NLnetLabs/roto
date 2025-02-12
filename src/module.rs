@@ -2,7 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::{
     ast::{self, Identifier},
-    parser::{meta::Spans, Parser},
+    parser::{
+        meta::{Meta, Span, Spans},
+        Parser,
+    },
     FileTree, RotoError, RotoReport,
 };
 
@@ -21,7 +24,7 @@ pub struct ModuleTree {
 pub struct ModuleRef(pub usize);
 
 pub struct Module {
-    pub ident: Identifier,
+    pub ident: Meta<Identifier>,
     pub ast: ast::SyntaxTree,
     pub children: BTreeMap<Identifier, ModuleRef>,
     pub parent: Option<ModuleRef>,
@@ -42,6 +45,16 @@ impl Parsed {
 
         // First add all modules to the tree
         for (i, file) in file_tree.files.iter().enumerate() {
+            let ident: Identifier = (&file.module_name).into();
+            let ident = spans.add(
+                Span {
+                    file: i,
+                    start: 0,
+                    end: 1,
+                },
+                ident,
+            );
+
             let ast = match Parser::parse(i, &mut spans, &file.contents) {
                 Ok(ast) => ast,
                 Err(err) => {
@@ -53,7 +66,7 @@ impl Parsed {
             file_to_mod.insert(i, modules.len());
 
             modules.push(Module {
-                ident: (&file.module_name).into(),
+                ident,
                 children: BTreeMap::new(),
                 parent: None,
                 ast,
@@ -73,7 +86,7 @@ impl Parsed {
             for child in &file.children {
                 let child_module = &mut modules[*child];
                 child_module.parent = Some(ModuleRef(parent));
-                let child_ident = child_module.ident;
+                let child_ident = *child_module.ident;
                 modules[parent]
                     .children
                     .insert(child_ident, ModuleRef(*child));

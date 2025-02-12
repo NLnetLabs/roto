@@ -1,10 +1,11 @@
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, net::IpAddr, sync::Arc};
 
 use inetnum::addr::Prefix;
 
 use crate::{ast::Identifier, parser::meta::MetaId, Runtime};
 
 use super::{
+    expr::ResolvedPath,
     scope::{ResolvedName, ScopeGraph, ScopeRef},
     types::{Function, Primitive, Type},
     unionfind::UnionFind,
@@ -37,7 +38,7 @@ pub struct TypeInfo {
 
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
-    pub(super) enum_variant_constructors: HashMap<MetaId, Type>,
+    pub(super) path_kinds: HashMap<MetaId, ResolvedPath>,
 
     pub(super) diverges: HashMap<MetaId, bool>,
 
@@ -56,7 +57,7 @@ impl TypeInfo {
             types: HashMap::new(),
             expr_types: HashMap::new(),
             resolved_names: HashMap::new(),
-            enum_variant_constructors: HashMap::new(),
+            path_kinds: HashMap::new(),
             diverges: HashMap::new(),
             return_types: HashMap::new(),
             function_calls: HashMap::new(),
@@ -67,11 +68,14 @@ impl TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn resolved_name(&self, x: impl Into<MetaId>) -> ResolvedName {
+    pub fn resolved_name(
+        &self,
+        x: impl Into<MetaId> + Debug,
+    ) -> ResolvedName {
         self.resolved_names[&x.into()]
     }
 
-    pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
+    pub fn type_of(&mut self, x: impl Into<MetaId> + Debug) -> Type {
         let ty = self.expr_types[&x.into()].clone();
         self.resolve(&ty)
     }
@@ -86,11 +90,15 @@ impl TypeInfo {
     }
 
     pub fn function(&self, x: impl Into<MetaId>) -> &Function {
-        self.function_calls.get(&x.into()).unwrap()
+        &self.function_calls[&x.into()]
     }
 
     pub fn function_scope(&self, x: impl Into<MetaId>) -> ScopeRef {
         self.function_scopes[&x.into()]
+    }
+
+    pub fn path_kind(&self, x: impl Into<MetaId>) -> &ResolvedPath {
+        &self.path_kinds[&x.into()]
     }
 
     pub fn full_name(&self, name: &ResolvedName) -> Identifier {
@@ -131,7 +139,7 @@ impl TypeInfo {
         | Type::RecordVar(_, fields)
         | Type::NamedRecord(_, fields)) = record
         else {
-            panic!("Can't get offsets in a type that's not a record")
+            panic!("Can't get offsets in a type that's not a record, but {record}")
         };
 
         let mut offset = 0;
@@ -192,13 +200,6 @@ impl TypeInfo {
         };
         // Alignment must be guaranteed to be at least 1
         align.max(1)
-    }
-
-    pub fn enum_variant_constructor(
-        &self,
-        x: impl Into<MetaId>,
-    ) -> Option<&Type> {
-        self.enum_variant_constructors.get(&x.into())
     }
 
     pub fn resolve(&mut self, t: &Type) -> Type {

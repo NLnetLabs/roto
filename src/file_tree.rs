@@ -24,7 +24,7 @@ impl SourceFile {
         let module_name = if file_name == "mod.roto" {
             path.parent().unwrap().file_name().unwrap()
         } else {
-            file_name
+            path.file_stem().unwrap()
         }
         .to_string_lossy()
         .to_string();
@@ -115,7 +115,7 @@ impl FileTree {
                 continue;
             }
 
-            if path.extension().map_or(false, |ext| ext == "roto") {
+            if path.extension().map_or(true, |ext| ext != "roto") {
                 continue;
             }
 

@@ -656,7 +656,7 @@ impl<'c> FuncGen<'c> {
                 let mut new_args = Vec::new();
                 new_args.push(self.operand(ctx).0);
 
-                for (_, arg) in args {
+                for arg in args {
                     new_args.push(self.operand(arg).0);
                 }
 
@@ -934,7 +934,7 @@ impl<'c> FuncGen<'c> {
             }
             ir::Instruction::LoadConstant { to, name, ty } => {
                 let Some(FuncOrDataId::Data(data_id)) =
-                    self.module.inner.get_name(name.as_str())
+                    self.module.inner.get_name(&format!(".{name}"))
                 else {
                     panic!("Could not find {name}");
                 };

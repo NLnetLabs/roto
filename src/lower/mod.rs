@@ -23,10 +23,11 @@ use crate::{
     runtime::{self, Movability, RuntimeFunction, RuntimeFunctionRef},
     typechecker::{
         info::TypeInfo,
-        scope::{DeclarationKind, ScopeRef},
+        scope::{DeclarationKind, ScopeRef, ValueKind},
         types::{
             FunctionDefinition, FunctionKind, Primitive, Signature, Type,
         },
+        PathValue, ResolvedPath,
     },
     Runtime,
 };
@@ -440,42 +441,55 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::Literal(l) => Some(self.literal(l)),
             ast::Expr::Match(m) => self.match_expr(m),
-            ast::Expr::FunctionCall(ident, args) => {
-                let func = self.type_info.function(ident).clone();
+            ast::Expr::FunctionCall(e, arg_exprs) => {
+                let operand = match &e.node {
+                    ast::Expr::Path(p) => {
+                        let resolved_path = self.type_info.path_kind(p);
+                        match resolved_path {
+                            ResolvedPath::Method { value, .. } => {
+                                self.path_value(&value.clone())
+                            }
+                            ResolvedPath::Function { .. }
+                            | ResolvedPath::StaticMethod { .. }
+                            | ResolvedPath::EnumConstructor { .. } => None,
+                            ResolvedPath::Value { .. } => unreachable!(),
+                        }
+                    }
+                    ast::Expr::Access(e, _) => self.expr(e),
+                    _ => unreachable!(),
+                };
+
+                let mut args = Vec::new();
+                if let Some(operand) = operand {
+                    args.push(operand);
+                }
+
+                for e in &arg_exprs.node {
+                    if let Some(e) = self.expr(e) {
+                        args.push(e);
+                    }
+                }
+
+                let func = self.type_info.function(id).clone();
+                let name = func.name;
 
                 match &func.definition {
-                    FunctionDefinition::Runtime(runtime_func) => {
-                        let args: Vec<_> = args
-                            .iter()
-                            .map(|e| self.expr(e).unwrap())
-                            .collect();
-
-                        self.call_runtime_function(
-                            **ident,
+                    FunctionDefinition::Runtime(runtime_func) => self
+                        .call_runtime_function(
                             *runtime_func,
                             args,
                             &func.signature.parameter_types,
                             &func.signature.return_type,
-                        )
-                    }
+                        ),
                     FunctionDefinition::Roto => {
-                        let ty = self.type_info.type_of(ident);
-                        let name = self.type_info.resolved_name(ident);
-
-                        let Type::Function(params, ret) = ty else {
-                            ice!("can only call functions");
-                        };
-
-                        let mut new_args = Vec::new();
-
-                        for (p, a) in params.iter().zip(&args.node) {
-                            if let Some(e) = self.expr(a) {
-                                new_args.push((p.0.node, e));
-                            }
-                        }
+                        let Signature {
+                            kind: _,
+                            parameter_types: _,
+                            return_type,
+                        } = func.signature;
 
                         let to = self
-                            .lower_type(&ret)
+                            .lower_type(&return_type)
                             .map(|ty| (self.new_tmp(), ty));
 
                         let ctx = Var {
@@ -489,182 +503,33 @@ impl<'r> Lowerer<'r> {
                             to: to.clone(),
                             ctx: ctx.into(),
                             func: name,
-                            args: new_args,
+                            args,
                         });
 
                         to.map(|(to, _ty)| to.into())
                     }
                 }
             }
-            ast::Expr::MethodCall(receiver, ident, args) => {
-                // Check whether it is in fact not a method call, but an
-                // enum constructor
-                if let Some(ty) = self.type_info.enum_variant_constructor(id)
-                {
-                    let ty = ty.clone();
-                    let args: Vec<_> =
-                        args.iter().map(|a| self.expr(a)).collect();
+            ast::Expr::Access(e, field) => {
+                let record_ty = self.type_info.type_of(&**e);
+                let op = self.expr(e)?;
+                let (ty, offset) = self.type_info.offset_of(
+                    &record_ty,
+                    **field,
+                    self.runtime,
+                );
+                self.read_field(op, offset, &ty)
+            }
+            ast::Expr::Path(p) => {
+                let path_kind = self.type_info.path_kind(p);
 
-                    let [arg] = &args[..] else {
-                        ice!();
-                    };
-                    let Type::Enum(_, variants) = ty.clone() else {
-                        ice!();
-                    };
-
-                    let idx = variants
-                        .iter()
-                        .position(|(f, _)| ident.node == *f)
-                        .unwrap();
-
-                    let to = self.new_tmp();
-                    let size = self.type_info.size_of(&ty, self.runtime);
-                    let alignment =
-                        self.type_info.alignment_of(&ty, self.runtime);
-                    let align_shift = alignment.ilog2() as u8;
-
-                    self.stack_slots.push((to.clone(), ty.clone()));
-
-                    self.add(Instruction::Alloc {
-                        to: to.clone(),
-                        size,
-                        align_shift,
-                    });
-                    self.add(Instruction::Write {
-                        to: to.clone().into(),
-                        val: IrValue::U8(idx as u8).into(),
-                    });
-
-                    if let Some(arg) = arg {
-                        let offset = 1 + self.type_info.padding_of(
-                            &ty,
-                            1,
-                            self.runtime,
-                        );
-                        let tmp = self.new_tmp();
-                        self.add(Instruction::Offset {
-                            to: tmp.clone(),
-                            from: to.clone().into(),
-                            offset,
-                        });
-                        self.add(Instruction::Write {
-                            to: to.clone().into(),
-                            val: arg.clone(),
-                        })
-                    }
-
-                    return Some(to.into());
-                }
-
-                // It's a runtime-defined method, which we compile just like
-                // a function
-                let func = self.type_info.function(ident).clone();
-
-                let runtime_func = match &func.definition {
-                    FunctionDefinition::Roto => {
-                        panic!("Not yet supported")
-                    }
-                    FunctionDefinition::Runtime(rt) => rt,
+                let value = match path_kind.clone() {
+                    ResolvedPath::Value(value) => value,
+                    ResolvedPath::EnumConstructor { .. } => todo!(),
+                    _ => unreachable!("should be rejected by type checker"),
                 };
 
-                let receiver_iter =
-                    if let FunctionKind::Method(_) = func.signature.kind {
-                        Some(&**receiver)
-                    } else {
-                        None
-                    };
-
-                let args: Vec<_> = receiver_iter
-                    .into_iter()
-                    .chain(&args.node)
-                    .map(|e| self.expr(e).unwrap())
-                    .collect();
-
-                self.call_runtime_function(
-                    **ident,
-                    *runtime_func,
-                    args,
-                    &func.signature.parameter_types,
-                    &func.signature.return_type,
-                )
-            }
-            ast::Expr::Access(e, field) => {
-                if let Some(ty) = self.type_info.enum_variant_constructor(id)
-                {
-                    let ty = ty.clone();
-                    let Type::Enum(_, variants) = ty.clone() else {
-                        ice!("it's an enum variant constructor, so the type must be an enum")
-                    };
-
-                    let size = self.type_info.size_of(&ty, self.runtime);
-                    let alignment =
-                        self.type_info.alignment_of(&ty, self.runtime);
-                    let align_shift = alignment.ilog2() as u8;
-
-                    let Some(idx) =
-                        variants.iter().position(|(f, _)| field.node == *f)
-                    else {
-                        ice!("expected field to be present")
-                    };
-
-                    let to = self.new_tmp();
-                    self.add(Instruction::Alloc {
-                        to: to.clone(),
-                        size,
-                        align_shift,
-                    });
-
-                    self.add(Instruction::Write {
-                        to: to.clone().into(),
-                        val: IrValue::U8(idx as u8).into(),
-                    });
-
-                    Some(to.into())
-                } else {
-                    let record_ty = self.type_info.type_of(&**e);
-                    let op = self.expr(e)?;
-                    let (ty, offset) = self.type_info.offset_of(
-                        &record_ty,
-                        **field,
-                        self.runtime,
-                    );
-                    self.read_field(op, offset, &ty)
-                }
-            }
-            ast::Expr::Var(x) => {
-                let name = self.type_info.resolved_name(x);
-                let dec = self.type_info.scope_graph.get_declaration(name);
-                let full_name = self.type_info.full_name(&name);
-                match dec.kind {
-                    DeclarationKind::Context(offset, _) => {
-                        let ty = self.type_info.type_of(id);
-                        let var = Var {
-                            scope: self.function_scope,
-                            kind: VarKind::Context,
-                        };
-                        self.read_field(var.into(), offset as u32, &ty)
-                    }
-                    DeclarationKind::Constant(_) => {
-                        let var = self.new_tmp();
-                        let ty = self.type_info.type_of(id);
-                        let ty = self.lower_type(&ty)?;
-                        self.add(Instruction::LoadConstant {
-                            to: var.clone(),
-                            name: full_name,
-                            ty,
-                        });
-                        Some(var.into())
-                    }
-                    DeclarationKind::Variable(_) => Some(
-                        Var {
-                            scope: dec.name.scope,
-                            kind: VarKind::Explicit(dec.name.ident),
-                        }
-                        .into(),
-                    ),
-                    DeclarationKind::Type(_) => unreachable!(),
-                    DeclarationKind::Function(_, _) => unreachable!(),
-                }
+                self.path_value(&value)
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);
@@ -853,7 +718,6 @@ impl<'r> Lowerer<'r> {
 
                         let out = self
                             .call_runtime_function(
-                                Identifier::from("eq"),
                                 runtime_func.get_ref(),
                                 [left, right],
                                 &[
@@ -882,7 +746,6 @@ impl<'r> Lowerer<'r> {
 
                         let out = self
                             .call_runtime_function(
-                                Identifier::from("eq"),
                                 runtime_func.get_ref(),
                                 [left, right],
                                 &[
@@ -1208,6 +1071,52 @@ impl<'r> Lowerer<'r> {
         Some(to.into())
     }
 
+    fn path_value(
+        &mut self,
+        PathValue {
+            kind,
+            ty,
+            name,
+            fields,
+        }: &PathValue,
+    ) -> Option<Operand> {
+        let var = match kind {
+            ValueKind::Context(offset) => {
+                let var = Var {
+                    scope: self.function_scope,
+                    kind: VarKind::Context,
+                };
+                self.read_field(var.into(), *offset as u32, ty)?
+            }
+            ValueKind::Constant => {
+                let name = name.ident;
+                let var = self.new_tmp();
+                let ir_ty = self.lower_type(ty)?;
+                self.add(Instruction::LoadConstant {
+                    to: var.clone(),
+                    name,
+                    ty: ir_ty,
+                });
+                var.into()
+            }
+            ValueKind::Local => Var {
+                scope: name.scope,
+                kind: VarKind::Explicit(name.ident),
+            }
+            .into(),
+        };
+
+        let mut var = var;
+        let mut record_ty = ty.clone();
+        for (field, _) in fields {
+            let (ty, offset) =
+                self.type_info.offset_of(&record_ty, *field, self.runtime);
+            var = self.read_field(var, offset, &ty)?;
+            record_ty = ty;
+        }
+        Some(var)
+    }
+
     fn is_reference_type(&mut self, ty: &Type) -> bool {
         self.type_info.is_reference_type(ty, self.runtime)
     }
@@ -1237,7 +1146,6 @@ impl<'r> Lowerer<'r> {
 
     fn call_runtime_function(
         &mut self,
-        ident: Identifier,
         runtime_func_ref: RuntimeFunctionRef,
         args: impl IntoIterator<Item = Operand>,
         parameter_types: &[Type],
@@ -1265,7 +1173,7 @@ impl<'r> Lowerer<'r> {
         let runtime_func = self.runtime.get_function(runtime_func_ref);
 
         let ir_func = IrFunction {
-            name: ident,
+            name: (&runtime_func.name).into(),
             ptr: runtime_func.description.pointer(),
             params,
             ret: None,

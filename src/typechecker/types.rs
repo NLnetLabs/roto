@@ -26,9 +26,9 @@ pub enum Type {
     Record(Vec<(Meta<Identifier>, Type)>),
     NamedRecord(ResolvedName, Vec<(Meta<Identifier>, Type)>),
     Enum(ResolvedName, Vec<(Identifier, Option<Type>)>),
-    Function(Vec<(Meta<Identifier>, Type)>, Box<Type>),
-    Filter(Vec<(Meta<Identifier>, Type)>),
-    FilterMap(Vec<(Meta<Identifier>, Type)>),
+    Function(Vec<Type>, Box<Type>),
+    Filter(Vec<Type>),
+    FilterMap(Vec<Type>),
     Name(ResolvedName),
 }
 
@@ -83,14 +83,14 @@ impl Display for Primitive {
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let fmt_args = |args: &[(_, Type)]| {
+        let fmt_args = |args: &[Type]| {
             use std::fmt::Write;
             let mut iter = args.iter();
             let mut s = String::new();
-            if let Some((_, i)) = iter.next() {
+            if let Some(i) = iter.next() {
                 write!(s, "{i}")?;
             }
-            for (_, i) in iter {
+            for i in iter {
                 write!(s, ", {i}")?;
             }
             Ok(s)

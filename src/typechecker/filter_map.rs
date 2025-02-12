@@ -64,9 +64,10 @@ impl TypeChecker {
             .unwrap();
         }
 
+        let param_types = params.into_iter().map(|(_, t)| t).collect();
         Ok(match filter_type {
-            ast::FilterType::FilterMap => Type::FilterMap(params),
-            ast::FilterType::Filter => Type::Filter(params),
+            ast::FilterType::FilterMap => Type::FilterMap(param_types),
+            ast::FilterType::Filter => Type::Filter(param_types),
         })
     }
 
@@ -174,10 +175,12 @@ impl TypeChecker {
         } else {
             Type::Primitive(Primitive::Unit)
         };
-        Ok(Type::Function(
-            self.params(scope, &dec.params)?,
-            Box::new(ret),
-        ))
+        let param_types = self
+            .params(scope, &dec.params)?
+            .into_iter()
+            .map(|(_, t)| t)
+            .collect();
+        Ok(Type::Function(param_types, Box::new(ret)))
     }
 
     pub fn filter_map_type(
@@ -187,8 +190,13 @@ impl TypeChecker {
     ) -> TypeResult<Type> {
         let accept = Box::new(self.fresh_var());
         let reject = Box::new(self.fresh_var());
+        let param_types = self
+            .params(scope, &dec.params)?
+            .into_iter()
+            .map(|(_, t)| t)
+            .collect();
         Ok(Type::Function(
-            self.params(scope, &dec.params)?,
+            param_types,
             Box::new(Type::Verdict(accept, reject)),
         ))
     }
@@ -210,8 +218,7 @@ impl TypeChecker {
                     return Err(self.error_undeclared_type(ty));
                 };
 
-                let ty = ty.clone();
-                Ok((field_name.clone(), ty))
+                Ok((field_name.clone(), ty.clone()))
             })
             .collect()
     }

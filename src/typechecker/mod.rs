@@ -22,8 +22,7 @@ use crate::{
 };
 use cycle::detect_type_cycles;
 use scope::{
-    DeclarationKind, ModuleScope, ResolvedName, ScopeRef, ScopeType,
-    StubDeclarationKind,
+    ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
 };
 use std::{borrow::Borrow, collections::HashMap};
 use types::{FunctionDefinition, Type};
@@ -44,6 +43,7 @@ mod tests;
 pub mod types;
 mod unionfind;
 
+pub use expr::{ResolvedPath, PathValue};
 use info::TypeInfo;
 
 pub struct TypeChecker {
@@ -177,7 +177,7 @@ impl TypeChecker {
                 kind,
                 id: _,
                 docstring: _,
-                argument_names,
+                argument_names: _,
             } = func;
 
             let name = ResolvedName {
@@ -197,16 +197,7 @@ impl TypeChecker {
 
             let return_type = rust_parameters.next().unwrap();
 
-            let mut names = argument_names.iter();
-            let mut parameter_types = Vec::new();
-            for p in rust_parameters {
-                let name = Identifier::from(*names.next().unwrap_or(&""));
-                let name = Meta {
-                    node: name,
-                    id: MetaId(0),
-                };
-                parameter_types.push((name, p))
-            }
+            let parameter_types: Vec<_> = rust_parameters.collect();
 
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
@@ -253,10 +244,7 @@ impl TypeChecker {
                 kind,
                 name,
                 &[],
-                parameter_types
-                    .into_iter()
-                    .map(|(_, t)| t)
-                    .collect::<Vec<Type>>(),
+                parameter_types,
                 return_type,
                 FunctionDefinition::Runtime(func.get_ref()),
             ));
@@ -320,14 +308,19 @@ impl TypeChecker {
                 children: _,
                 parent,
             } = m;
+            let parent_module = parent.map(|p| modules[p.0].0);
             let mod_scope = ModuleScope {
-                ident: *ident,
-                parent_module: parent.map(|p| modules[p.0].0),
+                ident: **ident,
+                parent_module,
             };
             let scope = self
                 .type_info
                 .scope_graph
                 .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
+
+            if let Some(p) = parent_module {
+                self.insert_module(p, ident, scope)?;
+            }
 
             for d in &ast.declarations {
                 let (kind, ident) = match d {
@@ -617,63 +610,20 @@ impl TypeChecker {
         }
     }
 
-    fn resolve_name(
+    fn insert_module(
         &mut self,
         scope: ScopeRef,
-        ident: &Meta<Identifier>,
-    ) -> TypeResult<ResolvedName> {
-        let Some(stub) =
-            self.type_info.scope_graph.resolve_name(scope, ident)
-        else {
-            return Err(self.error_not_defined(ident));
-        };
-        Ok(stub.name)
-    }
-
-    fn get_var(
-        &mut self,
-        scope: ScopeRef,
-        ident: &Meta<Identifier>,
-    ) -> TypeResult<(ResolvedName, Type)> {
-        let Some(stub) =
-            self.type_info.scope_graph.resolve_name(scope, ident)
-        else {
-            return Err(self.error_not_defined(ident));
-        };
-        let name = stub.name;
-        let declaration = self.type_info.scope_graph.get_declaration(name);
-        let ty = match &declaration.kind {
-            DeclarationKind::Variable(ty)
-            | DeclarationKind::Context(_, ty)
-            | DeclarationKind::Constant(ty) => ty.clone(),
-            _ => return Err(self.error_expected_value(ident, &declaration)),
-        };
-        self.type_info.resolved_names.insert(ident.id, name);
-        self.type_info.expr_types.insert(ident.id, ty.clone());
-        Ok((name, ty))
-    }
-
-    fn get_function(
-        &mut self,
-        scope: ScopeRef,
-        ident: &Meta<Identifier>,
-    ) -> TypeResult<(ResolvedName, FunctionDefinition, Type)> {
-        let Some(stub) =
-            self.type_info.scope_graph.resolve_name(scope, ident)
-        else {
-            return Err(self.error_not_defined(ident));
-        };
-        let name = stub.name;
-        let declaration = self.type_info.scope_graph.get_declaration(name);
-        let (def, ty) = match &declaration.kind {
-            DeclarationKind::Function(def, ty) => (def.clone(), ty.clone()),
-            _ => {
-                return Err(self.error_expected_function(ident, &declaration))
-            }
-        };
-        self.type_info.resolved_names.insert(ident.id, name);
-        self.type_info.expr_types.insert(ident.id, ty.clone());
-        Ok((name, def, ty))
+        k: &Meta<Identifier>,
+        mod_scope: ScopeRef,
+    ) -> TypeResult<()> {
+        match self
+            .type_info
+            .scope_graph
+            .insert_module(scope, k, mod_scope)
+        {
+            Ok(()) => Ok(()),
+            Err(old) => Err(self.error_declared_twice(k, old)),
+        }
     }
 
     fn unify(
@@ -896,7 +846,7 @@ impl TypeChecker {
                 if let StubDeclarationKind::Type = stub.kind {
                     Type::Name(stub.name)
                 } else {
-                    return Err(self.error_not_a_type(ident, stub));
+                    return Err(self.error_expected_type(ident, stub));
                 }
             }
             ast::RecordFieldType::Record(fields) => Type::Record(

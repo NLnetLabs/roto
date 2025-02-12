@@ -142,7 +142,7 @@ impl TypeChecker {
         }
     }
 
-    pub fn error_not_a_type(
+    pub fn error_expected_type(
         &self,
         ident: &Meta<Identifier>,
         stub: StubDeclaration,
@@ -353,6 +353,7 @@ impl TypeChecker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn error_expected_function(
         &self,
         ident: &Meta<Identifier>,
@@ -378,6 +379,18 @@ impl TypeChecker {
             ],
         }
     }
+
+    pub fn error_no_field_on_type(
+        &self,
+        ty: &Type,
+        field: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!("no field `{field}` on type `{ty}`",),
+            format!("unknown field `{field}`"),
+            field.id,
+        )
+    }
 }
 
 fn describe_declaration(d: &StubDeclaration) -> &str {
@@ -387,6 +400,7 @@ fn describe_declaration(d: &StubDeclaration) -> &str {
         StubDeclarationKind::Variable => "variable",
         StubDeclarationKind::Type => "type",
         StubDeclarationKind::Function => "function",
+        StubDeclarationKind::Module => "module",
     }
 }
 

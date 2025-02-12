@@ -4,7 +4,7 @@ use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, Literal, Match, MatchArm, Pattern, Record,
+        BinOp, Block, Expr, Literal, Match, MatchArm, Path, Pattern, Record,
         ReturnKind, Stmt,
     },
     parser::ParseError,
@@ -295,18 +295,20 @@ impl Parser<'_, '_> {
     fn access(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let mut expr = self.atom(r)?;
 
-        while self.next_is(Token::Period) {
-            let ident = self.identifier()?;
+        loop {
             if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
                 let span = self.merge_spans(&expr, &args);
                 expr = self
                     .spans
-                    .add(span, Expr::MethodCall(Box::new(expr), ident, args));
-            } else {
+                    .add(span, Expr::FunctionCall(Box::new(expr), args));
+            } else if self.next_is(Token::Period) {
+                let ident = self.identifier()?;
                 let span = self.merge_spans(&expr, &ident);
                 expr =
                     self.spans.add(span, Expr::Access(Box::new(expr), ident));
+            } else {
+                break;
             }
         }
 
@@ -373,25 +375,27 @@ impl Parser<'_, '_> {
         }
 
         if let Some(Token::Ident(_)) = self.peek() {
-            let ident = self.identifier()?;
+            let mut idents = Vec::new();
+            idents.push(self.identifier()?);
+            while self.next_is(Token::Period) {
+                idents.push(self.identifier()?);
+            }
+            let span = self
+                .merge_spans(idents.first().unwrap(), idents.last().unwrap());
+            let path = self.add_span(span, Path { idents });
+
             if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
                 let key_values = self.record()?;
-                let span = self.merge_spans(&ident, &key_values);
+                let span = self.merge_spans(&path, &key_values);
                 return Ok(self
                     .spans
-                    .add(span, Expr::TypedRecord(ident, key_values)));
+                    .add(span, Expr::TypedRecord(path, key_values)));
+            } else {
+                return Ok(Meta {
+                    id: path.id,
+                    node: Expr::Path(path),
+                });
             }
-            if self.peek_is(Token::RoundLeft) {
-                let args = self.args()?;
-                let span = self.merge_spans(&ident, &args);
-                return Ok(self
-                    .spans
-                    .add(span, Expr::FunctionCall(ident, args)));
-            }
-            return Ok(Meta {
-                id: ident.id,
-                node: Expr::Var(ident),
-            });
         }
 
         let literal = self.literal()?;

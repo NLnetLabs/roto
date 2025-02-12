@@ -29,11 +29,17 @@ pub struct Declaration {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DeclarationKind {
-    Context(usize, Type),
-    Constant(Type),
-    Variable(Type),
+    Value(ValueKind, Type),
     Type(Type),
     Function(FunctionDefinition, Type),
+    Module(ScopeRef),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ValueKind {
+    Local,
+    Constant,
+    Context(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -49,6 +55,7 @@ pub enum StubDeclarationKind {
     Variable,
     Type,
     Function,
+    Module,
 }
 
 pub struct ScopeGraph {
@@ -89,11 +96,16 @@ impl Declaration {
 impl DeclarationKind {
     fn to_stub(&self) -> StubDeclarationKind {
         match self {
-            Self::Context(_, _) => StubDeclarationKind::Context,
-            Self::Constant(_) => StubDeclarationKind::Constant,
-            Self::Variable(_) => StubDeclarationKind::Variable,
+            Self::Value(ValueKind::Local, _) => StubDeclarationKind::Variable,
+            Self::Value(ValueKind::Constant, _) => {
+                StubDeclarationKind::Constant
+            }
+            Self::Value(ValueKind::Context(_), _) => {
+                StubDeclarationKind::Context
+            }
             Self::Type(_) => StubDeclarationKind::Type,
             Self::Function(_, _) => StubDeclarationKind::Function,
+            Self::Module(_) => StubDeclarationKind::Module,
         }
     }
 }
@@ -169,7 +181,8 @@ impl ScopeGraph {
             scope: ScopeRef::GLOBAL,
             ident: **v,
         };
-        let kind = DeclarationKind::Context(offset, ty.clone());
+        let kind =
+            DeclarationKind::Value(ValueKind::Context(offset), ty.clone());
         let id = v.id;
 
         match self.declarations.entry(name) {
@@ -190,7 +203,7 @@ impl ScopeGraph {
             scope: ScopeRef::GLOBAL,
             ident: **v,
         };
-        let kind = DeclarationKind::Constant(ty.clone());
+        let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
         let id = v.id;
 
         match self.declarations.entry(name) {
@@ -213,7 +226,7 @@ impl ScopeGraph {
             ident: **ident,
         };
 
-        let kind = DeclarationKind::Variable(ty.clone());
+        let kind = DeclarationKind::Value(ValueKind::Local, ty.clone());
         let id = ident.id;
         self.insert_declaration(
             scope,
@@ -235,6 +248,22 @@ impl ScopeGraph {
         };
 
         let kind = DeclarationKind::Type(ty.clone());
+        let id = ident.id;
+        self.insert_declaration(scope, ident, Declaration { name, kind, id })
+    }
+
+    pub fn insert_module(
+        &mut self,
+        scope: ScopeRef,
+        ident: &Meta<Identifier>,
+        mod_scope: ScopeRef,
+    ) -> Result<(), MetaId> {
+        let name = ResolvedName {
+            scope,
+            ident: **ident,
+        };
+
+        let kind = DeclarationKind::Module(mod_scope);
         let id = ident.id;
         self.insert_declaration(scope, ident, Declaration { name, kind, id })
     }

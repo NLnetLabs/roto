@@ -76,6 +76,11 @@ pub enum Stmt {
     Expr(Meta<Expr>),
 }
 
+#[derive(Clone, Debug)]
+pub struct Path {
+    pub idents: Vec<Meta<Identifier>>,
+}
+
 /// A Roto expression
 #[derive(Clone, Debug)]
 pub enum Expr {
@@ -91,20 +96,13 @@ pub enum Expr {
     Match(Box<Meta<Match>>),
 
     /// A function call expression
-    FunctionCall(Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
-
-    /// A method call expression
-    ///
-    /// Takes the expression of the _receiver_ (the expression that the
-    /// method is called on), the name of the method and a [`Vec`] of
-    /// arguments.
-    MethodCall(Box<Meta<Expr>>, Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
+    FunctionCall(Box<Meta<Expr>>, Meta<Vec<Meta<Expr>>>),
 
     /// A field access expression
     Access(Box<Meta<Expr>>, Meta<Identifier>),
 
     /// A variable use
-    Var(Meta<Identifier>),
+    Path(Meta<Path>),
 
     /// A record that doesn't have a type mentioned in the assignment of it
     ///
@@ -116,7 +114,7 @@ pub enum Expr {
     ///
     /// For example: `MyType { value_1: 100, value_2: "bla" }`, where `MyType`
     /// is a user-defined Record Type.
-    TypedRecord(Meta<Identifier>, Meta<Record>),
+    TypedRecord(Meta<Path>, Meta<Record>),
 
     /// An expression that yields a list of values, e.g. `[100, 200, 300]`
     List(Vec<Meta<Expr>>),

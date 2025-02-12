@@ -102,7 +102,7 @@ pub enum Instruction {
         to: Option<(Var, IrType)>,
         ctx: Operand,
         func: Identifier,
-        args: Vec<(Identifier, Operand)>,
+        args: Vec<Operand>,
     },
 
     /// Call a runtime function (i.e. a Rust function)
@@ -370,11 +370,7 @@ impl<'a> IrPrinter<'a> {
                 self.ident(func),
                 self.operand(ctx),
                 args.iter()
-                    .map(|a| format!(
-                        "{} = {}",
-                        self.ident(&a.0),
-                        self.operand(&a.1),
-                    ))
+                    .map(|a| self.operand(a).to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -388,11 +384,7 @@ impl<'a> IrPrinter<'a> {
                 self.ident(func),
                 self.operand(ctx),
                 args.iter()
-                    .map(|a| format!(
-                        "{} = {}",
-                        self.ident(&a.0),
-                        self.operand(&a.1),
-                    ))
+                    .map(|a| self.operand(a).to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),

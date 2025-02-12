@@ -374,12 +374,14 @@ pub fn eval(
                     ctx_val.clone(),
                 );
 
-                for (name, arg) in args {
+                let names = f.ir_signature.parameters.iter().map(|p| p.0);
+
+                for (name, arg) in names.zip(args) {
                     let val = eval_operand(&vars, arg);
                     vars.insert(
                         Var {
                             scope: f.scope,
-                            kind: VarKind::Explicit(*name),
+                            kind: VarKind::Explicit(name),
                         },
                         val.clone(),
                     );
