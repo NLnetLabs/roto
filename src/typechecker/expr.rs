@@ -239,20 +239,30 @@ impl TypeChecker {
                     .path_kinds
                     .insert(p.id, resolved_path.clone());
 
-                let ResolvedPath::Value(PathValue {
-                    name: _,
-                    kind: _,
-                    ty,
-                    fields,
-                }) = resolved_path
-                else {
-                    todo!("error and enum constructor")
-                };
-
-                let ty = if let Some(f) = fields.last() {
-                    f.1.clone()
-                } else {
-                    ty
+                let ty = match resolved_path {
+                    ResolvedPath::Value(PathValue {
+                        name: _,
+                        kind: _,
+                        ty,
+                        fields,
+                    }) => {
+                        if let Some(f) = fields.last() {
+                            f.1.clone()
+                        } else {
+                            ty
+                        }
+                    }
+                    ResolvedPath::EnumConstructor {
+                        ty,
+                        variant: _,
+                        data,
+                    } => {
+                        if data.is_some() {
+                            todo!("error")
+                        }
+                        ty
+                    }
+                    _ => todo!("error"),
                 };
 
                 self.type_info.expr_types.insert(p.id, ty.clone());
@@ -1070,30 +1080,32 @@ impl TypeChecker {
         p: &Meta<ast::Path>,
         args: &Meta<Vec<Meta<ast::Expr>>>,
     ) -> TypeResult<bool> {
+        let last_ident = p.idents.last().unwrap();
         let resolved_path = self.resolve_expression_path(scope, p)?;
 
-        let (name, definition, signature, description) = match &resolved_path
-        {
-            ResolvedPath::Function {
-                name,
-                definition,
-                signature,
-            } => (name, definition, signature, "function"),
-            ResolvedPath::StaticMethod {
-                name,
-                definition,
-                signature,
-            } => (name, definition, signature, "static method"),
-            ResolvedPath::Method {
-                value: _,
-                definition,
-                name,
-                signature,
-            } => (name, definition, signature, "method"),
-            _ => {
-                todo!("error")
-            }
-        };
+        let (name, definition, signature, description) =
+            match &resolved_path {
+                ResolvedPath::Function {
+                    name,
+                    definition,
+                    signature,
+                } => (name, definition, signature, "function"),
+                ResolvedPath::StaticMethod {
+                    name,
+                    definition,
+                    signature,
+                } => (name, definition, signature, "static method"),
+                ResolvedPath::Method {
+                    value: _,
+                    definition,
+                    name,
+                    signature,
+                } => (name, definition, signature, "method"),
+                _ => {
+                    return Err(self
+                        .error_expected_function(last_ident, &resolved_path))
+                }
+            };
 
         // Tell the lower stage about the kind of function this is.
         self.type_info

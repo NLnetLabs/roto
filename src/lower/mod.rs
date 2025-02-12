@@ -521,15 +521,43 @@ impl<'r> Lowerer<'r> {
                 self.read_field(op, offset, &ty)
             }
             ast::Expr::Path(p) => {
-                let path_kind = self.type_info.path_kind(p);
+                let path_kind = self.type_info.path_kind(p).clone();
 
-                let value = match path_kind.clone() {
-                    ResolvedPath::Value(value) => value,
-                    ResolvedPath::EnumConstructor { .. } => todo!(),
+                match path_kind {
+                    ResolvedPath::Value(value) => self.path_value(&value),
+                    ResolvedPath::EnumConstructor {
+                        ty,
+                        variant,
+                        data: _,
+                    } => {
+                        let Type::Enum(_, variants) = &ty else {
+                            unreachable!();
+                        };
+                        let idx = variants
+                            .iter()
+                            .position(|(s, _)| s == &variant)
+                            .unwrap();
+                        let size = self.type_info.size_of(&ty, self.runtime);
+                        let alignment =
+                            self.type_info.alignment_of(&ty, self.runtime);
+                        let align_shift = alignment.ilog2() as u8;
+
+                        let ty = ty.clone();
+                        let to = self.new_tmp();
+                        self.stack_slots.push((to.clone(), ty));
+                        self.add(Instruction::Alloc {
+                            to: to.clone(),
+                            size,
+                            align_shift,
+                        });
+                        self.add(Instruction::Write {
+                            to: to.clone().into(),
+                            val: IrValue::U8(idx as u8).into(),
+                        });
+                        Some(to.into())
+                    }
                     _ => unreachable!("should be rejected by type checker"),
-                };
-
-                self.path_value(&value)
+                }
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);

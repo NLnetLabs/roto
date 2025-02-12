@@ -11,7 +11,7 @@ use crate::{
 use super::{
     scope::{StubDeclaration, StubDeclarationKind},
     types::Type,
-    TypeChecker,
+    ResolvedPath, TypeChecker,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -353,30 +353,18 @@ impl TypeChecker {
         }
     }
 
-    #[allow(dead_code)]
     pub fn error_expected_function(
         &self,
         ident: &Meta<Identifier>,
-        declaration: &Declaration,
+        resolved_path: &ResolvedPath,
     ) -> TypeError {
-        let stub = declaration.to_stub();
-        let kind = describe_declaration(&stub);
+        let (kind, name) = describe_path(resolved_path);
         TypeError {
             description: format!(
-                "expected a function, but found {kind} `{}`",
-                declaration.name.ident
+                "expected a function, but found {kind} `{name}`",
             ),
             location: ident.id,
-            labels: vec![
-                Label::error("expected a function", ident.id),
-                Label::info(
-                    format!(
-                        "{kind} `{}` defined here",
-                        declaration.name.ident
-                    ),
-                    declaration.id,
-                ),
-            ],
+            labels: vec![Label::error("expected a function", ident.id)],
         }
     }
 
@@ -401,6 +389,26 @@ fn describe_declaration(d: &StubDeclaration) -> &str {
         StubDeclarationKind::Type => "type",
         StubDeclarationKind::Function => "function",
         StubDeclarationKind::Module => "module",
+    }
+}
+
+fn describe_path(p: &ResolvedPath) -> (&str, Identifier) {
+    match p {
+        ResolvedPath::Function { name, .. } => ("function", name.ident),
+        ResolvedPath::Method { name, .. } => ("method", name.ident),
+        ResolvedPath::Value(path_value) => {
+            if let Some(f) = path_value.fields.last() {
+                ("field", f.0)
+            } else {
+                ("value", path_value.name.ident)
+            }
+        }
+        ResolvedPath::StaticMethod { name, .. } => {
+            ("static method", name.ident)
+        }
+        ResolvedPath::EnumConstructor { variant, .. } => {
+            ("enum constructor", *variant)
+        }
     }
 }
 
