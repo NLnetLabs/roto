@@ -16,12 +16,12 @@ categories.workspace = true
 ariadne = "0.5.0"
 clap = { version = "4.4.6", features = ["derive"] }
 env_logger = "0.10"
-log = "0.4"
-inetnum = "0.1.0"
-symbol_table = { version = "0.3.0", features = ["global"] }
-string-interner = "0.17.0"
-roto-macros = { workspace = true, version = "0.3.0" }
 icu = { version = "1.5.0", features = ["compiled_data"] }
+inetnum = "0.1.0"
+log = "0.4"
+roto-macros = { workspace = true }
+string-interner = "0.17.0"
+symbol_table = { version = "0.3.0", features = ["global"] }
 
 [dependencies.cranelift]
 version = "0.113.0"
@@ -50,7 +50,7 @@ debug = "full"
 members = ["macros"]
 
 [workspace.package]
-version = "0.3.1-dev"
+version = "0.4.1-dev"
 edition = "2021"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
@@ -64,7 +64,7 @@ categories = ["network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
-roto-macros = { path = "macros", version = "0.3.1-dev" }
+roto-macros = { path = "macros", version = "0.4.1-dev" }
 proc-macro2 = "1.0.86"
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }
