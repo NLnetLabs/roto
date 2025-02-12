@@ -1,3 +1,7 @@
-function quadruple(x: i32) -> i32 {
-    super.double(super.double(x))
+function bar(x: i32) -> i32 {
+    let a = super.double(x);
+    let b = lib.double(a);
+    let c = .lib.double(b);
+    c
 }
+

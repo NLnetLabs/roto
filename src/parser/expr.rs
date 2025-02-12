@@ -4,8 +4,7 @@ use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, Literal, Match, MatchArm, Path, Pattern, Record,
-        ReturnKind, Stmt,
+        BinOp, Block, Expr, Identifier, Literal, Match, MatchArm, Path, Pattern, Record, ReturnKind, Stmt
     },
     parser::ParseError,
 };
@@ -374,15 +373,29 @@ impl Parser<'_, '_> {
             return self.match_expr();
         }
 
-        if let Some(Token::Ident(_)) = self.peek() {
+        let path_start = if self.next_is(Token::Period) {
+            Some(true)
+        } else if let Some(Token::Ident(_) | Token::Super | Token::Lib) = self.peek() {
+            Some(false)
+        } else {
+            None
+        };
+
+        if let Some(is_absolute) = path_start {
             let mut idents = Vec::new();
-            idents.push(self.identifier()?);
+            idents.push(self.path_item()?);
             while self.next_is(Token::Period) {
-                idents.push(self.identifier()?);
+                idents.push(self.path_item()?);
             }
             let span = self
                 .merge_spans(idents.first().unwrap(), idents.last().unwrap());
-            let path = self.add_span(span, Path { idents });
+            let path = self.add_span(
+                span,
+                Path {
+                    is_absolute,
+                    idents,
+                },
+            );
 
             if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
                 let key_values = self.record()?;
@@ -649,5 +662,16 @@ impl Parser<'_, '_> {
         )?;
 
         Ok(args)
+    }
+
+    fn path_item(&mut self) -> ParseResult<Meta<Identifier>> {
+        let (tok, span) = self.next()?;
+        let ident: Identifier = match tok {
+            Token::Lib => "lib".into(),
+            Token::Super => "super".into(),
+            Token::Ident(s) => s.into(),
+            _ => return Err(ParseError::expected("identifier, `super` or `lib`", tok, span)),
+        };
+        Ok(self.spans.add(span, ident))
     }
 }

@@ -1,5 +1,5 @@
 function main(x: i32) -> i32 {
-    foo.quadruple(foo.quadruple(x))
+    foo.bar(foo.bar(x))
 }
 
 function double(x: i32) -> i32 {

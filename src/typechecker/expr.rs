@@ -847,8 +847,15 @@ impl TypeChecker {
     fn resolve_module_part_of_path<'a>(
         &mut self,
         mut scope: ScopeRef,
-        mut idents: impl Iterator<Item = &'a Meta<Identifier>>,
+        is_absolute: bool,
+        idents: impl Iterator<Item = &'a Meta<Identifier>>,
     ) -> TypeResult<(&'a Meta<Identifier>, Declaration)> {
+        let mut idents = idents.peekable();
+
+        if is_absolute || idents.peek().unwrap().node == "lib".into() {
+            scope = ScopeRef::GLOBAL;
+        }
+
         let mut ident = idents.next().unwrap();
 
         // Keep checking modules until we find something that isn't a module
@@ -886,11 +893,17 @@ impl TypeChecker {
     fn resolve_expression_path(
         &mut self,
         scope: ScopeRef,
-        ast::Path { idents }: &ast::Path,
+        ast::Path {
+            idents,
+            is_absolute,
+        }: &ast::Path,
     ) -> TypeResult<ResolvedPath> {
         let mut idents = idents.iter();
-        let (ident, dec) =
-            self.resolve_module_part_of_path(scope, &mut idents)?;
+        let (ident, dec) = self.resolve_module_part_of_path(
+            scope,
+            *is_absolute,
+            &mut idents,
+        )?;
 
         match &dec.kind {
             // We have reached the end of the iterator, but are still a module even though we
@@ -1007,11 +1020,17 @@ impl TypeChecker {
     fn resolve_type_path(
         &mut self,
         scope: ScopeRef,
-        ast::Path { idents }: &ast::Path,
+        ast::Path {
+            idents,
+            is_absolute,
+        }: &ast::Path,
     ) -> TypeResult<Type> {
         let mut idents = idents.iter();
-        let (ident, dec) =
-            self.resolve_module_part_of_path(scope, &mut idents)?;
+        let (ident, dec) = self.resolve_module_part_of_path(
+            scope,
+            *is_absolute,
+            &mut idents,
+        )?;
 
         match dec.kind {
             DeclarationKind::Value(_, _)
