@@ -310,7 +310,7 @@ impl TypeChecker {
             } = m;
             let parent_module = parent.map(|p| modules[p.0].0);
             let mod_scope = ModuleScope {
-                ident: **ident,
+                name: ResolvedName { ident: **ident, scope: parent_module.unwrap_or(ScopeRef::GLOBAL) },
                 parent_module,
             };
             let scope = self
@@ -320,6 +320,8 @@ impl TypeChecker {
 
             if let Some(p) = parent_module {
                 self.insert_module(p, ident, scope)?;
+            } else {
+                self.insert_module(ScopeRef::GLOBAL, ident, scope)?;
             }
 
             for d in &ast.declarations {
@@ -735,7 +737,7 @@ impl TypeChecker {
 
         if let Type::Name(x) = t {
             t = self.type_info.types[&x].clone();
-        }
+       }
 
         t
     }

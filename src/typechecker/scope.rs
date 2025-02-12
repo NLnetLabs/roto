@@ -80,7 +80,7 @@ pub enum ScopeType {
 }
 
 pub struct ModuleScope {
-    pub ident: Identifier,
+    pub name: ResolvedName,
     pub parent_module: Option<ScopeRef>,
 }
 
@@ -322,6 +322,23 @@ impl ScopeGraph {
             Entry::Occupied(entry) => Err(entry.get().id),
         }
     }
+
+    pub fn parent_module(&self, mut scope: ScopeRef) -> Option<&Declaration> {
+        loop {
+            let s = &self.scopes[scope.0];
+
+            if let ScopeType::Module(m) = &s.scope_type {
+                let ScopeType::Module(parent) =
+                    &self.scopes[m.parent_module?.0].scope_type
+                else {
+                    unreachable!();
+                };
+                return self.declarations.get(&parent.name);
+            }
+
+            scope = self.parent(scope)?;
+        }
+    }
 }
 
 impl Default for ScopeGraph {
@@ -340,7 +357,7 @@ impl ScopeGraph {
 
         let mut m = Some(m);
         while let Some(current) = m {
-            idents.push(current.ident.to_string());
+            idents.push(current.name.ident.to_string());
             m = current.parent_module.map(|idx| {
                 let s = &self.scopes[idx.0];
                 let ScopeType::Module(m) = &s.scope_type else {

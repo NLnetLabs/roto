@@ -1,3 +1,7 @@
 function main(x: i32) -> i32 {
-    foo.double(foo.double(foo.double(x)))
+    foo.quadruple(foo.quadruple(x))
+}
+
+function double(x: i32) -> i32 {
+    2 * x
 }

@@ -853,12 +853,21 @@ impl TypeChecker {
 
         // Keep checking modules until we find something that isn't a module
         loop {
-            let Some(stub) =
-                self.type_info.scope_graph.resolve_name(scope, ident)
-            else {
-                return Err(self.error_not_defined(ident));
+            let dec = if ident.node == "super".into() {
+                let Some(dec) =
+                    self.type_info.scope_graph.parent_module(scope)
+                else {
+                    todo!("error");
+                };
+                dec.clone()
+            } else {
+                let Some(stub) =
+                    self.type_info.scope_graph.resolve_name(scope, ident)
+                else {
+                    return Err(self.error_not_defined(ident));
+                };
+                self.type_info.scope_graph.get_declaration(stub.name)
             };
-            let dec = self.type_info.scope_graph.get_declaration(stub.name);
 
             let DeclarationKind::Module(s) = &dec.kind else {
                 return Ok((ident, dec));
