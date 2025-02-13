@@ -461,8 +461,12 @@ impl TypeChecker {
 
         Ok(())
     }
-
+    
     fn imports(&mut self, scope: ScopeRef, paths: &[&Meta<ast::Path>]) -> TypeResult<()> {
+        // We want imports to work in any order and sometimes there are
+        // dependencies between them. This means that we process them in a loop
+        // where we exit either if we have no unresolved imports anymore or when
+        // we can no longer make progress, in which case we error.
         let mut paths = paths.to_vec();
         loop {
             let last_len = paths.len();
