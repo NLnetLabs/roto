@@ -1,5 +1,6 @@
 function main(x: i32) -> i32 {
-    foo.bar(foo.bar(x))
+    import foo.bar;
+    bar(bar(x))
 }
 
 function double(x: i32) -> i32 {

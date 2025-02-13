@@ -99,7 +99,7 @@ impl TypeChecker {
             let Some(ty) = self
                 .type_info
                 .scope_graph
-                .resolve_name(scope, ret)
+                .resolve_name(scope, ret, true)
                 .and_then(|dec| self.get_type(dec.name))
             else {
                 return Err(self.error_undeclared_type(ret));
@@ -166,7 +166,7 @@ impl TypeChecker {
             let Some(ty) = self
                 .type_info
                 .scope_graph
-                .resolve_name(scope, ret)
+                .resolve_name(scope, ret, true)
                 .and_then(|dec| self.get_type(dec.name))
             else {
                 return Err(self.error_undeclared_type(ret));
@@ -212,7 +212,7 @@ impl TypeChecker {
                 let Some(ty) = self
                     .type_info
                     .scope_graph
-                    .resolve_name(scope, ty)
+                    .resolve_name(scope, ty, true)
                     .and_then(|dec| self.get_type(dec.name))
                 else {
                     return Err(self.error_undeclared_type(ty));

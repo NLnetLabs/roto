@@ -68,7 +68,7 @@ pub struct ScopeGraph {
 struct Scope {
     scope_type: ScopeType,
     parent: Option<ScopeRef>,
-    imports: BTreeMap<Identifier, ResolvedName>,
+    imports: BTreeMap<Identifier, (MetaId, ResolvedName)>,
 }
 
 pub enum ScopeType {
@@ -152,6 +152,7 @@ impl ScopeGraph {
         &self,
         mut scope: ScopeRef,
         ident: &Meta<Identifier>,
+        recurse: bool,
     ) -> Option<StubDeclaration> {
         loop {
             let name = ResolvedName {
@@ -166,12 +167,37 @@ impl ScopeGraph {
             {
                 return Some(x);
             }
+
+            if !recurse {
+                return None;
+            }
+
+            if let Some(x) = self.scopes[scope.0].imports.get(ident) {
+                return Some(self.declarations.get(&x.1).unwrap().to_stub());
+            }
+
             scope = self.parent(scope)?;
         }
     }
 
     pub fn get_declaration(&self, name: ResolvedName) -> Declaration {
         self.declarations.get(&name).unwrap().clone()
+    }
+
+    pub fn insert_import(
+        &mut self,
+        scope: ScopeRef,
+        id: MetaId,
+        name: ResolvedName,
+    ) -> Result<(), MetaId> {
+        let map = &mut self.scopes[scope.0].imports;
+        match map.entry(name.ident) {
+            Entry::Occupied(entry) => Err(entry.get().0),
+            Entry::Vacant(entry) => {
+                entry.insert((id, name));
+                Ok(())
+            }
+        }
     }
 
     pub fn insert_context(
@@ -326,7 +352,10 @@ impl ScopeGraph {
         }
     }
 
-    pub fn parent_module(&self, mut scope: ScopeRef) -> Option<&Declaration> {
+    pub fn parent_module(
+        &self,
+        mut scope: ScopeRef,
+    ) -> Option<StubDeclaration> {
         loop {
             let s = &self.scopes[scope.0];
 
@@ -336,7 +365,10 @@ impl ScopeGraph {
                 else {
                     unreachable!();
                 };
-                return self.declarations.get(&parent.name);
+                return Some(StubDeclaration {
+                    name: parent.name,
+                    kind: StubDeclarationKind::Module,
+                });
             }
 
             scope = self.parent(scope)?;

@@ -43,7 +43,7 @@ mod tests;
 pub mod types;
 mod unionfind;
 
-pub use expr::{ResolvedPath, PathValue};
+pub use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
 
 pub struct TypeChecker {
@@ -87,6 +87,7 @@ impl TypeChecker {
         checker.declare_runtime_items(runtime).unwrap();
 
         let modules = checker.declare_modules(tree)?;
+        checker.declare_imports(&modules)?;
         checker.declare_types(&modules)?;
 
         detect_type_cycles(&checker.type_info.types).map_err(
@@ -149,7 +150,7 @@ impl TypeChecker {
             if self
                 .type_info
                 .scope_graph
-                .resolve_name(ScopeRef::GLOBAL, &ident)
+                .resolve_name(ScopeRef::GLOBAL, &ident, true)
                 .is_none()
             {
                 let ty = Type::BuiltIn(name, ty.type_id());
@@ -310,7 +311,10 @@ impl TypeChecker {
             } = m;
             let parent_module = parent.map(|p| modules[p.0].0);
             let mod_scope = ModuleScope {
-                name: ResolvedName { ident: **ident, scope: parent_module.unwrap_or(ScopeRef::GLOBAL) },
+                name: ResolvedName {
+                    ident: **ident,
+                    scope: parent_module.unwrap_or(ScopeRef::GLOBAL),
+                },
                 parent_module,
             };
             let scope = self
@@ -335,7 +339,7 @@ impl TypeChecker {
                     ast::Declaration::FilterMap(x) => {
                         (StubDeclarationKind::Function, x.ident.clone())
                     }
-                    ast::Declaration::Import(_) => todo!(),
+                    ast::Declaration::Import(_) => continue,
                     ast::Declaration::Test(_) => continue,
                 };
                 self.type_info.scope_graph.insert_stub(scope, &ident, kind);
@@ -343,6 +347,21 @@ impl TypeChecker {
             modules.push((scope, m))
         }
         Ok(modules)
+    }
+
+    fn declare_imports(
+        &mut self,
+        modules: &[(ScopeRef, &Module)],
+    ) -> TypeResult<()> {
+        for &(scope, module) in modules {
+            for expr in &module.ast.declarations {
+                let ast::Declaration::Import(path) = expr else {
+                    continue;
+                };
+                self.import(scope, path)?;
+            }
+        }
+        Ok(())
     }
 
     fn declare_types(
@@ -439,6 +458,21 @@ impl TypeChecker {
         }
 
         Ok(())
+    }
+
+    fn import(&mut self, scope: ScopeRef, path: &ast::Path) -> TypeResult<()> {
+        let mut idents = path.idents.iter();
+        let (ident, stub) = self.resolve_module_part_of_path(scope, path.is_absolute, &mut idents)?;
+
+        // This is a bit of an oversimplification. The
+        // resolve_module_part_of_path should just give us the thing
+        // to import, but we might expand import functionality to enum
+        // constructors.
+        if let Some(_ident) = idents.next() {
+            todo!("error")
+        }
+
+        self.type_info.scope_graph.insert_import(scope, ident.id, stub.name).map_err(|old| self.error_declared_twice(ident, old))
     }
 
     /// Create a fresh variable in the unionfind structure
@@ -740,7 +774,7 @@ impl TypeChecker {
 
         if let Type::Name(x) = t {
             t = self.type_info.types[&x].clone();
-       }
+        }
 
         t
     }
@@ -846,7 +880,7 @@ impl TypeChecker {
                 let stub = self
                     .type_info
                     .scope_graph
-                    .resolve_name(scope, ident)
+                    .resolve_name(scope, ident, true)
                     .ok_or_else(|| self.error_not_defined(ident))?;
                 if let StubDeclarationKind::Type = stub.kind {
                     Type::Name(stub.name)

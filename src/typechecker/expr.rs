@@ -9,7 +9,10 @@ use crate::{
 };
 
 use super::{
-    scope::{Declaration, ResolvedName, ScopeRef, ScopeType, ValueKind},
+    scope::{
+        ResolvedName, ScopeRef, ScopeType, StubDeclaration,
+        StubDeclarationKind, ValueKind,
+    },
     types::{
         Function, FunctionDefinition, FunctionKind, Primitive, Signature,
         Type,
@@ -74,6 +77,10 @@ impl TypeChecker {
         block: &Meta<ast::Block>,
     ) -> TypeResult<bool> {
         let mut diverged = false;
+
+        for path in &block.imports {
+            self.import(scope, path)?;
+        }
 
         for stmt in &block.stmts {
             if diverged {
@@ -854,12 +861,12 @@ impl TypeChecker {
     ///
     /// In a path, we might start with a path of modules and at some point, we
     /// transition into other items. This function resolves that first part.
-    fn resolve_module_part_of_path<'a>(
+    pub fn resolve_module_part_of_path<'a>(
         &mut self,
         mut scope: ScopeRef,
         is_absolute: bool,
         idents: impl Iterator<Item = &'a Meta<Identifier>>,
-    ) -> TypeResult<(&'a Meta<Identifier>, Declaration)> {
+    ) -> TypeResult<(&'a Meta<Identifier>, StubDeclaration)> {
         let mut idents = idents.peekable();
 
         if is_absolute || idents.peek().unwrap().node == "lib".into() {
@@ -869,33 +876,46 @@ impl TypeChecker {
         let mut ident = idents.next().unwrap();
 
         // Keep checking modules until we find something that isn't a module
+        // The current implementation is a bit strange because it uses
+        // resolve_name, but after the first identifier, it should actually
+        // not really traverse the scope graph.
+        let mut recurse = true;
         loop {
-            let dec = if ident.node == "super".into() {
-                let Some(dec) =
+            let stub = if ident.node == "super".into() {
+                let Some(stub) =
                     self.type_info.scope_graph.parent_module(scope)
                 else {
                     todo!("error");
                 };
-                dec.clone()
+                stub
             } else {
-                let Some(stub) =
-                    self.type_info.scope_graph.resolve_name(scope, ident)
+                let Some(stub) = self
+                    .type_info
+                    .scope_graph
+                    .resolve_name(scope, ident, recurse)
                 else {
                     return Err(self.error_not_defined(ident));
                 };
-                self.type_info.scope_graph.get_declaration(stub.name)
+                stub
             };
 
-            let DeclarationKind::Module(s) = &dec.kind else {
-                return Ok((ident, dec));
+            let StubDeclarationKind::Module = &stub.kind else {
+                return Ok((ident, stub));
             };
-            scope = *s;
+
+            let dec = self.type_info.scope_graph.get_declaration(stub.name);
+            let DeclarationKind::Module(s) = dec.kind else {
+                unreachable!();
+            };
+
+            scope = s;
 
             let Some(tmp_ident) = idents.next() else {
-                return Ok((ident, dec));
+                return Ok((ident, stub));
             };
 
             ident = tmp_ident;
+            recurse = false;
         }
     }
 
@@ -909,11 +929,13 @@ impl TypeChecker {
         }: &ast::Path,
     ) -> TypeResult<ResolvedPath> {
         let mut idents = idents.iter();
-        let (ident, dec) = self.resolve_module_part_of_path(
+        let (ident, stub) = self.resolve_module_part_of_path(
             scope,
             *is_absolute,
             &mut idents,
         )?;
+
+        let dec = self.type_info.scope_graph.get_declaration(stub.name);
 
         match &dec.kind {
             // We have reached the end of the iterator, but are still a module even though we
@@ -1036,11 +1058,13 @@ impl TypeChecker {
         }: &ast::Path,
     ) -> TypeResult<Type> {
         let mut idents = idents.iter();
-        let (ident, dec) = self.resolve_module_part_of_path(
+        let (ident, stub) = self.resolve_module_part_of_path(
             scope,
             *is_absolute,
             &mut idents,
         )?;
+
+        let dec = self.type_info.scope_graph.get_declaration(stub.name);
 
         match dec.kind {
             DeclarationKind::Value(_, _)
