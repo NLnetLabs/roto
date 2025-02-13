@@ -13,7 +13,7 @@ mod runtime;
 mod typechecker;
 
 pub use codegen::TypedFunc;
-pub use file_tree::FileTree;
+pub use file_tree::{FileTree, SourceFile};
 pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::*;

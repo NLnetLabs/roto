@@ -354,12 +354,14 @@ impl TypeChecker {
         modules: &[(ScopeRef, &Module)],
     ) -> TypeResult<()> {
         for &(scope, module) in modules {
+            let mut paths = Vec::new();
             for expr in &module.ast.declarations {
                 let ast::Declaration::Import(path) = expr else {
                     continue;
                 };
-                self.import(scope, path)?;
+                paths.push(path);
             }
+            self.imports(scope, &paths)?;
         }
         Ok(())
     }
@@ -458,6 +460,25 @@ impl TypeChecker {
         }
 
         Ok(())
+    }
+
+    fn imports(&mut self, scope: ScopeRef, paths: &[&Meta<ast::Path>]) -> TypeResult<()> {
+        let mut paths = paths.to_vec();
+        loop {
+            let last_len = paths.len();
+            paths.retain(|p| {
+                self.import(scope, p).is_err()
+            });
+            let new_len = paths.len();
+            if new_len == 0 {
+                return Ok(());
+            }
+            if new_len == last_len {
+                for p in &paths {
+                    self.import(scope, p)?; 
+                }
+            }
+        }
     }
 
     fn import(&mut self, scope: ScopeRef, path: &ast::Path) -> TypeResult<()> {

@@ -63,6 +63,11 @@ impl FileTree {
     }
 }
 
+pub enum FileSpec {
+    File(SourceFile),
+    Directory(SourceFile, Vec<FileSpec>),
+}
+
 impl FileTree {
     pub fn read(path: &Path) -> Self {
         if path.metadata().unwrap().file_type().is_dir() {
@@ -93,6 +98,43 @@ impl FileTree {
                 children: Vec::new(),
             }],
         }
+    }
+
+    pub fn file_spec(file_spec: FileSpec) -> FileTree {
+        fn inner(
+            parent: usize,
+            files: &mut Vec<SourceFile>,
+            file_spec: FileSpec,
+        ) {
+            match file_spec {
+                FileSpec::File(file) => {
+                    let idx = files.len();
+                    files.push(file);
+                    files[parent].children.push(idx);
+                }
+                FileSpec::Directory(file, specs) => {
+                    let idx = files.len();
+                    files.push(file);
+                    files[parent].children.push(idx);
+                    for spec in specs {
+                        inner(idx, files, spec)
+                    }
+                }
+            }
+        }
+
+        let mut files = Vec::new();
+        match file_spec {
+            FileSpec::File(file) => files.push(file),
+            FileSpec::Directory(file, specs) => {
+                let idx = files.len();
+                files.push(file);
+                for spec in specs {
+                    inner(idx, &mut files, spec)
+                }
+            }
+        }
+        Self { files }
     }
 
     /// A Roto script defined by a directory

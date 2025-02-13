@@ -78,9 +78,7 @@ impl TypeChecker {
     ) -> TypeResult<bool> {
         let mut diverged = false;
 
-        for path in &block.imports {
-            self.import(scope, path)?;
-        }
+        self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
 
         for stmt in &block.stmts {
             if diverged {

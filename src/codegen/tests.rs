@@ -7,8 +7,9 @@ use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_function, roto_static_method};
 
 use crate::{
-    pipeline::Compiled, runtime::tests::routecore_runtime, src, Context,
-    FileTree, Runtime, Val, Verdict,
+    file_tree::FileSpec, pipeline::Compiled,
+    runtime::tests::routecore_runtime, source_file, src, Context, FileTree,
+    Runtime, Val, Verdict,
 };
 
 #[track_caller]
@@ -1173,4 +1174,248 @@ fn string_repeat() {
 
     let res = f.call(&mut (), "boo".into());
     assert_eq!(res, Verdict::Accept("BOO! BOO! BOO! BOO! BOO!".into()));
+}
+
+#[test]
+fn top_level_import() {
+    let lib = source_file!(
+        "lib",
+        "
+            import foo.bar;
+            function main(x: i32) -> i32 {
+                bar(x)    
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function bar(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn local_import() {
+    let lib = source_file!(
+        "lib",
+        "
+            function main(x: i32) -> i32 {
+                import foo.bar;
+                bar(x)    
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function bar(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn parent_import() {
+    let lib = source_file!(
+        "lib",
+        "
+            import foo.quadruple;
+            function main(x: i32) -> i32 {
+                quadruple(x)
+            }
+
+            function double(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            import super.double;
+            function quadruple(x: i32) -> i32 {
+                double(double(x))
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 16);
+}
+
+#[test]
+fn silly_import_loop() {
+    let lib = source_file!(
+        "lib",
+        "
+            import foo.super.foo.super.foo.super.foo.bar;
+            function main(x: i32) -> i32 {
+                bar(x)    
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function bar(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn import_via_super() {
+    let lib = source_file!(
+        "lib",
+        "
+            import foo.a;
+            function main(x: i32) -> i32 {
+                a(x)  
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            import super.bar.b;
+            function a(x: i32) -> i32 {
+                b(x)
+            }
+        "
+    );
+    let bar = source_file!(
+        "bar",
+        "
+            function b(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo), FileSpec::File(bar)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn import_module_first() {
+    let lib = source_file!(
+        "lib",
+        "
+            import foo.a;
+            function main(x: i32) -> i32 {
+                a(x)  
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            import super.bar;
+            import bar.b;
+            function a(x: i32) -> i32 {
+                b(x)
+            }
+        "
+    );
+    let bar = source_file!(
+        "bar",
+        "
+            function b(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo), FileSpec::File(bar)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn import_module_second() {
+    let lib = source_file!(
+        "lib",
+        "
+            import foo.a;
+            function main(x: i32) -> i32 {
+                a(x)  
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            import bar.b;
+            import super.bar;
+            function a(x: i32) -> i32 {
+                b(x)
+            }
+        "
+    );
+    let bar = source_file!(
+        "bar",
+        "
+            function b(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo), FileSpec::File(bar)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 8);
 }

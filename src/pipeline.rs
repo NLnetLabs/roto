@@ -178,6 +178,19 @@ macro_rules! src {
     };
 }
 
+#[macro_export]
+macro_rules! source_file {
+    ($module_name:literal, $code:literal) => {
+        $crate::SourceFile {
+            name: file!().into(),
+            module_name: $module_name.into(),
+            contents: $code.into(),
+            location_offset: line!() as usize - 1,
+            children: Vec::new(),
+        }
+    };
+}
+
 /// Compile and run a Roto script from a file
 pub fn interpret(
     runtime: Runtime,
