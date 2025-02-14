@@ -487,7 +487,7 @@ impl TypeChecker {
 
     fn import(&mut self, scope: ScopeRef, path: &ast::Path) -> TypeResult<()> {
         let mut idents = path.idents.iter();
-        let (ident, stub) = self.resolve_module_part_of_path(scope, path.is_absolute, &mut idents)?;
+        let (ident, stub) = self.resolve_module_part_of_path(scope, &mut idents)?;
 
         // This is a bit of an oversimplification. The
         // resolve_module_part_of_path should just give us the thing

@@ -862,16 +862,38 @@ impl TypeChecker {
     pub fn resolve_module_part_of_path<'a>(
         &mut self,
         mut scope: ScopeRef,
-        is_absolute: bool,
-        idents: impl Iterator<Item = &'a Meta<Identifier>>,
+        mut idents: impl Iterator<Item = &'a Meta<Identifier>>,
     ) -> TypeResult<(&'a Meta<Identifier>, StubDeclaration)> {
-        let mut idents = idents.peekable();
-
-        if is_absolute || idents.peek().unwrap().node == "lib".into() {
-            scope = ScopeRef::GLOBAL;
-        }
-
         let mut ident = idents.next().unwrap();
+
+        while ident.node == "super".into() {
+            let Some(stub) = self.type_info.scope_graph.parent_module(scope)
+            else {
+                return Err(self.error_simple(
+                    "could not resolve name: too many leading `super` keywords".to_string(),
+                    "too many leading `super` keywords".to_string(),
+                    ident.id,
+                ));
+            };
+
+            // Little sanity check
+            let StubDeclarationKind::Module = &stub.kind else {
+                unreachable!();
+            };
+
+            let dec = self.type_info.scope_graph.get_declaration(stub.name);
+            let DeclarationKind::Module(s) = dec.kind else {
+                unreachable!();
+            };
+
+            scope = s;
+
+            let Some(tmp_ident) = idents.next() else {
+                return Ok((ident, stub));
+            };
+
+            ident = tmp_ident;
+        }
 
         // Keep checking modules until we find something that isn't a module
         // The current implementation is a bit strange because it uses
@@ -879,22 +901,19 @@ impl TypeChecker {
         // not really traverse the scope graph.
         let mut recurse = true;
         loop {
-            let stub = if ident.node == "super".into() {
-                let Some(stub) =
-                    self.type_info.scope_graph.parent_module(scope)
-                else {
-                    todo!("error");
-                };
-                stub
-            } else {
-                let Some(stub) = self
-                    .type_info
-                    .scope_graph
-                    .resolve_name(scope, ident, recurse)
-                else {
-                    return Err(self.error_not_defined(ident));
-                };
-                stub
+            if ident.node == "super".into() {
+                return Err(self.error_simple(
+                    "could not resolve name: too many leading `super` keywords".to_string(),
+                    "too many leading `super` keywords".to_string(),
+                    ident.id,
+                ));
+            }
+            let Some(stub) = self
+                .type_info
+                .scope_graph
+                .resolve_name(scope, ident, recurse)
+            else {
+                return Err(self.error_not_defined(ident));
             };
 
             let StubDeclarationKind::Module = &stub.kind else {
@@ -921,17 +940,11 @@ impl TypeChecker {
     fn resolve_expression_path(
         &mut self,
         scope: ScopeRef,
-        ast::Path {
-            idents,
-            is_absolute,
-        }: &ast::Path,
+        ast::Path { idents }: &ast::Path,
     ) -> TypeResult<ResolvedPath> {
         let mut idents = idents.iter();
-        let (ident, stub) = self.resolve_module_part_of_path(
-            scope,
-            *is_absolute,
-            &mut idents,
-        )?;
+        let (ident, stub) =
+            self.resolve_module_part_of_path(scope, &mut idents)?;
 
         let dec = self.type_info.scope_graph.get_declaration(stub.name);
 
@@ -1050,17 +1063,11 @@ impl TypeChecker {
     fn resolve_type_path(
         &mut self,
         scope: ScopeRef,
-        ast::Path {
-            idents,
-            is_absolute,
-        }: &ast::Path,
+        ast::Path { idents }: &ast::Path,
     ) -> TypeResult<Type> {
         let mut idents = idents.iter();
-        let (ident, stub) = self.resolve_module_part_of_path(
-            scope,
-            *is_absolute,
-            &mut idents,
-        )?;
+        let (ident, stub) =
+            self.resolve_module_part_of_path(scope, &mut idents)?;
 
         let dec = self.type_info.scope_graph.get_declaration(stub.name);
 

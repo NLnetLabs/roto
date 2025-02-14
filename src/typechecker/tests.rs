@@ -1,7 +1,7 @@
-use crate::file_tree::FileTree;
+use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
 use crate::runtime::tests::routecore_runtime;
-use crate::{src, Context, Runtime};
+use crate::{source_file, src, Context, Runtime};
 
 #[track_caller]
 fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
@@ -866,4 +866,42 @@ fn use_context() {
     );
 
     typecheck_with_runtime(s, rt).unwrap();
+}
+
+#[test]
+fn too_many_leading_super() {
+    let s = src!(
+        "
+        import super.super;
+        "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn silly_import_loop() {
+    let lib = source_file!(
+        "lib",
+        "
+            function main(x: i32) -> i32 {
+                foo.super.bar(x)    
+            }
+
+            function bar(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        lib,
+        vec![FileSpec::File(foo)],
+    ));
+    typecheck(tree).unwrap_err();
 }

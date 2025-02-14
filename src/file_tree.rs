@@ -80,7 +80,7 @@ impl FileTree {
     /// A Roto script consisting of a single file
     pub fn single_file(path: impl AsRef<Path>) -> Self {
         let mut file = SourceFile::read(path.as_ref());
-        file.module_name = "lib".into();
+        file.module_name = "pkg".into();
         FileTree { files: vec![file] }
     }
 
@@ -91,7 +91,7 @@ impl FileTree {
     ) -> Self {
         FileTree {
             files: vec![SourceFile {
-                module_name: "lib".into(),
+                module_name: "pkg".into(),
                 location_offset,
                 name: file.into(),
                 contents: source.into(),
@@ -139,10 +139,10 @@ impl FileTree {
 
     /// A Roto script defined by a directory
     pub fn directory(root: &Path) -> FileTree {
-        let lib_file = SourceFile::read(&root.join("lib.roto"));
-        assert_eq!(lib_file.module_name, "lib");
+        let pkg_file = SourceFile::read(&root.join("pkg.roto"));
+        assert_eq!(pkg_file.module_name, "pkg");
         let mut tree = Self {
-            files: vec![lib_file],
+            files: vec![pkg_file],
         };
         tree.find_files(0, root);
         tree
@@ -163,7 +163,7 @@ impl FileTree {
 
             let ident = path.file_stem().unwrap().to_str().unwrap();
 
-            if ident == "lib" || ident == "mod" {
+            if ident == "pkg" || ident == "mod" {
                 continue;
             }
 

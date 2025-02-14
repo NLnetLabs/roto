@@ -253,7 +253,7 @@ pub fn eval(
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Option<IrValue> {
-    let filter_map_ident = Identifier::from(format!("lib.{filter_map}"));
+    let filter_map_ident = Identifier::from(format!("pkg.{filter_map}"));
     let f = p
         .iter()
         .find(|f| f.name == filter_map_ident)

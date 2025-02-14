@@ -1098,7 +1098,7 @@ impl Module {
             print!("Test {n:>total_width$} / {total}: {test_display}... ");
             let test_fn = self
                 .get_function::<Ctx, (), Verdict<(), ()>>(
-                    test.strip_prefix("lib.").unwrap(),
+                    test.strip_prefix("pkg.").unwrap(),
                 )
                 .unwrap();
 
@@ -1128,7 +1128,7 @@ impl Module {
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
-        let name = format!("lib.{name}");
+        let name = format!("pkg.{name}");
         let function_info = self.functions.get(&name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
                 name: name.to_string(),

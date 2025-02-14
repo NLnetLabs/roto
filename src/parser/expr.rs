@@ -390,7 +390,13 @@ impl Parser<'_, '_> {
 
         if matches!(
             self.peek(),
-            Some(Token::Ident(_) | Token::Super | Token::Lib | Token::Period)
+            Some(
+                Token::Ident(_)
+                    | Token::Super
+                    | Token::Pkg
+                    | Token::Lib
+                    | Token::Std
+            )
         ) {
             let path = self.path()?;
             if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
@@ -663,7 +669,6 @@ impl Parser<'_, '_> {
     }
 
     pub(super) fn path(&mut self) -> ParseResult<Meta<Path>> {
-        let is_absolute = self.next_is(Token::Period);
         let mut idents = Vec::new();
         idents.push(self.path_item()?);
         while self.next_is(Token::Period) {
@@ -671,18 +676,13 @@ impl Parser<'_, '_> {
         }
         let span =
             self.merge_spans(idents.first().unwrap(), idents.last().unwrap());
-        Ok(self.add_span(
-            span,
-            Path {
-                is_absolute,
-                idents,
-            },
-        ))
+        Ok(self.add_span(span, Path { idents }))
     }
 
     fn path_item(&mut self) -> ParseResult<Meta<Identifier>> {
         let (tok, span) = self.next()?;
         let ident: Identifier = match tok {
+            Token::Pkg => "pkg".into(),
             Token::Lib => "lib".into(),
             Token::Super => "super".into(),
             Token::Ident(s) => s.into(),

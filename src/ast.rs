@@ -80,7 +80,6 @@ pub enum Stmt {
 
 #[derive(Clone, Debug)]
 pub struct Path {
-    pub is_absolute: bool,
     pub idents: Vec<Meta<Identifier>>,
 }
 

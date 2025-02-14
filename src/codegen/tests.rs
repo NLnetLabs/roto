@@ -1178,8 +1178,8 @@ fn string_repeat() {
 
 #[test]
 fn top_level_import() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             import foo.bar;
             function main(x: i32) -> i32 {
@@ -1197,7 +1197,7 @@ fn top_level_import() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
@@ -1208,8 +1208,8 @@ fn top_level_import() {
 
 #[test]
 fn local_import() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             function main(x: i32) -> i32 {
                 import foo.bar;
@@ -1227,7 +1227,7 @@ fn local_import() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
@@ -1238,8 +1238,8 @@ fn local_import() {
 
 #[test]
 fn parent_import() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             import foo.quadruple;
             function main(x: i32) -> i32 {
@@ -1262,7 +1262,7 @@ fn parent_import() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
@@ -1272,39 +1272,44 @@ fn parent_import() {
 }
 
 #[test]
-fn silly_import_loop() {
-    let lib = source_file!(
-        "lib",
+fn package_import() {
+    let pkg = source_file!(
+        "pkg",
         "
-            import foo.super.foo.super.foo.super.foo.bar;
+            import foo.quadruple;
             function main(x: i32) -> i32 {
-                bar(x)    
+                quadruple(x)
+            }
+
+            function double(x: i32) -> i32 {
+                2 * x
             }
         "
     );
     let foo = source_file!(
         "foo",
         "
-            function bar(x: i32) -> i32 {
-                2 * x
+            import pkg.double;
+            function quadruple(x: i32) -> i32 {
+                double(double(x))
             }
         "
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
     let main = p.get_function::<(), (i32,), i32>("main").unwrap();
     let res = main.call(&mut (), 4);
-    assert_eq!(res, 8);
+    assert_eq!(res, 16);
 }
 
 #[test]
 fn import_via_super() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             import foo.a;
             function main(x: i32) -> i32 {
@@ -1331,7 +1336,7 @@ fn import_via_super() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo), FileSpec::File(bar)],
     ));
     let mut p = compile(tree);
@@ -1342,8 +1347,8 @@ fn import_via_super() {
 
 #[test]
 fn import_module_first() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             import foo.a;
             function main(x: i32) -> i32 {
@@ -1371,7 +1376,7 @@ fn import_module_first() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo), FileSpec::File(bar)],
     ));
     let mut p = compile(tree);
@@ -1382,8 +1387,8 @@ fn import_module_first() {
 
 #[test]
 fn import_module_second() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             import foo.a;
             function main(x: i32) -> i32 {
@@ -1411,7 +1416,7 @@ fn import_module_second() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo), FileSpec::File(bar)],
     ));
     let mut p = compile(tree);

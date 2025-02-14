@@ -293,22 +293,13 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     }
 
     fn tree(&mut self) -> ParseResult<SyntaxTree> {
-        let mut expressions = Vec::new();
+        let mut declarations = Vec::new();
 
         while self.peek().is_some() {
-            expressions.push(self.root()?);
+            declarations.push(self.root()?);
         }
 
-        if expressions.is_empty() {
-            return Err(ParseError {
-                location: Span::new(self.file, 0..0),
-                kind: ParseErrorKind::EmptyInput,
-            });
-        }
-
-        Ok(SyntaxTree {
-            declarations: expressions,
-        })
+        Ok(SyntaxTree { declarations })
     }
 
     /// Parse a root expression
