@@ -294,7 +294,8 @@ impl TypeChecker {
             }
             TypedRecord(path, record) => {
                 let last_ident = path.idents.last().unwrap();
-                let ty = self.resolve_type_path(scope, path)?;
+                let type_name = self.resolve_type_path(scope, path)?;
+                let ty = self.resolve_type(&type_name);
 
                 let Type::NamedRecord(_, record_fields) = &ty else {
                     return Err(self.error_simple(
@@ -867,7 +868,7 @@ impl TypeChecker {
     /// In a path, we might start with a path of modules and at some point, we
     /// transition into other items. This function resolves that first part.
     pub fn resolve_module_part_of_path<'a>(
-        &mut self,
+        &self,
         mut scope: ScopeRef,
         mut idents: impl Iterator<Item = &'a Meta<Identifier>>,
     ) -> TypeResult<(&'a Meta<Identifier>, StubDeclaration)> {
@@ -1068,7 +1069,7 @@ impl TypeChecker {
     }
 
     pub fn resolve_type_path(
-        &mut self,
+        &self,
         scope: ScopeRef,
         ast::Path { idents }: &ast::Path,
     ) -> TypeResult<Type> {
@@ -1076,15 +1077,15 @@ impl TypeChecker {
         let (ident, stub) =
             self.resolve_module_part_of_path(scope, &mut idents)?;
 
-        let dec = self.type_info.scope_graph.get_declaration(stub.name);
-
-        match dec.kind {
-            DeclarationKind::Value(_, _)
-            | DeclarationKind::Function(_, _)
-            | DeclarationKind::Module(_) => {
-                Err(self.error_expected_type(ident, dec.to_stub()))
+        match stub.kind {
+            StubDeclarationKind::Variable
+            | StubDeclarationKind::Context
+            | StubDeclarationKind::Constant
+            | StubDeclarationKind::Function
+            | StubDeclarationKind::Module => {
+                Err(self.error_expected_type(ident, stub))
             }
-            DeclarationKind::Type(ty) => Ok(ty),
+            StubDeclarationKind::Type => Ok(Type::Name(stub.name)),
         }
     }
 

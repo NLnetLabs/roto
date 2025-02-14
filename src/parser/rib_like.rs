@@ -71,7 +71,7 @@ impl Parser<'_, '_> {
             let span = start.merge(end);
             RecordFieldType::List(self.add_span(span, Box::new(inner_type)))
         } else {
-            RecordFieldType::Identifier(self.identifier()?)
+            RecordFieldType::Path(self.path()?)
         })
     }
 }

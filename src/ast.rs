@@ -221,7 +221,7 @@ pub struct RecordType {
 
 #[derive(Clone, Debug)]
 pub enum RecordFieldType {
-    Identifier(Meta<Identifier>),
+    Path(Meta<Path>),
     Record(Meta<RecordType>),
     List(Meta<Box<RecordFieldType>>),
 }

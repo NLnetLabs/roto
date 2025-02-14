@@ -1551,3 +1551,36 @@ fn use_type_in_function_return_type() {
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
+
+#[test]
+fn use_type_from_other_module_in_type() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            type Bli {
+                bla: foo.Bla,
+            }
+
+            function main(x: i32) -> i32 {
+                Bli { bla: foo.Bla { blubb: x }}.bla.blubb
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            type Bla {
+                blubb: i32,
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 4);
+}
