@@ -96,15 +96,7 @@ impl TypeChecker {
         }
 
         let ret = if let Some(ret) = ret {
-            let Some(ty) = self
-                .type_info
-                .scope_graph
-                .resolve_name(scope, ret, true)
-                .and_then(|dec| self.get_type(dec.name))
-            else {
-                return Err(self.error_undeclared_type(ret));
-            };
-            ty.clone()
+            self.resolve_type_path(scope, ret)?
         } else {
             Type::Primitive(Primitive::Unit)
         };
@@ -163,15 +155,7 @@ impl TypeChecker {
         dec: &ast::FunctionDeclaration,
     ) -> TypeResult<Type> {
         let ret = if let Some(ret) = &dec.ret {
-            let Some(ty) = self
-                .type_info
-                .scope_graph
-                .resolve_name(scope, ret, true)
-                .and_then(|dec| self.get_type(dec.name))
-            else {
-                return Err(self.error_undeclared_type(ret));
-            };
-            ty.clone()
+            self.resolve_type_path(scope, ret)?
         } else {
             Type::Primitive(Primitive::Unit)
         };
@@ -209,16 +193,8 @@ impl TypeChecker {
         args.0
             .iter()
             .map(|(field_name, ty)| {
-                let Some(ty) = self
-                    .type_info
-                    .scope_graph
-                    .resolve_name(scope, ty, true)
-                    .and_then(|dec| self.get_type(dec.name))
-                else {
-                    return Err(self.error_undeclared_type(ty));
-                };
-
-                Ok((field_name.clone(), ty.clone()))
+                let ty = self.resolve_type_path(scope, ty)?;
+                Ok((field_name.clone(), ty))
             })
             .collect()
     }

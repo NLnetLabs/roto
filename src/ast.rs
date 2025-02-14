@@ -25,7 +25,7 @@ pub enum Declaration {
 }
 
 #[derive(Clone, Debug)]
-pub struct Params(pub Vec<(Meta<Identifier>, Meta<Identifier>)>);
+pub struct Params(pub Vec<(Meta<Identifier>, Meta<Path>)>);
 
 /// The value of a typed record
 #[derive(Clone, Debug)]
@@ -53,7 +53,7 @@ pub struct FilterMap {
 pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
-    pub ret: Option<Meta<Identifier>>,
+    pub ret: Option<Meta<Path>>,
     pub body: Meta<Block>,
 }
 

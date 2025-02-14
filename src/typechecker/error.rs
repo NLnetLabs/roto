@@ -93,14 +93,6 @@ impl TypeChecker {
         }
     }
 
-    pub fn error_undeclared_type(&self, ty: &Meta<Identifier>) -> TypeError {
-        TypeError {
-            description: format!("cannot find type `{ty}`",),
-            location: ty.id,
-            labels: vec![Label::error("not found", ty.id)],
-        }
-    }
-
     pub fn error_field_mismatch<'a>(
         &self,
         span: MetaId,

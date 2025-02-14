@@ -103,6 +103,7 @@ pub enum Instruction {
         ctx: Operand,
         func: Identifier,
         args: Vec<Operand>,
+        return_ptr: Option<Var>,
     },
 
     /// Call a runtime function (i.e. a Rust function)
@@ -364,6 +365,7 @@ impl<'a> IrPrinter<'a> {
                 ctx,
                 func,
                 args,
+                return_ptr: _,
             } => format!(
                 "{}: {ty} = {}({}, {})",
                 self.var(to),
@@ -379,6 +381,23 @@ impl<'a> IrPrinter<'a> {
                 ctx,
                 func,
                 args,
+                return_ptr: Some(ret),
+            } => format!(
+                "{}({}, {}, {})",
+                self.ident(func),
+                self.var(ret),
+                self.operand(ctx),
+                args.iter()
+                    .map(|a| self.operand(a).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Call {
+                to: None,
+                ctx,
+                func,
+                args,
+                return_ptr: None,
             } => format!(
                 "{}({}, {})",
                 self.ident(func),

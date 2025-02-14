@@ -295,7 +295,25 @@ impl<'r> Lowerer<'r> {
 
         let last = self.block(body);
 
-        self.add(Instruction::Return(last));
+        self.drop_locals();
+
+        if return_ptr {
+            if let Some(last) = last {
+                self.write_field(
+                    Var {
+                        scope: self.function_scope,
+                        kind: VarKind::Return,
+                    }
+                    .into(),
+                    0,
+                    last,
+                    &signature.return_type,
+                );
+            }
+            self.add(Instruction::Return(None));
+        } else {
+            self.add(Instruction::Return(last));
+        }
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
@@ -488,9 +506,25 @@ impl<'r> Lowerer<'r> {
                             return_type,
                         } = func.signature;
 
-                        let to = self
-                            .lower_type(&return_type)
-                            .map(|ty| (self.new_tmp(), ty));
+                        let reference_return =
+                            self.is_reference_type(&return_type);
+                        let (to, out_ptr) = if reference_return {
+                            let out_ptr = self.new_tmp();
+                            let size = self
+                                .type_info
+                                .size_of(&return_type, self.runtime);
+                            self.add(Instruction::Alloc {
+                                to: out_ptr.clone(),
+                                size,
+                                align_shift: 0,
+                            });
+                            (None, Some(out_ptr))
+                        } else {
+                            let to = self
+                                .lower_type(&return_type)
+                                .map(|ty| (self.new_tmp(), ty));
+                            (to, None)
+                        };
 
                         let ctx = Var {
                             scope: self.function_scope,
@@ -504,9 +538,14 @@ impl<'r> Lowerer<'r> {
                             ctx: ctx.into(),
                             func: name,
                             args,
+                            return_ptr: out_ptr.clone(),
                         });
 
-                        to.map(|(to, _ty)| to.into())
+                        if let Some(out_ptr) = out_ptr {
+                            Some(out_ptr.into())
+                        } else {
+                            to.map(|(to, _ty)| to.into())
+                        }
                     }
                 }
             }

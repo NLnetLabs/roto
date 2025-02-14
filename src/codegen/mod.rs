@@ -375,6 +375,11 @@ impl ModuleBuilder {
 
         let mut sig = self.inner.make_signature();
 
+        if ir_signature.return_ptr {
+            sig.params
+                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        }
+
         // This is the parameter for the context
         sig.params
             .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
@@ -566,14 +571,6 @@ impl<'c> FuncGen<'c> {
 
         let args = self.builder.block_params(entry_block).to_owned();
         let mut args = args.into_iter();
-        self.def(
-            self.module.variable_map[&Var {
-                scope: self.scope,
-                kind: VarKind::Context,
-            }]
-                .0,
-            args.next().unwrap(),
-        );
 
         if return_ptr {
             self.def(
@@ -585,6 +582,15 @@ impl<'c> FuncGen<'c> {
                 args.next().unwrap(),
             )
         }
+
+        self.def(
+            self.module.variable_map[&Var {
+                scope: self.scope,
+                kind: VarKind::Context,
+            }]
+                .0,
+            args.next().unwrap(),
+        );
 
         for ((x, _), val) in parameters.iter().zip(args) {
             self.def(
@@ -645,6 +651,7 @@ impl<'c> FuncGen<'c> {
                 ctx,
                 func,
                 args,
+                return_ptr,
             } => {
                 let func = func.as_str();
                 let func_id = self.module.functions[func].id;
@@ -654,6 +661,11 @@ impl<'c> FuncGen<'c> {
                     .declare_func_in_func(func_id, self.builder.func);
 
                 let mut new_args = Vec::new();
+
+                if let Some(return_ptr) = return_ptr {
+                    new_args.push(self.operand(&return_ptr.clone().into()).0);
+                }
+
                 new_args.push(self.operand(ctx).0);
 
                 for arg in args {

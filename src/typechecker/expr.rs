@@ -489,7 +489,7 @@ impl TypeChecker {
                     if let Some(guard) = guard {
                         let ctx =
                             ctx.with_type(Type::Primitive(Primitive::Bool));
-                        let _ = self.expr(arm_scope, &ctx, guard)?;
+                        self.expr(arm_scope, &ctx, guard)?;
                     } else {
                         default_arm = true;
                     }
@@ -542,7 +542,7 @@ impl TypeChecker {
                     if let Some(guard) = guard {
                         let ctx =
                             ctx.with_type(Type::Primitive(Primitive::Bool));
-                        let _ = self.expr(arm_scope, &ctx, guard)?;
+                        self.expr(arm_scope, &ctx, guard)?;
                     } else if !variant_already_used {
                         // If there is a guard we don't mark the variant as used,
                         // because the guard could evaluate to false and hence the
@@ -1067,7 +1067,7 @@ impl TypeChecker {
         }
     }
 
-    fn resolve_type_path(
+    pub fn resolve_type_path(
         &mut self,
         scope: ScopeRef,
         ast::Path { idents }: &ast::Path,

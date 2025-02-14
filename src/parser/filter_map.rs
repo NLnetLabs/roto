@@ -1,4 +1,4 @@
-use crate::ast::{FilterMap, FilterType, Identifier, Params};
+use crate::ast::{FilterMap, FilterType, Identifier, Params, Path};
 
 use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
 
@@ -62,10 +62,10 @@ impl Parser<'_, '_> {
     /// ```
     fn type_ident_field(
         &mut self,
-    ) -> ParseResult<(Meta<Identifier>, Meta<Identifier>)> {
+    ) -> ParseResult<(Meta<Identifier>, Meta<Path>)> {
         let field_name = self.identifier()?;
         self.take(Token::Colon)?;
-        let ty = self.identifier()?;
+        let ty = self.path()?;
         Ok((field_name, ty))
     }
 }

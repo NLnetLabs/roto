@@ -1485,3 +1485,69 @@ fn use_imported_type() {
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
+
+#[test]
+fn use_type_in_function_argument() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            function main(x: i32) -> i32 {
+                get_bar(foo.Foo { bar: x }) 
+            }
+
+            function get_bar(f: foo.Foo) -> i32 {
+                f.bar
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            type Foo {
+                bar: i32,
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 4);
+}
+
+#[test]
+fn use_type_in_function_return_type() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            function main(x: i32) -> i32 {
+                make_foo(x).bar
+            }
+
+            function make_foo(x: i32) -> foo.Foo {
+                foo.Foo { bar: x }
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            type Foo {
+                bar: i32,
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 4);
+}

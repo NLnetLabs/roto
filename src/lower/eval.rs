@@ -360,11 +360,22 @@ pub fn eval(
                 ctx,
                 func,
                 args,
+                return_ptr,
             } => {
                 let f = p.iter().find(|f| f.name == *func).unwrap();
 
                 mem.push_frame(program_counter, to.clone().map(|to| to.0));
 
+                if let Some(return_ptr) = return_ptr {
+                    vars.insert(
+                        Var {
+                            scope: f.scope,
+                            kind: VarKind::Return,
+                        },
+                        eval_operand(&vars, &return_ptr.clone().into())
+                            .clone(),
+                    );
+                }
                 let ctx_val = eval_operand(&vars, ctx);
                 vars.insert(
                     Var {
