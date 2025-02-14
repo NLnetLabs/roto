@@ -1,6 +1,6 @@
 //! Defines the [`Verdict`] type
 
-/// A `Verdict` is the output of a filter-map
+/// A `Verdict` is the output of a filtermap
 ///
 /// It is functionally equivalent to a [`Result`], but it has `repr(C)` to
 /// keep the representation synchronized with Roto.

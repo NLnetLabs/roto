@@ -16,9 +16,12 @@ use crate::{
         value::IrType,
         IrFunction,
     },
-    runtime::{context::ContextDescription, ty::Reflect, RuntimeConstant},
+    runtime::{
+        context::ContextDescription, ty::Reflect, RuntimeConstant,
+        RuntimeFunctionRef,
+    },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue, Verdict,
+    IrValue, Runtime, Verdict,
 };
 use check::{
     check_roto_type_reflect, FunctionRetrievalError, RotoParams, TypeMismatch,
@@ -180,7 +183,7 @@ struct ModuleBuilder {
     functions: HashMap<String, FunctionInfo>,
 
     /// External functions
-    runtime_functions: HashMap<usize, FuncId>,
+    runtime_functions: HashMap<RuntimeFunctionRef, FuncId>,
 
     /// The inner cranelift module
     inner: JITModule,
@@ -241,8 +244,9 @@ struct FuncGen<'c> {
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen(
+    runtime: &Runtime,
     ir: &[ir::Function],
-    runtime_functions: &HashMap<usize, IrFunction>,
+    runtime_functions: &HashMap<RuntimeFunctionRef, IrFunction>,
     constants: &[RuntimeConstant],
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -262,8 +266,9 @@ pub fn codegen(
         cranelift::module::default_libcall_names(),
     );
 
-    for (name, func) in runtime_functions {
-        builder.symbol(format!("runtime_function_{name}"), func.ptr);
+    for (func_ref, func) in runtime_functions {
+        let f = runtime.get_function(*func_ref);
+        builder.symbol(format!("runtime_function_{}", f.name), func.ptr);
     }
 
     let jit = JITModule::new(builder);
@@ -310,7 +315,7 @@ pub fn codegen(
         module.declare_constant(constant);
     }
 
-    for (roto_func_id, func) in runtime_functions {
+    for (func_ref, func) in runtime_functions {
         let mut sig = module.inner.make_signature();
         for ty in &func.params {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
@@ -318,14 +323,15 @@ pub fn codegen(
         if let Some(ty) = &func.ret {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
+        let f = runtime.get_function(*func_ref);
         let Ok(func_id) = module.inner.declare_function(
-            &format!("runtime_function_{roto_func_id}"),
+            &format!("runtime_function_{}", f.name),
             Linkage::Import,
             &sig,
         ) else {
             panic!()
         };
-        module.runtime_functions.insert(*roto_func_id, func_id);
+        module.runtime_functions.insert(*func_ref, func_id);
     }
 
     // Our functions might call each other, so we declare them before we
@@ -345,14 +351,10 @@ pub fn codegen(
 
 impl ModuleBuilder {
     fn declare_constant(&mut self, constant: &RuntimeConstant) {
+        let full_name = format!(".{}", constant.name);
         let data_id = self
             .inner
-            .declare_data(
-                constant.name.as_str(),
-                Linkage::Local,
-                false,
-                false,
-            )
+            .declare_data(&full_name, Linkage::Local, false, false)
             .unwrap();
 
         let mut description = DataDescription::new();
@@ -372,6 +374,11 @@ impl ModuleBuilder {
         } = func;
 
         let mut sig = self.inner.make_signature();
+
+        if ir_signature.return_ptr {
+            sig.params
+                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        }
 
         // This is the parameter for the context
         sig.params
@@ -564,14 +571,6 @@ impl<'c> FuncGen<'c> {
 
         let args = self.builder.block_params(entry_block).to_owned();
         let mut args = args.into_iter();
-        self.def(
-            self.module.variable_map[&Var {
-                scope: self.scope,
-                kind: VarKind::Context,
-            }]
-                .0,
-            args.next().unwrap(),
-        );
 
         if return_ptr {
             self.def(
@@ -583,6 +582,15 @@ impl<'c> FuncGen<'c> {
                 args.next().unwrap(),
             )
         }
+
+        self.def(
+            self.module.variable_map[&Var {
+                scope: self.scope,
+                kind: VarKind::Context,
+            }]
+                .0,
+            args.next().unwrap(),
+        );
 
         for ((x, _), val) in parameters.iter().zip(args) {
             self.def(
@@ -643,6 +651,7 @@ impl<'c> FuncGen<'c> {
                 ctx,
                 func,
                 args,
+                return_ptr,
             } => {
                 let func = func.as_str();
                 let func_id = self.module.functions[func].id;
@@ -652,9 +661,14 @@ impl<'c> FuncGen<'c> {
                     .declare_func_in_func(func_id, self.builder.func);
 
                 let mut new_args = Vec::new();
+
+                if let Some(return_ptr) = return_ptr {
+                    new_args.push(self.operand(&return_ptr.clone().into()).0);
+                }
+
                 new_args.push(self.operand(ctx).0);
 
-                for (_, arg) in args {
+                for arg in args {
                     new_args.push(self.operand(arg).0);
                 }
 
@@ -667,7 +681,7 @@ impl<'c> FuncGen<'c> {
                 }
             }
             ir::Instruction::CallRuntime { to, func, args } => {
-                let func_id = self.module.runtime_functions[&func.id];
+                let func_id = self.module.runtime_functions[func];
                 let func_ref = self
                     .module
                     .inner
@@ -932,9 +946,9 @@ impl<'c> FuncGen<'c> {
             }
             ir::Instruction::LoadConstant { to, name, ty } => {
                 let Some(FuncOrDataId::Data(data_id)) =
-                    self.module.inner.get_name(name.as_str())
+                    self.module.inner.get_name(&format!(".{name}"))
                 else {
-                    panic!();
+                    panic!("Could not find {name}");
                 };
                 let val = self
                     .module
@@ -1077,7 +1091,11 @@ impl Module {
         let tests: Vec<_> = self
             .functions
             .keys()
-            .filter(|x| x.starts_with("test#"))
+            .filter(|x| {
+                x.rsplit_once(".")
+                    .map_or(x.as_ref(), |x| x.1)
+                    .starts_with("test#")
+            })
             .map(Clone::clone)
             .collect();
 
@@ -1088,10 +1106,12 @@ impl Module {
 
         for (n, test) in tests.into_iter().enumerate() {
             let n = n + 1;
-            let test_display = test.strip_prefix("test#").unwrap();
+            let test_display = test.replace("test#", "");
             print!("Test {n:>total_width$} / {total}: {test_display}... ");
             let test_fn = self
-                .get_function::<Ctx, (), Verdict<(), ()>>(&test)
+                .get_function::<Ctx, (), Verdict<(), ()>>(
+                    test.strip_prefix("pkg.").unwrap(),
+                )
                 .unwrap();
 
             match test_fn.call(&mut ctx) {
@@ -1120,7 +1140,8 @@ impl Module {
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
-        let function_info = self.functions.get(name).ok_or_else(|| {
+        let name = format!("pkg.{name}");
+        let function_info = self.functions.get(&name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
                 name: name.to_string(),
                 existing: self.functions.keys().cloned().collect(),

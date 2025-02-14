@@ -1,9 +1,8 @@
 use crate::ast::{
-    Declaration, FunctionDeclaration, Identifier, SyntaxTree, Test,
+    Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };
-use logos::{Lexer, SpannedIter};
 use std::{fmt::Display, iter::Peekable};
-use token::Token;
+use token::{Lexer, Token};
 
 use self::meta::{Meta, Span, Spans};
 
@@ -149,7 +148,7 @@ impl std::error::Error for ParseError {}
 pub struct Parser<'source, 'spans> {
     file: usize,
     file_length: usize,
-    lexer: Peekable<SpannedIter<'source, Token<'source>>>,
+    lexer: Peekable<Lexer<'source>>,
     pub spans: &'spans mut Spans,
 }
 
@@ -280,7 +279,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let mut p = Self {
             file,
             file_length: input.len(),
-            lexer: Lexer::new(input).spanned().peekable(),
+            lexer: Lexer::new(input).peekable(),
             spans,
         };
         let out = parser(&mut p)?;
@@ -294,28 +293,19 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     }
 
     fn tree(&mut self) -> ParseResult<SyntaxTree> {
-        let mut expressions = Vec::new();
+        let mut declarations = Vec::new();
 
         while self.peek().is_some() {
-            expressions.push(self.root()?);
+            declarations.push(self.root()?);
         }
 
-        if expressions.is_empty() {
-            return Err(ParseError {
-                location: Span::new(self.file, 0..0),
-                kind: ParseErrorKind::EmptyInput,
-            });
-        }
-
-        Ok(SyntaxTree {
-            declarations: expressions,
-        })
+        Ok(SyntaxTree { declarations })
     }
 
     /// Parse a root expression
     ///
     /// ```ebnf
-    /// Root ::= Rib | Table | OutputStream | FilterMap | Type
+    /// Root ::= FilterMap | Function | Type
     /// ```
     fn root(&mut self) -> ParseResult<Declaration> {
         let end_of_input = ParseError {
@@ -326,11 +316,6 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             ),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Rib => Declaration::Rib(self.rib()?),
-            Token::Table => Declaration::Table(self.table()?),
-            Token::OutputStream => {
-                Declaration::OutputStream(self.output_stream()?)
-            }
             Token::FilterMap | Token::Filter => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
@@ -339,10 +324,11 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             }
             Token::Function => Declaration::Function(self.function()?),
             Token::Test => Declaration::Test(self.test()?),
+            Token::Import => Declaration::Import(self.import()?),
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
-                    "a function, rib, table, output-stream, filter or filter-map",
+                    "a function, filter, filtermap or import",
                     token,
                     span,
                 ));
@@ -362,7 +348,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let params = self.params()?;
 
         let ret = if self.next_is(Token::Arrow) {
-            Some(self.identifier()?)
+            Some(self.path()?)
         } else {
             None
         };
@@ -382,6 +368,13 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let body = self.block()?;
         Ok(Test { ident, body })
     }
+
+    fn import(&mut self) -> ParseResult<Meta<Path>> {
+        self.take(Token::Import)?;
+        let path = self.path()?;
+        self.take(Token::SemiColon)?;
+        Ok(path)
+    }
 }
 
 /// # Parsing identifiers
@@ -395,7 +388,6 @@ impl Parser<'_, '_> {
         let ident = match token {
             Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Contains => "contains",
             Token::Type => "type",
             _ => {
                 return Err(ParseError::expected(

@@ -168,6 +168,15 @@ pub struct RuntimeFunction {
     pub argument_names: &'static [&'static str],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct RuntimeFunctionRef(usize);
+
+impl RuntimeFunction {
+    pub fn get_ref(&self) -> RuntimeFunctionRef {
+        RuntimeFunctionRef(self.id)
+    }
+}
+
 pub struct DocumentedFunc<F> {
     pub func: F,
     pub docstring: &'static str,
@@ -183,6 +192,10 @@ pub struct RuntimeConstant {
 }
 
 impl Runtime {
+    pub fn get_function(&self, f: RuntimeFunctionRef) -> &RuntimeFunction {
+        &self.functions[f.0]
+    }
+
     /// Register a type with a default name
     ///
     /// This type will be cloned and dropped many times, so make sure to have

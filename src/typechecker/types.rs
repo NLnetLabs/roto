@@ -1,7 +1,8 @@
 use crate::{
     ast::Identifier,
     parser::meta::{Meta, MetaId},
-    runtime::{Runtime, RuntimeFunction},
+    runtime::RuntimeFunctionRef,
+    typechecker::scope::ScopeRef,
 };
 use std::{
     any::TypeId,
@@ -9,7 +10,9 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+use super::scope::ResolvedName;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Var(usize),
     ExplicitVar(Identifier),
@@ -17,22 +20,19 @@ pub enum Type {
     RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
     Never,
     Primitive(Primitive),
-    BuiltIn(Identifier, TypeId),
+    BuiltIn(ResolvedName, TypeId),
     Verdict(Box<Type>, Box<Type>),
     List(Box<Type>),
-    Table(Box<Type>),
-    OutputStream(Box<Type>),
-    Rib(Box<Type>),
     Record(Vec<(Meta<Identifier>, Type)>),
-    NamedRecord(Identifier, Vec<(Meta<Identifier>, Type)>),
-    Enum(Identifier, Vec<(Identifier, Option<Type>)>),
-    Function(Vec<(Meta<Identifier>, Type)>, Box<Type>),
-    Filter(Vec<(Meta<Identifier>, Type)>),
-    FilterMap(Vec<(Meta<Identifier>, Type)>),
-    Name(Identifier),
+    NamedRecord(ResolvedName, Vec<(Meta<Identifier>, Type)>),
+    Enum(ResolvedName, Vec<(Identifier, Option<Type>)>),
+    Function(Vec<Type>, Box<Type>),
+    Filter(Vec<Type>),
+    FilterMap(Vec<Type>),
+    Name(ResolvedName),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Primitive {
     U8,
     U16,
@@ -83,14 +83,14 @@ impl Display for Primitive {
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let fmt_args = |args: &[(_, Type)]| {
+        let fmt_args = |args: &[Type]| {
             use std::fmt::Write;
             let mut iter = args.iter();
             let mut s = String::new();
-            if let Some((_, i)) = iter.next() {
+            if let Some(i) = iter.next() {
                 write!(s, "{i}")?;
             }
-            for (_, i) in iter {
+            for i in iter {
                 write!(s, ", {i}")?;
             }
             Ok(s)
@@ -114,25 +114,18 @@ impl Display for Type {
             }
             Type::Never => write!(f, "!"),
             Type::Primitive(p) => write!(f, "{p}"),
-            Type::BuiltIn(name, _) => write!(f, " {name}"),
+            Type::BuiltIn(name, _) => write!(f, " {}", name.ident),
             Type::List(t) => write!(f, "List<{t}>"),
-            Type::Table(t) => {
-                write!(f, "Table<{t}>")
-            }
-            Type::OutputStream(t) => {
-                write!(f, "OutputStream<{t}>")
-            }
-            Type::Rib(t) => write!(f, "Rib<{t}>"),
-            Type::NamedRecord(x, _) => write!(f, "{x}"),
-            Type::Enum(x, _) => write!(f, "{x}"),
+            Type::NamedRecord(x, _) => write!(f, "{}", x.ident),
+            Type::Enum(x, _) => write!(f, "{}", x.ident),
             Type::Function(args, ret) => {
                 write!(f, "function({}) -> {ret}", fmt_args(args)?)
             }
             Type::Filter(args) => write!(f, "filter({})", fmt_args(args)?),
             Type::FilterMap(args) => {
-                write!(f, "filter-map({})", fmt_args(args)?)
+                write!(f, "filtermap({})", fmt_args(args)?)
             }
-            Type::Name(x) => write!(f, "{x}"),
+            Type::Name(x) => write!(f, "{}", x.ident),
         }
     }
 }
@@ -154,9 +147,6 @@ impl Type {
 
         match self {
             Type::List(x) => Type::List(Box::new(f(x))),
-            Type::Table(x) => Type::Table(Box::new(f(x))),
-            Type::OutputStream(x) => Type::OutputStream(Box::new(f(x))),
-            Type::Rib(x) => Type::Rib(Box::new(f(x))),
             Type::Verdict(a, r) => {
                 Type::Verdict(Box::new(f(a)), Box::new(f(r)))
             }
@@ -197,9 +187,9 @@ impl Primitive {
 ///
 /// This is used to extract the function pointer and any other information
 /// required to generate the code to call this function.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FunctionDefinition {
-    Runtime(RuntimeFunction),
+    Runtime(RuntimeFunctionRef),
     Roto,
 }
 
@@ -210,7 +200,7 @@ pub struct Function {
     pub signature: Signature,
 
     /// Function name
-    pub name: Identifier,
+    pub name: ResolvedName,
 
     /// Type variables of this function
     pub vars: Vec<Identifier>,
@@ -231,7 +221,7 @@ pub enum FunctionKind {
 impl Function {
     pub fn new<T: Into<Type>>(
         kind: FunctionKind,
-        name: Identifier,
+        name: ResolvedName,
         vars: &[Identifier],
         parameter_types: impl IntoIterator<Item = T>,
         return_type: impl Into<Type>,
@@ -253,7 +243,7 @@ impl Function {
     }
 }
 
-pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
+pub fn default_types() -> Vec<(Identifier, Type)> {
     use Primitive::*;
 
     let primitives = vec![
@@ -280,11 +270,6 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
         types.push((name, Type::Primitive(p)))
     }
 
-    for ty in &runtime.runtime_types {
-        let name = Identifier::from(ty.name());
-        types.push((name, Type::BuiltIn(name, ty.type_id())))
-    }
-
     enum RecordOrEnum {
         Record(&'static str, Vec<(&'static str, &'static str)>),
         Enum(&'static str, Vec<(&'static str, Option<&'static str>)>),
@@ -309,7 +294,11 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
     for c in compound_types {
         match c {
             Record(n, fields) => {
-                let n = Identifier::from(n);
+                let ident = Identifier::from(n);
+                let name = ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident,
+                };
                 let fields = fields
                     .iter()
                     .map(|(field_name, field_type)| {
@@ -348,10 +337,14 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
                         )
                     })
                     .collect();
-                types.push((n, Type::NamedRecord(n, fields)))
+                types.push((ident, Type::NamedRecord(name, fields)))
             }
             Enum(n, variants) => {
-                let n = Identifier::from(n);
+                let ident = Identifier::from(n);
+                let name = ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident,
+                };
                 let variants = variants
                     .iter()
                     .map(|(variant_name, v)| {
@@ -368,7 +361,7 @@ pub fn default_types(runtime: &Runtime) -> Vec<(Identifier, Type)> {
                         (variant_name, v)
                     })
                     .collect();
-                types.push((n, Type::Enum(n, variants)))
+                types.push((ident, Type::Enum(name, variants)))
             }
         }
     }

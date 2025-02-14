@@ -3,11 +3,8 @@
 //! Roto types are not allowed to be recursive. See [`detect_type_cycles`]
 //! for more information.
 
+use super::{scope::ResolvedName, types::Type};
 use std::collections::HashMap;
-
-use crate::ast::Identifier;
-
-use super::types::Type;
 
 /// Return an error if there is a cycles in the type declarations
 ///
@@ -33,38 +30,38 @@ use super::types::Type;
 /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
 /// is a temporary mark and `true` is a permanent mark.
 pub fn detect_type_cycles(
-    types: &HashMap<Identifier, Type>,
+    types: &HashMap<ResolvedName, Type>,
 ) -> Result<(), String> {
     let mut visited = HashMap::new();
 
-    for ident in types.keys() {
-        visit_name(types, &mut visited, *ident)?;
+    for name in types.keys() {
+        visit_name(types, &mut visited, *name)?;
     }
 
     Ok(())
 }
 
 fn visit_name(
-    types: &HashMap<Identifier, Type>,
-    visited: &mut HashMap<Identifier, bool>,
-    s: Identifier,
+    types: &HashMap<ResolvedName, Type>,
+    visited: &mut HashMap<ResolvedName, bool>,
+    name: ResolvedName,
 ) -> Result<(), String> {
-    match visited.get(&s) {
+    match visited.get(&name) {
         Some(false) => return Err("cycle detected!".into()),
         Some(true) => return Ok(()),
         None => {}
     };
 
-    visited.insert(s, false);
-    visit(types, visited, &types[&s])?;
-    visited.insert(s, true);
+    visited.insert(name, false);
+    visit(types, visited, &types[&name])?;
+    visited.insert(name, true);
 
     Ok(())
 }
 
 fn visit<'a>(
-    types: &'a HashMap<Identifier, Type>,
-    visited: &mut HashMap<Identifier, bool>,
+    types: &'a HashMap<ResolvedName, Type>,
+    visited: &mut HashMap<ResolvedName, bool>,
     ty: &'a Type,
 ) -> Result<(), String> {
     match ty {
@@ -86,10 +83,7 @@ fn visit<'a>(
             // no need to recurse into them.
             Ok(())
         }
-        Type::Table(t)
-        | Type::OutputStream(t)
-        | Type::Rib(t)
-        | Type::List(t) => visit(types, visited, t),
+        Type::List(t) => visit(types, visited, t),
         Type::Verdict(t1, t2) => {
             visit(types, visited, t1)?;
             visit(types, visited, t2)

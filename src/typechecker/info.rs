@@ -1,23 +1,26 @@
-use std::{collections::HashMap, net::IpAddr, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, net::IpAddr, sync::Arc};
 
 use inetnum::addr::Prefix;
 
 use crate::{ast::Identifier, parser::meta::MetaId, Runtime};
 
 use super::{
-    scope::{DefinitionRef, ScopeRef},
+    expr::ResolvedPath,
+    scope::{ResolvedName, ScopeGraph, ScopeRef},
     types::{Function, Primitive, Type},
     unionfind::UnionFind,
 };
 
 /// The output of the type checker that is used for lowering
-#[derive(Clone)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
 
+    /// All declarations in the program, extracted from the scope graph
+    pub scope_graph: ScopeGraph,
+
     /// Map from type names to types
-    pub(super) types: HashMap<Identifier, Type>,
+    pub(super) types: HashMap<ResolvedName, Type>,
 
     /// The types we inferred for each Expr
     ///
@@ -25,7 +28,7 @@ pub struct TypeInfo {
     pub(super) expr_types: HashMap<MetaId, Type>,
 
     /// The fully qualified (and hence unique) name for each identifier.
-    pub(super) resolved_names: HashMap<MetaId, DefinitionRef>,
+    pub(super) resolved_names: HashMap<MetaId, ResolvedName>,
 
     /// Scopes of functions
     pub(super) function_scopes: HashMap<MetaId, ScopeRef>,
@@ -35,7 +38,7 @@ pub struct TypeInfo {
 
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
-    pub(super) enum_variant_constructors: HashMap<MetaId, Type>,
+    pub(super) path_kinds: HashMap<MetaId, ResolvedPath>,
 
     pub(super) diverges: HashMap<MetaId, bool>,
 
@@ -50,10 +53,11 @@ impl TypeInfo {
     pub fn new(pointer_bytes: u32) -> Self {
         Self {
             unionfind: UnionFind::default(),
+            scope_graph: ScopeGraph::new(),
             types: HashMap::new(),
             expr_types: HashMap::new(),
             resolved_names: HashMap::new(),
-            enum_variant_constructors: HashMap::new(),
+            path_kinds: HashMap::new(),
             diverges: HashMap::new(),
             return_types: HashMap::new(),
             function_calls: HashMap::new(),
@@ -61,20 +65,17 @@ impl TypeInfo {
             pointer_bytes,
         }
     }
-
-    pub fn add_type(&mut self, name: Identifier, ty: Type) {
-        if self.types.insert(name, ty).is_some() {
-            panic!("Type was added to TypeInfo twice");
-        }
-    }
 }
 
 impl TypeInfo {
-    pub fn resolved_name(&self, x: impl Into<MetaId>) -> DefinitionRef {
+    pub fn resolved_name(
+        &self,
+        x: impl Into<MetaId> + Debug,
+    ) -> ResolvedName {
         self.resolved_names[&x.into()]
     }
 
-    pub fn type_of(&mut self, x: impl Into<MetaId>) -> Type {
+    pub fn type_of(&mut self, x: impl Into<MetaId> + Debug) -> Type {
         let ty = self.expr_types[&x.into()].clone();
         self.resolve(&ty)
     }
@@ -89,11 +90,22 @@ impl TypeInfo {
     }
 
     pub fn function(&self, x: impl Into<MetaId>) -> &Function {
-        self.function_calls.get(&x.into()).unwrap()
+        &self.function_calls[&x.into()]
     }
 
     pub fn function_scope(&self, x: impl Into<MetaId>) -> ScopeRef {
         self.function_scopes[&x.into()]
+    }
+
+    pub fn path_kind(&self, x: impl Into<MetaId>) -> &ResolvedPath {
+        &self.path_kinds[&x.into()]
+    }
+
+    pub fn full_name(&self, name: &ResolvedName) -> Identifier {
+        let mut s = self.scope_graph.print_scope(name.scope);
+        s.push('.');
+        s.push_str(name.ident.as_str());
+        s.into()
     }
 
     pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
@@ -127,7 +139,7 @@ impl TypeInfo {
         | Type::RecordVar(_, fields)
         | Type::NamedRecord(_, fields)) = record
         else {
-            panic!("Can't get offsets in a type that's not a record")
+            panic!("Can't get offsets in a type that's not a record, but {record}")
         };
 
         let mut offset = 0;
@@ -190,13 +202,6 @@ impl TypeInfo {
         align.max(1)
     }
 
-    pub fn enum_variant_constructor(
-        &self,
-        x: impl Into<MetaId>,
-    ) -> Option<&Type> {
-        self.enum_variant_constructors.get(&x.into())
-    }
-
     pub fn resolve(&mut self, t: &Type) -> Type {
         let mut t = t.clone();
 
@@ -251,10 +256,7 @@ impl TypeInfo {
                 rt.get_runtime_type(id).unwrap().size() as u32
             }
             Type::Primitive(p) => p.size(),
-            Type::List(_)
-            | Type::Table(_)
-            | Type::OutputStream(_)
-            | Type::Rib(_) => self.pointer_bytes,
+            Type::List(_) => self.pointer_bytes,
             _ => 0,
         }
     }

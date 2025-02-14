@@ -1,0 +1,8 @@
+function bar(x: i32) -> i32 {
+    import pkg.double;
+    let a = super.double(x);
+    let b = pkg.double(a);
+    let c = double(b);
+    c
+}
+

@@ -13,7 +13,8 @@ use crate::{
         ir::{Instruction, IntCmp, VarKind},
         value::IrValue,
     },
-    runtime::{RuntimeConstant, RuntimeFunction},
+    runtime::{RuntimeConstant, RuntimeFunctionRef},
+    Runtime,
 };
 use std::collections::HashMap;
 
@@ -244,6 +245,7 @@ impl Allocation {
 /// fairly slow. This is because all variables at this point are identified
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
+    rt: &Runtime,
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
@@ -251,7 +253,7 @@ pub fn eval(
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Option<IrValue> {
-    let filter_map_ident = Identifier::from(filter_map);
+    let filter_map_ident = Identifier::from(format!("pkg.{filter_map}"));
     let f = p
         .iter()
         .find(|f| f.name == filter_map_ident)
@@ -358,11 +360,22 @@ pub fn eval(
                 ctx,
                 func,
                 args,
+                return_ptr,
             } => {
                 let f = p.iter().find(|f| f.name == *func).unwrap();
 
                 mem.push_frame(program_counter, to.clone().map(|to| to.0));
 
+                if let Some(return_ptr) = return_ptr {
+                    vars.insert(
+                        Var {
+                            scope: f.scope,
+                            kind: VarKind::Return,
+                        },
+                        eval_operand(&vars, &return_ptr.clone().into())
+                            .clone(),
+                    );
+                }
                 let ctx_val = eval_operand(&vars, ctx);
                 vars.insert(
                     Var {
@@ -372,12 +385,14 @@ pub fn eval(
                     ctx_val.clone(),
                 );
 
-                for (name, arg) in args {
+                let names = f.ir_signature.parameters.iter().map(|p| p.0);
+
+                for (name, arg) in names.zip(args) {
                     let val = eval_operand(&vars, arg);
                     vars.insert(
                         Var {
                             scope: f.scope,
-                            kind: VarKind::Explicit(*name),
+                            kind: VarKind::Explicit(name),
                         },
                         val.clone(),
                     );
@@ -390,7 +405,7 @@ pub fn eval(
                     .iter()
                     .map(|a| eval_operand(&vars, a).clone())
                     .collect();
-                let ret = call_runtime_function(mem, func, args);
+                let ret = call_runtime_function(rt, mem, *func, args);
                 if let Some((to, _ty)) = to {
                     vars.insert(to.clone(), ret.unwrap());
                 }
@@ -645,10 +660,12 @@ pub fn eval(
 }
 
 fn call_runtime_function(
+    rt: &Runtime,
     mem: &mut Memory,
-    func: &RuntimeFunction,
+    func: RuntimeFunctionRef,
     mut args: Vec<IrValue>,
 ) -> Option<IrValue> {
+    let func = rt.get_function(func);
     assert_eq!(func.description.parameter_types().len(), args.len());
 
     // Runtime functions don't understand our pointers, so we need to resolve

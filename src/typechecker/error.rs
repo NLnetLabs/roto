@@ -5,9 +5,14 @@ use std::fmt::Display;
 use crate::{
     ast::{Expr, Identifier},
     parser::meta::{Meta, MetaId},
+    typechecker::scope::Declaration,
 };
 
-use super::{types::Type, TypeChecker};
+use super::{
+    scope::{StubDeclaration, StubDeclarationKind},
+    types::Type,
+    ResolvedPath, TypeChecker,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -51,7 +56,7 @@ pub struct TypeError {
     pub labels: Vec<Label>,
 }
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     /// Catch all error with a basic format with just one label
     pub fn error_simple(
         &self,
@@ -85,14 +90,6 @@ impl TypeChecker<'_> {
                     )
                 })
                 .collect(),
-        }
-    }
-
-    pub fn error_undeclared_type(&self, ty: &Meta<Identifier>) -> TypeError {
-        TypeError {
-            description: format!("cannot find type `{ty}`",),
-            location: ty.id,
-            labels: vec![Label::error("not found", ty.id)],
         }
     }
 
@@ -137,16 +134,34 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn error_tried_to_overwrite_builtin(
+    pub fn error_expected_type(
         &self,
-        type_name: &Meta<Identifier>,
+        ident: &Meta<Identifier>,
+        stub: StubDeclaration,
     ) -> TypeError {
+        let kind = describe_declaration(&stub);
+        TypeError {
+            description: format!("expected type, but found {kind} `{ident}`",),
+            location: ident.id,
+            labels: vec![Label::error("expected type", ident.id)],
+        }
+    }
+
+    pub fn error_expected_module(
+        &self,
+        ident: &Meta<Identifier>,
+        stub: StubDeclaration,
+    ) -> TypeError {
+        let kind = describe_declaration(&stub);
         TypeError {
             description: format!(
-                "type `{type_name}` is a built-in type and cannot be overwritten"
+                "expected a module, but found {kind} `{ident}`",
             ),
-            location: type_name.id,
-            labels: vec![Label::error("declared here", type_name.id)],
+            location: ident.id,
+            labels: vec![Label::error(
+                format!("`{ident}` is a {kind}, not a module"),
+                ident.id,
+            )],
         }
     }
 
@@ -319,6 +334,105 @@ impl TypeChecker<'_> {
             description: format!("cannot `{divergence_type}` here"),
             location: expr.id,
             labels: vec![Label::error("not allowed", expr.id)],
+        }
+    }
+
+    pub fn error_expected_value(
+        &self,
+        ident: &Meta<Identifier>,
+        declaration: &Declaration,
+    ) -> TypeError {
+        let stub = declaration.to_stub();
+        let kind = describe_declaration(&stub);
+        TypeError {
+            description: format!(
+                "expected a value, but found {kind} `{}`",
+                declaration.name.ident
+            ),
+            location: ident.id,
+            labels: vec![
+                Label::error("expected a value", ident.id),
+                Label::info(
+                    format!(
+                        "{kind} `{}` defined here",
+                        declaration.name.ident
+                    ),
+                    declaration.id,
+                ),
+            ],
+        }
+    }
+
+    pub fn error_expected_value_path(
+        &self,
+        ident: &Meta<Identifier>,
+        path: &ResolvedPath,
+    ) -> TypeError {
+        let (name, kind) = describe_path(path);
+        TypeError {
+            description: format!(
+                "expected a value, but found {kind} `{}`",
+                name
+            ),
+            location: ident.id,
+            labels: vec![Label::error("expected a value", ident.id)],
+        }
+    }
+    pub fn error_expected_function(
+        &self,
+        ident: &Meta<Identifier>,
+        resolved_path: &ResolvedPath,
+    ) -> TypeError {
+        let (kind, name) = describe_path(resolved_path);
+        TypeError {
+            description: format!(
+                "expected a function, but found {kind} `{name}`",
+            ),
+            location: ident.id,
+            labels: vec![Label::error("expected a function", ident.id)],
+        }
+    }
+
+    pub fn error_no_field_on_type(
+        &self,
+        ty: &Type,
+        field: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!("no field `{field}` on type `{ty}`",),
+            format!("unknown field `{field}`"),
+            field.id,
+        )
+    }
+}
+
+fn describe_declaration(d: &StubDeclaration) -> &str {
+    match &d.kind {
+        StubDeclarationKind::Context => "context",
+        StubDeclarationKind::Constant => "constant",
+        StubDeclarationKind::Variable => "variable",
+        StubDeclarationKind::Type => "type",
+        StubDeclarationKind::Function => "function",
+        StubDeclarationKind::Module => "module",
+    }
+}
+
+fn describe_path(p: &ResolvedPath) -> (&str, Identifier) {
+    match p {
+        ResolvedPath::Function { name, .. } => ("function", name.ident),
+        ResolvedPath::Method { name, .. } => ("method", name.ident),
+        ResolvedPath::Value(path_value) => {
+            if let Some(f) = path_value.fields.last() {
+                ("field", f.0)
+            } else {
+                ("value", path_value.name.ident)
+            }
+        }
+        ResolvedPath::StaticMethod { name, .. } => {
+            ("static method", name.ident)
+        }
+        ResolvedPath::EnumConstructor { variant, .. } => {
+            ("enum constructor", *variant)
         }
     }
 }

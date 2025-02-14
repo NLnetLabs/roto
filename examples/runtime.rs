@@ -1,4 +1,4 @@
-use roto::{read_files, Runtime, Val, Verdict};
+use roto::{FileTree, Runtime, Val, Verdict};
 use roto_macros::roto_method;
 
 #[derive(Clone, Copy)]
@@ -20,7 +20,7 @@ fn main() -> Result<(), roto::RotoReport> {
         unsafe { &*bla }.x
     }
 
-    let mut compiled = read_files(["examples/runtime.roto"])?
+    let mut compiled = FileTree::single_file("examples/runtime.roto")
         .compile(runtime, usize::BITS / 8)
         .inspect_err(|e| eprintln!("{e}"))?;
 
