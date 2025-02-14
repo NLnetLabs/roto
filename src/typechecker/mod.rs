@@ -494,7 +494,7 @@ impl TypeChecker {
         // to import, but we might expand import functionality to enum
         // constructors.
         if let Some(_ident) = idents.next() {
-            todo!("error")
+            return Err(self.error_expected_module(ident, stub));
         }
 
         self.type_info.scope_graph.insert_import(scope, ident.id, stub.name).map_err(|old| self.error_declared_twice(ident, old))

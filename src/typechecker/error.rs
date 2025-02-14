@@ -155,6 +155,24 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_expected_module(
+        &self,
+        ident: &Meta<Identifier>,
+        stub: StubDeclaration,
+    ) -> TypeError {
+        let kind = describe_declaration(&stub);
+        TypeError {
+            description: format!(
+                "expected a module, but found {kind} `{ident}`",
+            ),
+            location: ident.id,
+            labels: vec![Label::error(
+                format!("`{ident}` is a {kind}, not a module"),
+                ident.id,
+            )],
+        }
+    }
+
     pub fn error_declared_twice(
         &self,
         new_declaration: &Meta<Identifier>,
@@ -341,7 +359,7 @@ impl TypeChecker {
             ),
             location: ident.id,
             labels: vec![
-                Label::error("expected a variable", ident.id),
+                Label::error("expected a value", ident.id),
                 Label::info(
                     format!(
                         "{kind} `{}` defined here",
@@ -353,6 +371,21 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_expected_value_path(
+        &self,
+        ident: &Meta<Identifier>,
+        path: &ResolvedPath,
+    ) -> TypeError {
+        let (name, kind) = describe_path(path);
+        TypeError {
+            description: format!(
+                "expected a value, but found {kind} `{}`",
+                name
+            ),
+            location: ident.id,
+            labels: vec![Label::error("expected a value", ident.id)],
+        }
+    }
     pub fn error_expected_function(
         &self,
         ident: &Meta<Identifier>,

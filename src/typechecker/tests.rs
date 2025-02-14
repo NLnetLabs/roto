@@ -880,9 +880,31 @@ fn too_many_leading_super() {
 }
 
 #[test]
+fn expected_module() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.bar.baz;
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function bar() {}
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    typecheck(tree).unwrap_err();
+}
+
+#[test]
 fn silly_import_loop() {
-    let lib = source_file!(
-        "lib",
+    let pkg = source_file!(
+        "pkg",
         "
             function main(x: i32) -> i32 {
                 foo.super.bar(x)    
@@ -900,7 +922,7 @@ fn silly_import_loop() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        lib,
+        pkg,
         vec![FileSpec::File(foo)],
     ));
     typecheck(tree).unwrap_err();

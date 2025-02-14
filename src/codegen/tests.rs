@@ -1424,3 +1424,64 @@ fn import_module_second() {
     let res = main.call(&mut (), 4);
     assert_eq!(res, 8);
 }
+
+#[test]
+fn use_type_from_module() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            function main(x: i32) -> i32 {
+                let foofoo = foo.Foo { bar: x };
+                foofoo.bar
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            type Foo {
+                bar: i32,
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 4);
+}
+
+#[test]
+fn use_imported_type() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.Foo;
+            function main(x: i32) -> i32 {
+                let foofoo = Foo { bar: x };
+                foofoo.bar
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            type Foo {
+                bar: i32,
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let res = main.call(&mut (), 4);
+    assert_eq!(res, 4);
+}

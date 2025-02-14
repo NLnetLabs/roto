@@ -257,17 +257,24 @@ impl TypeChecker {
                             ty
                         }
                     }
-                    ResolvedPath::EnumConstructor {
-                        ty,
-                        variant: _,
-                        data,
-                    } => {
+                    ResolvedPath::EnumConstructor { ty, variant, data } => {
                         if data.is_some() {
-                            todo!("error")
+                            return Err(self.error_simple(
+                                format!(
+                                "enum variant {variant} requires an argument"
+                            ),
+                                "requires an argument".to_string(),
+                                last_ident.id,
+                            ));
                         }
                         ty
                     }
-                    _ => todo!("error"),
+                    _ => {
+                        return Err(self.error_expected_value_path(
+                            last_ident,
+                            &resolved_path,
+                        ))
+                    }
                 };
 
                 self.type_info.expr_types.insert(p.id, ty.clone());
@@ -469,7 +476,7 @@ impl TypeChecker {
         {
             // Anything after default is unreachable
             if default_arm {
-                todo!("error")
+                return Err(self.error_unreachable_expression(body));
             }
 
             match &pattern.node {
