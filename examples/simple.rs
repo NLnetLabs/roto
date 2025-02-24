@@ -5,7 +5,7 @@ use roto::{FileTree, Runtime, Verdict};
 fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
 
-    let runtime = Runtime::basic().unwrap();
+    let runtime = Runtime::new();
 
     let mut arguments = args();
     let _program_name = arguments.next().unwrap();
@@ -17,7 +17,7 @@ fn main() -> Result<(), roto::RotoReport> {
     }
 
     let mut compiled = FileTree::single_file("examples/simple.roto")
-        .compile(runtime, usize::BITS / 8)
+        .compile(runtime)
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled

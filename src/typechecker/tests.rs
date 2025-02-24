@@ -847,7 +847,7 @@ fn use_globals() {
 
 #[test]
 fn use_context() {
-    let mut rt = Runtime::basic().unwrap();
+    let mut rt = Runtime::new();
 
     #[derive(Context)]
     struct Ctx {

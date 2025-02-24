@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::{
+    TypeChecker, TypeResult,
     scope::{
         ResolvedName, ScopeRef, ScopeType, StubDeclaration,
         StubDeclarationKind, ValueKind,
@@ -17,7 +18,6 @@ use super::{
         Function, FunctionDefinition, FunctionKind, Primitive, Signature,
         Type,
     },
-    TypeChecker, TypeResult,
 };
 
 #[derive(Clone)]
@@ -273,7 +273,7 @@ impl TypeChecker {
                         return Err(self.error_expected_value_path(
                             last_ident,
                             &resolved_path,
-                        ))
+                        ));
                     }
                 };
 
@@ -512,7 +512,9 @@ impl TypeChecker {
                     let variant_already_used =
                         used_variants.contains(&variant.node);
                     if variant_already_used {
-                        println!("WARNING: Variant occurs multiple times in match! This arm is unreachable")
+                        println!(
+                            "WARNING: Variant occurs multiple times in match! This arm is unreachable"
+                        )
                     }
 
                     let ty = &variants[idx].1;
@@ -530,7 +532,7 @@ impl TypeChecker {
                             return Err(self
                                 .error_variant_does_not_have_field(
                                     data_field, &t_expr,
-                                ))
+                                ));
                         }
                         (Some(_), None) => {
                             return Err(self
@@ -714,7 +716,7 @@ impl TypeChecker {
                             "type cannot be compared",
                             "cannot be compared",
                             span,
-                        ))
+                        ));
                     }
                 }
 
@@ -1004,7 +1006,7 @@ impl TypeChecker {
                 })
             }
             // We ended on a function, which means there can be no identifiers left
-            DeclarationKind::Function(definition, ref ty) => {
+            DeclarationKind::Function(definition, ty) => {
                 if let Some(field) = idents.next() {
                     return Err(self.error_no_field_on_type(ty, field));
                 }
@@ -1024,7 +1026,7 @@ impl TypeChecker {
             }
             // We have a value, so the rest of the idents should be field accesses
             // optionally ending with a method.
-            DeclarationKind::Value(kind, ref root_ty) => {
+            DeclarationKind::Value(kind, root_ty) => {
                 let mut fields = Vec::new();
                 let mut ty = root_ty.clone();
 
@@ -1120,29 +1122,30 @@ impl TypeChecker {
         let last_ident = p.idents.last().unwrap();
         let resolved_path = self.resolve_expression_path(scope, p)?;
 
-        let (name, definition, signature, description) =
-            match &resolved_path {
-                ResolvedPath::Function {
-                    name,
-                    definition,
-                    signature,
-                } => (name, definition, signature, "function"),
-                ResolvedPath::StaticMethod {
-                    name,
-                    definition,
-                    signature,
-                } => (name, definition, signature, "static method"),
-                ResolvedPath::Method {
-                    value: _,
-                    definition,
-                    name,
-                    signature,
-                } => (name, definition, signature, "method"),
-                _ => {
-                    return Err(self
-                        .error_expected_function(last_ident, &resolved_path))
-                }
-            };
+        let (name, definition, signature, description) = match &resolved_path
+        {
+            ResolvedPath::Function {
+                name,
+                definition,
+                signature,
+            } => (name, definition, signature, "function"),
+            ResolvedPath::StaticMethod {
+                name,
+                definition,
+                signature,
+            } => (name, definition, signature, "static method"),
+            ResolvedPath::Method {
+                value: _,
+                definition,
+                name,
+                signature,
+            } => (name, definition, signature, "method"),
+            _ => {
+                return Err(
+                    self.error_expected_function(last_ident, &resolved_path)
+                );
+            }
+        };
 
         // Tell the lower stage about the kind of function this is.
         self.type_info

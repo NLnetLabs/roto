@@ -49,11 +49,8 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    pub fn compile(
-        self,
-        rt: Runtime,
-        pointer_bytes: u32,
-    ) -> Result<Compiled, RotoReport> {
+    pub fn compile(self, rt: Runtime) -> Result<Compiled, RotoReport> {
+        let pointer_bytes = usize::BITS / 8;
         let compiled = self
             .parse()?
             .typecheck(rt, pointer_bytes)?

@@ -510,7 +510,7 @@ fn issue_52() {
         _x: i32,
     }
 
-    let mut rt = Runtime::basic().unwrap();
+    let mut rt = Runtime::new();
     rt.register_clone_type::<Foo>("A Foo!").unwrap();
 
     #[roto_static_method(rt, Foo)]
@@ -532,7 +532,7 @@ fn issue_52() {
 
 #[test]
 fn issue_54() {
-    let mut rt = Runtime::basic().unwrap();
+    let mut rt = Runtime::new();
 
     struct Foo {
         _x: i32,
@@ -757,7 +757,7 @@ fn construct_prefix() {
 
 #[test]
 fn function_returning_unit() {
-    let mut runtime = Runtime::basic().unwrap();
+    let mut runtime = Runtime::new();
 
     #[roto_function(runtime)]
     fn unit_unit() {}
@@ -808,7 +808,7 @@ fn arc_type() {
         }
     }
 
-    let mut rt = Runtime::basic().unwrap();
+    let mut rt = Runtime::new();
 
     rt.register_clone_type::<CloneDrop>("A CloneDrop type")
         .unwrap();
@@ -825,7 +825,7 @@ fn arc_type() {
     "
     );
 
-    let mut p = s.compile(rt, usize::BITS / 8).unwrap();
+    let mut p = s.compile(rt).unwrap();
     let f = p.get_function::<(), (bool, Val<CloneDrop>, Val<CloneDrop>), Verdict<Val<CloneDrop>, ()>>(
         "main",
     ).unwrap();
@@ -874,7 +874,7 @@ fn use_context() {
         pub bar: bool,
     }
 
-    let mut rt = Runtime::basic().unwrap();
+    let mut rt = Runtime::new();
     rt.register_context_type::<Ctx>().unwrap();
 
     let s = src!(

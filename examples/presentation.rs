@@ -71,7 +71,7 @@ type Log = *mut OutputStream<Output>;
 type Func = TypedFunc<(), (Val<Log>, Val<RotondaRoute>), Verdict<(), ()>>;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut rt = roto::Runtime::basic()?;
+    let mut rt = roto::Runtime::new();
 
     // Registering types and their methods
 
@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut compiled =
         roto::FileTree::single_file("examples/presentation.roto")
-            .compile(rt, usize::BITS / 8)
+            .compile(rt)
             .inspect_err(|e| eprintln!("{e}"))?;
 
     let function = compiled.get_function("rib_in_pre").unwrap();

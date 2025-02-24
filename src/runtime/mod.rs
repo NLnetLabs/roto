@@ -35,7 +35,7 @@ pub mod verdict;
 
 use core::{slice, str};
 use std::{
-    any::{type_name, TypeId},
+    any::{TypeId, type_name},
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr,
@@ -48,7 +48,7 @@ use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
-use crate::{ast::Identifier, Context};
+use crate::{Context, ast::Identifier};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -88,7 +88,7 @@ unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
 
 unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
     let x = x as *mut T;
-    std::ptr::read(x);
+    unsafe { std::ptr::read(x) };
 }
 
 unsafe extern "C" fn init_string(s: *mut Arc<str>, data: *mut u8, len: u32) {
@@ -394,7 +394,7 @@ impl Runtime {
                 return Err(format!(
                     "Cannot register a method on {}",
                     ty.rust_name
-                ))
+                ));
             }
         };
 
@@ -657,21 +657,27 @@ impl Runtime {
 }
 
 macro_rules! int_docs {
-    ($t:ty) => {{
+    ($t:ty) => {&{
         #[allow(unused_comparisons)]
         let signed = if <$t>::MIN < 0 { "signed" } else { "unsigned" };
         let bits = <$t>::BITS;
         let min = <$t>::MIN;
         let max = <$t>::MAX;
-        &format!("The {signed} {bits}-bit integer type\n\nThis type can represent integers from {min} up to (and including) {max}.")
+        format!("The {signed} {bits}-bit integer type\n\nThis type can represent integers from {min} up to (and including) {max}.")
     }};
+}
+
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Runtime {
     /// A Runtime that is as empty as possible.
     ///
     /// This contains only type information for Roto primitives.
-    pub fn basic() -> Result<Self, String> {
+    pub fn new() -> Self {
         let mut rt = Runtime {
             context: None,
             runtime_types: Default::default(),
@@ -685,24 +691,26 @@ impl Runtime {
             "Unit",
             "The unit type that has just one possible value. It can be used \
             when there is nothing meaningful to be returned.",
-        )?;
+        )
+        .unwrap();
 
         rt.register_copy_type::<bool>(
             "The boolean type\n\n\
             This type has two possible values: `true` and `false`. Several \
             boolean operations can be used with booleans, such as `&&` (\
             logical and), `||` (logical or) and `not`.",
-        )?;
+        )
+        .unwrap();
 
         // All the integer types
-        rt.register_copy_type::<u8>(int_docs!(u8))?;
-        rt.register_copy_type::<u16>(int_docs!(u16))?;
-        rt.register_copy_type::<u32>(int_docs!(u32))?;
-        rt.register_copy_type::<u64>(int_docs!(u64))?;
-        rt.register_copy_type::<i8>(int_docs!(i8))?;
-        rt.register_copy_type::<i16>(int_docs!(i16))?;
-        rt.register_copy_type::<i32>(int_docs!(i32))?;
-        rt.register_copy_type::<i64>(int_docs!(i64))?;
+        rt.register_copy_type::<u8>(int_docs!(u8)).unwrap();
+        rt.register_copy_type::<u16>(int_docs!(u16)).unwrap();
+        rt.register_copy_type::<u32>(int_docs!(u32)).unwrap();
+        rt.register_copy_type::<u64>(int_docs!(u64)).unwrap();
+        rt.register_copy_type::<i8>(int_docs!(i8)).unwrap();
+        rt.register_copy_type::<i16>(int_docs!(i16)).unwrap();
+        rt.register_copy_type::<i32>(int_docs!(i32)).unwrap();
+        rt.register_copy_type::<i64>(int_docs!(i64)).unwrap();
 
         rt.register_copy_type::<Asn>(
             "An ASN: an Autonomous System Number\n\
@@ -716,7 +724,7 @@ impl Runtime {
             AS1010\n\
             AS4294967295\n\
             ```\n\
-            ")?;
+            ").unwrap();
 
         rt.register_copy_type::<IpAddr>(
             "An IP address\n\nCan be either IPv4 or IPv6.\n\
@@ -733,7 +741,8 @@ impl Runtime {
             ::\n\
             ```\n\
             ",
-        )?;
+        )
+        .unwrap();
 
         rt.register_copy_type::<Prefix>(
             "An IP address prefix: the combination of an IP address and a prefix length\n\n\
@@ -746,7 +755,7 @@ impl Runtime {
             192.0.0.0.0 / 24\n\
             ```\n\
             ",
-        )?;
+        ).unwrap();
 
         /// Construct a new prefix
         ///
@@ -759,10 +768,8 @@ impl Runtime {
         /// 192.169.0.0 / 16
         /// ```
         #[roto_static_method(rt, Prefix, new)]
-        fn prefix_new(ip: *mut IpAddr, len: u8) -> Prefix {
-            let ip = unsafe { *ip };
-
-            Prefix::new(ip, len).unwrap()
+        fn prefix_new(ip: &IpAddr, len: u8) -> Prefix {
+            Prefix::new(*ip, len).unwrap()
         }
 
         /// Check whether two IP addresses are equal
@@ -782,9 +789,7 @@ impl Runtime {
         /// 192.0.0.0.eq(192.0.0.0)  # -> true
         /// ```
         #[roto_method(rt, IpAddr, eq)]
-        fn ipaddr_eq(a: *const IpAddr, b: *const IpAddr) -> bool {
-            let a = unsafe { *a };
-            let b = unsafe { *b };
+        fn ipaddr_eq(a: &IpAddr, b: &IpAddr) -> bool {
             a == b
         }
 
@@ -795,8 +800,7 @@ impl Runtime {
         /// ::.is_ipv4()      # -> false
         /// ```
         #[roto_method(rt, IpAddr)]
-        fn is_ipv4(ip: *const IpAddr) -> bool {
-            let ip = unsafe { &*ip };
+        fn is_ipv4(ip: &IpAddr) -> bool {
             ip.is_ipv4()
         }
 
@@ -807,15 +811,13 @@ impl Runtime {
         /// ::.is_ipv6()      # -> true
         /// ```
         #[roto_method(rt, IpAddr)]
-        fn is_ipv6(ip: *const IpAddr) -> bool {
-            let ip = unsafe { &*ip };
+        fn is_ipv6(ip: &IpAddr) -> bool {
             ip.is_ipv6()
         }
 
         /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address, otherwise it returns self as-is.
         #[roto_method(rt, IpAddr)]
-        fn to_canonical(ip: *const IpAddr) -> IpAddr {
-            let ip = unsafe { &*ip };
+        fn to_canonical(ip: &IpAddr) -> IpAddr {
             ip.to_canonical()
         }
 
@@ -836,7 +838,8 @@ impl Runtime {
         rt.register_clone_type_with_name::<Arc<str>>(
             "String",
             "The string type",
-        )?;
+        )
+        .unwrap();
 
         /// Append a string to another, creating a new string
         ///
@@ -844,9 +847,7 @@ impl Runtime {
         /// "hello".append(" ").append("world") # -> "hello world"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn append(a: *const Arc<str>, b: *const Arc<str>) -> Arc<str> {
-            let a = unsafe { &*a };
-            let b = unsafe { &*b };
+        fn append(a: &Arc<str>, b: &Arc<str>) -> Arc<str> {
             format!("{a}{b}").into()
         }
 
@@ -857,12 +858,7 @@ impl Runtime {
         /// "haystack".contains("corn") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn contains(
-            haystack: *const Arc<str>,
-            needle: *const Arc<str>,
-        ) -> bool {
-            let haystack = unsafe { &*haystack };
-            let needle = unsafe { &*needle };
+        fn contains(haystack: &Arc<str>, needle: &Arc<str>) -> bool {
             haystack.contains(needle.as_ref())
         }
 
@@ -873,9 +869,7 @@ impl Runtime {
         /// "haystack".contains("trees") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn starts_with(s: *const Arc<str>, prefix: *const Arc<str>) -> bool {
-            let s = unsafe { &*s };
-            let prefix = unsafe { &*prefix };
+        fn starts_with(s: &Arc<str>, prefix: &Arc<str>) -> bool {
             s.starts_with(prefix.as_ref())
         }
 
@@ -886,9 +880,7 @@ impl Runtime {
         /// "haystack".contains("black") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn ends_with(s: *const Arc<str>, suffix: *const Arc<str>) -> bool {
-            let s = unsafe { &*s };
-            let suffix = unsafe { &*suffix };
+        fn ends_with(s: &Arc<str>, suffix: &Arc<str>) -> bool {
             s.ends_with(suffix.as_ref())
         }
 
@@ -898,8 +890,7 @@ impl Runtime {
         /// "LOUD".to_lowercase() # -> "loud"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn to_lowercase(s: *const Arc<str>) -> Arc<str> {
-            let s = unsafe { &*s };
+        fn to_lowercase(s: &Arc<str>) -> Arc<str> {
             s.to_lowercase().into()
         }
 
@@ -909,8 +900,7 @@ impl Runtime {
         /// "quiet".to_uppercase() # -> "QUIET"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn to_uppercase(s: *const Arc<str>) -> Arc<str> {
-            let s = unsafe { &*s };
+        fn to_uppercase(s: &Arc<str>) -> Arc<str> {
             s.to_uppercase().into()
         }
 
@@ -920,12 +910,11 @@ impl Runtime {
         /// "ha".repeat(6) # -> "hahahahahaha"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn repeat(s: *const Arc<str>, n: u32) -> Arc<str> {
-            let s = unsafe { &*s };
+        fn repeat(s: &Arc<str>, n: u32) -> Arc<str> {
             s.repeat(n as usize).into()
         }
 
-        Ok(rt)
+        rt
     }
 
     // We might not use this, but let's keep it around for now (as of 27/8/2024)
@@ -933,7 +922,9 @@ impl Runtime {
     fn find_type(&self, id: TypeId, name: &str) -> Result<&Ty, String> {
         match self.type_registry.get(id) {
             Some(t) => Ok(t),
-            None => Err(format!("Type `{name}` has not been registered and cannot be inspected by Roto")),
+            None => Err(format!(
+                "Type `{name}` has not been registered and cannot be inspected by Roto"
+            )),
         }
     }
 }
@@ -949,7 +940,7 @@ pub mod tests {
     };
 
     pub fn routecore_runtime() -> Result<Runtime, String> {
-        let mut rt = Runtime::basic()?;
+        let mut rt = Runtime::new();
 
         rt.register_clone_type::<OriginType>("TODO")?;
         rt.register_clone_type::<LocalPref>("TODO")?;

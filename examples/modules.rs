@@ -5,9 +5,9 @@ use roto::{FileTree, Runtime};
 fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
 
-    let runtime = Runtime::basic().unwrap();
+    let runtime = Runtime::new();
     let mut compiled = FileTree::directory(Path::new("examples/modules"))
-        .compile(runtime, usize::BITS / 8)
+        .compile(runtime)
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let f = compiled.get_function::<(), (i32,), i32>("main").unwrap();

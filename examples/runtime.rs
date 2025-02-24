@@ -9,7 +9,7 @@ struct Bla {
 fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
 
-    let mut runtime = Runtime::basic().unwrap();
+    let mut runtime = Runtime::new();
 
     runtime
         .register_copy_type::<Bla>("Some random type")
@@ -21,7 +21,7 @@ fn main() -> Result<(), roto::RotoReport> {
     }
 
     let mut compiled = FileTree::single_file("examples/runtime.roto")
-        .compile(runtime, usize::BITS / 8)
+        .compile(runtime)
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled

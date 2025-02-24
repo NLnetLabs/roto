@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Token, Visibility};
@@ -248,7 +250,6 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         .collect();
 
     let generics = sig.generics;
-    let inputs = sig.inputs.clone().into_iter();
     let ret = match sig.output {
         syn::ReturnType::Default => quote!(()),
         syn::ReturnType::Type(_, t) => quote!(#t),
@@ -266,15 +267,44 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         })
         .collect();
 
+    let mut transformed_types = Vec::new();
+    let mut transformed_args = Vec::new();
+
+    for (t, a) in input_types.iter().zip(&args) {
+        match t.deref() {
+            syn::Type::Reference(syn::TypeReference {
+                and_token: _,
+                lifetime,
+                mutability,
+                elem,
+            }) => {
+                if lifetime.is_some() {
+                    panic!("lifetime not allowed")
+                };
+                if mutability.is_some() {
+                    transformed_types.push(quote!(#a: *mut #elem));
+                    transformed_args.push(quote!(unsafe { &mut *#a }));
+                } else {
+                    transformed_types.push(quote!(#a: *const #elem));
+                    transformed_args.push(quote!(unsafe { &*#a }));
+                }
+            }
+            _ => {
+                transformed_types.push(quote!(#a: #t));
+                transformed_args.push(quote!(#a));
+            }
+        }
+    }
+
     let underscored_types = input_types.iter().map(|_| quote!(_));
     let arg_types = quote!(_, #(#underscored_types,)*);
 
     let function = quote! {
         #(#attrs)*
-        #vis extern "C" fn #ident #generics ( out: *mut #ret, #(#inputs,)* ) {
+        #vis extern "C" fn #ident #generics ( out: *mut #ret, #(#transformed_types,)* ) {
             #item
 
-            unsafe { std::ptr::write(out, #ident(#(#args),*)) };
+            unsafe { std::ptr::write(out, #ident(#(#transformed_args),*)) };
         }
     };
 

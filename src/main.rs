@@ -29,7 +29,7 @@ fn main() {
 
     let ptr = mem.allocate(0);
     let result = roto::interpret(
-        Runtime::basic().unwrap(),
+        Runtime::new(),
         Path::new(&settings.file),
         &mut mem,
         IrValue::Pointer(ptr),
