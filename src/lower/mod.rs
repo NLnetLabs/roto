@@ -30,8 +30,8 @@ use crate::{
         info::TypeInfo,
         scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
         types::{
-            EnumVariant, FunctionDefinition, FunctionKind, IntKind, IntSize,
-            Primitive, Signature, Type, TypeDefinition,
+            EnumVariant, FloatSize, FunctionDefinition, FunctionKind,
+            IntKind, IntSize, Primitive, Signature, Type, TypeDefinition,
         },
         PathValue, ResolvedPath,
     },
@@ -584,6 +584,30 @@ impl<'r> Lowerer<'r> {
 
                 let place = self.new_tmp();
 
+                if self.type_info.is_int_type(&ty) {
+                    if let Some(cmp) = self.binop_to_int_cmp(op, &ty) {
+                        self.add(Instruction::IntCmp {
+                            to: place.clone(),
+                            cmp,
+                            left,
+                            right,
+                        });
+                        return Some(place.into());
+                    }
+                }
+
+                if self.type_info.is_float_type(&ty) {
+                    if let Some(cmp) = binop_to_float_cmp(op) {
+                        self.add(Instruction::FloatCmp {
+                            to: place.clone(),
+                            cmp,
+                            left,
+                            right,
+                        });
+                        return Some(place.into());
+                    }
+                }
+
                 let op = op.clone();
                 if op == ast::BinOp::Add && ty == Type::string() {
                     let function = self.type_info.function(id);
@@ -720,7 +744,7 @@ impl<'r> Lowerer<'r> {
                         left: left.clone(),
                         right: right.clone(),
                     });
-                    self.add(Instruction::Cmp {
+                    self.add(Instruction::IntCmp {
                         to: place.clone(),
                         cmp: ir::IntCmp::Eq,
                         left: tmp.into(),
@@ -740,7 +764,7 @@ impl<'r> Lowerer<'r> {
                         left: left.clone(),
                         right: right.clone(),
                     });
-                    self.add(Instruction::Cmp {
+                    self.add(Instruction::IntCmp {
                         to: place.clone(),
                         cmp: ir::IntCmp::Ne,
                         left: tmp.into(),
@@ -749,7 +773,7 @@ impl<'r> Lowerer<'r> {
                 }
 
                 if op == ast::BinOp::Eq && ty == Type::asn() {
-                    self.add(Instruction::Cmp {
+                    self.add(Instruction::IntCmp {
                         to: place.clone(),
                         cmp: ir::IntCmp::Eq,
                         left,
@@ -759,7 +783,7 @@ impl<'r> Lowerer<'r> {
                 }
 
                 if op == ast::BinOp::Ne && ty == Type::asn() {
-                    self.add(Instruction::Cmp {
+                    self.add(Instruction::IntCmp {
                         to: place.clone(),
                         cmp: ir::IntCmp::Ne,
                         left,
@@ -768,10 +792,20 @@ impl<'r> Lowerer<'r> {
                     return Some(place.into());
                 }
 
-                if let Some(cmp) = self.binop_to_cmp(&op, &ty) {
-                    self.add(Instruction::Cmp {
+                if let Some(cmp) = self.binop_to_int_cmp(&op, &ty) {
+                    self.add(Instruction::IntCmp {
                         to: place.clone(),
                         cmp,
+                        left,
+                        right,
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Div && self.type_info.is_float_type(&ty)
+                {
+                    self.add(Instruction::FDiv {
+                        to: place.clone(),
                         left,
                         right,
                     });
@@ -1113,6 +1147,26 @@ impl<'r> Lowerer<'r> {
                 }
                 ice!("should be a type error");
             }
+            Literal::Float(x) => {
+                let ty = self.type_info.type_of(lit);
+                match ty {
+                    Type::FloatVar(_) => return IrValue::F64(*x).into(),
+                    Type::Name(type_name) => {
+                        if let TypeDefinition::Primitive(Primitive::Float(
+                            s,
+                        )) = self.type_info.resolve_type_name(&type_name)
+                        {
+                            return match s {
+                                FloatSize::F32 => IrValue::F32(*x as f32),
+                                FloatSize::F64 => IrValue::F64(*x),
+                            }
+                            .into();
+                        }
+                    }
+                    _ => {}
+                }
+                ice!("should be a type error");
+            }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
         }
     }
@@ -1245,6 +1299,7 @@ impl<'r> Lowerer<'r> {
         if let Type::Name(type_name) = &ty {
             let type_def = self.type_info.resolve_type_name(type_name);
             if let TypeDefinition::Primitive(p) = type_def {
+                use FloatSize::*;
                 use IntKind::*;
                 use IntSize::*;
                 'prim: {
@@ -1257,6 +1312,8 @@ impl<'r> Lowerer<'r> {
                         Primitive::Int(Signed, I16) => IrType::I16,
                         Primitive::Int(Signed, I32) => IrType::I32,
                         Primitive::Int(Signed, I64) => IrType::I64,
+                        Primitive::Float(F32) => IrType::F32,
+                        Primitive::Float(F64) => IrType::F64,
                         Primitive::Asn => IrType::U32,
                         Primitive::Bool => IrType::Bool,
                         _ => break 'prim,
@@ -1270,6 +1327,7 @@ impl<'r> Lowerer<'r> {
 
         Some(match ty {
             Type::IntVar(_) => IrType::I32,
+            Type::FloatVar(_) => IrType::F64,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => ice!("could not lower: {ty:?}"),
         })
@@ -1398,7 +1456,7 @@ impl<'r> Lowerer<'r> {
         Some(kind == IntKind::Signed)
     }
 
-    fn binop_to_cmp(
+    fn binop_to_int_cmp(
         &mut self,
         op: &ast::BinOp,
         ty: &Type,
@@ -1419,4 +1477,16 @@ impl<'r> Lowerer<'r> {
             _ => return None,
         })
     }
+}
+
+fn binop_to_float_cmp(op: &ast::BinOp) -> Option<ir::FloatCmp> {
+    Some(match op {
+        ast::BinOp::Eq => ir::FloatCmp::Eq,
+        ast::BinOp::Ne => ir::FloatCmp::Ne,
+        ast::BinOp::Lt => ir::FloatCmp::Lt,
+        ast::BinOp::Le => ir::FloatCmp::Le,
+        ast::BinOp::Gt => ir::FloatCmp::Gt,
+        ast::BinOp::Ge => ir::FloatCmp::Ge,
+        _ => return None,
+    })
 }

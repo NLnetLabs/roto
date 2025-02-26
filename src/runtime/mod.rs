@@ -662,6 +662,16 @@ macro_rules! int_docs {
     }};
 }
 
+macro_rules! float_docs {
+    ($t:ty) => {
+        &{
+            #[allow(unused_comparisons)]
+            let bits = std::mem::size_of::<$t>();
+            format!("The {bits}-bit floating point type")
+        }
+    };
+}
+
 impl Default for Runtime {
     fn default() -> Self {
         Self::new()
@@ -706,6 +716,8 @@ impl Runtime {
         rt.register_copy_type::<i16>(int_docs!(i16)).unwrap();
         rt.register_copy_type::<i32>(int_docs!(i32)).unwrap();
         rt.register_copy_type::<i64>(int_docs!(i64)).unwrap();
+        rt.register_copy_type::<f32>(float_docs!(f32)).unwrap();
+        rt.register_copy_type::<f64>(float_docs!(f64)).unwrap();
 
         rt.register_copy_type::<Asn>(
             "An ASN: an Autonomous System Number\n\
@@ -982,6 +994,8 @@ pub mod tests {
                 "i16",
                 "i32",
                 "i64",
+                "f32",
+                "f64",
                 "Asn",
                 "IpAddr",
                 "Prefix",

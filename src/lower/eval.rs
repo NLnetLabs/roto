@@ -10,7 +10,7 @@ use super::ir::{Function, Operand, Var};
 use crate::{
     ast::Identifier,
     lower::{
-        ir::{Instruction, IntCmp, VarKind},
+        ir::{FloatCmp, Instruction, IntCmp, VarKind},
         value::IrValue,
     },
     runtime::{RuntimeConstant, RuntimeFunctionRef},
@@ -429,7 +429,7 @@ pub fn eval(
                     return val;
                 }
             }
-            Instruction::Cmp {
+            Instruction::IntCmp {
                 to,
                 cmp,
                 left,
@@ -448,6 +448,24 @@ pub fn eval(
                     IntCmp::SLe => left.as_i64() <= right.as_i64(),
                     IntCmp::SGt => left.as_i64() > right.as_i64(),
                     IntCmp::SGe => left.as_i64() >= right.as_i64(),
+                };
+                vars.insert(to.clone(), IrValue::Bool(res));
+            }
+            Instruction::FloatCmp {
+                to,
+                cmp,
+                left,
+                right,
+            } => {
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                let res = match cmp {
+                    FloatCmp::Eq => left == right,
+                    FloatCmp::Ne => left != right,
+                    FloatCmp::Lt => left.as_f64() < right.as_f64(),
+                    FloatCmp::Le => left.as_f64() <= right.as_f64(),
+                    FloatCmp::Gt => left.as_f64() > right.as_f64(),
+                    FloatCmp::Ge => left.as_f64() >= right.as_f64(),
                 };
                 vars.insert(to.clone(), IrValue::Bool(res));
             }
@@ -535,6 +553,16 @@ pub fn eval(
                     (IrValue::I16(l), IrValue::I16(r)) => IrValue::I16(l / r),
                     (IrValue::I32(l), IrValue::I32(r)) => IrValue::I32(l / r),
                     (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l / r),
+                    _ => panic!(),
+                };
+                vars.insert(to.clone(), res);
+            }
+            Instruction::FDiv { to, left, right } => {
+                let left = eval_operand(&vars, left);
+                let right = eval_operand(&vars, right);
+                let res = match (left, right) {
+                    (IrValue::F32(l), IrValue::F32(r)) => IrValue::F32(l / r),
+                    (IrValue::F64(l), IrValue::F64(r)) => IrValue::F64(l / r),
                     _ => panic!(),
                 };
                 vars.insert(to.clone(), res);

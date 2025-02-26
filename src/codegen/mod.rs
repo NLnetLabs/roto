@@ -15,7 +15,7 @@ use crate::{
     ast::Identifier,
     ice,
     lower::{
-        ir::{self, IntCmp, Operand, Var, VarKind},
+        ir::{self, FloatCmp, IntCmp, Operand, Var, VarKind},
         label::{LabelRef, LabelStore},
         value::IrType,
         IrFunction,
@@ -46,7 +46,7 @@ use cranelift::{
     },
     jit::{JITBuilder, JITModule},
     module::{DataDescription, FuncId, FuncOrDataId, Linkage, Module as _},
-    prelude::Signature,
+    prelude::{FloatCC, Signature},
 };
 use cranelift_codegen::ir::SigRef;
 use log::info;
@@ -521,6 +521,8 @@ impl ModuleBuilder {
             IrType::U16 | IrType::I16 => I16,
             IrType::U32 | IrType::I32 | IrType::Asn => I32,
             IrType::U64 | IrType::I64 => I64,
+            IrType::F32 => F32,
+            IrType::F64 => F64,
             IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
             IrType::ExtValue => todo!(),
         }
@@ -711,7 +713,7 @@ impl<'c> FuncGen<'c> {
             ir::Instruction::Return(None) => {
                 self.ins().return_(&[]);
             }
-            ir::Instruction::Cmp {
+            ir::Instruction::IntCmp {
                 to,
                 cmp,
                 left,
@@ -720,7 +722,19 @@ impl<'c> FuncGen<'c> {
                 let (l, _) = self.operand(left);
                 let (r, _) = self.operand(right);
                 let var = self.variable(to, I8);
-                let val = self.binop(l, r, cmp);
+                let val = self.int_cmp(l, r, cmp);
+                self.def(var, val);
+            }
+            ir::Instruction::FloatCmp {
+                to,
+                cmp,
+                left,
+                right,
+            } => {
+                let (l, _) = self.operand(left);
+                let (r, _) = self.operand(right);
+                let var = self.variable(to, I8);
+                let val = self.float_cmp(l, r, cmp);
                 self.def(var, val);
             }
             ir::Instruction::Not { to, val } => {
@@ -750,7 +764,11 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, left_ty);
                 // Possibly interesting note for later: this is wrapping
                 // addition
-                let val = self.ins().iadd(l, r);
+                let val = if let F32 | F64 = left_ty {
+                    self.ins().fadd(l, r)
+                } else {
+                    self.ins().iadd(l, r)
+                };
                 self.def(var, val)
             }
             ir::Instruction::Sub { to, left, right } => {
@@ -760,7 +778,11 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, left_ty);
                 // Possibly interesting note for later: this is wrapping
                 // subtraction
-                let val = self.ins().isub(l, r);
+                let val = if let F32 | F64 = left_ty {
+                    self.ins().fsub(l, r)
+                } else {
+                    self.ins().isub(l, r)
+                };
                 self.def(var, val)
             }
             ir::Instruction::Mul { to, left, right } => {
@@ -770,7 +792,11 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, left_ty);
                 // Possibly interesting note for later: this is wrapping
                 // multiplication
-                let val = self.ins().imul(l, r);
+                let val = if let F32 | F64 = left_ty {
+                    self.ins().fmul(l, r)
+                } else {
+                    self.ins().imul(l, r)
+                };
                 self.def(var, val)
             }
             ir::Instruction::Div {
@@ -788,6 +814,15 @@ impl<'c> FuncGen<'c> {
                     true => self.ins().sdiv(l, r),
                     false => self.ins().udiv(l, r),
                 };
+                self.def(var, val)
+            }
+            ir::Instruction::FDiv { to, left, right } => {
+                let (l, left_ty) = self.operand(left);
+                let (r, _) = self.operand(right);
+
+                let var = self.variable(to, left_ty);
+
+                let val = self.ins().fdiv(l, r);
                 self.def(var, val)
             }
             ir::Instruction::Extend { to, ty, from } => {
@@ -1013,7 +1048,6 @@ impl<'c> FuncGen<'c> {
     }
 
     fn operand(&mut self, val: &Operand) -> (Value, Type) {
-        let pointer_ty = self.module.isa.pointer_type();
         match val {
             ir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
@@ -1029,23 +1063,47 @@ impl<'c> FuncGen<'c> {
                 (self.builder.use_var(*var), *ty)
             }
             ir::Operand::Value(v) => {
-                let (ty, val) = match v {
-                    IrValue::Bool(x) => (I8, *x as i64),
-                    IrValue::U8(x) => (I8, *x as i64),
-                    IrValue::U16(x) => (I16, *x as i64),
-                    IrValue::U32(x) => (I32, *x as i64),
-                    IrValue::U64(x) => (I64, *x as i64),
-                    IrValue::I8(x) => (I8, *x as i64),
-                    IrValue::I16(x) => (I16, *x as i64),
-                    IrValue::I32(x) => (I32, *x as i64),
-                    IrValue::I64(x) => (I64, *x),
-                    IrValue::Asn(x) => (I32, x.into_u32() as i64),
-                    IrValue::Pointer(x) => (pointer_ty, *x as i64),
-                    _ => ice!(),
-                };
-                (self.ins().iconst(ty, val), ty)
+                if let Some((ty, val)) = self.integer_operand(v) {
+                    (self.ins().iconst(ty, val), ty)
+                } else if let Some((ty, val)) = self.float_operand(v) {
+                    if ty == F32 {
+                        (self.ins().f32const(val as f32), ty)
+                    } else if ty == F64 {
+                        (self.ins().f64const(val), ty)
+                    } else {
+                        ice!()
+                    }
+                } else {
+                    ice!()
+                }
             }
         }
+    }
+
+    fn integer_operand(&self, val: &IrValue) -> Option<(Type, i64)> {
+        let pointer_ty = self.module.isa.pointer_type();
+        Some(match val {
+            IrValue::Bool(x) => (I8, *x as i64),
+            IrValue::U8(x) => (I8, *x as i64),
+            IrValue::U16(x) => (I16, *x as i64),
+            IrValue::U32(x) => (I32, *x as i64),
+            IrValue::U64(x) => (I64, *x as i64),
+            IrValue::I8(x) => (I8, *x as i64),
+            IrValue::I16(x) => (I16, *x as i64),
+            IrValue::I32(x) => (I32, *x as i64),
+            IrValue::I64(x) => (I64, *x),
+            IrValue::Asn(x) => (I32, x.into_u32() as i64),
+            IrValue::Pointer(x) => (pointer_ty, *x as i64),
+            _ => return None,
+        })
+    }
+
+    fn float_operand(&self, val: &IrValue) -> Option<(Type, f64)> {
+        Some(match val {
+            IrValue::F32(x) => (F32, *x as f64),
+            IrValue::F64(x) => (F64, *x),
+            _ => return None,
+        })
     }
 
     fn variable(&mut self, var: &Var, ty: Type) -> Variable {
@@ -1061,7 +1119,7 @@ impl<'c> FuncGen<'c> {
         var
     }
 
-    fn binop(&mut self, left: Value, right: Value, op: &IntCmp) -> Value {
+    fn int_cmp(&mut self, left: Value, right: Value, op: &IntCmp) -> Value {
         let cc = match op {
             IntCmp::Eq => IntCC::Equal,
             IntCmp::Ne => IntCC::NotEqual,
@@ -1075,6 +1133,23 @@ impl<'c> FuncGen<'c> {
             IntCmp::SGe => IntCC::SignedGreaterThanOrEqual,
         };
         self.ins().icmp(cc, left, right)
+    }
+
+    fn float_cmp(
+        &mut self,
+        left: Value,
+        right: Value,
+        op: &FloatCmp,
+    ) -> Value {
+        let cc = match op {
+            FloatCmp::Eq => FloatCC::Equal,
+            FloatCmp::Ne => FloatCC::NotEqual,
+            FloatCmp::Lt => FloatCC::LessThan,
+            FloatCmp::Le => FloatCC::LessThanOrEqual,
+            FloatCmp::Gt => FloatCC::GreaterThan,
+            FloatCmp::Ge => FloatCC::GreaterThanOrEqual,
+        };
+        self.ins().fcmp(cc, left, right)
     }
 }
 

@@ -634,6 +634,101 @@ fn multiply() {
 }
 
 #[test]
+fn float_mul() {
+    let s = src!(
+        "
+        filtermap main(x: f32) {
+            accept 2.0 * x
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.0);
+    assert_eq!(res, Verdict::Accept(40.0));
+}
+
+#[test]
+fn float_add() {
+    let s = src!(
+        "
+        filtermap main(x: f32) {
+            accept 2.0 + x
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.0);
+    assert_eq!(res, Verdict::Accept(22.0));
+}
+
+#[test]
+fn float_sub() {
+    let s = src!(
+        "
+        filtermap main(x: f32) {
+            accept 20.0 - x
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 2.0);
+    assert_eq!(res, Verdict::Accept(18.0));
+}
+
+#[test]
+fn float_cmp() {
+    let s = src!(
+        "
+        filtermap main(x: f32) {
+            accept x == 20.0
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), Verdict<bool, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.0);
+    assert_eq!(res, Verdict::Accept(true));
+}
+
+#[test]
+fn float_add_f64() {
+    let s = src!(
+        "
+        filtermap main(x: f64) {
+            accept x + 20.0
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f64,), Verdict<f64, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.0);
+    assert_eq!(res, Verdict::Accept(40.0));
+}
+
+#[test]
 fn ip_output() {
     let s = src!(
         "

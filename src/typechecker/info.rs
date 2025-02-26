@@ -115,6 +115,42 @@ impl TypeInfo {
         s.into()
     }
 
+    pub fn is_numeric_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::FloatVar(_) | Type::IntVar(_) => true,
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                type_def.is_float() || type_def.is_int()
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_float_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::FloatVar(_) => true,
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                type_def.is_float()
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_int_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::IntVar(_) => true,
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                type_def.is_int()
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
         let ty = self.resolve(ty);
         if self.layout_of(&ty, rt).size() == 0 {
@@ -218,6 +254,7 @@ impl TypeInfo {
             }
             Type::Never => panic!("Can't get the layout of the never type"),
             Type::IntVar(_) => Primitive::i32().layout(),
+            Type::FloatVar(_) => Primitive::f64().layout(),
             Type::RecordVar(_, fields) | Type::Record(fields) => {
                 Layout::concat(
                     fields.iter().map(|(_, f)| self.layout_of(f, rt)),

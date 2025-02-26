@@ -21,7 +21,10 @@ impl UnionFind {
     /// Find the type corresponding to a type var
     pub fn find(&mut self, index: usize) -> Type {
         match &self.inner[index] {
-            Type::Var(i) | Type::IntVar(i) | Type::RecordVar(i, _)
+            Type::Var(i)
+            | Type::IntVar(i)
+            | Type::FloatVar(i)
+            | Type::RecordVar(i, _)
                 if *i != index =>
             {
                 let new_t = self.find(*i);

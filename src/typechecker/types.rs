@@ -76,6 +76,7 @@ pub enum Type {
     Var(usize),
     ExplicitVar(Identifier),
     IntVar(usize),
+    FloatVar(usize),
     RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
     Never,
     Record(Vec<(Meta<Identifier>, Type)>),
@@ -102,6 +103,7 @@ pub struct EnumVariant {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Primitive {
     Int(IntKind, IntSize),
+    Float(FloatSize),
     Unit,
     String,
     Bool,
@@ -126,6 +128,13 @@ pub enum IntKind {
     Signed,
 }
 
+/// Size of a floating point type
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FloatSize {
+    F32,
+    F64,
+}
+
 impl IntSize {
     const fn int(&self) -> u8 {
         match self {
@@ -142,6 +151,15 @@ impl IntKind {
         match self {
             IntKind::Unsigned => 'u',
             IntKind::Signed => 'i',
+        }
+    }
+}
+
+impl FloatSize {
+    const fn int(&self) -> u8 {
+        match self {
+            Self::F32 => 32,
+            Self::F64 => 64,
         }
     }
 }
@@ -240,6 +258,10 @@ impl Primitive {
     pub fn i32() -> Self {
         Self::Int(IntKind::Signed, IntSize::I32)
     }
+
+    pub fn f64() -> Self {
+        Self::Float(FloatSize::F64)
+    }
 }
 
 impl Display for Primitive {
@@ -250,6 +272,7 @@ impl Display for Primitive {
             match self {
                 Primitive::Int(ty, size) =>
                     format!("{}{}", ty.prefix(), size.int()),
+                Primitive::Float(size) => format!("f{}", size.int()),
                 Primitive::Unit => "Unit".into(),
                 Primitive::String => "String".into(),
                 Primitive::Bool => "bool".into(),
@@ -280,6 +303,7 @@ impl Display for Type {
             Type::Var(_) => write!(f, "{{unknown}}"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
             Type::IntVar(_) => write!(f, "{{integer}}"),
+            Type::FloatVar(_) => write!(f, "{{float}}"),
             Type::RecordVar(_, fields) | Type::Record(fields) => write!(
                 f,
                 "{{ {} }}",
@@ -358,6 +382,10 @@ impl TypeDefinition {
         matches!(self, Self::Primitive(Primitive::Int(_, _)))
     }
 
+    pub fn is_float(&self) -> bool {
+        matches!(self, Self::Primitive(Primitive::Float(_)))
+    }
+
     pub fn type_parameters(&self) -> usize {
         match self {
             Self::Enum(type_name, _) | Self::Record(type_name, _) => {
@@ -413,6 +441,10 @@ impl Primitive {
         use Primitive::*;
         match self {
             Int(_, size) => {
+                let bytes = size.int() as usize / 8;
+                Layout::new(bytes, bytes)
+            }
+            Float(size) => {
                 let bytes = size.int() as usize / 8;
                 Layout::new(bytes, bytes)
             }
@@ -499,6 +531,8 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
         ("i16", Int(IntKind::Signed, IntSize::I16)),
         ("i32", Int(IntKind::Signed, IntSize::I32)),
         ("i64", Int(IntKind::Signed, IntSize::I64)),
+        ("f32", Float(FloatSize::F32)),
+        ("f64", Float(FloatSize::F64)),
         ("bool", Bool),
         ("String", String),
         ("Unit", Unit),

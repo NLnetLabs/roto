@@ -85,6 +85,8 @@ fn check_roto_type(
     let I16: TypeId = TypeId::of::<i16>();
     let I32: TypeId = TypeId::of::<i32>();
     let I64: TypeId = TypeId::of::<i64>();
+    let F32: TypeId = TypeId::of::<f32>();
+    let F64: TypeId = TypeId::of::<f64>();
     let UNIT: TypeId = TypeId::of::<()>();
     let ASN: TypeId = TypeId::of::<Asn>();
     let IPADDR: TypeId = TypeId::of::<IpAddr>();
@@ -109,6 +111,10 @@ fn check_roto_type(
         roto_ty = Type::named("i32", Vec::new());
     }
 
+    if let Type::FloatVar(_) = roto_ty {
+        roto_ty = Type::named("f64", Vec::new());
+    }
+
     match rust_ty.description {
         TypeDescription::Leaf => {
             let expected_name = match rust_ty.type_id {
@@ -121,6 +127,8 @@ fn check_roto_type(
                 x if x == I16 => "i16",
                 x if x == I32 => "i32",
                 x if x == I64 => "i64",
+                x if x == F32 => "f32",
+                x if x == F64 => "f64",
                 x if x == UNIT => "Unit",
                 x if x == ASN => "Asn",
                 x if x == IPADDR => "IpAddr",
