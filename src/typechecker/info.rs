@@ -223,6 +223,8 @@ impl TypeInfo {
             Type::Never => 0,
             // Int variables are inferred to u32
             Type::IntVar(_) => 4,
+            // Float variables are inferred to f64
+            Type::FloatVar(_) => 8,
             // Records have the size of their fields
             Type::Record(fields)
             | Type::NamedRecord(_, fields)

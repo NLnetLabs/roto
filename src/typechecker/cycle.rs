@@ -67,6 +67,7 @@ fn visit<'a>(
     match ty {
         Type::Var(_)
         | Type::IntVar(_)
+        | Type::FloatVar(_)
         | Type::ExplicitVar(_)
         | Type::RecordVar(_, _) => {
             Err("there should be no unresolved type variables left".into())

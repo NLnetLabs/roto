@@ -9,7 +9,6 @@ use crate::{
 };
 
 use super::{
-    TypeChecker, TypeResult,
     scope::{
         ResolvedName, ScopeRef, ScopeType, StubDeclaration,
         StubDeclarationKind, ValueKind,
@@ -18,6 +17,7 @@ use super::{
         Function, FunctionDefinition, FunctionKind, Primitive, Signature,
         Type,
     },
+    TypeChecker, TypeResult,
 };
 
 #[derive(Clone)]
@@ -424,6 +424,7 @@ impl TypeChecker {
             IpAddress(_) => Type::Primitive(Primitive::IpAddr),
             Bool(_) => Type::Primitive(Primitive::Bool),
             Integer(_) => self.fresh_int(),
+            Float(_) => self.fresh_float(),
         };
 
         self.unify(&ctx.expected_type, &t, span, None)?;
@@ -682,12 +683,18 @@ impl TypeChecker {
                     None,
                 )?;
 
-                let ctx = ctx.with_type(self.fresh_int());
+                let ty = self.fresh_var();
+                let ctx = ctx.with_type(ty.clone());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
-                diverges |= self.expr(scope, &ctx, right)?;
-                Ok(diverges)
+                let resolved = self.resolve_type(&ty);
+                if resolved.is_numeric() {
+                    diverges |= self.expr(scope, &ctx, right)?;
+                    Ok(diverges)
+                } else {
+                    Err(self.error_expected_numeric_value(left, &resolved))
+                }
             }
             Eq | Ne => {
                 self.unify(
@@ -723,15 +730,24 @@ impl TypeChecker {
                 Ok(diverges)
             }
             Add | Sub | Mul | Div => {
-                let operand_ty = self.fresh_int();
+                let operand_ty = self.fresh_var();
                 let new_ctx = ctx.with_type(operand_ty.clone());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &new_ctx, left)?;
-                diverges |= self.expr(scope, &new_ctx, right)?;
 
-                self.unify(&ctx.expected_type, &operand_ty, span, None)?;
-                Ok(diverges)
+                let resolved = self.resolve_type(&operand_ty);
+                if resolved.is_numeric() {
+                    diverges |= self.expr(scope, &new_ctx, right)?;
+
+                    self.unify(&ctx.expected_type, &resolved, span, None)?;
+
+                    dbg!(self.resolve_type(&resolved));
+                    dbg!(self.resolve_type(&operand_ty));
+                    Ok(diverges)
+                } else {
+                    Err(self.error_expected_numeric_value(left, &resolved))
+                }
             }
             In | NotIn => {
                 self.unify(
