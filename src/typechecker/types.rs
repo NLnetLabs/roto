@@ -17,6 +17,7 @@ pub enum Type {
     Var(usize),
     ExplicitVar(Identifier),
     IntVar(usize),
+    FloatVar(usize),
     RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
     Never,
     Primitive(Primitive),
@@ -42,12 +43,28 @@ pub enum Primitive {
     I16,
     I32,
     I64,
+    F32,
+    F64,
     Unit,
     String,
     Bool,
     Asn,
     IpAddr,
     Prefix,
+}
+
+impl Type {
+    pub fn is_numeric(&self) -> bool {
+        use Primitive::*;
+        matches!(
+            self,
+            Type::IntVar(_)
+                | Type::FloatVar(_)
+                | Type::Primitive(
+                    U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64 | F32 | F64
+                )
+        )
+    }
 }
 
 impl From<Primitive> for Type {
@@ -70,6 +87,8 @@ impl Display for Primitive {
                 Primitive::I16 => "i16",
                 Primitive::I32 => "i32",
                 Primitive::I64 => "i64",
+                Primitive::F32 => "f32",
+                Primitive::F64 => "f64",
                 Primitive::Unit => "Unit",
                 Primitive::String => "String",
                 Primitive::Bool => "bool",
@@ -100,6 +119,7 @@ impl Display for Type {
             Type::Var(_) => write!(f, "{{unknown}}"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
             Type::IntVar(_) => write!(f, "{{integer}}"),
+            Type::FloatVar(_) => write!(f, "{{float}}"),
             Type::RecordVar(_, fields) | Type::Record(fields) => write!(
                 f,
                 "{{ {} }}",
@@ -173,8 +193,8 @@ impl Primitive {
         match self {
             U8 | I8 | Bool => 1,
             U16 | I16 => 2,
-            U32 | I32 | Asn => 4,
-            U64 | I64 => 8,
+            U32 | I32 | F32 | Asn => 4,
+            U64 | I64 | F64 => 8,
             Unit => 0,
             String => std::mem::size_of::<Arc<str>>() as u32,
             IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
@@ -255,6 +275,8 @@ pub fn default_types() -> Vec<(Identifier, Type)> {
         ("i16", I16),
         ("i32", I32),
         ("i64", I64),
+        ("f32", F32),
+        ("f64", F64),
         ("bool", Bool),
         ("String", String),
         ("Unit", Unit),

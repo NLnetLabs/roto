@@ -669,12 +669,50 @@ impl<'r> Lowerer<'r> {
                 let right = right.unwrap();
 
                 let place = self.new_tmp();
-                match (op, binop_to_cmp(op, &ty), ty) {
-                    (
-                        ast::BinOp::Add,
-                        _,
-                        Type::Primitive(Primitive::String),
-                    ) => {
+                if matches!(
+                    ty,
+                    Type::IntVar(_)
+                        | Type::Primitive(
+                            Primitive::U8
+                                | Primitive::U16
+                                | Primitive::U32
+                                | Primitive::U64
+                                | Primitive::I8
+                                | Primitive::I16
+                                | Primitive::I32
+                                | Primitive::I64
+                                | Primitive::Asn
+                        )
+                ) {
+                    if let Some(cmp) = binop_to_int_cmp(op, &ty) {
+                        self.add(Instruction::IntCmp {
+                            to: place.clone(),
+                            cmp,
+                            left,
+                            right,
+                        });
+                        return Some(place.into());
+                    }
+                }
+
+                if matches!(
+                    ty,
+                    Type::FloatVar(_)
+                        | Type::Primitive(Primitive::F32 | Primitive::F64)
+                ) {
+                    if let Some(cmp) = binop_to_float_cmp(op) {
+                        self.add(Instruction::FloatCmp {
+                            to: place.clone(),
+                            cmp,
+                            left,
+                            right,
+                        });
+                        return Some(place.into());
+                    }
+                }
+
+                match (op, ty) {
+                    (ast::BinOp::Add, Type::Primitive(Primitive::String)) => {
                         let function = self.type_info.function(id);
                         let FunctionDefinition::Runtime(runtime_func_ref) =
                             function.definition.clone()
@@ -721,11 +759,7 @@ impl<'r> Lowerer<'r> {
                             args: vec![place.clone().into(), left, right],
                         });
                     }
-                    (
-                        ast::BinOp::Div,
-                        _,
-                        Type::Primitive(Primitive::IpAddr),
-                    ) => {
+                    (ast::BinOp::Div, Type::Primitive(Primitive::IpAddr)) => {
                         let function = self.type_info.function(id);
                         let FunctionDefinition::Runtime(runtime_func_ref) =
                             function.definition.clone()
@@ -772,11 +806,7 @@ impl<'r> Lowerer<'r> {
                             args: vec![place.clone().into(), left, right],
                         });
                     }
-                    (
-                        ast::BinOp::Eq,
-                        _,
-                        Type::Primitive(Primitive::IpAddr),
-                    ) => {
+                    (ast::BinOp::Eq, Type::Primitive(Primitive::IpAddr)) => {
                         let ip_addr_type_id = TypeId::of::<IpAddr>();
                         let runtime_func = self.find_runtime_function(
                             runtime::FunctionKind::Method(ip_addr_type_id),
@@ -800,11 +830,7 @@ impl<'r> Lowerer<'r> {
                             ty: IrType::Bool,
                         })
                     }
-                    (
-                        ast::BinOp::Ne,
-                        _,
-                        Type::Primitive(Primitive::IpAddr),
-                    ) => {
+                    (ast::BinOp::Ne, Type::Primitive(Primitive::IpAddr)) => {
                         let ip_addr_type_id = TypeId::of::<IpAddr>();
                         let runtime_func = self.find_runtime_function(
                             runtime::FunctionKind::Method(ip_addr_type_id),
@@ -828,9 +854,7 @@ impl<'r> Lowerer<'r> {
                             val: out,
                         })
                     }
-                    (ast::BinOp::Eq, _, ty)
-                        if self.is_reference_type(&ty) =>
-                    {
+                    (ast::BinOp::Eq, ty) if self.is_reference_type(&ty) => {
                         let size = self.type_info.size_of(&ty, self.runtime);
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
@@ -839,16 +863,14 @@ impl<'r> Lowerer<'r> {
                             left: left.clone(),
                             right: right.clone(),
                         });
-                        self.add(Instruction::Cmp {
+                        self.add(Instruction::IntCmp {
                             to: place.clone(),
                             cmp: ir::IntCmp::Eq,
                             left: tmp.into(),
                             right: IrValue::Pointer(0).into(),
                         })
                     }
-                    (ast::BinOp::Ne, _, ty)
-                        if self.is_reference_type(&ty) =>
-                    {
+                    (ast::BinOp::Ne, ty) if self.is_reference_type(&ty) => {
                         let size = self.type_info.size_of(&ty, self.runtime);
                         let tmp = self.new_tmp();
                         self.add(Instruction::MemCmp {
@@ -857,52 +879,44 @@ impl<'r> Lowerer<'r> {
                             left: left.clone(),
                             right: right.clone(),
                         });
-                        self.add(Instruction::Cmp {
+                        self.add(Instruction::IntCmp {
                             to: place.clone(),
                             cmp: ir::IntCmp::Ne,
                             left: tmp.into(),
                             right: IrValue::Pointer(0).into(),
                         })
                     }
-                    (_, Some(cmp), _) => {
-                        self.add(Instruction::Cmp {
-                            to: place.clone(),
-                            cmp,
-                            left,
-                            right,
-                        });
-                    }
-                    (ast::BinOp::And, _, _) => self.add(Instruction::And {
+                    (ast::BinOp::And, _) => self.add(Instruction::And {
                         to: place.clone(),
                         left,
                         right,
                     }),
-                    (ast::BinOp::Or, _, _) => self.add(Instruction::Or {
+                    (ast::BinOp::Or, _) => self.add(Instruction::Or {
                         to: place.clone(),
                         left,
                         right,
                     }),
-                    (ast::BinOp::Eq, _, _) => self.add(Instruction::Eq {
+                    (ast::BinOp::Eq, _) => self.add(Instruction::Eq {
                         to: place.clone(),
                         left,
                         right,
                     }),
-                    (ast::BinOp::Add, _, _) => self.add(Instruction::Add {
+                    (ast::BinOp::Add, _) => self.add(Instruction::Add {
                         to: place.clone(),
                         left,
                         right,
                     }),
-                    (ast::BinOp::Sub, _, _) => self.add(Instruction::Sub {
+                    (ast::BinOp::Sub, _) => self.add(Instruction::Sub {
                         to: place.clone(),
                         left,
                         right,
                     }),
-                    (ast::BinOp::Mul, _, _) => self.add(Instruction::Mul {
+                    (ast::BinOp::Mul, _) => self.add(Instruction::Mul {
                         to: place.clone(),
                         left,
                         right,
                     }),
-                    (ast::BinOp::Div, _, ty) => {
+                    (ast::BinOp::Div, ty) => {
                         let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Div {
                             to: place.clone(),
@@ -1066,6 +1080,18 @@ impl<'r> Lowerer<'r> {
                 }
                 .into()
             }
+            Literal::Float(x) => {
+                let ty = self.type_info.type_of(lit);
+                match ty {
+                    Type::Primitive(Primitive::F32) => {
+                        IrValue::F32(*x as f32)
+                    }
+                    Type::Primitive(Primitive::F64) => IrValue::F64(*x),
+                    Type::FloatVar(_) => IrValue::F64(*x),
+                    _ => ice!("should be a type error"),
+                }
+                .into()
+            }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
         }
     }
@@ -1203,8 +1229,11 @@ impl<'r> Lowerer<'r> {
             Type::Primitive(Primitive::I16) => IrType::I16,
             Type::Primitive(Primitive::I32) => IrType::I32,
             Type::Primitive(Primitive::I64) => IrType::I64,
+            Type::Primitive(Primitive::F32) => IrType::F32,
+            Type::Primitive(Primitive::F64) => IrType::F64,
             Type::Primitive(Primitive::Asn) => IrType::Asn,
             Type::IntVar(_) => IrType::I32,
+            Type::FloatVar(_) => IrType::F64,
             Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => panic!("could not lower: {ty:?}"),
@@ -1310,7 +1339,7 @@ impl<'r> Lowerer<'r> {
     }
 }
 
-fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
+fn binop_to_int_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
     let signed = match ty {
         Type::Primitive(p) => match p {
             Primitive::U64
@@ -1325,6 +1354,8 @@ fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
             | Primitive::I32
             | Primitive::I16
             | Primitive::I8 => true,
+            Primitive::F32 => return None,
+            Primitive::F64 => return None,
             Primitive::Unit => return None,
             Primitive::String => return None,
         },
@@ -1343,6 +1374,18 @@ fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
         ast::BinOp::Le => ir::IntCmp::ULe,
         ast::BinOp::Gt => ir::IntCmp::UGt,
         ast::BinOp::Ge => ir::IntCmp::UGe,
+        _ => return None,
+    })
+}
+
+fn binop_to_float_cmp(op: &ast::BinOp) -> Option<ir::FloatCmp> {
+    Some(match op {
+        ast::BinOp::Eq => ir::FloatCmp::Eq,
+        ast::BinOp::Ne => ir::FloatCmp::Ne,
+        ast::BinOp::Lt => ir::FloatCmp::Lt,
+        ast::BinOp::Le => ir::FloatCmp::Le,
+        ast::BinOp::Gt => ir::FloatCmp::Gt,
+        ast::BinOp::Ge => ir::FloatCmp::Ge,
         _ => return None,
     })
 }

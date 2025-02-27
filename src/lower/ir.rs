@@ -117,9 +117,17 @@ pub enum Instruction {
     Return(Option<Operand>),
 
     /// Perform a comparison and store the result in `to`
-    Cmp {
+    IntCmp {
         to: Var,
         cmp: IntCmp,
+        left: Operand,
+        right: Operand,
+    },
+
+    /// Perform a comparison and store the result in `to`
+    FloatCmp {
+        to: Var,
+        cmp: FloatCmp,
         left: Operand,
         right: Operand,
     },
@@ -269,6 +277,30 @@ impl Display for IntCmp {
             IntCmp::SLe => "sle",
             IntCmp::SGt => "sgt",
             IntCmp::SGe => "sge",
+        };
+        write!(f, "{s}")
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FloatCmp {
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+}
+
+impl Display for FloatCmp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            FloatCmp::Eq => "eq",
+            FloatCmp::Ne => "ne",
+            FloatCmp::Lt => "lt",
+            FloatCmp::Le => "le",
+            FloatCmp::Gt => "gt",
+            FloatCmp::Ge => "ge",
         };
         write!(f, "{s}")
     }
@@ -443,7 +475,20 @@ impl<'a> IrPrinter<'a> {
             Return(Some(v)) => {
                 format!("return {}", self.operand(v))
             }
-            Cmp {
+            IntCmp {
+                to,
+                cmp,
+                left,
+                right,
+            } => {
+                format!(
+                    "{} = {cmp}({}, {})",
+                    self.var(to),
+                    self.operand(left),
+                    self.operand(right),
+                )
+            }
+            FloatCmp {
                 to,
                 cmp,
                 left,

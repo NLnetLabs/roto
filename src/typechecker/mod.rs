@@ -510,6 +510,11 @@ impl TypeChecker {
         self.type_info.unionfind.fresh(Type::IntVar)
     }
 
+    /// Create a fresh integer variable in the unionfind structure
+    fn fresh_float(&mut self) -> Type {
+        self.type_info.unionfind.fresh(Type::FloatVar)
+    }
+
     /// Create a fresh record variable in the unionfind structure
     fn fresh_record(
         &mut self,
@@ -697,7 +702,9 @@ impl TypeChecker {
         if let Some(ty) = self.unify_inner(a, b) {
             Ok(ty)
         } else {
-            Err(self.error_mismatched_types(a, b, span, cause))
+            let a = self.resolve_type(a);
+            let b = self.resolve_type(b);
+            Err(self.error_mismatched_types(&a, &b, span, cause))
         }
     }
 
@@ -706,7 +713,6 @@ impl TypeChecker {
         use Type::*;
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
-
         Some(match (a, b) {
             // We never recurse into NamedRecords, so they are included here.
             (a, b) if a == b => a,
@@ -722,6 +728,21 @@ impl TypeChecker {
             (
                 a @ Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64),
                 IntVar(b),
+            ) => {
+                self.type_info.unionfind.set(b, a.clone());
+                a.clone()
+            }
+            (
+                FloatVar(a),
+                b @ (Primitive(F32 | F64)
+                | FloatVar(_)),
+            ) => {
+                self.type_info.unionfind.set(a, b.clone());
+                b.clone()
+            }
+            (
+                a @ Primitive(F32 | F64),
+                FloatVar(b),
             ) => {
                 self.type_info.unionfind.set(b, a.clone());
                 a.clone()
@@ -790,7 +811,7 @@ impl TypeChecker {
     fn resolve_type(&mut self, t: &Type) -> Type {
         let mut t = t.clone();
 
-        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+        if let Type::Var(x) | Type::IntVar(x) | Type::FloatVar(x) | Type::RecordVar(x, _) = t {
             t = self.type_info.unionfind.find(x).clone();
         }
 

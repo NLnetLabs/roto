@@ -84,6 +84,8 @@ fn check_roto_type(
     let I16: TypeId = TypeId::of::<i16>();
     let I32: TypeId = TypeId::of::<i32>();
     let I64: TypeId = TypeId::of::<i64>();
+    let F32: TypeId = TypeId::of::<f32>();
+    let F64: TypeId = TypeId::of::<f64>();
     let UNIT: TypeId = TypeId::of::<()>();
     let ASN: TypeId = TypeId::of::<Asn>();
     let IPADDR: TypeId = TypeId::of::<IpAddr>();
@@ -108,6 +110,10 @@ fn check_roto_type(
         roto_ty = Type::Primitive(Primitive::I32);
     }
 
+    if let Type::FloatVar(_) = roto_ty {
+        roto_ty = Type::Primitive(Primitive::F64);
+    }
+
     match rust_ty.description {
         TypeDescription::Leaf => {
             let expected_roto = match rust_ty.type_id {
@@ -120,6 +126,8 @@ fn check_roto_type(
                 x if x == I16 => Type::Primitive(Primitive::I16),
                 x if x == I32 => Type::Primitive(Primitive::I32),
                 x if x == I64 => Type::Primitive(Primitive::I64),
+                x if x == F32 => Type::Primitive(Primitive::F32),
+                x if x == F64 => Type::Primitive(Primitive::F64),
                 x if x == UNIT => Type::Primitive(Primitive::Unit),
                 x if x == ASN => Type::Primitive(Primitive::Asn),
                 x if x == IPADDR => Type::Primitive(Primitive::IpAddr),

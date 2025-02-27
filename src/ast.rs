@@ -233,6 +233,7 @@ pub enum Literal {
     Asn(Asn),
     IpAddress(std::net::IpAddr),
     Integer(i64),
+    Float(f64),
     Bool(bool),
 }
 
