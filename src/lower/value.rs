@@ -413,6 +413,52 @@ impl TryFrom<&IrValue> for u8 {
     }
 }
 
+impl From<f32> for IrValue {
+    fn from(value: f32) -> Self {
+        IrValue::F32(value)
+    }
+}
+
+impl From<f32> for ReturnValue {
+    fn from(value: f32) -> Self {
+        Self(Some(value.into()))
+    }
+}
+
+impl TryFrom<&IrValue> for f32 {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::F32(x) => Ok(*x),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<f64> for IrValue {
+    fn from(value: f64) -> Self {
+        IrValue::F64(value)
+    }
+}
+
+impl From<f64> for ReturnValue {
+    fn from(value: f64) -> Self {
+        Self(Some(value.into()))
+    }
+}
+
+impl TryFrom<&IrValue> for f64 {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::F64(x) => Ok(*x),
+            _ => Err(()),
+        }
+    }
+}
+
 impl From<u32> for IrValue {
     fn from(value: u32) -> Self {
         IrValue::U32(value)
