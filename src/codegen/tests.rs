@@ -1,3 +1,4 @@
+use core::f32;
 use std::{
     net::IpAddr,
     sync::{atomic::AtomicUsize, Arc},
@@ -707,6 +708,115 @@ fn float_cmp() {
 
     let res = f.call(&mut (), 20.0);
     assert_eq!(res, Verdict::Accept(true));
+}
+
+#[test]
+fn float_div_zero() {
+    let s = src!(
+        "
+        filtermap main(x: f32) {
+            accept x / 0.0
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.0);
+    assert_eq!(res, Verdict::Accept(f32::INFINITY));
+
+    let res = f.call(&mut (), -20.0);
+    assert_eq!(res, Verdict::Accept(-f32::INFINITY));
+
+    let Verdict::Accept(res) = f.call(&mut (), 0.0) else {
+        panic!("should have returned accept")
+    };
+    assert!(res.is_nan());
+}
+
+#[test]
+fn float_floor() {
+    let s = src!("function floor(x: f32) -> f32 { x.floor() }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), f32>("floor")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.5);
+    assert_eq!(res, 20.0);
+    let res = f.call(&mut (), -20.5);
+    assert_eq!(res, -21.0);
+}
+
+#[test]
+fn float_ceil() {
+    let s = src!("function ceil(x: f32) -> f32 { x.ceil() }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), f32>("ceil")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.5);
+    assert_eq!(res, 21.0);
+    let res = f.call(&mut (), -20.5);
+    assert_eq!(res, -20.0);
+}
+
+#[test]
+fn float_round() {
+    let s = src!("function round(x: f32) -> f32 { x.round() }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32,), f32>("round")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 20.6);
+    assert_eq!(res, 21.0);
+    let res = f.call(&mut (), 20.4);
+    assert_eq!(res, 20.0);
+}
+
+#[test]
+fn float_pow() {
+    let s = src!("function pow(x: f32, y: f32) -> f32 { x.pow(y) }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (f32, f32), f32>("pow")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 2.0, 2.0);
+    assert_eq!(res, 4.0);
+    let res = f.call(&mut (), 25.0, 0.5);
+    assert_eq!(res, 5.0);
+}
+
+#[test]
+fn float_scientific_notation_one() {
+    let s = src!("function main() -> f32 { 20.0e4 }");
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (), f32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert_eq!(res, 20.0e4);
+}
+
+#[test]
+fn float_scientific_notation_two() {
+    let s = src!("function main() -> f32 { 20.0e-4 }");
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (), f32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert_eq!(res, 20.0e-4);
 }
 
 #[test]
