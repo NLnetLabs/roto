@@ -1,20 +1,11 @@
 use std::{env::args, net::IpAddr};
 
-use roto::{read_files, Context, Runtime, Verdict};
+use roto::{FileTree, Runtime, Verdict};
 
 fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
 
-    let mut runtime = Runtime::basic().unwrap();
-
-    // Adding a context is not necessary but done here for testing purposes
-    #[derive(Context)]
-    struct Ctx {
-        /// This is the foo usize
-        pub foo: u32,
-    }
-
-    runtime.register_context_type::<Ctx>().unwrap();
+    let runtime = Runtime::new();
 
     let mut arguments = args();
     let _program_name = arguments.next().unwrap();
@@ -25,8 +16,8 @@ fn main() -> Result<(), roto::RotoReport> {
         return Ok(());
     }
 
-    let mut compiled = read_files(["examples/simple.roto"])?
-        .compile(runtime, usize::BITS / 8)
+    let mut compiled = FileTree::single_file("examples/simple.roto")
+        .compile(runtime)
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled

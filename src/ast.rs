@@ -18,16 +18,14 @@ pub struct SyntaxTree {
 #[derive(Clone, Debug)]
 pub enum Declaration {
     FilterMap(Box<FilterMap>),
-    Rib(Rib),
-    Table(Table),
-    OutputStream(OutputStream),
     Record(RecordTypeDeclaration),
     Function(FunctionDeclaration),
     Test(Test),
+    Import(Meta<Path>),
 }
 
 #[derive(Clone, Debug)]
-pub struct Params(pub Vec<(Meta<Identifier>, Meta<Identifier>)>);
+pub struct Params(pub Vec<(Meta<Identifier>, Meta<Path>)>);
 
 /// The value of a typed record
 #[derive(Clone, Debug)]
@@ -55,7 +53,7 @@ pub struct FilterMap {
 pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
-    pub ret: Option<Meta<Identifier>>,
+    pub ret: Option<Meta<Path>>,
     pub body: Meta<Block>,
 }
 
@@ -68,6 +66,7 @@ pub struct Test {
 /// A block of multiple statements
 #[derive(Clone, Debug)]
 pub struct Block {
+    pub imports: Vec<Meta<Path>>,
     pub stmts: Vec<Meta<Stmt>>,
     pub last: Option<Box<Meta<Expr>>>,
 }
@@ -79,10 +78,15 @@ pub enum Stmt {
     Expr(Meta<Expr>),
 }
 
+#[derive(Clone, Debug)]
+pub struct Path {
+    pub idents: Vec<Meta<Identifier>>,
+}
+
 /// A Roto expression
 #[derive(Clone, Debug)]
 pub enum Expr {
-    /// Return from the current function or filter-map
+    /// Return from the current function or filtermap
     ///
     /// Optionally takes an expression for the value being returned.
     Return(ReturnKind, Option<Box<Meta<Expr>>>),
@@ -94,20 +98,13 @@ pub enum Expr {
     Match(Box<Meta<Match>>),
 
     /// A function call expression
-    FunctionCall(Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
-
-    /// A method call expression
-    ///
-    /// Takes the expression of the _receiver_ (the expression that the
-    /// method is called on), the name of the method and a [`Vec`] of
-    /// arguments.
-    MethodCall(Box<Meta<Expr>>, Meta<Identifier>, Meta<Vec<Meta<Expr>>>),
+    FunctionCall(Box<Meta<Expr>>, Meta<Vec<Meta<Expr>>>),
 
     /// A field access expression
     Access(Box<Meta<Expr>>, Meta<Identifier>),
 
     /// A variable use
-    Var(Meta<Identifier>),
+    Path(Meta<Path>),
 
     /// A record that doesn't have a type mentioned in the assignment of it
     ///
@@ -119,7 +116,7 @@ pub enum Expr {
     ///
     /// For example: `MyType { value_1: 100, value_2: "bla" }`, where `MyType`
     /// is a user-defined Record Type.
-    TypedRecord(Meta<Identifier>, Meta<Record>),
+    TypedRecord(Meta<Path>, Meta<Record>),
 
     /// An expression that yields a list of values, e.g. `[100, 200, 300]`
     List(Vec<Meta<Expr>>),
@@ -180,39 +177,6 @@ pub enum Pattern {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct Rib {
-    pub ident: Meta<Identifier>,
-    pub contain_ty: Meta<Identifier>,
-    pub body: RibBody,
-}
-
-#[derive(Clone, Debug)]
-pub struct RibBody {
-    pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum RibFieldType {
-    Identifier(Meta<Identifier>),
-    Record(Meta<RecordType>),
-    List(Meta<Box<RibFieldType>>),
-}
-
-#[derive(Clone, Debug)]
-pub struct Table {
-    pub ident: Meta<Identifier>,
-    pub contain_ty: Meta<Identifier>,
-    pub body: RibBody,
-}
-
-#[derive(Clone, Debug)]
-pub struct OutputStream {
-    pub ident: Meta<Identifier>,
-    pub contain_ty: Meta<Identifier>,
-    pub body: RibBody,
-}
-
 /// An identifier is the name of variables or other things.
 ///
 /// It is a word composed of a leading alphabetic Unicode character, followed
@@ -252,7 +216,14 @@ impl From<String> for Identifier {
 
 #[derive(Clone, Debug)]
 pub struct RecordType {
-    pub key_values: Meta<Vec<(Meta<Identifier>, RibFieldType)>>,
+    pub key_values: Meta<Vec<(Meta<Identifier>, RecordFieldType)>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum RecordFieldType {
+    Path(Meta<Path>),
+    Record(Meta<RecordType>),
+    List(Meta<Box<RecordFieldType>>),
 }
 
 #[derive(Clone, Debug)]

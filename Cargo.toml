@@ -15,13 +15,12 @@ categories.workspace = true
 [dependencies]
 ariadne = "0.5.0"
 clap = { version = "4.4.6", features = ["derive"] }
-env_logger = "0.10"
-log = "0.4"
-logos = "0.14.0"
+env_logger = "0.11"
+icu = { version = "1.5.0", features = ["compiled_data"] }
 inetnum = "0.1.0"
-symbol_table = { version = "0.3.0", features = ["global"] }
-string-interner = "0.17.0"
-roto-macros = { workspace = true, version = "0.4.0" }
+log = "0.4"
+roto-macros = { workspace = true }
+symbol_table = { version = "0.4.0", features = ["global"] }
 
 [dependencies.cranelift]
 version = "0.113.0"
@@ -38,7 +37,7 @@ rev = "1af294ea2d6c18c5a8fa9b4f272398b7c98e0c48"
 [dev-dependencies]
 bytes = "1"
 routecore = { version = "0.5", features = ["bgp", "bmp", "serde"] }
-tabled = { version = "0.17.0", default-features = false, features = ["std"] }
+tabled = { version = "0.18.0", default-features = false, features = ["std"] }
 
 [profile.profiling]
 inherits = "release"
@@ -54,7 +53,7 @@ version = "0.4.1-dev"
 edition = "2021"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
-rust-version = "1.80"
+rust-version = "1.81"
 description = "strongly-typed, compiled language for Rotonda"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
@@ -64,7 +63,7 @@ categories = ["network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
-roto-macros = { path = "macros", version = "0.4.0" }
+roto-macros = { path = "macros", version = "0.4.1-dev" }
 proc-macro2 = "1.0.86"
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }

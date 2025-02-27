@@ -5,13 +5,19 @@ use std::{borrow::Borrow, collections::HashSet};
 use crate::{
     ast::{self, Identifier, Pattern},
     parser::meta::{Meta, MetaId},
-    typechecker::types::FunctionDefinition,
+    typechecker::scope::DeclarationKind,
 };
 
 use super::{
-    scope::{LocalScopeRef, ScopeType},
-    types::{Function, FunctionKind, Primitive, Signature, Type},
     TypeChecker, TypeResult,
+    scope::{
+        ResolvedName, ScopeRef, ScopeType, StubDeclaration,
+        StubDeclarationKind, ValueKind,
+    },
+    types::{
+        Function, FunctionDefinition, FunctionKind, Primitive, Signature,
+        Type,
+    },
 };
 
 #[derive(Clone)]
@@ -29,14 +35,50 @@ impl Context {
     }
 }
 
-impl TypeChecker<'_> {
+#[derive(Clone)]
+pub enum ResolvedPath {
+    Function {
+        name: ResolvedName,
+        definition: FunctionDefinition,
+        signature: Signature,
+    },
+    Method {
+        value: PathValue,
+        name: ResolvedName,
+        definition: FunctionDefinition,
+        signature: Signature,
+    },
+    Value(PathValue),
+    StaticMethod {
+        name: ResolvedName,
+        definition: FunctionDefinition,
+        signature: Signature,
+    },
+    EnumConstructor {
+        ty: Type,
+        variant: Identifier,
+        data: Option<Type>,
+    },
+}
+
+#[derive(Clone)]
+pub struct PathValue {
+    pub name: ResolvedName,
+    pub kind: ValueKind,
+    pub ty: Type,
+    pub fields: Vec<(Identifier, Type)>,
+}
+
+impl TypeChecker {
     pub fn block(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         block: &Meta<ast::Block>,
     ) -> TypeResult<bool> {
         let mut diverged = false;
+
+        self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
 
         for stmt in &block.stmts {
             if diverged {
@@ -76,7 +118,7 @@ impl TypeChecker<'_> {
 
     pub fn stmt(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         stmt: &Meta<ast::Stmt>,
     ) -> TypeResult<bool> {
@@ -95,7 +137,7 @@ impl TypeChecker<'_> {
 
     pub fn expr(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         expr: &Meta<ast::Expr>,
     ) -> TypeResult<bool> {
@@ -168,165 +210,75 @@ impl TypeChecker<'_> {
             }
             Literal(l) => self.literal(ctx, l),
             Match(m) => self.match_expr(scope, ctx, m),
-            FunctionCall(name, args) => {
-                // A function call can either be an internal function or an
-                // external function. Internal functions have priority over
-                // external functions.
-                if let Ok(ty) = self.get_var(scope, name) {
-                    let ty = ty.clone();
-                    let ty = self.resolve_type(&ty);
-
-                    let Type::Function(params, ret) = ty else {
-                        return Err(self.error_simple(
-                            format!("the variable `{name}` is not callable, but has type `{ty}`"),
-                            "not a function",
-                            name.id,
-                        ));
-                    };
-
-                    // Tell the lower stage about the kind of function this
-                    // is. The most important part here is the
-                    // FunctionDefinition::Roto bit.
-                    self.type_info.function_calls.insert(
-                        name.id,
-                        Function {
-                            signature: Signature {
-                                kind: FunctionKind::Free,
-                                parameter_types: params
-                                    .iter()
-                                    .map(|p| p.1.clone())
-                                    .collect(),
-                                return_type: *ret.clone(),
-                            },
-                            name: name.node,
-                            vars: Vec::new(),
-                            definition: FunctionDefinition::Roto,
-                        },
-                    );
-
-                    let params: Vec<_> =
-                        params.into_iter().map(|(_, t)| t).collect();
-                    let diverges = self.check_arguments(
-                        scope, ctx, "function", name, &params, args,
-                    )?;
-
-                    self.unify(&ctx.expected_type, &ret, id, None)?;
-                    Ok(diverges)
-                } else {
-                    // It's not found in scope, so it should be a runtime
-                    // function, otherwise we really can't find it.
-                    let Some((function, signature)) =
-                        self.find_function(&FunctionKind::Free, **name)
-                    else {
-                        let n = name.as_str();
-                        return Err(self.error_simple(
-                            format!("function `{n}` not found`",),
-                            "function not found",
-                            name.id,
-                        ));
-                    };
-
-                    let function = function.clone();
-
-                    self.type_info.function_calls.insert(name.id, function);
-
-                    self.unify(
-                        &ctx.expected_type,
-                        &signature.return_type,
-                        name.id,
-                        None,
-                    )?;
-
-                    let diverges = self.check_arguments(
-                        scope,
-                        ctx,
-                        "runtime function",
-                        name,
-                        &signature.parameter_types,
-                        args,
-                    )?;
-
+            FunctionCall(e, args) => match &e.node {
+                ast::Expr::Path(p) => {
+                    self.path_function_call(scope, ctx, id, p, args)
+                }
+                ast::Expr::Access(e, name) => {
+                    let ty = self.fresh_var();
+                    let mut diverges =
+                        self.expr(scope, &ctx.with_type(&ty), e)?;
+                    diverges |=
+                        self.method_call(scope, ctx, id, ty, name, args)?;
                     Ok(diverges)
                 }
-            }
-            MethodCall(receiver, name, args) => {
-                // This could be an enum variant constructor, so we check that too
-                if let Some((type_name, _, data)) =
-                    self.find_enum_variant(ctx, id, receiver, name)?
-                {
-                    let Some(data) = data else {
-                        return Err(self.error_simple(
-                            format!("variant {name} of {type_name} does not have data"),
-                            "does not have data",
-                            name.id,
-                        ));
-                    };
-
-                    let [arg] = &args.node[..] else {
-                        return Err(self.error_simple(
-                            "enum constructor must have exactly 1 argument",
-                            "must have exactly 1 argument",
-                            args.id,
-                        ));
-                    };
-
-                    let ctx = &Context {
-                        expected_type: data.clone(),
-                        ..ctx.clone()
-                    };
-                    return self.expr(scope, ctx, arg);
-                }
-
-                if let ast::Expr::Var(x) = &receiver.node {
-                    if let Some(ty) = self.get_type(x.node) {
-                        let ty = ty.clone();
-                        return self
-                            .static_method_call(scope, ctx, &ty, name, args);
-                    }
-                }
-                self.method_call(id, scope, ctx, receiver, name, args)
-            }
-            Access(e, x) => {
-                // This could be an enum variant constructor, so we check that too
-                if let Some((name, _, data)) =
-                    self.find_enum_variant(ctx, id, e, x)?
-                {
-                    if data.is_some() {
-                        return Err(self.error_simple(
-                            format!("variant {x} of {name} requires data"),
-                            "requires data",
-                            x.id,
-                        ));
-                    }
-
-                    return Ok(false);
-                }
-
+                _ => Err(self.error_simple(
+                    "arbitrary function expressions are not supported yet"
+                        .to_string(),
+                    "cannot be called".to_string(),
+                    e.id,
+                )),
+            },
+            Access(e, field) => {
                 let ty = self.fresh_var();
                 let diverges = self.expr(scope, &ctx.with_type(&ty), e)?;
                 let ty = self.resolve_type(&ty);
-
-                if let Type::Record(fields)
-                | Type::NamedRecord(_, fields)
-                | Type::RecordVar(_, fields) = &ty
-                {
-                    if let Some((_, t)) =
-                        fields.iter().find(|(s, _)| s.node == x.node)
-                    {
-                        self.unify(&ctx.expected_type, t, x.id, None)?;
-                        return Ok(diverges);
-                    };
-                }
-
-                Err(self.error_simple(
-                    format!("no field `{x}` on type `{ty}`",),
-                    format!("unknown field `{x}`"),
-                    x.id,
-                ))
+                let ty = self.access_field(&ty, field)?;
+                self.unify(&ctx.expected_type, &ty, field.id, None)?;
+                Ok(diverges)
             }
-            Var(x) => {
-                let t = self.get_var(scope, x)?.clone();
-                self.unify(&ctx.expected_type, &t, x.id, None)?;
+            Path(p) => {
+                let last_ident = p.idents.last().unwrap();
+                let resolved_path = self.resolve_expression_path(scope, p)?;
+                self.type_info
+                    .path_kinds
+                    .insert(p.id, resolved_path.clone());
+
+                let ty = match resolved_path {
+                    ResolvedPath::Value(PathValue {
+                        name: _,
+                        kind: _,
+                        ty,
+                        fields,
+                    }) => {
+                        if let Some(f) = fields.last() {
+                            f.1.clone()
+                        } else {
+                            ty
+                        }
+                    }
+                    ResolvedPath::EnumConstructor { ty, variant, data } => {
+                        if data.is_some() {
+                            return Err(self.error_simple(
+                                format!(
+                                "enum variant {variant} requires an argument"
+                            ),
+                                "requires an argument".to_string(),
+                                last_ident.id,
+                            ));
+                        }
+                        ty
+                    }
+                    _ => {
+                        return Err(self.error_expected_value_path(
+                            last_ident,
+                            &resolved_path,
+                        ));
+                    }
+                };
+
+                self.type_info.expr_types.insert(p.id, ty.clone());
+                self.unify(&ctx.expected_type, &ty, last_ident.id, None)?;
                 Ok(false)
             }
             Record(record) => {
@@ -340,28 +292,25 @@ impl TypeChecker<'_> {
 
                 self.record_fields(scope, ctx, field_types, record, id)
             }
-            TypedRecord(name, record) => {
-                // We first retrieve the type we expect
-                let Some(ty) = self.type_info.types.get(name) else {
-                    return Err(self.error_undeclared_type(name));
-                };
-                let ty = ty.clone();
-                self.unify(&ctx.expected_type, &ty, id, None)?;
+            TypedRecord(path, record) => {
+                let last_ident = path.idents.last().unwrap();
+                let type_name = self.resolve_type_path(scope, path)?;
+                let ty = self.resolve_type(&type_name);
 
-                let Type::NamedRecord(_, record_fields) = ty else {
+                let Type::NamedRecord(_, record_fields) = &ty else {
                     return Err(self.error_simple(
                         format!(
-                            "Expected a named record type, but found `{name}`"
+                            "Expected a named record type, but found `{last_ident}`"
                         ),
                         "not a named record type",
-                        name.id,
+                        last_ident.id,
                     ));
                 };
 
                 let diverges = self.record_fields(
                     scope,
                     ctx,
-                    record_fields,
+                    record_fields.clone(),
                     record,
                     id,
                 )?;
@@ -374,6 +323,7 @@ impl TypeChecker<'_> {
                     .collect();
                 let rec = self.fresh_record(field_types);
                 self.unify(&ctx.expected_type, &rec, id, None)?;
+                self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 Ok(diverges)
             }
@@ -419,11 +369,15 @@ impl TypeChecker<'_> {
 
                 if let Some(e) = e {
                     let mut diverges = false;
-                    let then_scope =
-                        self.scope_graph.wrap(scope, ScopeType::Then(idx));
+                    let then_scope = self
+                        .type_info
+                        .scope_graph
+                        .wrap(scope, ScopeType::Then(idx));
                     diverges |= self.block(then_scope, ctx, t)?;
-                    let else_scope =
-                        self.scope_graph.wrap(scope, ScopeType::Else(idx));
+                    let else_scope = self
+                        .type_info
+                        .scope_graph
+                        .wrap(scope, ScopeType::Else(idx));
                     diverges |= self.block(else_scope, ctx, e)?;
 
                     // Record divergence so that we can omit the
@@ -440,8 +394,10 @@ impl TypeChecker<'_> {
 
                     // An if without else does not always diverge, because
                     // the condition could be false
-                    let then_scope =
-                        self.scope_graph.wrap(scope, ScopeType::Then(idx));
+                    let then_scope = self
+                        .type_info
+                        .scope_graph
+                        .wrap(scope, ScopeType::Then(idx));
                     let _ = self.block(
                         then_scope,
                         &ctx.with_type(Type::Primitive(Primitive::Unit)),
@@ -452,45 +408,6 @@ impl TypeChecker<'_> {
                 }
             }
         }
-    }
-
-    fn find_enum_variant(
-        &mut self,
-        ctx: &Context,
-        id: MetaId,
-        e: &Meta<ast::Expr>,
-        x: &Meta<Identifier>,
-    ) -> TypeResult<Option<(Identifier, Identifier, Option<Type>)>> {
-        let ast::Expr::Var(ident) = &e.node else {
-            return Ok(None);
-        };
-
-        let Some(t) = self.get_type(ident.node) else {
-            return Ok(None);
-        };
-
-        let t = t.clone();
-
-        let Type::Enum(name, variants) = &t else {
-            return Ok(None);
-        };
-
-        let Some((variant, data)) =
-            variants.iter().find(|(v, _)| v == &x.node)
-        else {
-            return Err(self.error_simple(
-                format!("no variant {x} on enum {name}"),
-                "variant not found",
-                x.id,
-            ));
-        };
-
-        self.unify(&ctx.expected_type, &t, x.id, None)?;
-        self.type_info
-            .enum_variant_constructors
-            .insert(id, t.clone());
-
-        Ok(Some((*name, *variant, data.clone())))
     }
 
     fn literal(
@@ -515,7 +432,7 @@ impl TypeChecker<'_> {
 
     fn match_expr(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         mat: &Meta<ast::Match>,
     ) -> TypeResult<bool> {
@@ -560,19 +477,20 @@ impl TypeChecker<'_> {
         {
             // Anything after default is unreachable
             if default_arm {
-                todo!("error")
+                return Err(self.error_unreachable_expression(body));
             }
 
             match &pattern.node {
                 Pattern::Underscore => {
                     let arm_scope = self
+                        .type_info
                         .scope_graph
                         .wrap(scope, ScopeType::MatchArm(match_id, None));
 
                     if let Some(guard) = guard {
                         let ctx =
                             ctx.with_type(Type::Primitive(Primitive::Bool));
-                        let _ = self.expr(arm_scope, &ctx, guard)?;
+                        self.expr(arm_scope, &ctx, guard)?;
                     } else {
                         default_arm = true;
                     }
@@ -594,11 +512,13 @@ impl TypeChecker<'_> {
                     let variant_already_used =
                         used_variants.contains(&variant.node);
                     if variant_already_used {
-                        println!("WARNING: Variant occurs multiple times in match! This arm is unreachable")
+                        println!(
+                            "WARNING: Variant occurs multiple times in match! This arm is unreachable"
+                        )
                     }
 
                     let ty = &variants[idx].1;
-                    let arm_scope = self.scope_graph.wrap(
+                    let arm_scope = self.type_info.scope_graph.wrap(
                         scope,
                         ScopeType::MatchArm(match_id, Some(idx)),
                     );
@@ -612,7 +532,7 @@ impl TypeChecker<'_> {
                             return Err(self
                                 .error_variant_does_not_have_field(
                                     data_field, &t_expr,
-                                ))
+                                ));
                         }
                         (Some(_), None) => {
                             return Err(self
@@ -625,7 +545,7 @@ impl TypeChecker<'_> {
                     if let Some(guard) = guard {
                         let ctx =
                             ctx.with_type(Type::Primitive(Primitive::Bool));
-                        let _ = self.expr(arm_scope, &ctx, guard)?;
+                        self.expr(arm_scope, &ctx, guard)?;
                     } else if !variant_already_used {
                         // If there is a guard we don't mark the variant as used,
                         // because the guard could evaluate to false and hence the
@@ -656,7 +576,7 @@ impl TypeChecker<'_> {
 
     fn binop(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         op: &ast::BinOp,
         span: MetaId,
@@ -691,7 +611,7 @@ impl TypeChecker<'_> {
 
                 let name = Identifier::from("new");
                 let (function, _sig) = self
-                    .find_function(
+                    .find_method(
                         &FunctionKind::StaticMethod(Type::Primitive(
                             Primitive::Prefix,
                         )),
@@ -725,7 +645,7 @@ impl TypeChecker<'_> {
 
                 let name = Identifier::from("append");
                 let (function, _sig) = self
-                    .find_function(
+                    .find_method(
                         &FunctionKind::Method(Type::Primitive(
                             Primitive::String,
                         )),
@@ -796,7 +716,7 @@ impl TypeChecker<'_> {
                             "type cannot be compared",
                             "cannot be compared",
                             span,
-                        ))
+                        ));
                     }
                 }
 
@@ -836,99 +756,9 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn method_call(
-        &mut self,
-        _meta_id: MetaId,
-        scope: LocalScopeRef,
-        ctx: &Context,
-        receiver: &Meta<ast::Expr>,
-        name: &Meta<Identifier>,
-        args: &[Meta<ast::Expr>],
-    ) -> TypeResult<bool> {
-        let ty = self.fresh_var();
-        let mut diverges = self.expr(scope, &ctx.with_type(&ty), receiver)?;
-
-        let Some((function, signature)) =
-            self.find_function(&FunctionKind::Method(ty.clone()), name.node)
-        else {
-            let ty = self.resolve_type(&ty);
-            return Err(self.error_simple(
-                format!("method `{name}` not found on `{ty}`",),
-                format!("method not found for `{ty}`"),
-                name.id,
-            ));
-        };
-
-        let function = function.clone();
-        self.type_info.function_calls.insert(name.id, function);
-
-        self.unify(
-            &ctx.expected_type,
-            &signature.return_type,
-            name.id,
-            None,
-        )?;
-
-        let mut all_args = vec![receiver.clone()];
-        all_args.extend_from_slice(args);
-
-        diverges |= self.check_arguments(
-            scope,
-            ctx,
-            "method",
-            name,
-            &signature.parameter_types,
-            &all_args,
-        )?;
-
-        Ok(diverges)
-    }
-
-    fn static_method_call(
-        &mut self,
-        scope: LocalScopeRef,
-        ctx: &Context,
-        ty: &Type,
-        name: &Meta<Identifier>,
-        args: &[Meta<ast::Expr>],
-    ) -> TypeResult<bool> {
-        let Some((function, signature)) = self.find_function(
-            &FunctionKind::StaticMethod(ty.clone()),
-            name.node,
-        ) else {
-            let ty = self.resolve_type(ty);
-            return Err(self.error_simple(
-                format!("static method `{name}` not found on `{ty}`",),
-                format!("static method not found on `{ty}`"),
-                name.id,
-            ));
-        };
-
-        let function = function.clone();
-        self.type_info.function_calls.insert(name.id, function);
-
-        self.unify(
-            &ctx.expected_type,
-            &signature.return_type,
-            name.id,
-            None,
-        )?;
-
-        let diverges = self.check_arguments(
-            scope,
-            ctx,
-            "static method",
-            name,
-            &signature.parameter_types,
-            args,
-        )?;
-
-        Ok(diverges)
-    }
-
     fn check_arguments(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         call_type: &str,
         name: &Meta<Identifier>,
@@ -952,19 +782,23 @@ impl TypeChecker<'_> {
         Ok(diverges)
     }
 
-    fn find_function(
+    fn find_method(
         &mut self,
         kind: &FunctionKind,
         name: Identifier,
     ) -> Option<(Function, Signature)> {
+        // Free functions are part of the normal scope graph and should not be
+        // handled here.
+        assert!(!matches!(kind, FunctionKind::Free));
+
         let funcs = self.functions.clone();
         for f in funcs {
-            if f.name != name {
+            if f.name.ident != name {
                 continue;
             }
             let signature = self.instantiate_method(&f);
             let is_match = match (&signature.kind, kind) {
-                (FunctionKind::Free, FunctionKind::Free) => true,
+                (FunctionKind::Free, FunctionKind::Free) => unreachable!(),
                 (FunctionKind::Method(ty1), FunctionKind::Method(ty2)) => {
                     self.subtype_of(ty1, ty2)
                 }
@@ -983,7 +817,7 @@ impl TypeChecker<'_> {
 
     fn record_fields(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         ctx: &Context,
         field_types: Vec<(Meta<Identifier>, Type)>,
         record: &ast::Record,
@@ -1028,6 +862,356 @@ impl TypeChecker<'_> {
             diverges |=
                 self.expr(scope, &ctx.with_type(expected_type), expr)?;
         }
+        Ok(diverges)
+    }
+
+    /// Resolve the module part of a path
+    ///
+    /// In a path, we might start with a path of modules and at some point, we
+    /// transition into other items. This function resolves that first part.
+    pub fn resolve_module_part_of_path<'a>(
+        &self,
+        mut scope: ScopeRef,
+        mut idents: impl Iterator<Item = &'a Meta<Identifier>>,
+    ) -> TypeResult<(&'a Meta<Identifier>, StubDeclaration)> {
+        let mut ident = idents.next().unwrap();
+
+        while ident.node == "super".into() {
+            let Some(stub) = self.type_info.scope_graph.parent_module(scope)
+            else {
+                return Err(self.error_simple(
+                    "could not resolve name: too many leading `super` keywords".to_string(),
+                    "too many leading `super` keywords".to_string(),
+                    ident.id,
+                ));
+            };
+
+            // Little sanity check
+            let StubDeclarationKind::Module = &stub.kind else {
+                unreachable!();
+            };
+
+            let dec = self.type_info.scope_graph.get_declaration(stub.name);
+            let DeclarationKind::Module(s) = dec.kind else {
+                unreachable!();
+            };
+
+            scope = s;
+
+            let Some(tmp_ident) = idents.next() else {
+                return Ok((ident, stub));
+            };
+
+            ident = tmp_ident;
+        }
+
+        // Keep checking modules until we find something that isn't a module
+        // The current implementation is a bit strange because it uses
+        // resolve_name, but after the first identifier, it should actually
+        // not really traverse the scope graph.
+        let mut recurse = true;
+        loop {
+            if ident.node == "super".into() {
+                return Err(self.error_simple(
+                    "could not resolve name: too many leading `super` keywords".to_string(),
+                    "too many leading `super` keywords".to_string(),
+                    ident.id,
+                ));
+            }
+            let Some(stub) = self
+                .type_info
+                .scope_graph
+                .resolve_name(scope, ident, recurse)
+            else {
+                return Err(self.error_not_defined(ident));
+            };
+
+            let StubDeclarationKind::Module = &stub.kind else {
+                return Ok((ident, stub));
+            };
+
+            let dec = self.type_info.scope_graph.get_declaration(stub.name);
+            let DeclarationKind::Module(s) = dec.kind else {
+                unreachable!();
+            };
+
+            scope = s;
+
+            let Some(tmp_ident) = idents.next() else {
+                return Ok((ident, stub));
+            };
+
+            ident = tmp_ident;
+            recurse = false;
+        }
+    }
+
+    /// Resolve a path of identifiers into a value
+    fn resolve_expression_path(
+        &mut self,
+        scope: ScopeRef,
+        ast::Path { idents }: &ast::Path,
+    ) -> TypeResult<ResolvedPath> {
+        let mut idents = idents.iter();
+        let (ident, stub) =
+            self.resolve_module_part_of_path(scope, &mut idents)?;
+
+        let dec = self.type_info.scope_graph.get_declaration(stub.name);
+
+        match &dec.kind {
+            // We have reached the end of the iterator, but are still a module even though we
+            // should be an expression. Time to error!
+            DeclarationKind::Module(_) => {
+                Err(self.error_expected_value(ident, &dec))
+            }
+            // We ended on a type, which means there can only be 1 ident left to make this
+            // an enum variant constructor or the name of a static method.
+            DeclarationKind::Type(ty) => {
+                let Some(next_ident) = idents.next() else {
+                    return Err(self.error_expected_value(ident, &dec));
+                };
+
+                if let Some((function, signature)) = self.find_method(
+                    &FunctionKind::StaticMethod(ty.clone()),
+                    **next_ident,
+                ) {
+                    if let Some(field) = idents.next() {
+                        return Err(self.error_no_field_on_type(ty, field));
+                    }
+                    return Ok(ResolvedPath::StaticMethod {
+                        name: dec.name,
+                        definition: function.definition.clone(),
+                        signature,
+                    });
+                }
+
+                let Type::Enum(_, variants) = &ty else {
+                    return Err(self.error_expected_value(ident, &dec));
+                };
+
+                let Some((variant, data)) =
+                    variants.iter().find(|(v, _)| *v == **next_ident)
+                else {
+                    return Err(self.error_no_field_on_type(ty, next_ident));
+                };
+
+                if let Some(field) = idents.next() {
+                    return Err(self.error_no_field_on_type(ty, field));
+                }
+
+                Ok(ResolvedPath::EnumConstructor {
+                    ty: ty.clone(),
+                    variant: *variant,
+                    data: data.clone(),
+                })
+            }
+            // We ended on a function, which means there can be no identifiers left
+            DeclarationKind::Function(definition, ty) => {
+                if let Some(field) = idents.next() {
+                    return Err(self.error_no_field_on_type(ty, field));
+                }
+                let Type::Function(parameter_types, return_type) = ty else {
+                    panic!()
+                };
+                let signature = Signature {
+                    kind: FunctionKind::Free,
+                    parameter_types: parameter_types.clone(),
+                    return_type: (**return_type).clone(),
+                };
+                Ok(ResolvedPath::Function {
+                    name: dec.name,
+                    definition: definition.clone(),
+                    signature,
+                })
+            }
+            // We have a value, so the rest of the idents should be field accesses
+            // optionally ending with a method.
+            DeclarationKind::Value(kind, root_ty) => {
+                let mut fields = Vec::new();
+                let mut ty = root_ty.clone();
+
+                // We loop until we either find the last field or a method.
+                // The method must be the last identifier.
+                while let Some(field) = idents.next() {
+                    if let Some((function, signature)) = self.find_method(
+                        &FunctionKind::Method(ty.clone()),
+                        **field,
+                    ) {
+                        if let Some(field) = idents.next() {
+                            return Err(
+                                self.error_no_field_on_type(&ty, field)
+                            );
+                        }
+                        return Ok(ResolvedPath::Method {
+                            value: PathValue {
+                                name: dec.name,
+                                kind: kind.clone(),
+                                ty: root_ty.clone(),
+                                fields,
+                            },
+                            name: function.name,
+                            definition: function.definition,
+                            signature,
+                        });
+                    }
+
+                    // The field is not a method, so we try a field access.
+                    ty = self.access_field(&ty, field)?;
+                    fields.push((field.node, ty.clone()));
+                }
+
+                Ok(ResolvedPath::Value(PathValue {
+                    name: dec.name,
+                    kind: kind.clone(),
+                    ty: root_ty.clone(),
+                    fields,
+                }))
+            }
+        }
+    }
+
+    pub fn resolve_type_path(
+        &self,
+        scope: ScopeRef,
+        ast::Path { idents }: &ast::Path,
+    ) -> TypeResult<Type> {
+        let mut idents = idents.iter();
+        let (ident, stub) =
+            self.resolve_module_part_of_path(scope, &mut idents)?;
+
+        match stub.kind {
+            StubDeclarationKind::Variable
+            | StubDeclarationKind::Context
+            | StubDeclarationKind::Constant
+            | StubDeclarationKind::Function
+            | StubDeclarationKind::Module => {
+                Err(self.error_expected_type(ident, stub))
+            }
+            StubDeclarationKind::Type => Ok(Type::Name(stub.name)),
+        }
+    }
+
+    fn access_field(
+        &mut self,
+        ty: &Type,
+        field: &Meta<Identifier>,
+    ) -> TypeResult<Type> {
+        let ty = self.type_info.resolve(ty);
+        if let Type::Record(fields)
+        | Type::NamedRecord(_, fields)
+        | Type::RecordVar(_, fields) = &ty
+        {
+            if let Some((_, t)) =
+                fields.iter().find(|(s, _)| s.node == field.node)
+            {
+                return Ok(t.clone());
+            };
+        }
+
+        Err(self.error_no_field_on_type(&ty, field))
+    }
+
+    fn path_function_call(
+        &mut self,
+        scope: ScopeRef,
+        ctx: &Context,
+        id: MetaId,
+        p: &Meta<ast::Path>,
+        args: &Meta<Vec<Meta<ast::Expr>>>,
+    ) -> TypeResult<bool> {
+        let last_ident = p.idents.last().unwrap();
+        let resolved_path = self.resolve_expression_path(scope, p)?;
+
+        let (name, definition, signature, description) = match &resolved_path
+        {
+            ResolvedPath::Function {
+                name,
+                definition,
+                signature,
+            } => (name, definition, signature, "function"),
+            ResolvedPath::StaticMethod {
+                name,
+                definition,
+                signature,
+            } => (name, definition, signature, "static method"),
+            ResolvedPath::Method {
+                value: _,
+                definition,
+                name,
+                signature,
+            } => (name, definition, signature, "method"),
+            _ => {
+                return Err(
+                    self.error_expected_function(last_ident, &resolved_path)
+                );
+            }
+        };
+
+        // Tell the lower stage about the kind of function this is.
+        self.type_info
+            .path_kinds
+            .insert(p.id, resolved_path.clone());
+        self.type_info.function_calls.insert(
+            id,
+            Function {
+                signature: signature.clone(),
+                name: *name,
+                vars: Vec::new(),
+                definition: definition.clone(),
+            },
+        );
+
+        let last_ident = p.idents.last().unwrap();
+
+        // Skip the first parameter if we are checking a method
+        let params = if let ResolvedPath::Method { .. } = resolved_path {
+            &signature.parameter_types[1..]
+        } else {
+            &signature.parameter_types
+        };
+
+        let diverges = self.check_arguments(
+            scope,
+            ctx,
+            description,
+            last_ident,
+            params,
+            args,
+        )?;
+
+        self.unify(&ctx.expected_type, &signature.return_type, id, None)?;
+        Ok(diverges)
+    }
+
+    fn method_call(
+        &mut self,
+        scope: ScopeRef,
+        ctx: &Context,
+        id: MetaId,
+        ty: Type,
+        field: &Meta<Identifier>,
+        args: &Meta<Vec<Meta<ast::Expr>>>,
+    ) -> TypeResult<bool> {
+        let Some((function, signature)) =
+            self.find_method(&FunctionKind::Method(ty.clone()), **field)
+        else {
+            return Err(self.error_no_field_on_type(&ty, field));
+        };
+
+        self.type_info.function_calls.insert(
+            id,
+            Function {
+                signature: signature.clone(),
+                name: function.name,
+                vars: Vec::new(),
+                definition: function.definition.clone(),
+            },
+        );
+
+        let params = &signature.parameter_types[1..];
+        let diverges =
+            self.check_arguments(scope, ctx, "method", field, params, args)?;
+        self.unify(&ctx.expected_type, &signature.return_type, id, None)?;
         Ok(diverges)
     }
 }

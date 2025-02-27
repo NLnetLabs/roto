@@ -16,15 +16,15 @@
 
 use crate::{
     ast::{self, Identifier},
+    module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
     runtime::{FunctionKind, Runtime, RuntimeFunction},
 };
 use cycle::detect_type_cycles;
-use scope::{LocalScopeRef, ScopeGraph, ScopeType};
-use std::{
-    borrow::Borrow,
-    collections::{hash_map::Entry, HashMap},
+use scope::{
+    ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
 };
+use std::{borrow::Borrow, collections::HashMap};
 use types::{FunctionDefinition, Type};
 
 use self::{
@@ -43,13 +43,13 @@ mod tests;
 pub mod types;
 mod unionfind;
 
+pub use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
 
-pub struct TypeChecker<'s> {
+pub struct TypeChecker {
     /// The list of built-in functions, methods and static methods.
     functions: Vec<Function>,
     type_info: TypeInfo,
-    scope_graph: &'s mut ScopeGraph,
     match_counter: usize,
     if_else_counter: usize,
 }
@@ -58,160 +58,37 @@ pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
     runtime: &Runtime,
-    scope_graph: &mut ScopeGraph,
-    tree: &ast::SyntaxTree,
+    module_tree: &ModuleTree,
     pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
-    TypeChecker::check_syntax_tree(runtime, scope_graph, tree, pointer_bytes)
+    TypeChecker::check_module_tree(runtime, module_tree, pointer_bytes)
 }
 
-enum MaybeDeclared {
-    /// A declared type, where the span of the type declaration is
-    /// available for user-defined types, but not for built-in types.
-    Declared(Type, Option<MetaId>),
-    /// An (as of yet) undeclared type with the spans of where it is
-    /// referenced.
-    Undeclared(MetaId),
-}
-
-impl TypeChecker<'_> {
-    /// Perform type checking for a syntax tree
-    pub fn check_syntax_tree(
+impl TypeChecker {
+    /// Perform type checking for a module tree (i.e. the entire program)
+    pub fn check_module_tree(
         runtime: &Runtime,
-        scope_graph: &mut ScopeGraph,
-        tree: &ast::SyntaxTree,
+        tree: &ModuleTree,
         pointer_bytes: u32,
-    ) -> TypeResult<TypeInfo> {
-        // This map contains MaybeDeclared, where Undeclared represents a type that
-        // is referenced, but not (yet) declared. At the end of all the type
-        // declarations, we check whether any nones are left to determine
-        // whether any types are unresolved.
-        // The builtin types are added right away.
-        let mut types: HashMap<Identifier, MaybeDeclared> =
-            default_types(runtime)
-                .into_iter()
-                .map(|(s, t)| (s, MaybeDeclared::Declared(t.clone(), None)))
-                .rev()
-                .collect();
-
+    ) -> Result<TypeInfo, TypeError> {
         let mut checker = TypeChecker {
             functions: Vec::new(),
             type_info: TypeInfo::new(pointer_bytes),
-            scope_graph,
             match_counter: 0,
             if_else_counter: 0,
         };
 
-        let root_scope = checker.scope_graph.root();
-        let module_scope = checker
-            .scope_graph
-            .wrap(root_scope, ScopeType::Module("main".into()));
+        // Add all the stuff that's gonna be included in any script
+        // We unwrap these because they really shouldn't fail. If
+        // the built-in types would fail then it would be an internal
+        // compiler error and if the runtime fails then the runtime is
+        // malformed.
+        checker.declare_builtin_types().unwrap();
+        checker.declare_runtime_items(runtime).unwrap();
 
-        for (v, t) in runtime.iter_constants() {
-            checker.insert_global_constant(
-                Meta {
-                    id: MetaId(0),
-                    node: v,
-                },
-                Type::Name(
-                    runtime.get_runtime_type(t).unwrap().name().into(),
-                ),
-            )?;
-        }
-
-        if let Some(ctx) = &runtime.context {
-            for field in &ctx.fields {
-                let ty = runtime
-                    .get_runtime_type(field.type_id)
-                    .unwrap()
-                    .name()
-                    .into();
-                checker.insert_context(
-                    Meta {
-                        id: MetaId(0),
-                        node: Identifier::from(field.name),
-                    },
-                    Type::Name(ty),
-                    field.offset,
-                )?;
-            }
-        }
-
-        // We go over the expressions three times:
-        //  1. Collect all type definitions
-        //  2. Collect all function definitions
-        //  3. Type check all function bodies
-        for expr in &tree.declarations {
-            match expr {
-                ast::Declaration::Rib(ast::Rib {
-                    ident,
-                    contain_ty,
-                    body,
-                }) => {
-                    let ty = checker
-                        .create_contains_type(&mut types, contain_ty, body)?;
-                    checker.insert_var(
-                        module_scope,
-                        ident.clone(),
-                        Type::Rib(Box::new(ty)),
-                    )?;
-                }
-                ast::Declaration::Table(ast::Table {
-                    ident,
-                    contain_ty,
-                    body,
-                }) => {
-                    let ty = checker
-                        .create_contains_type(&mut types, contain_ty, body)?;
-                    checker.insert_var(
-                        module_scope,
-                        ident.clone(),
-                        Type::Table(Box::new(ty)),
-                    )?;
-                }
-                ast::Declaration::OutputStream(ast::OutputStream {
-                    ident,
-                    contain_ty,
-                    body,
-                }) => {
-                    let ty = checker
-                        .create_contains_type(&mut types, contain_ty, body)?;
-                    checker.insert_var(
-                        module_scope,
-                        ident.clone(),
-                        Type::OutputStream(Box::new(ty)),
-                    )?;
-                }
-                ast::Declaration::Record(ast::RecordTypeDeclaration {
-                    ident,
-                    record_type,
-                }) => {
-                    let ty = Type::NamedRecord(
-                        ident.node,
-                        checker.evaluate_record_type(
-                            &mut types,
-                            &record_type.key_values,
-                        )?,
-                    );
-                    checker.store_type(&mut types, ident, ty)?;
-                }
-                _ => {}
-            }
-        }
-
-        for (name, ty) in types {
-            match ty {
-                MaybeDeclared::Declared(ty, _) => {
-                    checker.type_info.add_type(name, ty)
-                }
-                MaybeDeclared::Undeclared(reference_span) => {
-                    return Err(checker.error_undeclared_type(&Meta {
-                        id: reference_span,
-                        node: name,
-                    }));
-                }
-            }
-        }
+        let modules = checker.declare_modules(tree)?;
+        checker.declare_imports(&modules)?;
+        checker.declare_types(&modules)?;
 
         detect_type_cycles(&checker.type_info.types).map_err(
             |description| {
@@ -223,6 +100,74 @@ impl TypeChecker<'_> {
             },
         )?;
 
+        checker.declare_functions(&modules)?;
+        checker.tree(&modules)?;
+
+        Ok(checker.type_info)
+    }
+
+    fn declare_builtin_types(&mut self) -> TypeResult<()> {
+        for (ident, ty) in default_types() {
+            let ident = Meta {
+                node: ident,
+                id: MetaId(0),
+            };
+            let name = ResolvedName {
+                scope: ScopeRef::GLOBAL,
+                ident: *ident,
+            };
+            self.type_info
+                .scope_graph
+                .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
+                .map_err(|id| self.error_declared_twice(&ident, id))?;
+            self.type_info.types.insert(name, ty);
+        }
+        Ok(())
+    }
+
+    fn declare_runtime_items(&mut self, runtime: &Runtime) -> TypeResult<()> {
+        self.declare_runtime_types(runtime)?;
+        self.declare_runtime_functions(runtime)?;
+        self.declare_constants(runtime)?;
+        self.declare_context(runtime)?;
+        Ok(())
+    }
+
+    fn declare_runtime_types(&mut self, runtime: &Runtime) -> TypeResult<()> {
+        for ty in &runtime.runtime_types {
+            let ident = Identifier::from(ty.name());
+            let name = ResolvedName {
+                scope: ScopeRef::GLOBAL,
+                ident,
+            };
+            let ident = Meta {
+                node: ident,
+                id: MetaId(0),
+            };
+
+            // If the type is already in the scope graph, then it's a primitive type, we don't need
+            // to insert it again
+            if self
+                .type_info
+                .scope_graph
+                .resolve_name(ScopeRef::GLOBAL, &ident, true)
+                .is_none()
+            {
+                let ty = Type::BuiltIn(name, ty.type_id());
+                self.type_info
+                    .scope_graph
+                    .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
+                    .map_err(|id| self.error_declared_twice(&ident, id))?;
+                self.type_info.types.insert(name, ty);
+            }
+        }
+        Ok(())
+    }
+
+    fn declare_runtime_functions(
+        &mut self,
+        runtime: &Runtime,
+    ) -> TypeResult<()> {
         // We need to know about all runtime methods, static methods and
         // functions when we start type checking. Therefore, we have to map
         // the runtime methods with TypeIds to function types.
@@ -236,81 +181,323 @@ impl TypeChecker<'_> {
                 argument_names: _,
             } = func;
 
+            let name = ResolvedName {
+                scope: ScopeRef::GLOBAL,
+                ident: name.into(),
+            };
+
             let mut rust_parameters =
                 description.parameter_types().iter().map(|ty| {
-                    let name = runtime.get_runtime_type(*ty).unwrap().name();
-                    let name = Identifier::from(name);
+                    let ident = runtime.get_runtime_type(*ty).unwrap().name();
+                    let name = ResolvedName {
+                        scope: ScopeRef::GLOBAL,
+                        ident: ident.into(),
+                    };
                     Type::Name(name)
                 });
 
             let return_type = rust_parameters.next().unwrap();
+
             let parameter_types: Vec<_> = rust_parameters.collect();
 
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
                 FunctionKind::Method(id) => {
-                    let name = runtime.get_runtime_type(*id).unwrap().name();
-                    let name = Identifier::from(name);
+                    let ident = runtime.get_runtime_type(*id).unwrap().name();
+                    let name = ResolvedName {
+                        scope: ScopeRef::GLOBAL,
+                        ident: ident.into(),
+                    };
                     types::FunctionKind::Method(Type::Name(name))
                 }
                 FunctionKind::StaticMethod(id) => {
-                    let name = runtime.get_runtime_type(*id).unwrap().name();
-                    let name = Identifier::from(name);
+                    let ident = runtime.get_runtime_type(*id).unwrap().name();
+                    let name = ResolvedName {
+                        scope: ScopeRef::GLOBAL,
+                        ident: ident.into(),
+                    };
                     types::FunctionKind::StaticMethod(Type::Name(name))
                 }
             };
 
-            let name = Identifier::from(name);
+            let ident = Meta {
+                node: name.ident,
+                id: MetaId(0),
+            };
 
-            checker.functions.push(Function::new(
+            // Free functions are put in the global namespace
+            if let types::FunctionKind::Free = kind {
+                self.type_info
+                    .scope_graph
+                    .insert_function(
+                        ScopeRef::GLOBAL,
+                        &ident,
+                        FunctionDefinition::Runtime(func.get_ref()),
+                        &Type::Function(
+                            parameter_types.clone(),
+                            Box::new(return_type.clone()),
+                        ),
+                    )
+                    .unwrap();
+            }
+
+            self.functions.push(Function::new(
                 kind,
                 name,
                 &[],
                 parameter_types,
                 return_type,
-                FunctionDefinition::Runtime(func.clone()),
+                FunctionDefinition::Runtime(func.get_ref()),
             ));
         }
 
-        // Filter-maps are pretty generic: they do not have a fixed
-        // output type at the moment. It's a mess. So we don't declare
-        // them, which means that they cannot be called by anything else,
-        // which honestly makes sense. But that means that we start by
-        // only declaring functions in the root scope.
-        for expr in &tree.declarations {
-            if let ast::Declaration::Function(x) = expr {
-                let ty = checker.function_type(x)?;
-                checker.insert_var(module_scope, x.ident.clone(), &ty)?;
-                checker.type_info.expr_types.insert(x.ident.id, ty.clone());
+        Ok(())
+    }
+
+    fn declare_constants(&mut self, runtime: &Runtime) -> TypeResult<()> {
+        for (v, t) in runtime.iter_constants() {
+            self.insert_global_constant(
+                Meta {
+                    id: MetaId(0),
+                    node: v,
+                },
+                Type::Name(ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: runtime.get_runtime_type(t).unwrap().name().into(),
+                }),
+            )?
+        }
+
+        Ok(())
+    }
+
+    fn declare_context(&mut self, runtime: &Runtime) -> TypeResult<()> {
+        if let Some(ctx) = &runtime.context {
+            for field in &ctx.fields {
+                let ty = runtime
+                    .get_runtime_type(field.type_id)
+                    .unwrap()
+                    .name()
+                    .into();
+                let name = ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: ty,
+                };
+                self.insert_context(
+                    Meta {
+                        id: MetaId(0),
+                        node: Identifier::from(field.name),
+                    },
+                    Type::Name(name),
+                    field.offset,
+                )?;
             }
         }
 
-        for expr in &tree.declarations {
-            match expr {
-                ast::Declaration::FilterMap(f) => {
-                    let ty = checker.fresh_var();
-                    checker.insert_var(
-                        module_scope,
-                        f.ident.clone(),
-                        ty.clone(),
-                    )?;
-                    let ty2 = checker.filter_map(module_scope, f)?;
-                    checker.unify(&ty, &ty2, f.ident.id, None)?;
+        Ok(())
+    }
+
+    fn declare_modules<'a>(
+        &mut self,
+        tree: &'a ModuleTree,
+    ) -> TypeResult<Vec<(ScopeRef, &'a Module)>> {
+        let mut modules = Vec::<(ScopeRef, &'a Module)>::new();
+        for m in &tree.modules {
+            let Module {
+                ident,
+                ast,
+                children: _,
+                parent,
+            } = m;
+            let parent_module = parent.map(|p| modules[p.0].0);
+            let mod_scope = ModuleScope {
+                name: ResolvedName {
+                    ident: **ident,
+                    scope: parent_module.unwrap_or(ScopeRef::GLOBAL),
+                },
+                parent_module,
+            };
+            let scope = self
+                .type_info
+                .scope_graph
+                .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
+
+            if let Some(p) = parent_module {
+                self.insert_module(p, ident, scope)?;
+            } else {
+                self.insert_module(ScopeRef::GLOBAL, ident, scope)?;
+            }
+
+            for d in &ast.declarations {
+                let (kind, ident) = match d {
+                    ast::Declaration::Record(x) => {
+                        (StubDeclarationKind::Type, x.ident.clone())
+                    }
+                    ast::Declaration::Function(x) => {
+                        (StubDeclarationKind::Function, x.ident.clone())
+                    }
+                    ast::Declaration::FilterMap(x) => {
+                        (StubDeclarationKind::Function, x.ident.clone())
+                    }
+                    ast::Declaration::Import(_) => continue,
+                    ast::Declaration::Test(_) => continue,
+                };
+                self.type_info.scope_graph.insert_stub(scope, &ident, kind);
+            }
+            modules.push((scope, m))
+        }
+        Ok(modules)
+    }
+
+    fn declare_imports(
+        &mut self,
+        modules: &[(ScopeRef, &Module)],
+    ) -> TypeResult<()> {
+        for &(scope, module) in modules {
+            let mut paths = Vec::new();
+            for expr in &module.ast.declarations {
+                let ast::Declaration::Import(path) = expr else {
+                    continue;
+                };
+                paths.push(path);
+            }
+            self.imports(scope, &paths)?;
+        }
+        Ok(())
+    }
+
+    fn declare_types(
+        &mut self,
+        modules: &[(ScopeRef, &Module)],
+    ) -> TypeResult<()> {
+        for &(scope, module) in modules {
+            for expr in &module.ast.declarations {
+                match expr {
+                    ast::Declaration::Function(_)
+                    | ast::Declaration::FilterMap(_)
+                    | ast::Declaration::Test(_)
+                    | ast::Declaration::Import(_) => continue,
+                    ast::Declaration::Record(
+                        ast::RecordTypeDeclaration { ident, record_type },
+                    ) => {
+                        let name = ResolvedName {
+                            scope,
+                            ident: **ident,
+                        };
+                        let ty = Type::NamedRecord(
+                            name,
+                            self.evaluate_record_type(
+                                scope,
+                                &record_type.key_values,
+                            )?,
+                        );
+                        self.type_info
+                            .scope_graph
+                            .insert_type(scope, ident, ty.clone())
+                            .map_err(|e| {
+                                self.error_declared_twice(ident, e)
+                            })?;
+                        let opt = self.type_info.types.insert(name, ty);
+                        assert!(opt.is_none());
+                    }
                 }
-                ast::Declaration::Function(x) => {
-                    checker.function(module_scope, x)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn declare_functions(
+        &mut self,
+        modules: &[(ScopeRef, &Module)],
+    ) -> TypeResult<()> {
+        for &(scope, module) in modules {
+            for expr in &module.ast.declarations {
+                match expr {
+                    ast::Declaration::Function(x) => {
+                        let ty = self.function_type(scope, x)?;
+                        self.insert_function(
+                            scope,
+                            x.ident.clone(),
+                            FunctionDefinition::Roto,
+                            &ty,
+                        )?;
+                    }
+                    ast::Declaration::FilterMap(x) => {
+                        let ty = self.filter_map_type(scope, x)?;
+                        self.insert_function(
+                            scope,
+                            x.ident.clone(),
+                            FunctionDefinition::Roto,
+                            &ty,
+                        )?;
+                    }
+                    ast::Declaration::Test(_) => continue,
+                    ast::Declaration::Record(_) => continue,
+                    ast::Declaration::Import(_) => continue,
                 }
-                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn tree(&mut self, modules: &[(ScopeRef, &Module)]) -> TypeResult<()> {
+        for &(scope, module) in modules {
+            for expr in &module.ast.declarations {
+                match &expr {
+                    ast::Declaration::FilterMap(f) => {
+                        self.filter_map(scope, f)?;
+                    }
+                    ast::Declaration::Function(x) => {
+                        self.function(scope, x)?;
+                    }
+                    ast::Declaration::Test(x) => {
+                        self.test(scope, x)?;
+                    }
+                    _ => {}
+                }
             }
         }
 
-        for expr in &tree.declarations {
-            if let ast::Declaration::Test(t) = expr {
-                checker.test(module_scope, t)?
+        Ok(())
+    }
+    
+    fn imports(&mut self, scope: ScopeRef, paths: &[&Meta<ast::Path>]) -> TypeResult<()> {
+        // We want imports to work in any order and sometimes there are
+        // dependencies between them. This means that we process them in a loop
+        // where we exit either if we have no unresolved imports anymore or when
+        // we can no longer make progress, in which case we error.
+        let mut paths = paths.to_vec();
+        loop {
+            let last_len = paths.len();
+            paths.retain(|p| {
+                self.import(scope, p).is_err()
+            });
+            let new_len = paths.len();
+            if new_len == 0 {
+                return Ok(());
+            }
+            if new_len == last_len {
+                for p in &paths {
+                    self.import(scope, p)?; 
+                }
             }
         }
+    }
 
-        Ok(checker.type_info)
+    fn import(&mut self, scope: ScopeRef, path: &ast::Path) -> TypeResult<()> {
+        let mut idents = path.idents.iter();
+        let (ident, stub) = self.resolve_module_part_of_path(scope, &mut idents)?;
+
+        // This is a bit of an oversimplification. The
+        // resolve_module_part_of_path should just give us the thing
+        // to import, but we might expand import functionality to enum
+        // constructors.
+        if let Some(_ident) = idents.next() {
+            return Err(self.error_expected_module(ident, stub));
+        }
+
+        self.type_info.scope_graph.insert_import(scope, ident.id, stub.name).map_err(|old| self.error_declared_twice(ident, old))
     }
 
     /// Create a fresh variable in the unionfind structure
@@ -335,9 +522,6 @@ impl TypeChecker<'_> {
             .fresh(move |x| Type::RecordVar(x, fields))
     }
 
-    fn get_type(&self, type_name: Identifier) -> Option<&Type> {
-        self.type_info.types.get(&type_name)
-    }
 
     /// Check whether `a` is a subtype of `b`
     ///
@@ -373,10 +557,7 @@ impl TypeChecker<'_> {
                 subs.insert(x, t);
                 true
             }
-            (Type::Table(a), Type::Table(b))
-            | (Type::OutputStream(a), Type::OutputStream(b))
-            | (Type::List(a), Type::List(b))
-            | (Type::Rib(a), Type::Rib(b)) => {
+            (Type::List(a), Type::List(b)) => {
                 self.subtype_inner(&a, &b, subs)
             }
             (Type::NamedRecord(a_name, _), Type::NamedRecord(b_name, _)) => {
@@ -424,10 +605,11 @@ impl TypeChecker<'_> {
         ty: impl Borrow<Type>,
         offset: usize,
     ) -> TypeResult<()> {
-        match self.scope_graph.insert_context(&k, ty, offset) {
-            Ok((name, t)) => {
+        let ty = ty.borrow();
+        match self.type_info.scope_graph.insert_context(&k, ty, offset) {
+            Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
-                self.type_info.expr_types.insert(k.id, t.clone());
+                self.type_info.expr_types.insert(k.id, ty.clone());
                 Ok(())
             }
             Err(()) => Err(self.error_declared_twice(&k, MetaId(0))),
@@ -439,43 +621,70 @@ impl TypeChecker<'_> {
         k: Meta<Identifier>,
         ty: impl Borrow<Type>,
     ) -> TypeResult<()> {
-        match self.scope_graph.insert_global_constant(&k, ty) {
-            Ok((name, t)) => {
+        let ty = ty.borrow();
+        match self.type_info.scope_graph.insert_global_constant(&k, ty) {
+            Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
-                self.type_info.expr_types.insert(k.id, t.clone());
+                self.type_info.expr_types.insert(k.id, ty.clone());
                 Ok(())
             }
             Err(()) => Err(self.error_declared_twice(&k, MetaId(0))),
         }
     }
 
-    fn insert_var(
+    fn insert_function(
         &mut self,
-        scope: LocalScopeRef,
+        scope: ScopeRef,
         k: Meta<Identifier>,
+        definition: FunctionDefinition,
         ty: impl Borrow<Type>,
     ) -> TypeResult<()> {
-        match self.scope_graph.insert_var(scope, &k, ty) {
-            Ok((name, t)) => {
+        let ty = ty.borrow();
+        match self
+            .type_info
+            .scope_graph
+            .insert_function(scope, &k, definition, ty)
+        {
+            Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
-                self.type_info.expr_types.insert(k.id, t.clone());
+                self.type_info.expr_types.insert(k.id, ty.clone());
                 Ok(())
             }
             Err(old) => Err(self.error_declared_twice(&k, old)),
         }
     }
 
-    fn get_var<'a>(
-        &'a mut self,
-        scope: LocalScopeRef,
+    fn insert_var(
+        &mut self,
+        scope: ScopeRef,
+        k: Meta<Identifier>,
+        ty: impl Borrow<Type>,
+    ) -> TypeResult<()> {
+        let ty = ty.borrow();
+        match self.type_info.scope_graph.insert_var(scope, &k, ty) {
+            Ok(name) => {
+                self.type_info.resolved_names.insert(k.id, name);
+                self.type_info.expr_types.insert(k.id, ty.clone());
+                Ok(())
+            }
+            Err(old) => Err(self.error_declared_twice(&k, old)),
+        }
+    }
+
+    fn insert_module(
+        &mut self,
+        scope: ScopeRef,
         k: &Meta<Identifier>,
-    ) -> TypeResult<&'a Type> {
-        let Some((name, t)) = self.scope_graph.get_var(scope, k) else {
-            return Err(self.error_not_defined(k));
-        };
-        self.type_info.resolved_names.insert(k.id, name);
-        self.type_info.expr_types.insert(k.id, t.clone());
-        Ok(t)
+        mod_scope: ScopeRef,
+    ) -> TypeResult<()> {
+        match self
+            .type_info
+            .scope_graph
+            .insert_module(scope, k, mod_scope)
+        {
+            Ok(()) => Ok(()),
+            Err(old) => Err(self.error_declared_twice(k, old)),
+        }
     }
 
     fn unify(
@@ -525,13 +734,6 @@ impl TypeChecker<'_> {
                 self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }
-            (Table(a), Table(b)) => {
-                Table(Box::new(self.unify_inner(&a, &b)?))
-            }
-            (OutputStream(a), OutputStream(b)) => {
-                OutputStream(Box::new(self.unify_inner(&a, &b)?))
-            }
-            (Rib(a), Rib(b)) => Rib(Box::new(self.unify_inner(&a, &b)?)),
             (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
             (Verdict(a1, r1), Verdict(a2, r2)) => Verdict(
                 Box::new(self.unify_inner(&a1, &a2)?),
@@ -652,56 +854,15 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn store_type(
-        &self,
-        types: &mut HashMap<Identifier, MaybeDeclared>,
-        k: &Meta<ast::Identifier>,
-        v: Type,
-    ) -> TypeResult<()> {
-        match types.entry(k.node) {
-            Entry::Occupied(mut entry) => {
-                if let MaybeDeclared::Declared(_, existing_span) = entry.get()
-                {
-                    return Err(match existing_span {
-                        Some(existing_span) => {
-                            self.error_declared_twice(k, *existing_span)
-                        }
-                        None => self.error_tried_to_overwrite_builtin(k),
-                    });
-                }
-                entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(MaybeDeclared::Declared(v, Some(k.id)));
-            }
-        };
-        Ok(())
-    }
-
-    fn create_contains_type(
-        &self,
-        types: &mut HashMap<Identifier, MaybeDeclared>,
-        contain_ty: &Meta<ast::Identifier>,
-        body: &ast::RibBody,
-    ) -> TypeResult<Type> {
-        let ty = Type::NamedRecord(
-            contain_ty.node,
-            self.evaluate_record_type(types, &body.key_values)?,
-        );
-        self.store_type(types, contain_ty, ty.clone())?;
-        Ok(ty)
-    }
-
     fn evaluate_record_type(
-        &self,
-        types: &mut HashMap<Identifier, MaybeDeclared>,
-        fields: &[(Meta<Identifier>, ast::RibFieldType)],
+        &mut self,
+        scope: ScopeRef,
+        fields: &[(Meta<Identifier>, ast::RecordFieldType)],
     ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
-        // We store the spans temporarily to be able to create nice a
         let mut type_fields = Vec::new();
 
         for (ident, ty) in fields {
-            let field_type = self.evaluate_field_type(types, ty)?;
+            let field_type = self.evaluate_field_type(scope, ty)?;
             type_fields.push((ident, field_type))
         }
 
@@ -728,26 +889,20 @@ impl TypeChecker<'_> {
     }
 
     fn evaluate_field_type(
-        &self,
-        types: &mut HashMap<Identifier, MaybeDeclared>,
-        ty: &ast::RibFieldType,
+        &mut self,
+        scope: ScopeRef,
+        ty: &ast::RecordFieldType,
     ) -> TypeResult<Type> {
         Ok(match ty {
-            ast::RibFieldType::Identifier(ty) => {
-                // If the type for this is unknown, we insert None,
-                // which signals that the type is mentioned but not
-                // yet declared. The declaration will override it
-                // with Some(...) if we encounter it later.
-                types
-                    .entry(ty.node)
-                    .or_insert(MaybeDeclared::Undeclared(ty.id));
-                Type::Name(ty.node)
+            ast::RecordFieldType::Path(path) => {
+                let path = path.clone();
+                self.resolve_type_path(scope, &path)?
             }
-            ast::RibFieldType::Record(fields) => Type::Record(
-                self.evaluate_record_type(types, &fields.key_values)?,
+            ast::RecordFieldType::Record(fields) => Type::Record(
+                self.evaluate_record_type(scope, &fields.key_values)?,
             ),
-            ast::RibFieldType::List(inner) => {
-                let inner = self.evaluate_field_type(types, &inner.node)?;
+            ast::RecordFieldType::List(inner) => {
+                let inner = self.evaluate_field_type(scope, &inner.node)?;
                 Type::List(Box::new(inner))
             }
         })

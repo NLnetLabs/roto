@@ -1,0 +1,7 @@
+filtermap within_range(range: AddrRange, ip: IpAddr) {
+    if range.contains(ip) && ip.is_ipv4() {
+        accept ip
+    } else {
+        reject
+    }
+}

@@ -102,17 +102,18 @@ pub enum Instruction {
         to: Option<(Var, IrType)>,
         ctx: Operand,
         func: Identifier,
-        args: Vec<(Identifier, Operand)>,
+        args: Vec<Operand>,
+        return_ptr: Option<Var>,
     },
 
     /// Call a runtime function (i.e. a Rust function)
     CallRuntime {
         to: Option<(Var, IrType)>,
-        func: runtime::RuntimeFunction,
+        func: runtime::RuntimeFunctionRef,
         args: Vec<Operand>,
     },
 
-    /// Return from the current function (or filter-map)
+    /// Return from the current function (or filtermap)
     Return(Option<Operand>),
 
     /// Perform a comparison and store the result in `to`
@@ -364,17 +365,14 @@ impl<'a> IrPrinter<'a> {
                 ctx,
                 func,
                 args,
+                return_ptr: _,
             } => format!(
                 "{}: {ty} = {}({}, {})",
                 self.var(to),
                 self.ident(func),
                 self.operand(ctx),
                 args.iter()
-                    .map(|a| format!(
-                        "{} = {}",
-                        self.ident(&a.0),
-                        self.operand(&a.1),
-                    ))
+                    .map(|a| self.operand(a).to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -383,16 +381,29 @@ impl<'a> IrPrinter<'a> {
                 ctx,
                 func,
                 args,
+                return_ptr: Some(ret),
+            } => format!(
+                "{}({}, {}, {})",
+                self.ident(func),
+                self.var(ret),
+                self.operand(ctx),
+                args.iter()
+                    .map(|a| self.operand(a).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Call {
+                to: None,
+                ctx,
+                func,
+                args,
+                return_ptr: None,
             } => format!(
                 "{}({}, {})",
                 self.ident(func),
                 self.operand(ctx),
                 args.iter()
-                    .map(|a| format!(
-                        "{} = {}",
-                        self.ident(&a.0),
-                        self.operand(&a.1),
-                    ))
+                    .map(|a| self.operand(a).to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -403,7 +414,7 @@ impl<'a> IrPrinter<'a> {
             } => format!(
                 "{}: {ty} = <runtime function {:?}>({})",
                 self.var(to),
-                func.name,
+                func,
                 args.iter()
                     .map(|a| self.operand(a))
                     .collect::<Vec<_>>()
@@ -415,7 +426,7 @@ impl<'a> IrPrinter<'a> {
                 args,
             } => format!(
                 "<rust function {:?}>({})",
-                func.name,
+                func,
                 args.iter()
                     .map(|a| self.operand(a))
                     .collect::<Vec<_>>()

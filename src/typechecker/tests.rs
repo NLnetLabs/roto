@@ -1,15 +1,16 @@
+use crate::file_tree::{FileSpec, FileTree};
+use crate::pipeline::RotoReport;
 use crate::runtime::tests::routecore_runtime;
-use crate::{pipeline::RotoReport, Files};
-use crate::{src, Context, Runtime};
+use crate::{source_file, src, Context, Runtime};
 
 #[track_caller]
-fn typecheck(loaded: Files) -> Result<(), RotoReport> {
+fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
     typecheck_with_runtime(loaded, routecore_runtime().unwrap())
 }
 
 #[track_caller]
 fn typecheck_with_runtime(
-    loaded: Files,
+    loaded: FileTree,
     rt: Runtime,
 ) -> Result<(), RotoReport> {
     let res = loaded.parse();
@@ -148,44 +149,11 @@ fn record_diamond() {
 }
 
 #[test]
-fn table_contains_record() {
-    let s = src!(
-        "
-        table t contains A { b: B }
-        type B { x: u32 }
-    "
-    );
-    assert!(typecheck(s).is_ok());
-}
-
-#[test]
-fn output_stream_contains_record() {
-    let s = src!(
-        "
-        output-stream o contains A { b: B }
-        type B { x: u32 }
-    "
-    );
-    assert!(typecheck(s).is_ok());
-}
-
-#[test]
-fn rib_contains_record() {
-    let s = src!(
-        "
-        rib r contains A { b: B }
-        type B { x: u32 }
-    "
-    );
-    assert!(typecheck(s).is_ok());
-}
-
-#[test]
 #[ignore = "prefixes not supported yet"]
 fn filter_map() {
     let s = src!(
         r#"
-        filter-map blabla(foo: u32) {
+        filtermap blabla(foo: u32) {
             let a = "hello";
             let b = 0.0.0.0/10;
             let c = 192.168.0.0;
@@ -201,7 +169,7 @@ fn filter_map() {
 fn filter_map_double_definition() {
     let s = src!(
         r#"
-        filter-map blabla(foo: u32) {
+        filtermap blabla(foo: u32) {
             let a = "hello";
             let a = 0.0.0.0/10;
 
@@ -218,7 +186,7 @@ fn using_records() {
         r#"
         type Foo { a: String }
 
-        filter-map bar(r: u32) {
+        filtermap bar(r: u32) {
             let a = Foo { a: "hello" };
             accept
         }
@@ -230,7 +198,7 @@ fn using_records() {
         r#"
         type Foo { a: String }
 
-        filter-map bar(r: u32) {
+        filtermap bar(r: u32) {
             let a = Foo { a: 0.0.0.0 };
             accept
         }
@@ -242,7 +210,7 @@ fn using_records() {
         r#"
         type Foo { a: string }
 
-        filter-map bar(r: u32) {
+        filtermap bar(r: u32) {
             let a = Foo { };
             accept
         }
@@ -257,7 +225,7 @@ fn integer_inference() {
         "
         type Foo { x: u8 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
             accept
         }
@@ -270,7 +238,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let a = 5;
             let foo = Foo { x: a };
             accept
@@ -284,7 +252,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let a = 5;
             let foo = Foo { x: a };
             let bar = Bar { x: a };
@@ -299,7 +267,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u32 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let a = 5;
             let foo = Foo { x: a };
             let bar = Bar { x: a };
@@ -314,7 +282,7 @@ fn integer_inference() {
         type Foo { x: u8 }
         type Bar { x: u32 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: 5 };
             accept
@@ -331,7 +299,7 @@ fn assign_field_to_other_record() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: foo.x };
             accept
@@ -345,7 +313,7 @@ fn assign_field_to_other_record() {
         type Foo { x: u8 }
         type Bar { x: u8 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: foo.y };
             accept
@@ -359,7 +327,7 @@ fn assign_field_to_other_record() {
         type Foo { x: u8 }
         type Bar { x: u32 }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
             let bar = Bar { x: foo.x };
             accept
@@ -373,7 +341,7 @@ fn assign_field_to_other_record() {
 fn ip_addr_method() {
     let s = src!(
         "
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10;
             let is_four = 1 + p.is_ipv4();
             accept
@@ -384,7 +352,7 @@ fn ip_addr_method() {
 
     let s = src!(
         "
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10;
             let is_four = true && p.is_ipv4();
             accept
@@ -399,7 +367,7 @@ fn ip_addr_method() {
 fn ip_addr_method_of_method_return_type() {
     let s = src!(
         "
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10;
             let x = p.to_canonical().is_ipv4();
             accept
@@ -410,7 +378,7 @@ fn ip_addr_method_of_method_return_type() {
 
     let s = src!(
         "
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10;
             let x = p.is_ipv4().to_canonical();
             accept
@@ -425,7 +393,7 @@ fn ip_addr_method_of_method_return_type() {
 fn prefix_method() {
     let s = src!(
         "
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10/20;
             let add = p.address();
             accept
@@ -444,7 +412,7 @@ fn logical_expr() {
             (10 == 10) || (10 == 11)
         }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10/10;
             accept
         }
@@ -458,7 +426,7 @@ fn logical_expr() {
             (10 == 10) || ("hello" == 11)
         }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             let p = 10.10.10.10/10;
             accept
         }
@@ -482,7 +450,7 @@ fn send_output_stream() {
             });
         }
         
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             accept
         }
     "#
@@ -503,7 +471,7 @@ fn send_output_stream() {
             });
         }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             accept
         }
     "#
@@ -529,7 +497,7 @@ fn send_output_stream() {
             });
         }
 
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             accept
         }
     "#
@@ -555,7 +523,7 @@ fn send_output_stream() {
             });
         }
         
-        filter-map my_map(r: u32) {
+        filtermap my_map(r: u32) {
             accept
         }
     "#
@@ -574,7 +542,7 @@ fn record_inference() {
             s.send(a);
         }
         
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             let a = { a: 8 };
             bar(a);
             accept
@@ -591,7 +559,7 @@ fn record_inference() {
             s.send(a);
         }
 
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             let a = { b: 8 };
             bar(a);
             accept
@@ -608,7 +576,7 @@ fn record_inference() {
             a == b
         }
         
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             let a = { a: 8 };
             let b = A { a: 8 };
             if bla(a, b) {
@@ -629,7 +597,7 @@ fn record_inference() {
             a == b && a == c
         }
 
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             let a = { a: 8 };
             let b = A { a: 8 };
             let c = B { a: 8 };
@@ -648,7 +616,7 @@ fn return_keyword() {
             return true
         }
         
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             accept
         }
     "
@@ -661,7 +629,7 @@ fn return_keyword() {
             return 2
         }
         
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             accept
         }
     "
@@ -680,7 +648,7 @@ fn unit_block() {
             unit();
         }
 
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             accept
         }
     "
@@ -697,7 +665,7 @@ fn unreachable_expression() {
             return false;
         }
 
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             accept
         }
     "
@@ -709,7 +677,7 @@ fn unreachable_expression() {
 fn enum_values() {
     let s = src!(
         "
-        filter-map main(r: u32) { 
+        filtermap main(r: u32) { 
             let x = Afi.IpV4;
             if x == Afi.IpV4 {
                 accept
@@ -726,7 +694,7 @@ fn enum_values() {
 fn enum_match() {
     let s = src!(
         "
-        filter-map foo(r: u32) { 
+        filtermap foo(r: u32) { 
             let x = Afi.IpV4;
             match x {
                 IpV4 -> accept,
@@ -743,7 +711,7 @@ fn enum_match() {
 fn runtime_function() {
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             if pow(x, 2) > 100 {
                 accept
             } else {
@@ -756,7 +724,7 @@ fn runtime_function() {
 
     let s = src!(
         "
-        filter-map main(x: u32) {
+        filtermap main(x: u32) {
             let pow = 3;
             if pow(x, 2) > 100 {
                 accept
@@ -773,7 +741,7 @@ fn runtime_function() {
 fn issue_51() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             if true {
                 foo;
             }
@@ -789,7 +757,7 @@ fn issue_51() {
 fn self_referential_variable() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             let a = a;
             accept
         }
@@ -803,7 +771,7 @@ fn self_referential_variable() {
 fn reference_variable_later_declared() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             let a = b;
             let b = 12;
             accept
@@ -818,7 +786,7 @@ fn reference_variable_later_declared() {
 fn reference_variable_from_parent_scope() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             let a = 10;
             if true {
                 accept a
@@ -836,7 +804,7 @@ fn reference_variable_from_parent_scope() {
 fn reference_variable_from_child_scope() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             if true {
                 let a = 10;
             }
@@ -853,7 +821,7 @@ fn reference_variable_from_child_scope() {
 fn shadow_variable() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             let a = 10;
             let a = a + 1;
             accept
@@ -868,7 +836,7 @@ fn shadow_variable() {
 fn use_globals() {
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept BLACKHOLE
         }
         "
@@ -879,10 +847,11 @@ fn use_globals() {
 
 #[test]
 fn use_context() {
-    let mut rt = Runtime::basic().unwrap();
+    let mut rt = Runtime::new();
 
     #[derive(Context)]
     struct Ctx {
+        /// boop
         pub foo: u8,
     }
 
@@ -890,11 +859,71 @@ fn use_context() {
 
     let s = src!(
         "
-        filter-map main() {
+        filtermap main() {
             accept foo;
         }
         "
     );
 
     typecheck_with_runtime(s, rt).unwrap();
+}
+
+#[test]
+fn too_many_leading_super() {
+    let s = src!(
+        "
+        import super.super;
+        "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn expected_module() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.bar.baz;
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function bar() {}
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    typecheck(tree).unwrap_err();
+}
+
+#[test]
+fn silly_import_loop() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            function main(x: i32) -> i32 {
+                foo.super.bar(x)    
+            }
+
+            function bar(x: i32) -> i32 {
+                2 * x
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    typecheck(tree).unwrap_err();
 }

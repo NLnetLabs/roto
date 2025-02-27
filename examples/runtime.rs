@@ -1,4 +1,4 @@
-use roto::{read_files, Runtime, Val, Verdict};
+use roto::{FileTree, Runtime, Val, Verdict};
 use roto_macros::roto_method;
 
 #[derive(Clone, Copy)]
@@ -9,7 +9,7 @@ struct Bla {
 fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
 
-    let mut runtime = Runtime::basic().unwrap();
+    let mut runtime = Runtime::new();
 
     runtime
         .register_copy_type::<Bla>("Some random type")
@@ -20,8 +20,8 @@ fn main() -> Result<(), roto::RotoReport> {
         unsafe { &*bla }.x
     }
 
-    let mut compiled = read_files(["examples/runtime.roto"])?
-        .compile(runtime, usize::BITS / 8)
+    let mut compiled = FileTree::single_file("examples/runtime.roto")
+        .compile(runtime)
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled

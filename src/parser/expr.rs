@@ -4,8 +4,8 @@ use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, Literal, Match, MatchArm, Pattern, Record,
-        ReturnKind, Stmt,
+        BinOp, Block, Expr, Identifier, Literal, Match, MatchArm, Path,
+        Pattern, Record, ReturnKind, Stmt,
     },
     parser::ParseError,
 };
@@ -25,17 +25,28 @@ impl Parser<'_, '_> {
     pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 
+        let mut imports = Vec::new();
         let mut stmts = Vec::new();
 
         loop {
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
-                return Ok(self
-                    .spans
-                    .add(start.merge(end), Block { stmts, last: None }));
+                return Ok(self.spans.add(
+                    start.merge(end),
+                    Block {
+                        imports,
+                        stmts,
+                        last: None,
+                    },
+                ));
             }
 
-            if self.peek_is(Token::Let) {
+            if self.peek_is(Token::Import) {
+                self.take(Token::Import)?;
+                let path = self.path()?;
+                self.take(Token::SemiColon)?;
+                imports.push(path);
+            } else if self.peek_is(Token::Let) {
                 let start = self.take(Token::Let)?;
                 let identifier = self.identifier()?;
                 self.take(Token::Eq)?;
@@ -58,6 +69,7 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
+                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -80,6 +92,7 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
+                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -107,6 +120,7 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
+                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -295,18 +309,20 @@ impl Parser<'_, '_> {
     fn access(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let mut expr = self.atom(r)?;
 
-        while self.next_is(Token::Period) {
-            let ident = self.identifier()?;
+        loop {
             if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
                 let span = self.merge_spans(&expr, &args);
                 expr = self
                     .spans
-                    .add(span, Expr::MethodCall(Box::new(expr), ident, args));
-            } else {
+                    .add(span, Expr::FunctionCall(Box::new(expr), args));
+            } else if self.next_is(Token::Period) {
+                let ident = self.identifier()?;
                 let span = self.merge_spans(&expr, &ident);
                 expr =
                     self.spans.add(span, Expr::Access(Box::new(expr), ident));
+            } else {
+                break;
             }
         }
 
@@ -372,26 +388,29 @@ impl Parser<'_, '_> {
             return self.match_expr();
         }
 
-        if let Some(Token::Ident(_)) = self.peek() {
-            let ident = self.identifier()?;
+        if matches!(
+            self.peek(),
+            Some(
+                Token::Ident(_)
+                    | Token::Super
+                    | Token::Pkg
+                    | Token::Lib
+                    | Token::Std
+            )
+        ) {
+            let path = self.path()?;
             if !r.forbid_records && self.peek_is(Token::CurlyLeft) {
                 let key_values = self.record()?;
-                let span = self.merge_spans(&ident, &key_values);
+                let span = self.merge_spans(&path, &key_values);
                 return Ok(self
                     .spans
-                    .add(span, Expr::TypedRecord(ident, key_values)));
+                    .add(span, Expr::TypedRecord(path, key_values)));
+            } else {
+                return Ok(Meta {
+                    id: path.id,
+                    node: Expr::Path(path),
+                });
             }
-            if self.peek_is(Token::RoundLeft) {
-                let args = self.args()?;
-                let span = self.merge_spans(&ident, &args);
-                return Ok(self
-                    .spans
-                    .add(span, Expr::FunctionCall(ident, args)));
-            }
-            return Ok(Meta {
-                id: ident.id,
-                node: Expr::Var(ident),
-            });
         }
 
         let literal = self.literal()?;
@@ -431,6 +450,7 @@ impl Parser<'_, '_> {
                 Meta {
                     id: expr.id,
                     node: Block {
+                        imports: Vec::new(),
                         stmts: Vec::new(),
                         last: Some(Box::new(expr)),
                     },
@@ -502,6 +522,7 @@ impl Parser<'_, '_> {
                 Meta {
                     id: expr.id,
                     node: Block {
+                        imports: Vec::new(),
                         stmts: Vec::new(),
                         last: Some(Box::new(expr)),
                     },
@@ -599,9 +620,6 @@ impl Parser<'_, '_> {
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
-            Token::Float => {
-                unimplemented!("Floating point numbers are not supported yet")
-            }
             t => return Err(ParseError::expected("a literal", t, span)),
         };
         Ok(self.spans.add(span, literal))
@@ -648,5 +666,34 @@ impl Parser<'_, '_> {
         )?;
 
         Ok(args)
+    }
+
+    pub(super) fn path(&mut self) -> ParseResult<Meta<Path>> {
+        let mut idents = Vec::new();
+        idents.push(self.path_item()?);
+        while self.next_is(Token::Period) {
+            idents.push(self.path_item()?);
+        }
+        let span =
+            self.merge_spans(idents.first().unwrap(), idents.last().unwrap());
+        Ok(self.add_span(span, Path { idents }))
+    }
+
+    fn path_item(&mut self) -> ParseResult<Meta<Identifier>> {
+        let (tok, span) = self.next()?;
+        let ident: Identifier = match tok {
+            Token::Pkg => "pkg".into(),
+            Token::Lib => "lib".into(),
+            Token::Super => "super".into(),
+            Token::Ident(s) => s.into(),
+            _ => {
+                return Err(ParseError::expected(
+                    "identifier, `super`, `pkg` or `lib`",
+                    tok,
+                    span,
+                ))
+            }
+        };
+        Ok(self.spans.add(span, ident))
     }
 }

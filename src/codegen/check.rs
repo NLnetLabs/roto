@@ -256,10 +256,10 @@ macro_rules! params {
                 std::mem::forget(self);
                 if return_by_ref {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut Ctx, *mut Return, $($t::AsParam),*) -> ()>(func_ptr)
+                        std::mem::transmute::<*const u8, fn(*mut Return, *mut Ctx, $($t::AsParam),*) -> ()>(func_ptr)
                     };
                     let mut ret = MaybeUninit::<Return>::uninit();
-                    func_ptr(ctx as *mut Ctx, ret.as_mut_ptr(), $($t),*);
+                    func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx, $($t),*);
                     unsafe { ret.assume_init() }
                 } else {
                     let func_ptr = unsafe {

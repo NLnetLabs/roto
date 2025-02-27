@@ -71,7 +71,7 @@ type Log = *mut OutputStream<Output>;
 type Func = TypedFunc<(), (Val<Log>, Val<RotondaRoute>), Verdict<(), ()>>;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut rt = roto::Runtime::basic()?;
+    let mut rt = roto::Runtime::new();
 
     // Registering types and their methods
 
@@ -122,11 +122,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         stream.push(Output::Custom(id, local));
     }
 
-    let mut compiled = roto::read_files(["examples/presentation.roto"])?
-        .compile(rt, usize::BITS / 8)
-        .inspect_err(|e| eprintln!("{e}"))?;
+    let mut compiled =
+        roto::FileTree::single_file("examples/presentation.roto")
+            .compile(rt)
+            .inspect_err(|e| eprintln!("{e}"))?;
 
-    let function = compiled.get_function("rib-in-pre").unwrap();
+    let function = compiled.get_function("rib_in_pre").unwrap();
 
     run_with_prefix(&function, "8.8.8.0/24")?;
     run_with_prefix(&function, "100.40.0.0/17")?;

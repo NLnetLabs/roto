@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use clap::Parser;
 use roto::{IrValue, Memory, Runtime};
 
@@ -5,7 +7,7 @@ use roto::{IrValue, Memory, Runtime};
 struct Cli {
     #[arg(short, long)]
     rx: Option<String>,
-    files: Vec<String>,
+    file: String,
 }
 
 fn main() {
@@ -27,8 +29,8 @@ fn main() {
 
     let ptr = mem.allocate(0);
     let result = roto::interpret(
-        Runtime::basic().unwrap(),
-        settings.files,
+        Runtime::new(),
+        Path::new(&settings.file),
         &mut mem,
         IrValue::Pointer(ptr),
         args,
