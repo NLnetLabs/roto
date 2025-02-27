@@ -35,7 +35,7 @@ pub mod verdict;
 
 use core::{slice, str};
 use std::{
-    any::{TypeId, type_name},
+    any::{type_name, TypeId},
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr,
@@ -48,7 +48,7 @@ use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
-use crate::{Context, ast::Identifier};
+use crate::{ast::Identifier, Context};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -88,7 +88,7 @@ unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
 
 unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
     let x = x as *mut T;
-    unsafe { std::ptr::read(x) };
+    unsafe { std::ptr::drop_in_place(x) };
 }
 
 unsafe extern "C" fn init_string(s: *mut Arc<str>, data: *mut u8, len: u32) {

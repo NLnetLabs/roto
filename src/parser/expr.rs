@@ -688,7 +688,7 @@ impl Parser<'_, '_> {
             Token::Ident(s) => s.into(),
             _ => {
                 return Err(ParseError::expected(
-                    "identifier, `super` or `lib`",
+                    "identifier, `super`, `pkg` or `lib`",
                     tok,
                     span,
                 ))
