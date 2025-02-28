@@ -3,6 +3,7 @@ extern crate self as roto;
 
 mod ast;
 
+mod cli;
 mod codegen;
 mod file_tree;
 mod lower;
@@ -12,6 +13,7 @@ mod pipeline;
 mod runtime;
 mod typechecker;
 
+pub use cli::cli;
 pub use codegen::TypedFunc;
 pub use file_tree::{FileTree, SourceFile};
 pub use lower::eval::Memory;
