@@ -39,6 +39,7 @@ pub enum Token<'s> {
 
     // === Keywords ===
     Accept,
+    Dep,
     Else,
     Filter,
     FilterMap,
@@ -47,7 +48,6 @@ pub enum Token<'s> {
     Import,
     In,
     Let,
-    Lib,
     Match,
     Not,
     Pkg,
@@ -353,7 +353,7 @@ impl<'s> Lexer<'s> {
             "import" => Token::Import,
             "in" => Token::In,
             "let" => Token::Let,
-            "lib" => Token::Lib,
+            "dep" => Token::Dep,
             "match" => Token::Match,
             "not" => Token::Not,
             "pkg" => Token::Pkg,
@@ -415,7 +415,7 @@ impl Display for Token<'_> {
             Token::Import => "import",
             Token::In => "in",
             Token::Let => "let",
-            Token::Lib => "lib",
+            Token::Dep => "dep",
             Token::Match => "match",
             Token::Not => "not",
             Token::Pkg => "pkg",

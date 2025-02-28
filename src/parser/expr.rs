@@ -394,7 +394,7 @@ impl Parser<'_, '_> {
                 Token::Ident(_)
                     | Token::Super
                     | Token::Pkg
-                    | Token::Lib
+                    | Token::Dep
                     | Token::Std
             )
         ) {
@@ -683,12 +683,12 @@ impl Parser<'_, '_> {
         let (tok, span) = self.next()?;
         let ident: Identifier = match tok {
             Token::Pkg => "pkg".into(),
-            Token::Lib => "lib".into(),
+            Token::Dep => "dep".into(),
             Token::Super => "super".into(),
             Token::Ident(s) => s.into(),
             _ => {
                 return Err(ParseError::expected(
-                    "identifier, `super`, `pkg` or `lib`",
+                    "identifier, `super`, `pkg` or `dep`",
                     tok,
                     span,
                 ))
