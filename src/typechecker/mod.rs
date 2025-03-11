@@ -101,7 +101,6 @@ impl TypeChecker {
 
         checker.declare_functions(&modules)?;
         checker.tree(&modules)?;
-        checker.coerce_filter_map_return(&modules);
 
         Ok(checker.type_info)
     }
@@ -482,27 +481,6 @@ impl TypeChecker {
         }
 
         Ok(())
-    }
-
-    fn coerce_filter_map_return(&mut self, modules: &[(ScopeRef, &Module)]) { 
-        for &(_, module) in modules {
-            for expr in &module.ast.declarations {
-                if let ast::Declaration::FilterMap(f) = &expr {
-                    let Type::Function(_, ret) = self.type_info.type_of(&f.ident) else {
-                        panic!()
-                    };
-                    let Type::Name(TypeName { arguments, .. }) = &*ret else {
-                        panic!()
-                    };
-                    for ty in arguments {
-                        let ty = self.resolve_type(ty);
-                        if let Type::Var(x) = ty {
-                            self.unify_inner(&Type::Var(x), &Type::unit());
-                        }
-                    }
-                }
-            }
-        }
     }
 
     fn imports(
