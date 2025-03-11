@@ -1,16 +1,76 @@
 use crate::{
     ast::Identifier,
-    parser::meta::{Meta, MetaId},
-    runtime::RuntimeFunctionRef,
+    parser::meta::Meta,
+    runtime::{layout::Layout, RuntimeFunctionRef},
     typechecker::scope::ScopeRef,
 };
 use std::{
     any::TypeId,
-    fmt::{Debug, Display},
+    borrow::Borrow,
+    fmt::{Debug, Display, Write},
     sync::Arc,
 };
 
 use super::scope::ResolvedName;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PolyType {
+    vars: Vec<Identifier>,
+    inner: Type,
+}
+
+impl Type {
+    pub fn unit() -> Type {
+        Type::named("Unit", Vec::new())
+    }
+
+    pub fn bool() -> Type {
+        Type::named("bool", Vec::new())
+    }
+
+    pub fn u8() -> Type {
+        Type::named("u8", Vec::new())
+    }
+
+    pub fn string() -> Type {
+        Type::named("String", Vec::new())
+    }
+
+    pub fn asn() -> Type {
+        Type::named("Asn", Vec::new())
+    }
+
+    pub fn ip_addr() -> Type {
+        Type::named("IpAddr", Vec::new())
+    }
+
+    pub fn prefix() -> Type {
+        Type::named("Prefix", Vec::new())
+    }
+
+    pub fn verdict(a: impl Borrow<Type>, b: impl Borrow<Type>) -> Type {
+        Type::named("Verdict", vec![a.borrow().clone(), b.borrow().clone()])
+    }
+
+    pub fn optional(t: impl Borrow<Type>) -> Type {
+        Type::named("Optional", vec![t.borrow().clone()])
+    }
+
+    pub fn list(t: impl Borrow<Type>) -> Type {
+        Type::named("List", vec![t.borrow().clone()])
+    }
+
+    /// Create a named type in the global scope
+    pub fn named(ident: impl Into<Identifier>, arguments: Vec<Type>) -> Type {
+        Type::Name(TypeName {
+            name: ResolvedName {
+                scope: ScopeRef::GLOBAL,
+                ident: ident.into(),
+            },
+            arguments,
+        })
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -19,29 +79,28 @@ pub enum Type {
     IntVar(usize),
     RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
     Never,
-    Primitive(Primitive),
-    BuiltIn(ResolvedName, TypeId),
-    Verdict(Box<Type>, Box<Type>),
-    List(Box<Type>),
     Record(Vec<(Meta<Identifier>, Type)>),
-    NamedRecord(ResolvedName, Vec<(Meta<Identifier>, Type)>),
-    Enum(ResolvedName, Vec<(Identifier, Option<Type>)>),
     Function(Vec<Type>, Box<Type>),
-    Filter(Vec<Type>),
-    FilterMap(Vec<Type>),
-    Name(ResolvedName),
+    Name(TypeName),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeDefinition {
+    Enum(TypeName, Vec<EnumVariant>),
+    Record(TypeName, Vec<(Meta<Identifier>, Type)>),
+    Runtime(ResolvedName, TypeId),
+    Primitive(Primitive),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EnumVariant {
+    pub name: Identifier,
+    pub fields: Vec<Type>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Primitive {
-    U8,
-    U16,
-    U32,
-    U64,
-    I8,
-    I16,
-    I32,
-    I64,
+    Int(IntKind, IntSize),
     Unit,
     String,
     Bool,
@@ -50,9 +109,127 @@ pub enum Primitive {
     Prefix,
 }
 
-impl From<Primitive> for Type {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IntSize {
+    I8,
+    I16,
+    I32,
+    I64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum IntKind {
+    Unsigned,
+    Signed,
+}
+
+impl IntSize {
+    const fn int(&self) -> u8 {
+        match self {
+            Self::I8 => 8,
+            Self::I16 => 16,
+            Self::I32 => 32,
+            Self::I64 => 64,
+        }
+    }
+}
+
+impl IntKind {
+    fn prefix(&self) -> char {
+        match self {
+            IntKind::Unsigned => 'u',
+            IntKind::Signed => 'i',
+        }
+    }
+}
+
+impl From<Primitive> for TypeDefinition {
     fn from(value: Primitive) -> Self {
-        Type::Primitive(value)
+        TypeDefinition::Primitive(value)
+    }
+}
+
+impl TypeDefinition {
+    pub fn type_name(&self) -> TypeName {
+        match self {
+            TypeDefinition::Enum(type_name, _) => type_name.clone(),
+            TypeDefinition::Record(type_name, _) => type_name.clone(),
+            TypeDefinition::Runtime(resolved_name, _) => TypeName {
+                name: *resolved_name,
+                arguments: Vec::new(),
+            },
+            TypeDefinition::Primitive(primitive) => TypeName {
+                name: ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: primitive.to_string().into(),
+                },
+                arguments: Vec::new(),
+            },
+        }
+    }
+    pub fn instantiate(&self, fresh_var: impl FnMut() -> Type) -> Type {
+        self.type_name().instantiate(fresh_var)
+    }
+
+    pub fn match_patterns(
+        &self,
+        type_args: &[Type],
+    ) -> Option<Vec<EnumVariant>> {
+        let TypeDefinition::Enum(type_name, variants) = self else {
+            return None;
+        };
+
+        assert_eq!(type_name.arguments.len(), type_args.len());
+
+        let subs: Vec<_> =
+            type_name.arguments.iter().zip(type_args).collect();
+
+        let mut new_variants = Vec::new();
+        for variant in variants {
+            new_variants.push(variant.substitute_many(&subs));
+        }
+        Some(new_variants)
+    }
+}
+
+impl EnumVariant {
+    pub fn substitute_many(&self, subs: &[(&Type, &Type)]) -> Self {
+        let fields = self
+            .fields
+            .iter()
+            .map(|t| t.substitute_many(subs))
+            .collect();
+        EnumVariant {
+            name: self.name,
+            fields,
+        }
+    }
+}
+
+impl TypeName {
+    pub fn instantiate(&self, mut fresh_var: impl FnMut() -> Type) -> Type {
+        let TypeName { name, arguments } = self;
+        let arguments = arguments
+            .iter()
+            .cloned()
+            .map(|a| {
+                if matches!(a, Type::ExplicitVar(_)) {
+                    fresh_var()
+                } else {
+                    a
+                }
+            })
+            .collect();
+        Type::Name(TypeName {
+            name: *name,
+            arguments,
+        })
+    }
+}
+
+impl Primitive {
+    pub fn i32() -> Self {
+        Self::Int(IntKind::Signed, IntSize::I32)
     }
 }
 
@@ -62,20 +239,14 @@ impl Display for Primitive {
             f,
             "{}",
             match self {
-                Primitive::U8 => "u8",
-                Primitive::U16 => "u16",
-                Primitive::U32 => "u32",
-                Primitive::U64 => "u64",
-                Primitive::I8 => "i8",
-                Primitive::I16 => "i16",
-                Primitive::I32 => "i32",
-                Primitive::I64 => "i64",
-                Primitive::Unit => "Unit",
-                Primitive::String => "String",
-                Primitive::Bool => "bool",
-                Primitive::Asn => "Asn",
-                Primitive::IpAddr => "IpAddr",
-                Primitive::Prefix => "Prefix",
+                Primitive::Int(ty, size) =>
+                    format!("{}{}", ty.prefix(), size.int()),
+                Primitive::Unit => "Unit".into(),
+                Primitive::String => "String".into(),
+                Primitive::Bool => "bool".into(),
+                Primitive::Asn => "Asn".into(),
+                Primitive::IpAddr => "IpAddr".into(),
+                Primitive::Prefix => "Prefix".into(),
             }
         )
     }
@@ -105,27 +276,85 @@ impl Display for Type {
                 "{{ {} }}",
                 fields
                     .iter()
-                    .map(|(s, t)| { format!("\"{s}\": {t}") })
+                    .map(|(s, t)| { format!("{s}: {t}") })
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Type::Verdict(a, r) => {
-                write!(f, "Verdict<{a}, {r}>",)
-            }
             Type::Never => write!(f, "!"),
-            Type::Primitive(p) => write!(f, "{p}"),
-            Type::BuiltIn(name, _) => write!(f, " {}", name.ident),
-            Type::List(t) => write!(f, "List<{t}>"),
-            Type::NamedRecord(x, _) => write!(f, "{}", x.ident),
-            Type::Enum(x, _) => write!(f, "{}", x.ident),
             Type::Function(args, ret) => {
                 write!(f, "function({}) -> {ret}", fmt_args(args)?)
             }
-            Type::Filter(args) => write!(f, "filter({})", fmt_args(args)?),
-            Type::FilterMap(args) => {
-                write!(f, "filtermap({})", fmt_args(args)?)
+            Type::Name(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+impl Display for TypeDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeDefinition::Enum(type_name, _) => Display::fmt(type_name, f),
+            TypeDefinition::Record(type_name, _) => {
+                Display::fmt(type_name, f)
             }
-            Type::Name(x) => write!(f, "{}", x.ident),
+            TypeDefinition::Runtime(resolved_name, _) => {
+                // TODO: make resolved name printable somehow.
+                Display::fmt(&resolved_name.ident, f)
+            }
+            TypeDefinition::Primitive(primitive) => {
+                Display::fmt(primitive, f)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TypeName {
+    pub name: ResolvedName,
+    pub arguments: Vec<Type>,
+}
+
+impl TypeName {
+    fn substitute(&self, from: &Type, to: &Type) -> Self {
+        Self {
+            name: self.name,
+            arguments: self
+                .arguments
+                .iter()
+                .map(|x| x.substitute(from, to))
+                .collect(),
+        }
+    }
+}
+
+impl Display for TypeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name.fmt(f)?;
+        let mut args = self.arguments.iter();
+        if let Some(arg) = args.next() {
+            f.write_char('[')?;
+            Display::fmt(arg, f)?;
+            for arg in args {
+                f.write_char(',')?;
+                f.write_char(' ')?;
+                Display::fmt(arg, f)?;
+            }
+            f.write_char(']')?;
+        }
+        Ok(())
+    }
+}
+
+impl TypeDefinition {
+    pub fn is_int(&self) -> bool {
+        matches!(self, Self::Primitive(Primitive::Int(_, _)))
+    }
+
+    pub fn type_parameters(&self) -> usize {
+        match self {
+            Self::Enum(type_name, _) | Self::Record(type_name, _) => {
+                type_name.arguments.len()
+            }
+            Self::Runtime(..) | Self::Primitive(..) => 0,
         }
     }
 }
@@ -146,10 +375,6 @@ impl Type {
         let f = |x: &Self| x.substitute(from, to);
 
         match self {
-            Type::List(x) => Type::List(Box::new(f(x))),
-            Type::Verdict(a, r) => {
-                Type::Verdict(Box::new(f(a)), Box::new(f(r)))
-            }
             Type::RecordVar(x, fields) => Type::RecordVar(
                 *x,
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
@@ -157,28 +382,37 @@ impl Type {
             Type::Record(fields) => Type::Record(
                 fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
             ),
-            Type::NamedRecord(n, fields) => Type::NamedRecord(
-                *n,
-                fields.iter().map(|(n, t)| (n.clone(), f(t))).collect(),
-            ),
+            Type::Name(name) => Type::Name(name.substitute(from, to)),
             other => other.clone(),
         }
+    }
+
+    pub fn substitute_many(&self, iter: &[(&Self, &Self)]) -> Self {
+        let mut me = self.clone();
+        for (from, to) in iter {
+            me = me.substitute(from, to);
+        }
+        me
     }
 }
 
 impl Primitive {
-    /// Size of the type in bytes
-    pub fn size(&self) -> u32 {
+    /// Layout of the primitive type
+    ///
+    /// This gives access to the size and alignment
+    pub const fn layout(&self) -> Layout {
         use Primitive::*;
         match self {
-            U8 | I8 | Bool => 1,
-            U16 | I16 => 2,
-            U32 | I32 | Asn => 4,
-            U64 | I64 => 8,
-            Unit => 0,
-            String => std::mem::size_of::<Arc<str>>() as u32,
-            IpAddr => std::mem::size_of::<std::net::IpAddr>() as u32,
-            Prefix => std::mem::size_of::<inetnum::addr::Prefix>() as u32,
+            Int(_, size) => {
+                let bytes = size.int() as usize / 8;
+                Layout::new(bytes, bytes)
+            }
+            Bool => Layout::new(1, 1),
+            Asn => Layout::new(4, 4),
+            Unit => Layout::new(0, 1),
+            String => Layout::of::<Arc<str>>(),
+            IpAddr => Layout::of::<std::net::IpAddr>(),
+            Prefix => Layout::of::<inetnum::addr::Prefix>(),
         }
     }
 }
@@ -243,18 +477,18 @@ impl Function {
     }
 }
 
-pub fn default_types() -> Vec<(Identifier, Type)> {
+pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
     use Primitive::*;
 
     let primitives = vec![
-        ("u8", U8),
-        ("u16", U16),
-        ("u32", U32),
-        ("u64", U64),
-        ("i8", I8),
-        ("i16", I16),
-        ("i32", I32),
-        ("i64", I64),
+        ("u8", Int(IntKind::Unsigned, IntSize::I8)),
+        ("u16", Int(IntKind::Unsigned, IntSize::I16)),
+        ("u32", Int(IntKind::Unsigned, IntSize::I32)),
+        ("u64", Int(IntKind::Unsigned, IntSize::I64)),
+        ("i8", Int(IntKind::Signed, IntSize::I8)),
+        ("i16", Int(IntKind::Signed, IntSize::I16)),
+        ("i32", Int(IntKind::Signed, IntSize::I32)),
+        ("i64", Int(IntKind::Signed, IntSize::I64)),
         ("bool", Bool),
         ("String", String),
         ("Unit", Unit),
@@ -267,103 +501,81 @@ pub fn default_types() -> Vec<(Identifier, Type)> {
 
     for (n, p) in primitives {
         let name = Identifier::from(n);
-        types.push((name, Type::Primitive(p)))
+        types.push((name, TypeDefinition::Primitive(p)))
     }
 
-    enum RecordOrEnum {
-        Record(&'static str, Vec<(&'static str, &'static str)>),
-        Enum(&'static str, Vec<(&'static str, Option<&'static str>)>),
+    struct Enum {
+        name: &'static str,
+        params: Vec<&'static str>,
+        variants: Vec<(&'static str, Vec<Type>)>,
     }
-
-    use RecordOrEnum::*;
 
     let compound_types = vec![
-        Enum(
-            "Afi",
-            vec![
-                ("IpV4", None),
-                ("IpV6", None),
-                ("VpnV4", None),
-                ("VpnV6", None),
+        Enum {
+            name: "Optional",
+            params: vec!["T"],
+            variants: vec![
+                ("Some", vec![Type::ExplicitVar("T".into())]),
+                ("None", vec![]),
             ],
-        ),
-        Enum("Safi", vec![("Unicast", None), ("Multicast", None)]),
-        Record("Nlris", vec![("afi", "Afi"), ("safi", "Safi")]),
+        },
+        Enum {
+            name: "Verdict",
+            params: vec!["A", "R"],
+            variants: vec![
+                ("Accept", vec![Type::ExplicitVar("A".into())]),
+                ("Reject", vec![Type::ExplicitVar("R".into())]),
+            ],
+        },
+        Enum {
+            name: "Afi",
+            params: vec![],
+            variants: vec![
+                ("IpV4", vec![]),
+                ("IpV6", vec![]),
+                ("VpnV4", vec![]),
+                ("VpnV6", vec![]),
+            ],
+        },
+        Enum {
+            name: "Safi",
+            params: vec![],
+            variants: vec![("Unicast", vec![]), ("Multicast", vec![])],
+        },
     ];
 
-    for c in compound_types {
-        match c {
-            Record(n, fields) => {
-                let ident = Identifier::from(n);
-                let name = ResolvedName {
-                    scope: ScopeRef::GLOBAL,
-                    ident,
-                };
-                let fields = fields
-                    .iter()
-                    .map(|(field_name, field_type)| {
-                        let field_name = Identifier::from(*field_name);
+    for Enum {
+        name,
+        params,
+        variants,
+    } in compound_types
+    {
+        let ident = Identifier::from(name);
+        let name = ResolvedName {
+            scope: ScopeRef::GLOBAL,
+            ident,
+        };
 
-                        // Little hack to get list types for now, until that is in the
-                        // actual syntax and we can use a real type parser here.
-                        let is_list = field_type.starts_with('[')
-                            && field_type.ends_with(']');
+        let params: Vec<_> =
+            params.into_iter().map(Identifier::from).collect();
 
-                        let s = if is_list {
-                            &field_type[1..(field_type.len() - 1)]
-                        } else {
-                            field_type
-                        };
+        let param_types =
+            params.iter().map(|p| Type::ExplicitVar(*p)).collect();
 
-                        let s = Identifier::from(s);
+        let variants = variants
+            .into_iter()
+            .map(|(variant_name, fields)| {
+                let name = Identifier::from(variant_name);
+                EnumVariant { name, fields }
+            })
+            .collect();
 
-                        let mut ty = types
-                            .iter()
-                            .find(|(n, _)| s == *n)
-                            .unwrap_or_else(|| panic!("Not found: {s}",))
-                            .1
-                            .clone();
+        let type_name = TypeName {
+            name,
+            arguments: param_types,
+        };
 
-                        if is_list {
-                            ty = Type::List(Box::new(ty));
-                        }
-
-                        (
-                            Meta {
-                                id: MetaId(0),
-                                node: field_name,
-                            },
-                            ty,
-                        )
-                    })
-                    .collect();
-                types.push((ident, Type::NamedRecord(name, fields)))
-            }
-            Enum(n, variants) => {
-                let ident = Identifier::from(n);
-                let name = ResolvedName {
-                    scope: ScopeRef::GLOBAL,
-                    ident,
-                };
-                let variants = variants
-                    .iter()
-                    .map(|(variant_name, v)| {
-                        let variant_name = Identifier::from(*variant_name);
-                        let v = v.map(|t| {
-                            let t = Identifier::from(t);
-                            types
-                                .iter()
-                                .find(|(n, _)| t == *n)
-                                .unwrap()
-                                .1
-                                .clone()
-                        });
-                        (variant_name, v)
-                    })
-                    .collect();
-                types.push((ident, Type::Enum(name, variants)))
-            }
-        }
+        types.push((ident, TypeDefinition::Enum(type_name, variants)))
     }
 
     types

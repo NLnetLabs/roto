@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     ast::{self, Identifier, Match, Pattern},
     parser::meta::Meta,
+    runtime::layout::{Layout, LayoutBuilder},
     typechecker::types::Type,
 };
 
@@ -109,9 +110,10 @@ impl Lowerer<'_> {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
-        let Type::Enum(_, variants) = &ty else {
-            panic!("Should have been caught in typechecking")
-        };
+
+        let Type::Name(type_name) = ty else { panic!() };
+        let type_def = self.type_info.resolve_type_name(&type_name);
+        let variants = type_def.match_patterns(&type_name.arguments).unwrap();
 
         let current_label = self.current_label();
         let lbl_prefix = self
@@ -133,7 +135,7 @@ impl Lowerer<'_> {
                     Pattern::EnumVariant { variant, .. } => Some(
                         variants
                             .iter()
-                            .position(|(s, _)| s == &variant.node)
+                            .position(|s| s.name == variant.node)
                             .unwrap(),
                     ),
                     Pattern::Underscore => None,
@@ -254,29 +256,38 @@ impl Lowerer<'_> {
             self.new_block(guard_lbl);
 
             if let Pattern::EnumVariant {
+                fields: Some(fields),
                 variant: _,
-                data_field: Some(var),
             } = &arm.pattern.node
             {
-                let ty = self.type_info.type_of(var);
-                let name = self.type_info.resolved_name(var);
+                let mut b = LayoutBuilder::new();
+                b.add(&Layout::of::<u8>());
+                for var in &**fields {
+                    let ty = self.type_info.type_of(var);
+                    let name = self.type_info.resolved_name(var);
 
-                // The offset of the field is (at least) 1 because of the
-                // discriminant.
-                let offset =
-                    1 + self.type_info.padding_of(&ty, 1, self.runtime);
-                let val =
-                    self.read_field(examinee.clone().into(), offset, &ty);
-                if let Some(val) = val {
-                    let ty = self.lower_type(&ty).unwrap();
-                    self.add(Instruction::Assign {
-                        to: Var {
-                            scope: name.scope,
-                            kind: VarKind::Explicit(ident),
-                        },
-                        val,
-                        ty,
-                    });
+                    // The offset of the field is (at least) 1 because of the
+                    // discriminant.
+                    let offset =
+                        b.add(&self.type_info.layout_of(&ty, self.runtime));
+
+                    let val = self.read_field(
+                        examinee.clone().into(),
+                        offset as u32,
+                        &ty,
+                    );
+
+                    if let Some(val) = val {
+                        let ty = self.lower_type(&ty).unwrap();
+                        self.add(Instruction::Assign {
+                            to: Var {
+                                scope: name.scope,
+                                kind: VarKind::Explicit(name.ident),
+                            },
+                            val,
+                            ty,
+                        });
+                    }
                 }
             }
 

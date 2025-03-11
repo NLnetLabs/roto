@@ -25,7 +25,7 @@ pub enum Declaration {
 }
 
 #[derive(Clone, Debug)]
-pub struct Params(pub Vec<(Meta<Identifier>, Meta<Path>)>);
+pub struct Params(pub Vec<(Meta<Identifier>, Meta<TypeExpr>)>);
 
 /// The value of a typed record
 #[derive(Clone, Debug)]
@@ -53,7 +53,7 @@ pub struct FilterMap {
 pub struct FunctionDeclaration {
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
-    pub ret: Option<Meta<Path>>,
+    pub ret: Option<Meta<TypeExpr>>,
     pub body: Meta<Block>,
 }
 
@@ -81,6 +81,15 @@ pub enum Stmt {
 #[derive(Clone, Debug)]
 pub struct Path {
     pub idents: Vec<Meta<Identifier>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum TypeExpr {
+    Optional(Box<TypeExpr>),
+    Path(Meta<Path>, Vec<Meta<TypeExpr>>),
+    Never,
+    Unit,
+    Record(RecordType),
 }
 
 /// A Roto expression
@@ -173,7 +182,7 @@ pub enum Pattern {
     Underscore,
     EnumVariant {
         variant: Meta<Identifier>,
-        data_field: Option<Meta<Identifier>>,
+        fields: Option<Meta<Vec<Meta<Identifier>>>>,
     },
 }
 
@@ -216,14 +225,7 @@ impl From<String> for Identifier {
 
 #[derive(Clone, Debug)]
 pub struct RecordType {
-    pub key_values: Meta<Vec<(Meta<Identifier>, RecordFieldType)>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum RecordFieldType {
-    Path(Meta<Path>),
-    Record(Meta<RecordType>),
-    List(Meta<Box<RecordFieldType>>),
+    pub fields: Meta<Vec<(Meta<Identifier>, Meta<TypeExpr>)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -236,7 +238,7 @@ pub enum Literal {
     Bool(bool),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BinOp {
     /// Logical and (`&&`)
     And,

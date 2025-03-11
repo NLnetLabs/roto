@@ -19,13 +19,18 @@ use value::IrType;
 use crate::{
     ast::{self, Identifier, Literal},
     module::ModuleTree,
-    parser::meta::Meta,
-    runtime::{self, Movability, RuntimeFunction, RuntimeFunctionRef},
+    parser::meta::{Meta, MetaId},
+    runtime::{
+        self,
+        layout::{Layout, LayoutBuilder},
+        Movability, RuntimeFunction, RuntimeFunctionRef,
+    },
     typechecker::{
         info::TypeInfo,
-        scope::{DeclarationKind, ScopeRef, ValueKind},
+        scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
         types::{
-            FunctionDefinition, FunctionKind, Primitive, Signature, Type,
+            EnumVariant, FunctionDefinition, FunctionKind, IntKind, IntSize,
+            Primitive, Signature, Type, TypeDefinition,
         },
         PathValue, ResolvedPath,
     },
@@ -205,8 +210,10 @@ impl<'r> Lowerer<'r> {
             ..
         } = fm;
 
-        let return_type = self.type_info.type_of(body);
-        self.function_like(ident, params, &return_type, body)
+        let Type::Function(_, ret) = self.type_info.type_of(ident) else {
+            panic!();
+        };
+        self.function_like(ident, params, &ret, body)
     }
 
     fn function(self, function: &ast::FunctionDeclaration) -> Function {
@@ -234,8 +241,7 @@ impl<'r> Lowerer<'r> {
             node: format!("test#{}", *test.ident).into(),
             id: test.ident.id,
         };
-        let unit = Box::new(Type::Primitive(Primitive::Unit));
-        let return_type = Type::Verdict(unit.clone(), unit);
+        let return_type = Type::verdict(Type::unit(), Type::unit());
         let params = ast::Params(Vec::new());
         self.function_like(&ident, &params, &return_type, &test.body)
     }
@@ -276,7 +282,7 @@ impl<'r> Lowerer<'r> {
             return_type: return_type.clone(),
         };
 
-        let (return_type, return_ptr) = match return_type {
+        let (return_ir_type, return_ptr) = match return_type {
             x if self.is_reference_type(x) => (None, true),
             x => (self.lower_type(x), false),
         };
@@ -290,30 +296,14 @@ impl<'r> Lowerer<'r> {
                 })
                 .collect(),
             return_ptr,
-            return_type,
+            return_type: return_ir_type,
         };
 
         let last = self.block(body);
 
         self.drop_locals();
 
-        if return_ptr {
-            if let Some(last) = last {
-                self.write_field(
-                    Var {
-                        scope: self.function_scope,
-                        kind: VarKind::Return,
-                    }
-                    .into(),
-                    0,
-                    last,
-                    &signature.return_type,
-                );
-            }
-            self.add(Instruction::Return(None));
-        } else {
-            self.add(Instruction::Return(last));
-        }
+        self.return_expr(&return_type, last);
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
@@ -380,13 +370,26 @@ impl<'r> Lowerer<'r> {
 
                 match kind {
                     ast::ReturnKind::Return => {
-                        // TODO: Return reference types
                         self.drop_locals();
-                        self.add(Instruction::Return(op))
+                        self.return_expr(&ty, op);
                     }
                     ast::ReturnKind::Accept => {
-                        let Type::Verdict(accept_ty, _) = ty else {
+                        let Type::Name(type_name) = &ty else {
                             ice!("accept must have type of verdict")
+                        };
+
+                        // Just a little additional check
+                        if type_name.name
+                            != (ResolvedName {
+                                scope: ScopeRef::GLOBAL,
+                                ident: "Verdict".into(),
+                            })
+                        {
+                            ice!("accept must have type of verdict")
+                        }
+
+                        let [accept_ty, _] = &type_name.arguments[..] else {
+                            ice!("verdict should have 2 type arguments")
                         };
 
                         let var = Var {
@@ -398,29 +401,42 @@ impl<'r> Lowerer<'r> {
                             var.clone().into(),
                             0,
                             IrValue::U8(0).into(),
-                            &Type::Primitive(Primitive::U8),
+                            &Type::u8(),
                         );
 
                         if let Some(op) = op {
-                            let offset = 1 + self.type_info.padding_of(
-                                &accept_ty,
-                                1,
-                                self.runtime,
-                            );
+                            let offset = self
+                                .type_info
+                                .layout_of(&ty, self.runtime)
+                                .offset_by(1);
 
                             self.write_field(
                                 var.into(),
-                                offset,
+                                offset as u32,
                                 op,
-                                &accept_ty,
+                                accept_ty,
                             )
                         }
                         self.drop_locals();
                         self.add(Instruction::Return(None));
                     }
                     ast::ReturnKind::Reject => {
-                        let Type::Verdict(_, reject_ty) = ty else {
-                            ice!("reject must have a type of verdict")
+                        let Type::Name(type_name) = ty else {
+                            ice!("accept must have type of verdict")
+                        };
+
+                        // Just a little additional check
+                        if type_name.name
+                            != (ResolvedName {
+                                scope: ScopeRef::GLOBAL,
+                                ident: "Verdict".into(),
+                            })
+                        {
+                            ice!("accept must have type of verdict")
+                        }
+
+                        let [_, reject_ty] = &type_name.arguments[..] else {
+                            ice!("verdict should have 2 type arguments")
                         };
 
                         let var = Var {
@@ -432,21 +448,20 @@ impl<'r> Lowerer<'r> {
                             var.clone().into(),
                             0,
                             IrValue::U8(1).into(),
-                            &Type::Primitive(Primitive::U8),
+                            &Type::u8(),
                         );
 
                         if let Some(op) = op {
-                            let offset = 1 + self.type_info.padding_of(
-                                &reject_ty,
-                                1,
-                                self.runtime,
-                            );
+                            let offset = self
+                                .type_info
+                                .layout_of(reject_ty, self.runtime)
+                                .offset_by(1);
 
                             self.write_field(
                                 var.into(),
-                                offset,
+                                offset as u32,
                                 op,
-                                &reject_ty,
+                                reject_ty,
                             )
                         }
 
@@ -459,96 +474,37 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::Literal(l) => Some(self.literal(l)),
             ast::Expr::Match(m) => self.match_expr(m),
-            ast::Expr::FunctionCall(e, arg_exprs) => {
-                let operand = match &e.node {
-                    ast::Expr::Path(p) => {
-                        let resolved_path = self.type_info.path_kind(p);
-                        match resolved_path {
-                            ResolvedPath::Method { value, .. } => {
-                                self.path_value(&value.clone())
-                            }
-                            ResolvedPath::Function { .. }
-                            | ResolvedPath::StaticMethod { .. }
-                            | ResolvedPath::EnumConstructor { .. } => None,
-                            ResolvedPath::Value { .. } => unreachable!(),
+            ast::Expr::FunctionCall(e, arg_exprs) => match &e.node {
+                ast::Expr::Path(p) => {
+                    let resolved_path = self.type_info.path_kind(p);
+                    match resolved_path {
+                        ResolvedPath::Method { value, .. } => {
+                            let expr = self.path_value(&value.clone());
+                            self.function_call(id, expr, arg_exprs)
                         }
-                    }
-                    ast::Expr::Access(e, _) => self.expr(e),
-                    _ => unreachable!(),
-                };
-
-                let mut args = Vec::new();
-                if let Some(operand) = operand {
-                    args.push(operand);
-                }
-
-                for e in &arg_exprs.node {
-                    if let Some(e) = self.expr(e) {
-                        args.push(e);
-                    }
-                }
-
-                let func = self.type_info.function(id).clone();
-                let name = func.name;
-
-                match &func.definition {
-                    FunctionDefinition::Runtime(runtime_func) => self
-                        .call_runtime_function(
-                            *runtime_func,
-                            args,
-                            &func.signature.parameter_types,
-                            &func.signature.return_type,
-                        ),
-                    FunctionDefinition::Roto => {
-                        let Signature {
-                            kind: _,
-                            parameter_types: _,
-                            return_type,
-                        } = func.signature;
-
-                        let reference_return =
-                            self.is_reference_type(&return_type);
-                        let (to, out_ptr) = if reference_return {
-                            let out_ptr = self.new_tmp();
-                            let size = self
-                                .type_info
-                                .size_of(&return_type, self.runtime);
-                            self.add(Instruction::Alloc {
-                                to: out_ptr.clone(),
-                                size,
-                                align_shift: 0,
-                            });
-                            (None, Some(out_ptr))
-                        } else {
-                            let to = self
-                                .lower_type(&return_type)
-                                .map(|ty| (self.new_tmp(), ty));
-                            (to, None)
-                        };
-
-                        let ctx = Var {
-                            scope: self.function_scope,
-                            kind: VarKind::Context,
-                        };
-
-                        let name = self.type_info.full_name(&name);
-
-                        self.add(Instruction::Call {
-                            to: to.clone(),
-                            ctx: ctx.into(),
-                            func: name,
-                            args,
-                            return_ptr: out_ptr.clone(),
-                        });
-
-                        if let Some(out_ptr) = out_ptr {
-                            Some(out_ptr.into())
-                        } else {
-                            to.map(|(to, _ty)| to.into())
+                        ResolvedPath::Function { .. }
+                        | ResolvedPath::StaticMethod { .. } => {
+                            self.function_call(id, None, arg_exprs)
                         }
+                        ResolvedPath::EnumConstructor { ty, variant } => {
+                            let ty = ty.clone();
+                            let variant = variant.clone();
+                            self.construct_enum(
+                                id,
+                                ty,
+                                variant,
+                                Some(arg_exprs),
+                            )
+                        }
+                        ResolvedPath::Value { .. } => unreachable!(),
                     }
                 }
-            }
+                ast::Expr::Access(e, _) => {
+                    let expr = self.expr(e);
+                    self.function_call(id, expr, arg_exprs)
+                }
+                _ => unreachable!(),
+            },
             ast::Expr::Access(e, field) => {
                 let record_ty = self.type_info.type_of(&**e);
                 let op = self.expr(e)?;
@@ -565,45 +521,15 @@ impl<'r> Lowerer<'r> {
                 match path_kind {
                     ResolvedPath::Value(value) => self.path_value(&value),
                     ResolvedPath::EnumConstructor {
-                        ty,
+                        ty: type_def,
                         variant,
-                        data: _,
-                    } => {
-                        let Type::Enum(_, variants) = &ty else {
-                            unreachable!();
-                        };
-                        let idx = variants
-                            .iter()
-                            .position(|(s, _)| s == &variant)
-                            .unwrap();
-                        let size = self.type_info.size_of(&ty, self.runtime);
-                        let alignment =
-                            self.type_info.alignment_of(&ty, self.runtime);
-                        let align_shift = alignment.ilog2() as u8;
-
-                        let ty = ty.clone();
-                        let to = self.new_tmp();
-                        self.stack_slots.push((to.clone(), ty));
-                        self.add(Instruction::Alloc {
-                            to: to.clone(),
-                            size,
-                            align_shift,
-                        });
-                        self.add(Instruction::Write {
-                            to: to.clone().into(),
-                            val: IrValue::U8(idx as u8).into(),
-                        });
-                        Some(to.into())
-                    }
+                    } => self.construct_enum(id, type_def, variant, None),
                     _ => unreachable!("should be rejected by type checker"),
                 }
             }
             ast::Expr::TypedRecord(_, record) | ast::Expr::Record(record) => {
                 let ty = self.type_info.type_of(id);
-                let size = self.type_info.size_of(&ty, self.runtime);
-                let alignment =
-                    self.type_info.alignment_of(&ty, self.runtime);
-                let align_shift = alignment.ilog2() as u8;
+                let layout = self.type_info.layout_of(&ty, self.runtime);
 
                 let fields: Vec<_> = record
                     .fields
@@ -611,15 +537,14 @@ impl<'r> Lowerer<'r> {
                     .flat_map(|(s, expr)| Some((s, self.expr(expr)?)))
                     .collect();
 
-                if size == 0 {
+                if layout.size() == 0 {
                     return None;
                 }
 
                 let to = self.new_tmp();
                 self.add(Instruction::Alloc {
                     to: to.clone(),
-                    size,
-                    align_shift,
+                    layout,
                 });
 
                 for (field_name, field_operand) in fields {
@@ -654,7 +579,7 @@ impl<'r> Lowerer<'r> {
                 let left = self.expr(left);
                 let right = self.expr(right);
 
-                if self.type_info.size_of(&ty, self.runtime) == 0 {
+                if self.type_info.layout_of(&ty, self.runtime).size() == 0 {
                     return Some(
                         IrValue::Bool(match op {
                             ast::BinOp::Eq => true,
@@ -669,250 +594,242 @@ impl<'r> Lowerer<'r> {
                 let right = right.unwrap();
 
                 let place = self.new_tmp();
-                match (op, binop_to_cmp(op, &ty), ty) {
-                    (
-                        ast::BinOp::Add,
-                        _,
-                        Type::Primitive(Primitive::String),
-                    ) => {
-                        let function = self.type_info.function(id);
-                        let FunctionDefinition::Runtime(runtime_func_ref) =
-                            function.definition.clone()
-                        else {
-                            panic!()
-                        };
 
-                        let size = self.type_info.size_of(
-                            &Type::Primitive(Primitive::String),
-                            self.runtime,
-                        );
-                        let alignment = self.type_info.alignment_of(
-                            &Type::Primitive(Primitive::String),
-                            self.runtime,
-                        );
-                        let align_shift = alignment.ilog2() as u8;
-                        self.add(Instruction::Alloc {
-                            to: place.clone(),
-                            size,
-                            align_shift,
-                        });
+                let op = op.clone();
+                if op == ast::BinOp::Add && ty == Type::string() {
+                    let function = self.type_info.function(id);
+                    let FunctionDefinition::Runtime(runtime_func_ref) =
+                        function.definition.clone()
+                    else {
+                        panic!()
+                    };
 
-                        let runtime_func =
-                            self.runtime.get_function(runtime_func_ref);
-
-                        let ident = Identifier::from("append");
-                        let ir_func = IrFunction {
-                            name: ident,
-                            ptr: runtime_func.description.pointer(),
-                            params: vec![
-                                IrType::Pointer,
-                                IrType::Pointer,
-                                IrType::Pointer,
-                            ],
-                            ret: None,
-                        };
-
-                        self.runtime_functions
-                            .insert(runtime_func_ref, ir_func);
-
-                        self.add(Instruction::CallRuntime {
-                            to: None,
-                            func: runtime_func_ref,
-                            args: vec![place.clone().into(), left, right],
-                        });
-                    }
-                    (
-                        ast::BinOp::Div,
-                        _,
-                        Type::Primitive(Primitive::IpAddr),
-                    ) => {
-                        let function = self.type_info.function(id);
-                        let FunctionDefinition::Runtime(runtime_func_ref) =
-                            function.definition.clone()
-                        else {
-                            panic!()
-                        };
-
-                        let size = self.type_info.size_of(
-                            &Type::Primitive(Primitive::Prefix),
-                            self.runtime,
-                        );
-                        let alignment = self.type_info.alignment_of(
-                            &Type::Primitive(Primitive::Prefix),
-                            self.runtime,
-                        );
-                        let align_shift = alignment.ilog2() as u8;
-                        self.add(Instruction::Alloc {
-                            to: place.clone(),
-                            size,
-                            align_shift,
-                        });
-
-                        let runtime_func =
-                            self.runtime.get_function(runtime_func_ref);
-
-                        let ident = Identifier::from("new");
-                        let ir_func = IrFunction {
-                            name: ident,
-                            ptr: runtime_func.description.pointer(),
-                            params: vec![
-                                IrType::Pointer,
-                                IrType::Pointer,
-                                IrType::U8,
-                            ],
-                            ret: None,
-                        };
-
-                        self.runtime_functions
-                            .insert(runtime_func_ref, ir_func);
-
-                        self.add(Instruction::CallRuntime {
-                            to: None,
-                            func: runtime_func_ref,
-                            args: vec![place.clone().into(), left, right],
-                        });
-                    }
-                    (
-                        ast::BinOp::Eq,
-                        _,
-                        Type::Primitive(Primitive::IpAddr),
-                    ) => {
-                        let ip_addr_type_id = TypeId::of::<IpAddr>();
-                        let runtime_func = self.find_runtime_function(
-                            runtime::FunctionKind::Method(ip_addr_type_id),
-                            "eq",
-                        );
-
-                        let out = self
-                            .call_runtime_function(
-                                runtime_func.get_ref(),
-                                [left, right],
-                                &[
-                                    Type::Primitive(Primitive::IpAddr),
-                                    Type::Primitive(Primitive::IpAddr),
-                                ],
-                                &Type::Primitive(Primitive::Bool),
-                            )
-                            .unwrap();
-                        self.add(Instruction::Assign {
-                            to: place.clone(),
-                            val: out,
-                            ty: IrType::Bool,
-                        })
-                    }
-                    (
-                        ast::BinOp::Ne,
-                        _,
-                        Type::Primitive(Primitive::IpAddr),
-                    ) => {
-                        let ip_addr_type_id = TypeId::of::<IpAddr>();
-                        let runtime_func = self.find_runtime_function(
-                            runtime::FunctionKind::Method(ip_addr_type_id),
-                            "eq",
-                        );
-
-                        let out = self
-                            .call_runtime_function(
-                                runtime_func.get_ref(),
-                                [left, right],
-                                &[
-                                    Type::Primitive(Primitive::IpAddr),
-                                    Type::Primitive(Primitive::IpAddr),
-                                ],
-                                &Type::Primitive(Primitive::Bool),
-                            )
-                            .unwrap();
-
-                        self.add(Instruction::Not {
-                            to: place.clone(),
-                            val: out,
-                        })
-                    }
-                    (ast::BinOp::Eq, _, ty)
-                        if self.is_reference_type(&ty) =>
-                    {
-                        let size = self.type_info.size_of(&ty, self.runtime);
-                        let tmp = self.new_tmp();
-                        self.add(Instruction::MemCmp {
-                            to: tmp.clone(),
-                            size: IrValue::Pointer(size as usize).into(),
-                            left: left.clone(),
-                            right: right.clone(),
-                        });
-                        self.add(Instruction::Cmp {
-                            to: place.clone(),
-                            cmp: ir::IntCmp::Eq,
-                            left: tmp.into(),
-                            right: IrValue::Pointer(0).into(),
-                        })
-                    }
-                    (ast::BinOp::Ne, _, ty)
-                        if self.is_reference_type(&ty) =>
-                    {
-                        let size = self.type_info.size_of(&ty, self.runtime);
-                        let tmp = self.new_tmp();
-                        self.add(Instruction::MemCmp {
-                            to: tmp.clone(),
-                            size: IrValue::Pointer(size as usize).into(),
-                            left: left.clone(),
-                            right: right.clone(),
-                        });
-                        self.add(Instruction::Cmp {
-                            to: place.clone(),
-                            cmp: ir::IntCmp::Ne,
-                            left: tmp.into(),
-                            right: IrValue::Pointer(0).into(),
-                        })
-                    }
-                    (_, Some(cmp), _) => {
-                        self.add(Instruction::Cmp {
-                            to: place.clone(),
-                            cmp,
-                            left,
-                            right,
-                        });
-                    }
-                    (ast::BinOp::And, _, _) => self.add(Instruction::And {
+                    let layout = Primitive::String.layout();
+                    self.add(Instruction::Alloc {
                         to: place.clone(),
-                        left,
-                        right,
-                    }),
-                    (ast::BinOp::Or, _, _) => self.add(Instruction::Or {
-                        to: place.clone(),
-                        left,
-                        right,
-                    }),
-                    (ast::BinOp::Eq, _, _) => self.add(Instruction::Eq {
-                        to: place.clone(),
-                        left,
-                        right,
-                    }),
-                    (ast::BinOp::Add, _, _) => self.add(Instruction::Add {
-                        to: place.clone(),
-                        left,
-                        right,
-                    }),
-                    (ast::BinOp::Sub, _, _) => self.add(Instruction::Sub {
-                        to: place.clone(),
-                        left,
-                        right,
-                    }),
-                    (ast::BinOp::Mul, _, _) => self.add(Instruction::Mul {
-                        to: place.clone(),
-                        left,
-                        right,
-                    }),
-                    (ast::BinOp::Div, _, ty) => {
-                        let ty = self.lower_type(&ty)?;
-                        self.add(Instruction::Div {
-                            to: place.clone(),
-                            ty,
-                            left,
-                            right,
-                        })
-                    }
-                    _ => todo!(),
+                        layout,
+                    });
+
+                    let runtime_func =
+                        self.runtime.get_function(runtime_func_ref);
+
+                    let ident = Identifier::from("append");
+                    let ir_func = IrFunction {
+                        name: ident,
+                        ptr: runtime_func.description.pointer(),
+                        params: vec![
+                            IrType::Pointer,
+                            IrType::Pointer,
+                            IrType::Pointer,
+                        ],
+                        ret: None,
+                    };
+
+                    self.runtime_functions.insert(runtime_func_ref, ir_func);
+
+                    self.add(Instruction::CallRuntime {
+                        to: None,
+                        func: runtime_func_ref,
+                        args: vec![place.clone().into(), left, right],
+                    });
+                    return Some(place.into());
                 }
+
+                if op == ast::BinOp::Div && ty == Type::ip_addr() {
+                    let function = self.type_info.function(id);
+                    let FunctionDefinition::Runtime(runtime_func_ref) =
+                        function.definition.clone()
+                    else {
+                        panic!()
+                    };
+
+                    let layout = Primitive::Prefix.layout();
+                    self.add(Instruction::Alloc {
+                        to: place.clone(),
+                        layout,
+                    });
+
+                    let runtime_func =
+                        self.runtime.get_function(runtime_func_ref);
+
+                    let ident = Identifier::from("new");
+                    let ir_func = IrFunction {
+                        name: ident,
+                        ptr: runtime_func.description.pointer(),
+                        params: vec![
+                            IrType::Pointer,
+                            IrType::Pointer,
+                            IrType::U8,
+                        ],
+                        ret: None,
+                    };
+
+                    self.runtime_functions.insert(runtime_func_ref, ir_func);
+
+                    self.add(Instruction::CallRuntime {
+                        to: None,
+                        func: runtime_func_ref,
+                        args: vec![place.clone().into(), left, right],
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Eq && ty == Type::ip_addr() {
+                    let ip_addr_type_id = TypeId::of::<IpAddr>();
+                    let runtime_func = self.find_runtime_function(
+                        runtime::FunctionKind::Method(ip_addr_type_id),
+                        "eq",
+                    );
+
+                    let out = self
+                        .call_runtime_function(
+                            runtime_func.get_ref(),
+                            [left, right],
+                            &[Type::ip_addr(), Type::ip_addr()],
+                            &Type::bool(),
+                        )
+                        .unwrap();
+                    self.add(Instruction::Assign {
+                        to: place.clone(),
+                        val: out,
+                        ty: IrType::Bool,
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Eq && ty == Type::ip_addr() {
+                    let ip_addr_type_id = TypeId::of::<IpAddr>();
+                    let runtime_func = self.find_runtime_function(
+                        runtime::FunctionKind::Method(ip_addr_type_id),
+                        "eq",
+                    );
+
+                    let out = self
+                        .call_runtime_function(
+                            runtime_func.get_ref(),
+                            [left, right],
+                            &[Type::ip_addr(), Type::ip_addr()],
+                            &Type::bool(),
+                        )
+                        .unwrap();
+
+                    self.add(Instruction::Not {
+                        to: place.clone(),
+                        val: out,
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Eq && self.is_reference_type(&ty) {
+                    let size =
+                        self.type_info.layout_of(&ty, self.runtime).size();
+
+                    let tmp = self.new_tmp();
+                    self.add(Instruction::MemCmp {
+                        to: tmp.clone(),
+                        size: IrValue::Pointer(size).into(),
+                        left: left.clone(),
+                        right: right.clone(),
+                    });
+                    self.add(Instruction::Cmp {
+                        to: place.clone(),
+                        cmp: ir::IntCmp::Eq,
+                        left: tmp.into(),
+                        right: IrValue::Pointer(0).into(),
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Ne && self.is_reference_type(&ty) {
+                    let size =
+                        self.type_info.layout_of(&ty, self.runtime).size();
+
+                    let tmp = self.new_tmp();
+                    self.add(Instruction::MemCmp {
+                        to: tmp.clone(),
+                        size: IrValue::Pointer(size).into(),
+                        left: left.clone(),
+                        right: right.clone(),
+                    });
+                    self.add(Instruction::Cmp {
+                        to: place.clone(),
+                        cmp: ir::IntCmp::Ne,
+                        left: tmp.into(),
+                        right: IrValue::Pointer(0).into(),
+                    })
+                }
+
+                if op == ast::BinOp::Eq && ty == Type::asn() {
+                    self.add(Instruction::Cmp {
+                        to: place.clone(),
+                        cmp: ir::IntCmp::Eq,
+                        left,
+                        right,
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Ne && ty == Type::asn() {
+                    self.add(Instruction::Cmp {
+                        to: place.clone(),
+                        cmp: ir::IntCmp::Ne,
+                        left,
+                        right,
+                    });
+                    return Some(place.into());
+                }
+
+                if let Some(cmp) = self.binop_to_cmp(&op, &ty) {
+                    self.add(Instruction::Cmp {
+                        to: place.clone(),
+                        cmp,
+                        left,
+                        right,
+                    });
+                    return Some(place.into());
+                }
+
+                let inst = match op {
+                    ast::BinOp::And => Instruction::And {
+                        to: place.clone(),
+                        left,
+                        right,
+                    },
+                    ast::BinOp::Or => Instruction::Or {
+                        to: place.clone(),
+                        left,
+                        right,
+                    },
+                    ast::BinOp::Eq => Instruction::Eq {
+                        to: place.clone(),
+                        left,
+                        right,
+                    },
+                    ast::BinOp::Add => Instruction::Add {
+                        to: place.clone(),
+                        left,
+                        right,
+                    },
+                    ast::BinOp::Sub => Instruction::Sub {
+                        to: place.clone(),
+                        left,
+                        right,
+                    },
+                    ast::BinOp::Mul => Instruction::Mul {
+                        to: place.clone(),
+                        left,
+                        right,
+                    },
+                    ast::BinOp::Div => Instruction::Div {
+                        to: place.clone(),
+                        signed: self.type_is_signed(&ty).unwrap(),
+                        left,
+                        right,
+                    },
+                    _ => panic!("type checker should prevent this"),
+                };
+
+                self.add(inst);
 
                 Some(place.into())
             }
@@ -989,6 +906,149 @@ impl<'r> Lowerer<'r> {
         }
     }
 
+    fn return_expr(&mut self, ty: &Type, op: Option<Operand>) {
+        if self.is_reference_type(ty) {
+            if let Some(op) = op {
+                self.write_field(
+                    Var {
+                        scope: self.function_scope,
+                        kind: VarKind::Return,
+                    }
+                    .into(),
+                    0,
+                    op,
+                    ty,
+                );
+            }
+            self.add(Instruction::Return(None));
+        } else {
+            self.add(Instruction::Return(op));
+        }
+    }
+
+    fn function_call(
+        &mut self,
+        id: MetaId,
+        receiver: Option<Operand>,
+        arg_exprs: &Meta<Vec<Meta<ast::Expr>>>,
+    ) -> Option<Operand> {
+        let mut args = Vec::new();
+        if let Some(operand) = receiver {
+            args.push(operand);
+        }
+
+        for e in &arg_exprs.node {
+            if let Some(e) = self.expr(e) {
+                args.push(e);
+            }
+        }
+
+        let func = self.type_info.function(id).clone();
+        let name = func.name;
+
+        match &func.definition {
+            FunctionDefinition::Runtime(runtime_func) => self
+                .call_runtime_function(
+                    *runtime_func,
+                    args,
+                    &func.signature.parameter_types,
+                    &func.signature.return_type,
+                ),
+            FunctionDefinition::Roto => {
+                let Signature {
+                    kind: _,
+                    parameter_types: _,
+                    return_type,
+                } = func.signature;
+
+                let reference_return = self.is_reference_type(&return_type);
+                let (to, out_ptr) = if reference_return {
+                    let out_ptr = self.new_tmp();
+                    let layout =
+                        self.type_info.layout_of(&return_type, self.runtime);
+                    self.add(Instruction::Alloc {
+                        to: out_ptr.clone(),
+                        layout,
+                    });
+                    (None, Some(out_ptr))
+                } else {
+                    let to = self
+                        .lower_type(&return_type)
+                        .map(|ty| (self.new_tmp(), ty));
+                    (to, None)
+                };
+
+                let ctx = Var {
+                    scope: self.function_scope,
+                    kind: VarKind::Context,
+                };
+
+                let name = self.type_info.full_name(&name);
+
+                self.add(Instruction::Call {
+                    to: to.clone(),
+                    ctx: ctx.into(),
+                    func: name,
+                    args,
+                    return_ptr: out_ptr.clone(),
+                });
+
+                if let Some(out_ptr) = out_ptr {
+                    Some(out_ptr.into())
+                } else {
+                    to.map(|(to, _ty)| to.into())
+                }
+            }
+        }
+    }
+
+    fn construct_enum(
+        &mut self,
+        id: MetaId,
+        type_def: TypeDefinition,
+        variant: EnumVariant,
+        arguments: Option<&Meta<Vec<Meta<ast::Expr>>>>,
+    ) -> Option<Operand> {
+        let TypeDefinition::Enum(_, variants) = &type_def else {
+            unreachable!();
+        };
+        let idx = variants
+            .iter()
+            .position(|v| v.name == variant.name)
+            .unwrap();
+
+        let ty = self.type_info.type_of(id);
+        let layout = self.type_info.layout_of(&ty, self.runtime);
+
+        let ty = ty.clone();
+        let to = self.new_tmp();
+        self.stack_slots.push((to.clone(), ty));
+        self.add(Instruction::Alloc {
+            to: to.clone(),
+            layout,
+        });
+        self.add(Instruction::Write {
+            to: to.clone().into(),
+            val: IrValue::U8(idx as u8).into(),
+        });
+
+        if let Some(arguments) = arguments {
+            let mut builder = LayoutBuilder::new();
+            builder.add(&Layout::new(1, 1));
+            for arg in &arguments.node {
+                let Some(val) = self.expr(arg) else {
+                    continue;
+                };
+                let ty = self.type_info.type_of(arg);
+                let layout = self.type_info.layout_of(&ty, self.runtime);
+                let offset = builder.add(&layout);
+                self.write_field(to.clone().into(), offset as u32, val, &ty);
+            }
+        }
+
+        Some(to.into())
+    }
+
     fn find_runtime_function(
         &self,
         kind: runtime::FunctionKind,
@@ -1005,16 +1065,11 @@ impl<'r> Lowerer<'r> {
     fn literal(&mut self, lit: &Meta<Literal>) -> Operand {
         match &lit.node {
             Literal::String(s) => {
-                let size = std::mem::size_of::<IpAddr>() as u32;
-                let align = std::mem::align_of::<IpAddr>();
-                let align_shift = align.ilog2() as u8;
-
                 let to = self.new_tmp();
 
                 self.add(Instruction::Alloc {
                     to: to.clone(),
-                    size,
-                    align_shift,
+                    layout: Primitive::String.layout(),
                 });
 
                 self.add(Instruction::InitString {
@@ -1028,43 +1083,46 @@ impl<'r> Lowerer<'r> {
             Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => {
                 let to = self.new_tmp();
-                const SIZE: usize = std::mem::size_of::<IpAddr>();
-                const ALIGN: usize = std::mem::align_of::<IpAddr>();
-                let align_shift = ALIGN.ilog2() as u8;
 
+                const SIZE: usize = Primitive::IpAddr.layout().size();
                 let x: [u8; SIZE] = unsafe { std::mem::transmute_copy(addr) };
+
                 self.add(Instruction::Initialize {
                     to: to.clone(),
                     bytes: x.into(),
-                    align_shift,
+                    layout: Primitive::IpAddr.layout(),
                 });
                 to.into()
             }
             Literal::Integer(x) => {
                 let ty = self.type_info.type_of(lit);
+
                 match ty {
-                    Type::Primitive(Primitive::U8) => IrValue::U8(*x as u8),
-                    Type::Primitive(Primitive::U16) => {
-                        IrValue::U16(*x as u16)
+                    Type::IntVar(_) => return IrValue::I32(*x as i32).into(),
+                    Type::Name(type_name) => {
+                        if let TypeDefinition::Primitive(Primitive::Int(
+                            k,
+                            s,
+                        )) = self.type_info.resolve_type_name(&type_name)
+                        {
+                            use IntKind::*;
+                            use IntSize::*;
+                            return match (k, s) {
+                                (Unsigned, I8) => IrValue::U8(*x as _),
+                                (Unsigned, I16) => IrValue::U16(*x as _),
+                                (Unsigned, I32) => IrValue::U32(*x as _),
+                                (Unsigned, I64) => IrValue::U64(*x as _),
+                                (Signed, I8) => IrValue::I8(*x as _),
+                                (Signed, I16) => IrValue::I16(*x as _),
+                                (Signed, I32) => IrValue::I32(*x as _),
+                                (Signed, I64) => IrValue::I64(*x as _),
+                            }
+                            .into();
+                        }
                     }
-                    Type::Primitive(Primitive::U32) => {
-                        IrValue::U32(*x as u32)
-                    }
-                    Type::Primitive(Primitive::U64) => {
-                        IrValue::U64(*x as u64)
-                    }
-                    Type::Primitive(Primitive::I8) => IrValue::I8(*x as i8),
-                    Type::Primitive(Primitive::I16) => {
-                        IrValue::I16(*x as i16)
-                    }
-                    Type::Primitive(Primitive::I32) => {
-                        IrValue::I32(*x as i32)
-                    }
-                    Type::Primitive(Primitive::I64) => IrValue::I64(*x),
-                    Type::IntVar(_) => IrValue::I32(*x as i32),
-                    _ => ice!("should be a type error"),
+                    _ => {}
                 }
-                .into()
+                ice!("should be a type error");
             }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
         }
@@ -1086,7 +1144,8 @@ impl<'r> Lowerer<'r> {
 
         let ty = self.type_info.resolve(ty);
         if self.is_reference_type(&ty) {
-            let size = self.type_info.size_of(&ty, self.runtime);
+            let size =
+                self.type_info.layout_of(&ty, self.runtime).size() as u32;
             let clone = self.get_clone_function(&ty);
             self.add(Instruction::Copy {
                 to: tmp.into(),
@@ -1190,22 +1249,38 @@ impl<'r> Lowerer<'r> {
 
     fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
         let ty = self.type_info.resolve(ty);
-        if self.type_info.size_of(&ty, self.runtime) == 0 {
+        if self.type_info.layout_of(&ty, self.runtime).size() == 0 {
             return None;
         }
+
+        if let Type::Name(type_name) = &ty {
+            let type_def = self.type_info.resolve_type_name(type_name);
+            if let TypeDefinition::Primitive(p) = type_def {
+                use IntKind::*;
+                use IntSize::*;
+                'prim: {
+                    return Some(match p {
+                        Primitive::Int(Unsigned, I8) => IrType::U8,
+                        Primitive::Int(Unsigned, I16) => IrType::U16,
+                        Primitive::Int(Unsigned, I32) => IrType::U32,
+                        Primitive::Int(Unsigned, I64) => IrType::U64,
+                        Primitive::Int(Signed, I8) => IrType::I8,
+                        Primitive::Int(Signed, I16) => IrType::I16,
+                        Primitive::Int(Signed, I32) => IrType::I32,
+                        Primitive::Int(Signed, I64) => IrType::I64,
+                        Primitive::Asn => IrType::U32,
+                        Primitive::Bool => IrType::Bool,
+                        _ => break 'prim,
+                    });
+                }
+            }
+            if let TypeDefinition::Runtime(_, _) = type_def {
+                return Some(IrType::ExtPointer);
+            }
+        }
+
         Some(match ty {
-            Type::Primitive(Primitive::Bool) => IrType::Bool,
-            Type::Primitive(Primitive::U8) => IrType::U8,
-            Type::Primitive(Primitive::U16) => IrType::U16,
-            Type::Primitive(Primitive::U32) => IrType::U32,
-            Type::Primitive(Primitive::U64) => IrType::U64,
-            Type::Primitive(Primitive::I8) => IrType::I8,
-            Type::Primitive(Primitive::I16) => IrType::I16,
-            Type::Primitive(Primitive::I32) => IrType::I32,
-            Type::Primitive(Primitive::I64) => IrType::I64,
-            Type::Primitive(Primitive::Asn) => IrType::Asn,
             Type::IntVar(_) => IrType::I32,
-            Type::BuiltIn(_, _) => IrType::ExtPointer,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => panic!("could not lower: {ty:?}"),
         })
@@ -1219,11 +1294,10 @@ impl<'r> Lowerer<'r> {
         return_type: &Type,
     ) -> Option<Operand> {
         let out_ptr = self.new_tmp();
-        let size = self.type_info.size_of(return_type, self.runtime);
+        let layout = self.type_info.layout_of(return_type, self.runtime);
         self.add(Instruction::Alloc {
             to: out_ptr.clone(),
-            size,
-            align_shift: 0,
+            layout,
         });
 
         let mut params = Vec::new();
@@ -1262,14 +1336,19 @@ impl<'r> Lowerer<'r> {
     }
 
     fn get_clone_function(
-        &self,
+        &mut self,
         ty: &Type,
     ) -> Option<unsafe extern "C" fn(*const (), *mut ())> {
-        let Type::BuiltIn(_, id) = ty else {
+        let Type::Name(type_name) = ty else {
             return None;
         };
 
-        let ty = self.runtime.get_runtime_type(*id)?;
+        let type_def = self.type_info.resolve_type_name(type_name);
+        let TypeDefinition::Runtime(_, id) = type_def else {
+            return None;
+        };
+
+        let ty = self.runtime.get_runtime_type(id)?;
 
         let &Movability::CloneDrop { clone, .. } = ty.movability() else {
             return None;
@@ -1279,14 +1358,19 @@ impl<'r> Lowerer<'r> {
     }
 
     fn get_drop_function(
-        &self,
+        &mut self,
         ty: &Type,
     ) -> Option<unsafe extern "C" fn(*mut ())> {
-        let Type::BuiltIn(_, id) = ty else {
+        let Type::Name(type_name) = ty else {
             return None;
         };
 
-        let ty = self.runtime.get_runtime_type(*id)?;
+        let type_def = self.type_info.resolve_type_name(type_name);
+        let TypeDefinition::Runtime(_, id) = type_def else {
+            return None;
+        };
+
+        let ty = self.runtime.get_runtime_type(id)?;
 
         let &Movability::CloneDrop { drop, .. } = ty.movability() else {
             return None;
@@ -1297,7 +1381,7 @@ impl<'r> Lowerer<'r> {
 
     fn drop_locals(&mut self) {
         let mut instructions = Vec::new();
-        for (var, ty) in &self.stack_slots {
+        for (var, ty) in &self.stack_slots.clone() {
             let drop = self.get_drop_function(ty);
             instructions.push(Instruction::Drop {
                 var: var.clone(),
@@ -1308,41 +1392,42 @@ impl<'r> Lowerer<'r> {
             self.add(inst)
         }
     }
-}
 
-fn binop_to_cmp(op: &ast::BinOp, ty: &Type) -> Option<ir::IntCmp> {
-    let signed = match ty {
-        Type::Primitive(p) => match p {
-            Primitive::U64
-            | Primitive::U32
-            | Primitive::U16
-            | Primitive::U8
-            | Primitive::Asn
-            | Primitive::IpAddr
-            | Primitive::Prefix
-            | Primitive::Bool => false,
-            Primitive::I64
-            | Primitive::I32
-            | Primitive::I16
-            | Primitive::I8 => true,
-            Primitive::Unit => return None,
-            Primitive::String => return None,
-        },
-        Type::IntVar(_) => true,
-        _ => return None,
-    };
+    fn type_is_signed(&mut self, ty: &Type) -> Option<bool> {
+        if let Type::IntVar(_) = ty {
+            return Some(true);
+        };
 
-    Some(match op {
-        ast::BinOp::Eq => ir::IntCmp::Eq,
-        ast::BinOp::Ne => ir::IntCmp::Ne,
-        ast::BinOp::Lt if signed => ir::IntCmp::SLt,
-        ast::BinOp::Le if signed => ir::IntCmp::SLe,
-        ast::BinOp::Gt if signed => ir::IntCmp::SGt,
-        ast::BinOp::Ge if signed => ir::IntCmp::SGe,
-        ast::BinOp::Lt => ir::IntCmp::ULt,
-        ast::BinOp::Le => ir::IntCmp::ULe,
-        ast::BinOp::Gt => ir::IntCmp::UGt,
-        ast::BinOp::Ge => ir::IntCmp::UGe,
-        _ => return None,
-    })
+        let Type::Name(type_name) = ty else {
+            return None;
+        };
+        let type_def = self.type_info.resolve_type_name(type_name);
+        let TypeDefinition::Primitive(Primitive::Int(kind, _)) = type_def
+        else {
+            return None;
+        };
+        Some(kind == IntKind::Signed)
+    }
+
+    fn binop_to_cmp(
+        &mut self,
+        op: &ast::BinOp,
+        ty: &Type,
+    ) -> Option<ir::IntCmp> {
+        let signed = self.type_is_signed(ty)?;
+
+        Some(match op {
+            ast::BinOp::Eq => ir::IntCmp::Eq,
+            ast::BinOp::Ne => ir::IntCmp::Ne,
+            ast::BinOp::Lt if signed => ir::IntCmp::SLt,
+            ast::BinOp::Le if signed => ir::IntCmp::SLe,
+            ast::BinOp::Gt if signed => ir::IntCmp::SGt,
+            ast::BinOp::Ge if signed => ir::IntCmp::SGe,
+            ast::BinOp::Lt => ir::IntCmp::ULt,
+            ast::BinOp::Le => ir::IntCmp::ULe,
+            ast::BinOp::Gt => ir::IntCmp::UGt,
+            ast::BinOp::Ge => ir::IntCmp::UGe,
+            _ => return None,
+        })
+    }
 }

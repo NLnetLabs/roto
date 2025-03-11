@@ -22,10 +22,11 @@ use crate::{
 };
 use cycle::detect_type_cycles;
 use scope::{
-    ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
+    ModuleScope, ResolvedName, ScopeRef, ScopeType,
+    StubDeclarationKind,
 };
 use std::{borrow::Borrow, collections::HashMap};
-use types::{FunctionDefinition, Type};
+use types::{FunctionDefinition, Type, TypeDefinition, TypeName};
 
 use self::{
     error::TypeError,
@@ -59,9 +60,8 @@ pub type TypeResult<T> = Result<T, TypeError>;
 pub fn typecheck(
     runtime: &Runtime,
     module_tree: &ModuleTree,
-    pointer_bytes: u32,
 ) -> TypeResult<TypeInfo> {
-    TypeChecker::check_module_tree(runtime, module_tree, pointer_bytes)
+    TypeChecker::check_module_tree(runtime, module_tree)
 }
 
 impl TypeChecker {
@@ -69,11 +69,10 @@ impl TypeChecker {
     pub fn check_module_tree(
         runtime: &Runtime,
         tree: &ModuleTree,
-        pointer_bytes: u32,
     ) -> Result<TypeInfo, TypeError> {
         let mut checker = TypeChecker {
             functions: Vec::new(),
-            type_info: TypeInfo::new(pointer_bytes),
+            type_info: TypeInfo::new(),
             match_counter: 0,
             if_else_counter: 0,
         };
@@ -102,6 +101,7 @@ impl TypeChecker {
 
         checker.declare_functions(&modules)?;
         checker.tree(&modules)?;
+        checker.coerce_filter_map_return(&modules);
 
         Ok(checker.type_info)
     }
@@ -153,7 +153,7 @@ impl TypeChecker {
                 .resolve_name(ScopeRef::GLOBAL, &ident, true)
                 .is_none()
             {
-                let ty = Type::BuiltIn(name, ty.type_id());
+                let ty = TypeDefinition::Runtime(name, ty.type_id());
                 self.type_info
                     .scope_graph
                     .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
@@ -193,7 +193,10 @@ impl TypeChecker {
                         scope: ScopeRef::GLOBAL,
                         ident: ident.into(),
                     };
-                    Type::Name(name)
+                    Type::Name(TypeName {
+                        name,
+                        arguments: Vec::new(),
+                    })
                 });
 
             let return_type = rust_parameters.next().unwrap();
@@ -208,7 +211,10 @@ impl TypeChecker {
                         scope: ScopeRef::GLOBAL,
                         ident: ident.into(),
                     };
-                    types::FunctionKind::Method(Type::Name(name))
+                    types::FunctionKind::Method(Type::Name(TypeName {
+                        name,
+                        arguments: Vec::new(),
+                    }))
                 }
                 FunctionKind::StaticMethod(id) => {
                     let ident = runtime.get_runtime_type(*id).unwrap().name();
@@ -216,7 +222,10 @@ impl TypeChecker {
                         scope: ScopeRef::GLOBAL,
                         ident: ident.into(),
                     };
-                    types::FunctionKind::StaticMethod(Type::Name(name))
+                    types::FunctionKind::StaticMethod(Type::Name(TypeName {
+                        name,
+                        arguments: Vec::new(),
+                    }))
                 }
             };
 
@@ -261,9 +270,16 @@ impl TypeChecker {
                     id: MetaId(0),
                     node: v,
                 },
-                Type::Name(ResolvedName {
-                    scope: ScopeRef::GLOBAL,
-                    ident: runtime.get_runtime_type(t).unwrap().name().into(),
+                Type::Name(TypeName {
+                    name: ResolvedName {
+                        scope: ScopeRef::GLOBAL,
+                        ident: runtime
+                            .get_runtime_type(t)
+                            .unwrap()
+                            .name()
+                            .into(),
+                    },
+                    arguments: Vec::new(),
                 }),
             )?
         }
@@ -288,7 +304,10 @@ impl TypeChecker {
                         id: MetaId(0),
                         node: Identifier::from(field.name),
                     },
-                    Type::Name(name),
+                    Type::Name(TypeName {
+                        name,
+                        arguments: Vec::new(),
+                    }),
                     field.offset,
                 )?;
             }
@@ -331,7 +350,7 @@ impl TypeChecker {
             for d in &ast.declarations {
                 let (kind, ident) = match d {
                     ast::Declaration::Record(x) => {
-                        (StubDeclarationKind::Type, x.ident.clone())
+                        (StubDeclarationKind::Type(0), x.ident.clone())
                     }
                     ast::Declaration::Function(x) => {
                         (StubDeclarationKind::Function, x.ident.clone())
@@ -384,11 +403,14 @@ impl TypeChecker {
                             scope,
                             ident: **ident,
                         };
-                        let ty = Type::NamedRecord(
-                            name,
+                        let ty = TypeDefinition::Record(
+                            TypeName {
+                                name,
+                                arguments: Vec::new(),
+                            },
                             self.evaluate_record_type(
                                 scope,
-                                &record_type.key_values,
+                                record_type,
                             )?,
                         );
                         self.type_info
@@ -461,8 +483,33 @@ impl TypeChecker {
 
         Ok(())
     }
-    
-    fn imports(&mut self, scope: ScopeRef, paths: &[&Meta<ast::Path>]) -> TypeResult<()> {
+
+    fn coerce_filter_map_return(&mut self, modules: &[(ScopeRef, &Module)]) { 
+        for &(_, module) in modules {
+            for expr in &module.ast.declarations {
+                if let ast::Declaration::FilterMap(f) = &expr {
+                    let Type::Function(_, ret) = self.type_info.type_of(&f.ident) else {
+                        panic!()
+                    };
+                    let Type::Name(TypeName { arguments, .. }) = &*ret else {
+                        panic!()
+                    };
+                    for ty in arguments {
+                        let ty = self.resolve_type(ty);
+                        if let Type::Var(x) = ty {
+                            self.unify_inner(&Type::Var(x), &Type::unit());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn imports(
+        &mut self,
+        scope: ScopeRef,
+        paths: &[&Meta<ast::Path>],
+    ) -> TypeResult<()> {
         // We want imports to work in any order and sometimes there are
         // dependencies between them. This means that we process them in a loop
         // where we exit either if we have no unresolved imports anymore or when
@@ -470,24 +517,27 @@ impl TypeChecker {
         let mut paths = paths.to_vec();
         loop {
             let last_len = paths.len();
-            paths.retain(|p| {
-                self.import(scope, p).is_err()
-            });
+            paths.retain(|p| self.import(scope, p).is_err());
             let new_len = paths.len();
             if new_len == 0 {
                 return Ok(());
             }
             if new_len == last_len {
                 for p in &paths {
-                    self.import(scope, p)?; 
+                    self.import(scope, p)?;
                 }
             }
         }
     }
 
-    fn import(&mut self, scope: ScopeRef, path: &ast::Path) -> TypeResult<()> {
+    fn import(
+        &mut self,
+        scope: ScopeRef,
+        path: &ast::Path,
+    ) -> TypeResult<()> {
         let mut idents = path.idents.iter();
-        let (ident, stub) = self.resolve_module_part_of_path(scope, &mut idents)?;
+        let (ident, stub) =
+            self.resolve_module_part_of_path(scope, &mut idents)?;
 
         // This is a bit of an oversimplification. The
         // resolve_module_part_of_path should just give us the thing
@@ -497,7 +547,10 @@ impl TypeChecker {
             return Err(self.error_expected_module(ident, stub));
         }
 
-        self.type_info.scope_graph.insert_import(scope, ident.id, stub.name).map_err(|old| self.error_declared_twice(ident, old))
+        self.type_info
+            .scope_graph
+            .insert_import(scope, ident.id, stub.name)
+            .map_err(|old| self.error_declared_twice(ident, old))
     }
 
     /// Create a fresh variable in the unionfind structure
@@ -521,7 +574,6 @@ impl TypeChecker {
             .unionfind
             .fresh(move |x| Type::RecordVar(x, fields))
     }
-
 
     /// Check whether `a` is a subtype of `b`
     ///
@@ -557,22 +609,22 @@ impl TypeChecker {
                 subs.insert(x, t);
                 true
             }
-            (Type::List(a), Type::List(b)) => {
-                self.subtype_inner(&a, &b, subs)
-            }
-            (Type::NamedRecord(a_name, _), Type::NamedRecord(b_name, _)) => {
-                a_name == b_name
-            }
             (Type::Record(a_fields), Type::Record(b_fields)) => {
                 self.subtype_fields(&a_fields, &b_fields, subs)
             }
             (
                 Type::RecordVar(_, a_fields),
-                Type::Record(b_fields)
-                | Type::NamedRecord(_, b_fields)
-                | Type::RecordVar(_, b_fields),
+                Type::Record(b_fields) | Type::RecordVar(_, b_fields),
             ) => self.subtype_fields(&a_fields, &b_fields, subs),
-            // TODO: Named record and other stuff
+            (Type::Name(a), Type::Name(b)) => {
+                if a.name != b.name {
+                    return false;
+                }
+                a.arguments
+                    .iter()
+                    .zip(&b.arguments)
+                    .all(|(a, b)| self.subtype_inner(a, b, subs))
+            }
             _ => false,
         }
     }
@@ -702,7 +754,6 @@ impl TypeChecker {
     }
 
     fn unify_inner(&mut self, a: &Type, b: &Type) -> Option<Type> {
-        use types::Primitive::*;
         use Type::*;
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
@@ -710,21 +761,27 @@ impl TypeChecker {
         Some(match (a, b) {
             // We never recurse into NamedRecords, so they are included here.
             (a, b) if a == b => a,
+            (a @ ExplicitVar(_), b) => {
+                panic!("Cannot unify explicit var: {a}, {b}")
+            }
+            (a, b @ ExplicitVar(_)) => {
+                panic!("Cannot unify explicit var: {a}, {b}")
+            }
             (Never, x) | (x, Never) => x,
-            (
-                IntVar(a),
-                b @ (Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64)
-                | IntVar(_)),
-            ) => {
+            (IntVar(a), b @ IntVar(_)) => {
                 self.type_info.unionfind.set(a, b.clone());
                 b.clone()
             }
-            (
-                a @ Primitive(U8 | U16 | U32 | U64 | I8 | I16 | I32 | I64),
-                IntVar(b),
-            ) => {
-                self.type_info.unionfind.set(b, a.clone());
-                a.clone()
+            (IntVar(b), Name(name)) | (Name(name), IntVar(b)) => {
+                if !name.arguments.is_empty() {
+                    return None;
+                }
+                let type_def = self.type_info.resolve_type_name(&name);
+                if !type_def.is_int() {
+                    return None;
+                }
+                self.type_info.unionfind.set(b, Name(name.clone()));
+                Name(name)
             }
             (Var(a), b) => {
                 self.type_info.unionfind.set(a, b.clone());
@@ -734,28 +791,46 @@ impl TypeChecker {
                 self.type_info.unionfind.set(b, a.clone());
                 a.clone()
             }
-            (List(a), List(b)) => List(Box::new(self.unify_inner(&a, &b)?)),
-            (Verdict(a1, r1), Verdict(a2, r2)) => Verdict(
-                Box::new(self.unify_inner(&a1, &a2)?),
-                Box::new(self.unify_inner(&r1, &r2)?),
-            ),
             (
                 RecordVar(a_var, a_fields),
-                ref b @ (RecordVar(_, ref b_fields)
-                | Record(ref b_fields)
-                | NamedRecord(_, ref b_fields)),
+                ref b @ RecordVar(_, ref b_fields),
             ) => {
                 self.unify_fields(&a_fields, b_fields)?;
                 self.type_info.unionfind.set(a_var, b.clone());
                 b.clone()
             }
-            (
-                ref a @ (Record(ref a_fields) | NamedRecord(_, ref a_fields)),
-                RecordVar(b_var, b_fields),
-            ) => {
+            (RecordVar(a_var, a_fields), ref b @ Record(ref b_fields)) => {
+                self.unify_fields(&a_fields, b_fields)?;
+                self.type_info.unionfind.set(a_var, b.clone());
+                b.clone()
+            }
+            (ref a @ Record(ref a_fields), RecordVar(b_var, b_fields)) => {
                 self.unify_fields(a_fields, &b_fields)?;
                 self.type_info.unionfind.set(b_var, a.clone());
                 a.clone()
+            }
+            (RecordVar(var, fields), Name(name))
+            | (Name(name), RecordVar(var, fields)) => {
+                // TODO: Allow type parameters on records
+                if !name.arguments.is_empty() {
+                    return None;
+                }
+                let type_def = self.type_info.resolve_type_name(&name);
+                let TypeDefinition::Record(name, named_fields) = type_def else {
+                    return None;
+                };
+                self.unify_fields(&fields, &named_fields)?;
+                self.type_info.unionfind.set(var, Name(name.clone()));
+                Name(name)
+            }
+            (Name(a), Name(b)) => {
+                if a.name != b.name {
+                    return None;
+                }
+                for (a_param, b_param) in a.arguments.iter().zip(&b.arguments) {
+                    self.unify_inner(a_param, b_param)?;
+                }
+                Name(b)
             }
             (_a, _b) => {
                 return None;
@@ -792,10 +867,6 @@ impl TypeChecker {
 
         if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
             t = self.type_info.unionfind.find(x).clone();
-        }
-
-        if let Type::Name(x) = t {
-            t = self.type_info.types[&x].clone();
         }
 
         t
@@ -854,15 +925,37 @@ impl TypeChecker {
         }
     }
 
-    fn evaluate_record_type(
-        &mut self,
+    fn evaluate_type_expr(
+        &self,
         scope: ScopeRef,
-        fields: &[(Meta<Identifier>, ast::RecordFieldType)],
+        ty: &ast::TypeExpr,
+    ) -> TypeResult<Type> {
+        Ok(match ty {
+            ast::TypeExpr::Path(path, params) => {
+                let path = path.clone();
+                self.resolve_type_path(scope, &path, params)?
+            }
+            ast::TypeExpr::Record(record_ty) => Type::Record(
+                self.evaluate_record_type(scope, record_ty)?,
+            ),
+            ast::TypeExpr::Optional(inner) => {
+                let inner = self.evaluate_type_expr(scope, inner)?;
+                Type::optional(inner)
+            }
+            ast::TypeExpr::Never => Type::Never,
+            ast::TypeExpr::Unit => Type::unit()
+        })
+    }
+
+    fn evaluate_record_type(
+        &self,
+        scope: ScopeRef,
+        expr: &ast::RecordType,
     ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
         let mut type_fields = Vec::new();
 
-        for (ident, ty) in fields {
-            let field_type = self.evaluate_field_type(scope, ty)?;
+        for (ident, ty) in &expr.fields.node {
+            let field_type = self.evaluate_type_expr(scope, ty)?;
             type_fields.push((ident, field_type))
         }
 
@@ -886,25 +979,5 @@ impl TypeChecker {
         }
 
         Ok(unspanned_type_fields)
-    }
-
-    fn evaluate_field_type(
-        &mut self,
-        scope: ScopeRef,
-        ty: &ast::RecordFieldType,
-    ) -> TypeResult<Type> {
-        Ok(match ty {
-            ast::RecordFieldType::Path(path) => {
-                let path = path.clone();
-                self.resolve_type_path(scope, &path)?
-            }
-            ast::RecordFieldType::Record(fields) => Type::Record(
-                self.evaluate_record_type(scope, &fields.key_values)?,
-            ),
-            ast::RecordFieldType::List(inner) => {
-                let inner = self.evaluate_field_type(scope, &inner.node)?;
-                Type::List(Box::new(inner))
-            }
-        })
     }
 }

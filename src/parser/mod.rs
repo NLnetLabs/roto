@@ -9,7 +9,6 @@ use self::meta::{Meta, Span, Spans};
 mod expr;
 mod filter_map;
 pub mod meta;
-mod rib_like;
 mod token;
 
 #[cfg(test)]
@@ -348,7 +347,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let params = self.params()?;
 
         let ret = if self.next_is(Token::Arrow) {
-            Some(self.path()?)
+            Some(self.type_expr()?)
         } else {
             None
         };

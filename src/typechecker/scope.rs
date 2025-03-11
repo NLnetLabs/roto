@@ -5,7 +5,10 @@ use crate::{
     parser::meta::{Meta, MetaId},
 };
 
-use super::{types::FunctionDefinition, Type};
+use super::{
+    types::{FunctionDefinition, TypeDefinition},
+    Type,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ScopeRef(usize);
@@ -30,7 +33,7 @@ pub struct Declaration {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DeclarationKind {
     Value(ValueKind, Type),
-    Type(Type),
+    Type(TypeDefinition),
     Function(FunctionDefinition, Type),
     Module(ScopeRef),
 }
@@ -53,7 +56,10 @@ pub enum StubDeclarationKind {
     Context,
     Constant,
     Variable,
-    Type,
+    /// The declaration is a type
+    ///
+    /// The usize parameter specifies the number of type parameters
+    Type(usize),
     Function,
     Module,
 }
@@ -104,7 +110,9 @@ impl DeclarationKind {
             Self::Value(ValueKind::Context(_), _) => {
                 StubDeclarationKind::Context
             }
-            Self::Type(_) => StubDeclarationKind::Type,
+            Self::Type(def) => {
+                StubDeclarationKind::Type(def.type_parameters())
+            }
             Self::Function(_, _) => StubDeclarationKind::Function,
             Self::Module(_) => StubDeclarationKind::Module,
         }
@@ -269,7 +277,7 @@ impl ScopeGraph {
         &mut self,
         scope: ScopeRef,
         ident: &Meta<Identifier>,
-        ty: Type,
+        ty: TypeDefinition,
     ) -> Result<(), MetaId> {
         let name = ResolvedName {
             scope,

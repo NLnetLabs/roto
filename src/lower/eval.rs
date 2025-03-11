@@ -520,7 +520,7 @@ pub fn eval(
             }
             Instruction::Div {
                 to,
-                ty,
+                signed: _,
                 left,
                 right,
             } => {
@@ -537,7 +537,6 @@ pub fn eval(
                     (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l / r),
                     _ => panic!(),
                 };
-                debug_assert_eq!(*ty, res.get_type());
                 vars.insert(to.clone(), res);
             }
             Instruction::Extend { to, ty, from } => {
@@ -553,20 +552,17 @@ pub fn eval(
                 let new = mem.offset_by(from, *offset as usize);
                 vars.insert(to.clone(), IrValue::Pointer(new));
             }
-            Instruction::Alloc {
-                to,
-                size,
-                align_shift: _,
-            } => {
-                let pointer = mem.allocate(*size as usize);
+            Instruction::Alloc { to, layout } => {
+                let pointer = mem.allocate(layout.size());
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
-            Instruction::Initialize {
-                to,
-                bytes,
-                align_shift: _,
-            } => {
-                let pointer = mem.allocate(bytes.len());
+            Instruction::Initialize { to, bytes, layout } => {
+                // There are many cases where we only want to initialize the
+                // start of an allocation, but it needs to be in bounds of the
+                // allocation.
+                assert!(bytes.len() <= layout.size());
+
+                let pointer = mem.allocate(layout.size());
                 mem.write(pointer, bytes);
                 vars.insert(to.clone(), IrValue::Pointer(pointer));
             }

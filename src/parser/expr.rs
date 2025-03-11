@@ -5,7 +5,7 @@ use inetnum::asn::Asn;
 use crate::{
     ast::{
         BinOp, Block, Expr, Identifier, Literal, Match, MatchArm, Path,
-        Pattern, Record, ReturnKind, Stmt,
+        Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
     },
     parser::ParseError,
 };
@@ -487,18 +487,21 @@ impl Parser<'_, '_> {
                 Pattern::Underscore
             } else {
                 let data_field = if self.peek_is(Token::RoundLeft) {
-                    self.take(Token::RoundLeft)?;
-                    let ident = self.identifier()?;
-                    let end_span = self.take(Token::RoundRight)?;
-                    span = self.get_span(&variant).merge(end_span);
-                    Some(ident)
+                    let fields = self.separated(
+                        Token::RoundLeft,
+                        Token::RoundRight,
+                        Token::Comma,
+                        Self::identifier,
+                    )?;
+                    span = self.merge_spans(&variant, &fields);
+                    Some(fields)
                 } else {
                     None
                 };
 
                 Pattern::EnumVariant {
                     variant,
-                    data_field,
+                    fields: data_field,
                 }
             };
 
@@ -666,6 +669,63 @@ impl Parser<'_, '_> {
         )?;
 
         Ok(args)
+    }
+
+    pub(super) fn type_expr(&mut self) -> ParseResult<Meta<TypeExpr>> {
+        if self.peek_is(Token::Bang) {
+            let span = self.take(Token::Bang)?;
+            return Ok(self.spans.add(span, TypeExpr::Never));
+        }
+
+        if self.peek_is(Token::CurlyLeft) {
+            let record_type = self.record_type()?;
+            let span = self.get_span(&record_type.fields);
+            return Ok(self.spans.add(span, TypeExpr::Record(record_type)));
+        }
+
+        let path = self.path()?;
+        let mut span = self.get_span(&path);
+
+        let params = if self.peek_is(Token::SquareLeft) {
+            self.separated(
+                Token::SquareLeft,
+                Token::SquareRight,
+                Token::Comma,
+                Self::type_expr,
+            )?
+            .node
+        } else {
+            Vec::new()
+        };
+
+        let mut type_name = TypeExpr::Path(path, params);
+        while self.peek_is(Token::QuestionMark) {
+            let span2 = self.take(Token::QuestionMark).unwrap();
+            span = span.merge(span2);
+            type_name = TypeExpr::Optional(Box::new(type_name));
+        }
+        Ok(self.add_span(span, type_name))
+    }
+
+    pub(super) fn record_type(&mut self) -> ParseResult<RecordType> {
+        let fields = self.separated(
+            Token::CurlyLeft,
+            Token::CurlyRight,
+            Token::Comma,
+            Self::record_field,
+        )?;
+        Ok(RecordType { fields })
+    }
+
+    fn record_field(
+        &mut self,
+    ) -> ParseResult<(Meta<Identifier>, Meta<TypeExpr>)> {
+        let key = self.identifier()?;
+        self.take(Token::Colon)?;
+
+        let field_type = self.type_expr()?;
+
+        Ok((key, field_type))
     }
 
     pub(super) fn path(&mut self) -> ParseResult<Meta<Path>> {

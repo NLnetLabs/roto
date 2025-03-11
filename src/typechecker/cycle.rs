@@ -3,7 +3,10 @@
 //! Roto types are not allowed to be recursive. See [`detect_type_cycles`]
 //! for more information.
 
-use super::{scope::ResolvedName, types::Type};
+use super::{
+    scope::ResolvedName,
+    types::{EnumVariant, Type, TypeDefinition},
+};
 use std::collections::HashMap;
 
 /// Return an error if there is a cycles in the type declarations
@@ -30,7 +33,7 @@ use std::collections::HashMap;
 /// <https://en.wikipedia.org/wiki/Topological_sorting>, where `false`
 /// is a temporary mark and `true` is a permanent mark.
 pub fn detect_type_cycles(
-    types: &HashMap<ResolvedName, Type>,
+    types: &HashMap<ResolvedName, TypeDefinition>,
 ) -> Result<(), String> {
     let mut visited = HashMap::new();
 
@@ -42,7 +45,7 @@ pub fn detect_type_cycles(
 }
 
 fn visit_name(
-    types: &HashMap<ResolvedName, Type>,
+    types: &HashMap<ResolvedName, TypeDefinition>,
     visited: &mut HashMap<ResolvedName, bool>,
     name: ResolvedName,
 ) -> Result<(), String> {
@@ -53,55 +56,48 @@ fn visit_name(
     };
 
     visited.insert(name, false);
-    visit(types, visited, &types[&name])?;
+    match &types[&name] {
+        TypeDefinition::Enum(_, variants) => {
+            for variant in variants {
+                let EnumVariant { name: _, fields } = variant;
+                for field_ty in fields {
+                    visit(types, visited, field_ty)?;
+                }
+            }
+        }
+        TypeDefinition::Record(_, fields) => {
+            for (_, field_ty) in fields {
+                visit(types, visited, field_ty)?;
+            }
+        }
+        TypeDefinition::Runtime(_, _) => {}
+        TypeDefinition::Primitive(_) => {}
+    }
     visited.insert(name, true);
 
     Ok(())
 }
 
 fn visit<'a>(
-    types: &'a HashMap<ResolvedName, Type>,
+    types: &'a HashMap<ResolvedName, TypeDefinition>,
     visited: &mut HashMap<ResolvedName, bool>,
     ty: &'a Type,
 ) -> Result<(), String> {
     match ty {
-        Type::Var(_)
-        | Type::IntVar(_)
-        | Type::ExplicitVar(_)
-        | Type::RecordVar(_, _) => {
+        Type::Var(_) | Type::IntVar(_) | Type::RecordVar(_, _) => {
             Err("there should be no unresolved type variables left".into())
         }
         Type::Never => {
             Err("never should not appear in a type declaration".into())
         }
-        Type::Primitive(_)
-        | Type::BuiltIn(_, _)
-        | Type::Function(_, _)
-        | Type::Filter(_)
-        | Type::FilterMap(_) => {
-            // do nothing on primitive types
-            // no need to recurse into them.
-            Ok(())
-        }
-        Type::List(t) => visit(types, visited, t),
-        Type::Verdict(t1, t2) => {
-            visit(types, visited, t1)?;
-            visit(types, visited, t2)
-        }
-        Type::NamedRecord(_, fields) | Type::Record(fields) => {
+        Type::Function(_, _) => Ok(()),
+        Type::ExplicitVar(_) => Ok(()),
+        Type::Record(fields) => {
             for (_, ty) in fields {
                 visit(types, visited, ty)?;
             }
             Ok(())
         }
-        Type::Enum(_, variants) => {
-            for (_, ty) in variants {
-                if let Some(ty) = ty {
-                    visit(types, visited, ty)?;
-                }
-            }
-            Ok(())
-        }
-        Type::Name(ident) => visit_name(types, visited, *ident),
+        Type::Name(ident) => visit_name(types, visited, ident.name),
     }
 }

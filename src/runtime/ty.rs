@@ -17,7 +17,7 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use super::{val::Val, verdict::Verdict};
+use super::{optional::Optional, val::Val, verdict::Verdict};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -111,11 +111,15 @@ impl TypeRegistry {
 /// Additionally, this trait specifies how a type should be passed to Roto, via
 /// the `AsParam` associated type.
 pub trait Reflect: 'static {
+    type Transformed;
     /// The type that this type should be converted into when passed to Roto
     type AsParam;
 
+    fn transform(self) -> Self::Transformed;
+    fn untransform(transformed: Self::Transformed) -> Self;
+
     /// Convert the type to its `AsParam`
-    fn as_param(&mut self) -> Self::AsParam;
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam;
 
     /// Put information about this type into the [`TypeRegistry`]
     ///
@@ -124,10 +128,19 @@ pub trait Reflect: 'static {
 }
 
 impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
+    type Transformed = Self;
     type AsParam = *mut Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        self as _
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        transformed as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -140,10 +153,19 @@ impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
 }
 
 impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
+    type Transformed = Self;
     type AsParam = *mut Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        self as _
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        transformed as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -156,10 +178,19 @@ impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
 }
 
 impl<T: Reflect> Reflect for Option<T> {
-    type AsParam = *mut Self;
+    type Transformed = Optional<T>;
+    type AsParam = *mut Optional<T>;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        self as _
+    fn transform(self) -> Self::Transformed {
+        self.into()
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed.into()
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        transformed as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -171,10 +202,19 @@ impl<T: Reflect> Reflect for Option<T> {
 }
 
 impl<T: 'static> Reflect for *mut T {
+    type Transformed = Self;
     type AsParam = Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        *self
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        *transformed
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -186,10 +226,19 @@ impl<T: 'static> Reflect for *mut T {
 }
 
 impl<T: 'static> Reflect for *const T {
+    type Transformed = Self;
     type AsParam = Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        *self
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        *transformed
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -201,10 +250,19 @@ impl<T: 'static> Reflect for *const T {
 }
 
 impl<T: 'static> Reflect for Val<T> {
+    type Transformed = Self;
     type AsParam = *mut T;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        &mut self.0 as _
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        &mut transformed.0 as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -216,10 +274,19 @@ impl<T: 'static> Reflect for Val<T> {
 }
 
 impl Reflect for IpAddr {
+    type Transformed = Self;
     type AsParam = *mut Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        self as _
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        transformed as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -228,10 +295,19 @@ impl Reflect for IpAddr {
 }
 
 impl Reflect for Prefix {
+    type Transformed = Self;
     type AsParam = *mut Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        self as _
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        transformed as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -240,10 +316,19 @@ impl Reflect for Prefix {
 }
 
 impl Reflect for Arc<str> {
+    type Transformed = Self;
     type AsParam = *mut Self;
 
-    fn as_param(&mut self) -> Self::AsParam {
-        self as _
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        transformed as _
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -254,10 +339,21 @@ impl Reflect for Arc<str> {
 macro_rules! simple_reflect {
     ($t:ty) => {
         impl Reflect for $t {
+            type Transformed = Self;
             type AsParam = Self;
 
-            fn as_param(&mut self) -> Self::AsParam {
-                *self
+            fn transform(self) -> Self::Transformed {
+                self
+            }
+
+            fn untransform(transformed: Self::Transformed) -> Self {
+                transformed
+            }
+
+            fn as_param(
+                transformed: &mut Self::Transformed,
+            ) -> Self::AsParam {
+                *transformed
             }
 
             fn resolve(registry: &mut TypeRegistry) -> Ty {

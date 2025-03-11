@@ -22,15 +22,10 @@ fn compile(f: FileTree) -> Compiled {
 fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
     let _ = env_logger::try_init();
 
-    let pointer_bytes = usize::BITS / 8;
-
-    let res = f
-        .parse()
-        .and_then(|x| x.typecheck(runtime, pointer_bytes))
-        .map(|x| {
-            let x = x.lower();
-            x.codegen()
-        });
+    let res = f.parse().and_then(|x| x.typecheck(runtime)).map(|x| {
+        let x = x.lower();
+        x.codegen()
+    });
 
     match res {
         Ok(x) => x,
@@ -1174,6 +1169,135 @@ fn string_repeat() {
 
     let res = f.call(&mut (), "boo".into());
     assert_eq!(res, Verdict::Accept("BOO! BOO! BOO! BOO! BOO!".into()));
+}
+
+#[test]
+fn match_optional_value() {
+    let s = src!(
+        "
+        function or_fortytwo(x: u32?) -> u32 {
+            match x {
+                Some(x) -> x,
+                None -> 42,
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (Option<u32>,), u32>("or_fortytwo")
+        .unwrap();
+
+    let res = f.call(&mut (), Some(10));
+    assert_eq!(res, 10);
+    let res = f.call(&mut (), None);
+    assert_eq!(res, 42);
+}
+
+#[test]
+fn construct_optional_value() {
+    let s = src!(
+        "
+        function sub_one(x: u32) -> u32? {
+            if x == 0 {
+                Optional.None
+            } else {
+                Optional.Some(x - 1)
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (u32,), Option<u32>>("sub_one")
+        .unwrap();
+
+    let res = f.call(&mut (), 0);
+    assert_eq!(res, None);
+    let res = f.call(&mut (), 2);
+    assert_eq!(res, Some(1));
+}
+
+#[test]
+fn filter_map_with_manual_verdict() {
+    let s = src!(
+        "
+        filtermap foo(x: i32) {
+            if x < 10 {
+                return Verdict.Reject(10)
+            } else {
+                return Verdict.Accept(x)
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (i32,), Verdict<i32, i32>>("foo")
+        .unwrap();
+
+    let res = f.call(&mut (), 0);
+    assert_eq!(res, Verdict::Reject(10));
+    let res = f.call(&mut (), 12);
+    assert_eq!(res, Verdict::Accept(12));
+}
+
+#[test]
+fn match_on_verdict() {
+    let s = src!(
+        "
+        filtermap over_10(x: i32) {
+            if x > 10 {
+                accept x
+            } else {
+                reject x
+            }
+        }
+
+        filtermap foo(x: i32) {
+            match over_10(x) {
+                Accept(x) -> accept x + 1,
+                Reject(x) -> reject x,
+            };
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), (i32,), Verdict<i32, i32>>("foo")
+        .unwrap();
+
+    let res = f.call(&mut (), 5);
+    assert_eq!(res, Verdict::Reject(5));
+    let res = f.call(&mut (), 15);
+    assert_eq!(res, Verdict::Accept(16));
+    let res = f.call(&mut (), 25);
+    assert_eq!(res, Verdict::Accept(26));
+}
+
+#[test]
+fn non_sugar_optional() {
+    let s = src!(
+        "
+        function foo() -> Optional[u32] {
+            Optional.Some(2)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), (), Option<u32>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, Some(2));
 }
 
 #[test]

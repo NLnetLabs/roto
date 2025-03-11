@@ -24,7 +24,7 @@ use std::{fmt::Display, sync::Arc};
 
 use crate::{
     ast::Identifier,
-    runtime,
+    runtime::{self, layout::Layout},
     typechecker::{
         self,
         scope::{ScopeGraph, ScopeRef},
@@ -144,7 +144,7 @@ pub enum Instruction {
 
     Div {
         to: Var,
-        ty: IrType,
+        signed: bool,
         left: Operand,
         right: Operand,
     },
@@ -190,15 +190,14 @@ pub enum Instruction {
     /// Allocate a stack slot
     Alloc {
         to: Var,
-        size: u32,
-        align_shift: u8,
+        layout: Layout,
     },
 
     /// Write literal bytes to a variable
     Initialize {
         to: Var,
         bytes: Vec<u8>,
-        align_shift: u8,
+        layout: Layout,
     },
 
     /// Write to a stack slot
@@ -509,15 +508,16 @@ impl<'a> IrPrinter<'a> {
             }
             Div {
                 to,
-                ty,
+                signed,
                 left,
                 right,
             } => {
                 format!(
-                    "{}: {ty} = {} / {}",
+                    "{}: = {} / {} ({})",
                     self.var(to),
                     self.operand(left),
                     self.operand(right),
+                    if *signed { "signed" } else { "unsigned" },
                 )
             }
             Extend { to, ty, from } => {
@@ -546,29 +546,25 @@ impl<'a> IrPrinter<'a> {
                     self.label(default)
                 )
             }
-            Alloc {
-                to,
-                size,
-                align_shift,
-            } => {
+            Alloc { to, layout } => {
                 format!(
-                    "{} = mem::alloc(size={size}, align_shift={align_shift})",
-                    self.var(to)
+                    "{} = mem::alloc(size={}, align={})",
+                    self.var(to),
+                    layout.size(),
+                    layout.align(),
                 )
             }
-            Initialize {
-                to,
-                bytes,
-                align_shift,
-            } => {
+            Initialize { to, bytes, layout } => {
                 format!(
-                    "{} = mem::initialize([{}], align_shift={align_shift})",
+                    "{} = mem::initialize([{}], size={}, align={})",
                     self.var(to),
                     bytes
                         .iter()
                         .map(|b| b.to_string())
                         .collect::<Vec<_>>()
-                        .join(", ")
+                        .join(", "),
+                    layout.size(),
+                    layout.align(),
                 )
             }
             Offset { to, from, offset } => {

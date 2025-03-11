@@ -11,13 +11,7 @@ fn compile(s: FileTree) -> Lowered {
         .try_init();
 
     let runtime = routecore_runtime().unwrap();
-    let pointer_bytes = usize::BITS / 8;
-
-    s.parse()
-        .unwrap()
-        .typecheck(runtime, pointer_bytes)
-        .unwrap()
-        .lower()
+    s.parse().unwrap().typecheck(runtime).unwrap().lower()
 }
 
 /// Helper for constructing complex values for Roto

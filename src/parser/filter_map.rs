@@ -1,4 +1,7 @@
-use crate::ast::{FilterMap, FilterType, Identifier, Params, Path};
+use crate::ast::{
+    FilterMap, FilterType, Identifier, Params, RecordTypeDeclaration,
+    TypeExpr,
+};
 
 use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
 
@@ -62,10 +65,25 @@ impl Parser<'_, '_> {
     /// ```
     fn type_ident_field(
         &mut self,
-    ) -> ParseResult<(Meta<Identifier>, Meta<Path>)> {
+    ) -> ParseResult<(Meta<Identifier>, Meta<TypeExpr>)> {
         let field_name = self.identifier()?;
         self.take(Token::Colon)?;
-        let ty = self.path()?;
+        let ty = self.type_expr()?;
         Ok((field_name, ty))
+    }
+
+    /// Parse a record type declaration
+    ///
+    /// ```ebnf
+    /// Type ::= 'type' TypeIdentifier RibBody
+    /// ```
+    pub(super) fn record_type_assignment(
+        &mut self,
+    ) -> ParseResult<RecordTypeDeclaration> {
+        self.take(Token::Type)?;
+        let ident = self.identifier()?;
+        let record_type = self.record_type()?;
+
+        Ok(RecordTypeDeclaration { ident, record_type })
     }
 }

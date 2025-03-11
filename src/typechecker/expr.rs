@@ -3,21 +3,21 @@
 use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
-    ast::{self, Identifier, Pattern},
+    ast::{self, Identifier, Pattern, TypeExpr},
     parser::meta::{Meta, MetaId},
     typechecker::scope::DeclarationKind,
 };
 
 use super::{
-    TypeChecker, TypeResult,
     scope::{
         ResolvedName, ScopeRef, ScopeType, StubDeclaration,
         StubDeclarationKind, ValueKind,
     },
     types::{
-        Function, FunctionDefinition, FunctionKind, Primitive, Signature,
-        Type,
+        EnumVariant, Function, FunctionDefinition, FunctionKind, Signature,
+        Type, TypeDefinition, TypeName,
     },
+    TypeChecker, TypeResult,
 };
 
 #[derive(Clone)]
@@ -55,9 +55,8 @@ pub enum ResolvedPath {
         signature: Signature,
     },
     EnumConstructor {
-        ty: Type,
-        variant: Identifier,
-        data: Option<Type>,
+        ty: TypeDefinition,
+        variant: EnumVariant,
     },
 }
 
@@ -91,14 +90,12 @@ impl TypeChecker {
             if !diverged {
                 self.unify(
                     &ctx.expected_type,
-                    &Type::Primitive(Primitive::Unit),
+                    &Type::unit(),
                     block.id,
                     None,
                 )?;
             }
-            self.type_info
-                .expr_types
-                .insert(block.id, Type::Primitive(Primitive::Unit));
+            self.type_info.expr_types.insert(block.id, Type::unit());
             self.type_info.diverges.insert(block.id, diverged);
             return Ok(diverged);
         };
@@ -164,20 +161,14 @@ impl TypeChecker {
                     ast::ReturnKind::Accept => {
                         let a_ty = self.fresh_var();
                         let b_ty = self.fresh_var();
-                        let ty = Type::Verdict(
-                            Box::new(a_ty.clone()),
-                            Box::new(b_ty),
-                        );
+                        let ty = Type::verdict(&a_ty, b_ty);
                         self.unify(ret, &ty, id, None)?;
                         self.resolve_type(&a_ty)
                     }
                     ast::ReturnKind::Reject => {
                         let a_ty = self.fresh_var();
                         let r_ty = self.fresh_var();
-                        let ty = Type::Verdict(
-                            Box::new(a_ty),
-                            Box::new(r_ty.clone()),
-                        );
+                        let ty = Type::verdict(a_ty, &r_ty);
                         self.unify(ret, &ty, id, None)?;
                         self.resolve_type(&r_ty)
                     }
@@ -190,19 +181,14 @@ impl TypeChecker {
                         e,
                     )?;
                 } else {
-                    self.unify(
-                        &expected_type,
-                        &Type::Primitive(Primitive::Unit),
-                        id,
-                        None,
-                    )?;
+                    self.unify(&expected_type, &Type::unit(), id, None)?;
                 }
 
                 self.type_info.return_types.insert(
                     id,
                     ctx.function_return_type
                         .as_ref()
-                        .unwrap_or(&Type::Primitive(Primitive::Unit))
+                        .unwrap_or(&Type::unit())
                         .clone(),
                 );
 
@@ -257,17 +243,18 @@ impl TypeChecker {
                             ty
                         }
                     }
-                    ResolvedPath::EnumConstructor { ty, variant, data } => {
-                        if data.is_some() {
+                    ResolvedPath::EnumConstructor { ty, variant } => {
+                        if !variant.fields.is_empty() {
                             return Err(self.error_simple(
                                 format!(
-                                "enum variant {variant} requires an argument"
-                            ),
-                                "requires an argument".to_string(),
+                                    "enum variant {} requires arguments",
+                                    variant.name
+                                ),
+                                "requires arguments".to_string(),
                                 last_ident.id,
                             ));
                         }
-                        ty
+                        ty.instantiate(|| self.fresh_var())
                     }
                     _ => {
                         return Err(self.error_expected_value_path(
@@ -294,10 +281,23 @@ impl TypeChecker {
             }
             TypedRecord(path, record) => {
                 let last_ident = path.idents.last().unwrap();
-                let type_name = self.resolve_type_path(scope, path)?;
+                let type_name = self.resolve_type_path(scope, path, &[])?;
                 let ty = self.resolve_type(&type_name);
 
-                let Type::NamedRecord(_, record_fields) = &ty else {
+                let Type::Name(type_name) = &ty else {
+                    return Err(self.error_simple(
+                        format!(
+                            "Expected a named record type, but found `{last_ident}`"
+                        ),
+                        "not a named record type",
+                        last_ident.id,
+                    ));
+                };
+
+                let type_def = self.type_info.resolve_type_name(type_name);
+
+                let TypeDefinition::Record(_, record_fields) = &type_def
+                else {
                     return Err(self.error_simple(
                         format!(
                             "Expected a named record type, but found `{last_ident}`"
@@ -329,7 +329,7 @@ impl TypeChecker {
             }
             List(es) => {
                 let var = self.fresh_var();
-                let ty = Type::List(Box::new(var.clone()));
+                let ty = Type::list(&var);
                 self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 let mut diverges = false;
@@ -342,27 +342,14 @@ impl TypeChecker {
                 Ok(diverges)
             }
             Not(e) => {
-                self.unify(
-                    &ctx.expected_type,
-                    &Type::Primitive(Primitive::Bool),
-                    id,
-                    None,
-                )?;
-                self.expr(
-                    scope,
-                    &ctx.with_type(Type::Primitive(Primitive::Bool)),
-                    e,
-                )
+                self.unify(&ctx.expected_type, &Type::bool(), id, None)?;
+                self.expr(scope, &ctx.with_type(Type::bool()), e)
             }
             BinOp(left, op, right) => {
                 self.binop(scope, ctx, op, id, left, right)
             }
             IfElse(c, t, e) => {
-                self.expr(
-                    scope,
-                    &ctx.with_type(Type::Primitive(Primitive::Bool)),
-                    c,
-                )?;
+                self.expr(scope, &ctx.with_type(Type::bool()), c)?;
 
                 let idx = self.if_else_counter;
                 self.if_else_counter += 1;
@@ -385,12 +372,7 @@ impl TypeChecker {
                     self.type_info.diverges.insert(id, diverges);
                     Ok(diverges)
                 } else {
-                    self.unify(
-                        &ctx.expected_type,
-                        &Type::Primitive(Primitive::Unit),
-                        id,
-                        None,
-                    )?;
+                    self.unify(&ctx.expected_type, &Type::bool(), id, None)?;
 
                     // An if without else does not always diverge, because
                     // the condition could be false
@@ -400,7 +382,7 @@ impl TypeChecker {
                         .wrap(scope, ScopeType::Then(idx));
                     let _ = self.block(
                         then_scope,
-                        &ctx.with_type(Type::Primitive(Primitive::Unit)),
+                        &ctx.with_type(Type::bool()),
                         t,
                     )?;
                     self.type_info.diverges.insert(id, false);
@@ -419,10 +401,10 @@ impl TypeChecker {
         let span = lit.id;
 
         let t = match lit.node {
-            String(_) => Type::Primitive(Primitive::String),
-            Asn(_) => Type::Primitive(Primitive::Asn),
-            IpAddress(_) => Type::Primitive(Primitive::IpAddr),
-            Bool(_) => Type::Primitive(Primitive::Bool),
+            String(_) => Type::string(),
+            Asn(_) => Type::asn(),
+            IpAddress(_) => Type::ip_addr(),
+            Bool(_) => Type::bool(),
             Integer(_) => self.fresh_int(),
         };
 
@@ -452,7 +434,13 @@ impl TypeChecker {
             todo!("make a pretty error")
         }
 
-        let Type::Enum(_, variants) = &t_expr else {
+        let Type::Name(type_name) = &t_expr else {
+            return Err(self.error_can_only_match_on_enum(&t_expr, expr.id));
+        };
+
+        let type_def = self.type_info.resolve_type_name(type_name);
+        let Some(variants) = type_def.match_patterns(&type_name.arguments)
+        else {
             return Err(self.error_can_only_match_on_enum(&t_expr, expr.id));
         };
 
@@ -488,8 +476,7 @@ impl TypeChecker {
                         .wrap(scope, ScopeType::MatchArm(match_id, None));
 
                     if let Some(guard) = guard {
-                        let ctx =
-                            ctx.with_type(Type::Primitive(Primitive::Bool));
+                        let ctx = ctx.with_type(Type::bool());
                         self.expr(arm_scope, &ctx, guard)?;
                     } else {
                         default_arm = true;
@@ -500,10 +487,10 @@ impl TypeChecker {
                 }
                 Pattern::EnumVariant {
                     variant,
-                    data_field,
+                    fields: data_field,
                 } => {
                     let Some(idx) =
-                        variants.iter().position(|(v, _)| v == &variant.node)
+                        variants.iter().position(|v| v.name == variant.node)
                     else {
                         return Err(self
                             .error_variant_does_not_exist(variant, &t_expr));
@@ -517,34 +504,50 @@ impl TypeChecker {
                         )
                     }
 
-                    let ty = &variants[idx].1;
+                    let field_types = &variants[idx].fields;
                     let arm_scope = self.type_info.scope_graph.wrap(
                         scope,
                         ScopeType::MatchArm(match_id, Some(idx)),
                     );
 
-                    match (ty, data_field) {
-                        (None, None) => {} // ok!
-                        (Some(t), Some(id)) => {
-                            self.insert_var(arm_scope, id.clone(), t)?;
-                        }
-                        (None, Some(data_field)) => {
+                    match (field_types.as_slice(), data_field) {
+                        ([], None) => {} // ok!
+                        ([], Some(_)) => {
                             return Err(self
-                                .error_variant_does_not_have_field(
-                                    data_field, &t_expr,
+                                .error_variant_does_not_have_fields(
+                                    variant, &t_expr,
                                 ));
                         }
-                        (Some(_), None) => {
+                        (field_types, Some(fields)) => {
+                            if field_types.len() != fields.len() {
+                                return Err(self
+                                    .error_number_of_arguments_dont_match(
+                                        "pattern",
+                                        variant,
+                                        field_types.len(),
+                                        fields.len(),
+                                    ));
+                            }
+                            for (ty, field) in
+                                field_types.iter().zip(&fields.node)
+                            {
+                                self.insert_var(
+                                    arm_scope,
+                                    field.clone(),
+                                    ty,
+                                )?;
+                            }
+                        }
+                        (_field_types, None) => {
                             return Err(self
-                                .error_need_data_field_on_pattern(
+                                .error_need_arguments_on_pattern(
                                     variant, &t_expr,
                                 ));
                         }
                     }
 
                     if let Some(guard) = guard {
-                        let ctx =
-                            ctx.with_type(Type::Primitive(Primitive::Bool));
+                        let ctx = ctx.with_type(Type::bool());
                         self.expr(arm_scope, &ctx, guard)?;
                     } else if !variant_already_used {
                         // If there is a guard we don't mark the variant as used,
@@ -561,7 +564,7 @@ impl TypeChecker {
         if !default_arm && used_variants.len() < variants.len() {
             let mut missing_variants = Vec::new();
             for v in variants {
-                let v = v.0;
+                let v = v.name;
                 if !used_variants.contains(&v) {
                     missing_variants.push(v);
                 }
@@ -598,23 +601,16 @@ impl TypeChecker {
 
             let resolved = self.resolve_type(&var);
 
-            if let Type::Primitive(Primitive::IpAddr) = resolved {
-                let ctx_right = ctx.with_type(Type::Primitive(Primitive::U8));
+            if Type::ip_addr() == resolved {
+                let ctx_right = ctx.with_type(Type::u8());
                 diverges |= self.expr(scope, &ctx_right, right)?;
 
-                self.unify(
-                    &ctx.expected_type,
-                    &Type::Primitive(Primitive::Prefix),
-                    span,
-                    None,
-                )?;
+                self.unify(&ctx.expected_type, &Type::prefix(), span, None)?;
 
                 let name = Identifier::from("new");
                 let (function, _sig) = self
                     .find_method(
-                        &FunctionKind::StaticMethod(Type::Primitive(
-                            Primitive::Prefix,
-                        )),
+                        &FunctionKind::StaticMethod(Type::prefix()),
                         name,
                     )
                     .unwrap();
@@ -633,24 +629,14 @@ impl TypeChecker {
 
             let resolved = self.resolve_type(&var);
 
-            if let Type::Primitive(Primitive::String) = resolved {
+            if Type::string() == resolved {
                 diverges |= self.expr(scope, &ctx_new, right)?;
 
-                self.unify(
-                    &ctx.expected_type,
-                    &Type::Primitive(Primitive::String),
-                    span,
-                    None,
-                )?;
+                self.unify(&ctx.expected_type, &Type::string(), span, None)?;
 
                 let name = Identifier::from("append");
                 let (function, _sig) = self
-                    .find_method(
-                        &FunctionKind::Method(Type::Primitive(
-                            Primitive::String,
-                        )),
-                        name,
-                    )
+                    .find_method(&FunctionKind::Method(Type::string()), name)
                     .unwrap();
                 let function = function.clone();
                 self.type_info.function_calls.insert(span, function);
@@ -660,14 +646,9 @@ impl TypeChecker {
 
         match op {
             And | Or => {
-                self.unify(
-                    &ctx.expected_type,
-                    &Type::Primitive(Primitive::Bool),
-                    span,
-                    None,
-                )?;
+                self.unify(&ctx.expected_type, &Type::bool(), span, None)?;
 
-                let ctx = ctx.with_type(Type::Primitive(Primitive::Bool));
+                let ctx = ctx.with_type(Type::bool());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
@@ -675,12 +656,7 @@ impl TypeChecker {
                 Ok(diverges)
             }
             Lt | Le | Gt | Ge => {
-                self.unify(
-                    &ctx.expected_type,
-                    &Type::Primitive(Primitive::Bool),
-                    span,
-                    None,
-                )?;
+                self.unify(&ctx.expected_type, &Type::bool(), span, None)?;
 
                 let ctx = ctx.with_type(self.fresh_int());
 
@@ -690,12 +666,7 @@ impl TypeChecker {
                 Ok(diverges)
             }
             Eq | Ne => {
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &ctx.expected_type,
-                    span,
-                    None,
-                )?;
+                self.unify(&Type::bool(), &ctx.expected_type, span, None)?;
                 let ctx = ctx.with_type(self.fresh_var());
 
                 let mut diverges = false;
@@ -703,21 +674,30 @@ impl TypeChecker {
                 diverges |= self.expr(scope, &ctx, right)?;
 
                 let ty = self.resolve_type(&ctx.expected_type);
-                match ty {
+                let comparable = match ty {
                     Type::IntVar(_)
                     | Type::Never
-                    | Type::Primitive(_)
-                    | Type::Enum(_, _)
                     | Type::Record(..)
-                    | Type::RecordVar(..)
-                    | Type::NamedRecord(..) => (),
-                    _ => {
-                        return Err(self.error_simple(
-                            "type cannot be compared",
-                            "cannot be compared",
-                            span,
-                        ));
+                    | Type::RecordVar(..) => true,
+                    Type::Name(type_name) => {
+                        let type_def =
+                            self.type_info.resolve_type_name(&type_name);
+                        match type_def {
+                            TypeDefinition::Enum(_, _)
+                            | TypeDefinition::Record(_, _)
+                            | TypeDefinition::Primitive(_) => true,
+                            TypeDefinition::Runtime(_, _) => false,
+                        }
                     }
+                    _ => false,
+                };
+
+                if !comparable {
+                    return Err(self.error_simple(
+                        "type cannot be compared",
+                        "cannot be compared",
+                        span,
+                    ));
                 }
 
                 Ok(diverges)
@@ -734,22 +714,14 @@ impl TypeChecker {
                 Ok(diverges)
             }
             In | NotIn => {
-                self.unify(
-                    &Type::Primitive(Primitive::Bool),
-                    &ctx.expected_type,
-                    span,
-                    None,
-                )?;
+                self.unify(&Type::bool(), &ctx.expected_type, span, None)?;
 
                 let ty = self.fresh_var();
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx.with_type(&ty), left)?;
-                diverges |= self.expr(
-                    scope,
-                    &ctx.with_type(Type::List(Box::new(ty))),
-                    right,
-                )?;
+                diverges |=
+                    self.expr(scope, &ctx.with_type(Type::list(ty)), right)?;
 
                 Ok(diverges)
             }
@@ -971,8 +943,9 @@ impl TypeChecker {
                     return Err(self.error_expected_value(ident, &dec));
                 };
 
+                let ty2 = ty.instantiate(|| self.fresh_var());
                 if let Some((function, signature)) = self.find_method(
-                    &FunctionKind::StaticMethod(ty.clone()),
+                    &FunctionKind::StaticMethod(ty2),
                     **next_ident,
                 ) {
                     if let Some(field) = idents.next() {
@@ -985,12 +958,12 @@ impl TypeChecker {
                     });
                 }
 
-                let Type::Enum(_, variants) = &ty else {
-                    return Err(self.error_expected_value(ident, &dec));
+                let TypeDefinition::Enum(_, variants) = ty else {
+                    return Err(self.error_expected_enum(ident, ty));
                 };
 
-                let Some((variant, data)) =
-                    variants.iter().find(|(v, _)| *v == **next_ident)
+                let Some(variant) =
+                    variants.iter().find(|v| v.name == **next_ident)
                 else {
                     return Err(self.error_no_field_on_type(ty, next_ident));
                 };
@@ -1001,8 +974,7 @@ impl TypeChecker {
 
                 Ok(ResolvedPath::EnumConstructor {
                     ty: ty.clone(),
-                    variant: *variant,
-                    data: data.clone(),
+                    variant: variant.clone(),
                 })
             }
             // We ended on a function, which means there can be no identifiers left
@@ -1073,9 +1045,10 @@ impl TypeChecker {
     pub fn resolve_type_path(
         &self,
         scope: ScopeRef,
-        ast::Path { idents }: &ast::Path,
+        path: &Meta<ast::Path>,
+        params: &[Meta<TypeExpr>],
     ) -> TypeResult<Type> {
-        let mut idents = idents.iter();
+        let mut idents = path.idents.iter();
         let (ident, stub) =
             self.resolve_module_part_of_path(scope, &mut idents)?;
 
@@ -1087,7 +1060,28 @@ impl TypeChecker {
             | StubDeclarationKind::Module => {
                 Err(self.error_expected_type(ident, stub))
             }
-            StubDeclarationKind::Type => Ok(Type::Name(stub.name)),
+            StubDeclarationKind::Type(num_params) => {
+                if num_params != params.len() {
+                    return Err(self.error_simple(
+                        format!(
+                            "expected {num_params} type parameters, got {}",
+                            params.len()
+                        ),
+                        format!("expected {num_params} type parameters"),
+                        path.id,
+                    ));
+                }
+
+                let params = params
+                    .iter()
+                    .map(|t| self.evaluate_type_expr(scope, t))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(Type::Name(TypeName {
+                    name: stub.name,
+                    arguments: params,
+                }))
+            }
         }
     }
 
@@ -1097,10 +1091,22 @@ impl TypeChecker {
         field: &Meta<Identifier>,
     ) -> TypeResult<Type> {
         let ty = self.type_info.resolve(ty);
-        if let Type::Record(fields)
-        | Type::NamedRecord(_, fields)
-        | Type::RecordVar(_, fields) = &ty
-        {
+
+        let type_def;
+        let fields = match &ty {
+            Type::Record(fields) | Type::RecordVar(_, fields) => Some(fields),
+            Type::Name(name) => {
+                type_def = self.type_info.resolve_type_name(name);
+                if let TypeDefinition::Record(_, fields) = &type_def {
+                    Some(fields)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        if let Some(fields) = fields {
             if let Some((_, t)) =
                 fields.iter().find(|(s, _)| s.node == field.node)
             {
@@ -1122,6 +1128,10 @@ impl TypeChecker {
         let last_ident = p.idents.last().unwrap();
         let resolved_path = self.resolve_expression_path(scope, p)?;
 
+        self.type_info
+            .path_kinds
+            .insert(p.id, resolved_path.clone());
+
         let (name, definition, signature, description) = match &resolved_path
         {
             ResolvedPath::Function {
@@ -1140,6 +1150,36 @@ impl TypeChecker {
                 name,
                 signature,
             } => (name, definition, signature, "method"),
+            ResolvedPath::EnumConstructor {
+                ty: type_def,
+                variant,
+            } => {
+                let ty = type_def.instantiate(|| self.fresh_var());
+                let Type::Name(type_name) = &ty else {
+                    unreachable!()
+                };
+
+                let original_name = type_def.type_name();
+                let subs: Vec<_> = original_name
+                    .arguments
+                    .iter()
+                    .zip(&type_name.arguments)
+                    .collect();
+
+                let variant = variant.substitute_many(&subs);
+
+                let diverges = self.check_arguments(
+                    scope,
+                    ctx,
+                    "enum constructor",
+                    last_ident,
+                    &variant.fields,
+                    args,
+                )?;
+
+                self.unify(&ctx.expected_type, &ty, id, None)?;
+                return Ok(diverges);
+            }
             _ => {
                 return Err(
                     self.error_expected_function(last_ident, &resolved_path)
@@ -1148,9 +1188,6 @@ impl TypeChecker {
         };
 
         // Tell the lower stage about the kind of function this is.
-        self.type_info
-            .path_kinds
-            .insert(p.id, resolved_path.clone());
         self.type_info.function_calls.insert(
             id,
             Function {

@@ -11,6 +11,7 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[must_use]
 pub enum Verdict<A, R> {
+    // WARNING: Roto relies on the order of these variants
     Accept(A),
     Reject(R),
 }
