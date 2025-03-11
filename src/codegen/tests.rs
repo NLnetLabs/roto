@@ -56,6 +56,25 @@ fn accept() {
 }
 
 #[test]
+fn accept_with_semicolon() {
+    let s = src!(
+        "
+        filtermap main() {
+            accept;
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), (), Verdict<(), ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert_eq!(res, Verdict::Accept(()));
+}
+
+#[test]
 fn reject() {
     let s = src!(
         "
