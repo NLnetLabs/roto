@@ -199,12 +199,7 @@ pub fn interpret(
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Result<Option<IrValue>, RotoReport> {
-    let pointer_bytes = usize::BITS / 8;
-
-    let lowered = FileTree::read(path)
-        .parse()?
-        .typecheck(runtime, pointer_bytes)?
-        .lower();
+    let lowered = FileTree::read(path).parse()?.typecheck(runtime)?.lower();
 
     let res = lowered.eval(mem, ctx, args);
     Ok(res)
@@ -214,7 +209,6 @@ impl Parsed {
     pub fn typecheck(
         self,
         runtime: Runtime,
-        pointer_bytes: u32,
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
             file_tree,
@@ -225,11 +219,7 @@ impl Parsed {
         let context_type =
             runtime.context.clone().unwrap_or_else(<()>::description);
 
-        let result = crate::typechecker::typecheck(
-            &runtime,
-            &module_tree,
-            pointer_bytes,
-        );
+        let result = crate::typechecker::typecheck(&runtime, &module_tree);
 
         let type_info = match result {
             Ok(type_info) => type_info,

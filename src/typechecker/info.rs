@@ -1,13 +1,16 @@
-use std::{collections::HashMap, fmt::Debug, net::IpAddr, sync::Arc};
+use std::{collections::HashMap, fmt::Debug};
 
-use inetnum::addr::Prefix;
-
-use crate::{ast::Identifier, parser::meta::MetaId, Runtime};
+use crate::{
+    ast::Identifier,
+    parser::meta::MetaId,
+    runtime::layout::{Layout, LayoutBuilder},
+    Runtime,
+};
 
 use super::{
     expr::ResolvedPath,
-    scope::{ResolvedName, ScopeGraph, ScopeRef},
-    types::{Function, Primitive, Type},
+    scope::{DeclarationKind, ResolvedName, ScopeGraph, ScopeRef},
+    types::{Function, Primitive, Type, TypeDefinition, TypeName},
     unionfind::UnionFind,
 };
 
@@ -20,7 +23,7 @@ pub struct TypeInfo {
     pub scope_graph: ScopeGraph,
 
     /// Map from type names to types
-    pub(super) types: HashMap<ResolvedName, Type>,
+    pub(super) types: HashMap<ResolvedName, TypeDefinition>,
 
     /// The types we inferred for each Expr
     ///
@@ -44,13 +47,16 @@ pub struct TypeInfo {
 
     /// Type for return/accept/reject that it constructs and returns.
     pub(super) return_types: HashMap<MetaId, Type>,
+}
 
-    // Size of the pointer type in bytes
-    pointer_bytes: u32,
+impl Default for TypeInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypeInfo {
-    pub fn new(pointer_bytes: u32) -> Self {
+    pub fn new() -> Self {
         Self {
             unionfind: UnionFind::default(),
             scope_graph: ScopeGraph::new(),
@@ -62,7 +68,6 @@ impl TypeInfo {
             return_types: HashMap::new(),
             function_calls: HashMap::new(),
             function_scopes: HashMap::new(),
-            pointer_bytes,
         }
     }
 }
@@ -110,21 +115,36 @@ impl TypeInfo {
 
     pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
         let ty = self.resolve(ty);
-        if self.size_of(&ty, rt) == 0 {
+        if self.layout_of(&ty, rt).size() == 0 {
             return false;
         }
-        matches!(
-            ty,
-            Type::Record(..)
-                | Type::RecordVar(..)
-                | Type::NamedRecord(..)
-                | Type::Enum(..)
-                | Type::Verdict(..)
-                | Type::Primitive(
-                    Primitive::IpAddr | Primitive::Prefix | Primitive::String
+        match ty {
+            Type::Record(..) | Type::RecordVar(..) => true,
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                matches!(
+                    type_def,
+                    TypeDefinition::Enum(..)
+                        | TypeDefinition::Record(..)
+                        | TypeDefinition::Runtime(..)
+                        | TypeDefinition::Primitive(
+                            Primitive::IpAddr
+                                | Primitive::Prefix
+                                | Primitive::String,
+                        )
                 )
-                | Type::BuiltIn(..)
-        )
+            }
+            _ => false,
+        }
+    }
+
+    pub fn resolve_type_name(&mut self, ty: &TypeName) -> TypeDefinition {
+        let name = ty.name;
+        let dec = self.scope_graph.get_declaration(name);
+        let DeclarationKind::Type(ty) = dec.kind else {
+            panic!()
+        };
+        ty
     }
 
     pub fn offset_of(
@@ -135,71 +155,110 @@ impl TypeInfo {
     ) -> (Type, u32) {
         let record = self.resolve(record);
 
-        let (Type::Record(fields)
-        | Type::RecordVar(_, fields)
-        | Type::NamedRecord(_, fields)) = record
-        else {
-            panic!("Can't get offsets in a type that's not a record, but {record}")
+        let type_def;
+        let fields = match &record {
+            Type::Record(fields) | Type::RecordVar(_, fields) => fields,
+            Type::Name(type_name) => {
+                type_def = self.resolve_type_name(type_name);
+                let TypeDefinition::Record(_, fields) = &type_def else {
+                    panic!("Can't get offsets in a type that's not a record, but {record}")
+                };
+                fields
+            }
+            _ => {
+                panic!("Can't get offsets in a type that's not a record, but {record}")
+            }
         };
 
-        let mut offset = 0;
+        let mut builder = LayoutBuilder::new();
         for (name, ty) in fields {
-            // Here, we align the offset to the natural alignment of each
-            // type.
-            offset += self.padding_of(&ty, offset, rt);
+            let offset = builder.add(&self.layout_of(ty, rt));
             if name.node == field {
-                return (ty, offset);
+                return (ty.clone(), offset as u32);
             }
-            offset += self.size_of(&ty, rt);
         }
+
         panic!("Field not found")
     }
 
-    pub fn padding_of(
-        &mut self,
-        ty: &Type,
-        offset: u32,
-        rt: &Runtime,
-    ) -> u32 {
-        let alignment = self.alignment_of(ty, rt);
-        if offset % alignment > 0 {
-            alignment - (offset % alignment)
-        } else {
-            0
-        }
-    }
+    /// Compute the layout of a Roto type
+    ///
+    /// The layout of Roto types match the C representation of Rust types,
+    /// because we cannot rely on the Rust representation.
+    ///
+    /// The C representation is described in the [Rust reference].
+    ///
+    /// The general rules are as follows:
+    ///
+    ///  - The minimum layout of any type is a size of 0 and an alignment of 1
+    ///  - Each primitive has a size and alignment equal to itself.
+    ///  - Each composite type has the alignment of the most-aligned field in it.
+    ///  - Fields are layed out in order, each padded to their alignment.
+    ///  - The size **must** be a multiple of the alignment.
+    ///
+    /// For enums we use the `#[repr(C, u8)]` representation, because other the
+    /// other representations are platform-specific. This means that the tag for
+    /// enums is a `u8` and therefore 1 byte.
+    ///
+    /// To implement these rules, we rely on the [`Layout`] struct from the Rust
+    /// standard library. This also allows to get the layout of some Rust types
+    /// we rely on.
+    ///
+    /// [Rust reference]: https://doc.rust-lang.org/reference/type-layout.html
+    pub fn layout_of(&mut self, ty: &Type, rt: &Runtime) -> Layout {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::Var(_) | Type::ExplicitVar(_) => {
+                panic!("Can't get the layout of an unconcrete type")
+            }
+            Type::Function(_, _) => {
+                panic!("Can't get the layout of a function type")
+            }
+            Type::Never => panic!("Can't get the layout of the never type"),
+            Type::IntVar(_) => Primitive::i32().layout(),
+            Type::RecordVar(_, fields) | Type::Record(fields) => {
+                Layout::concat(
+                    fields.iter().map(|(_, f)| self.layout_of(f, rt)),
+                )
+            }
+            Type::Name(type_name) => {
+                let type_def = self.resolve_type_name(&type_name);
+                match type_def {
+                    TypeDefinition::Enum(enum_name, variants) => {
+                        let subs: Vec<_> = enum_name
+                            .arguments
+                            .iter()
+                            .zip(&type_name.arguments)
+                            .collect();
 
-    pub fn alignment_of(&mut self, ty: &Type, rt: &Runtime) -> u32 {
-        let align = match self.resolve(ty) {
-            Type::RecordVar(_, fields)
-            | Type::Record(fields)
-            | Type::NamedRecord(_, fields) => fields
-                .iter()
-                .map(|f| self.alignment_of(&f.1, rt))
-                .max()
-                .unwrap_or(1),
-            Type::Enum(_, variants) => variants
-                .iter()
-                .flat_map(|(_, opt)| opt)
-                .map(|f| self.alignment_of(f, rt))
-                .max()
-                .unwrap_or(4),
-            Type::Primitive(Primitive::IpAddr) => {
-                std::mem::align_of::<IpAddr>() as u32
+                        let mut layout = Layout::new(0, 1);
+                        for variant in &variants {
+                            let mut builder = LayoutBuilder::new();
+                            builder.add(&Layout::of::<u8>());
+                            for field in &variant.fields {
+                                builder.add(&self.layout_of(
+                                    &field.substitute_many(&subs),
+                                    rt,
+                                ));
+                            }
+                            layout = layout.union(&builder.finish());
+                        }
+
+                        layout
+                    }
+                    // TODO: The type constructors need to be instantiated
+                    TypeDefinition::Record(_, fields) => Layout::concat(
+                        fields.iter().map(|(_, f)| self.layout_of(f, rt)),
+                    ),
+                    TypeDefinition::Runtime(_, type_id) => {
+                        rt.get_runtime_type(type_id).unwrap().layout()
+                    }
+                    TypeDefinition::Primitive(primitive) => {
+                        primitive.layout()
+                    }
+                }
             }
-            Type::Primitive(Primitive::Prefix) => {
-                std::mem::align_of::<Prefix>() as u32
-            }
-            Type::Primitive(Primitive::String) => {
-                std::mem::align_of::<Arc<str>>() as u32
-            }
-            Type::BuiltIn(_, id) => {
-                rt.get_runtime_type(id).unwrap().alignment() as u32
-            }
-            ty => self.size_of(&ty, rt),
-        };
-        // Alignment must be guaranteed to be at least 1
-        align.max(1)
+        }
     }
 
     pub fn resolve(&mut self, t: &Type) -> Type {
@@ -209,55 +268,6 @@ impl TypeInfo {
             t = self.unionfind.find(x).clone();
         }
 
-        if let Type::Name(x) = t {
-            t = self.types[&x].clone();
-        }
-
         t
-    }
-
-    pub fn size_of(&mut self, t: &Type, rt: &Runtime) -> u32 {
-        let t = self.resolve(t);
-        match t {
-            // Never is zero-sized
-            Type::Never => 0,
-            // Int variables are inferred to u32
-            Type::IntVar(_) => 4,
-            // Records have the size of their fields
-            Type::Record(fields)
-            | Type::NamedRecord(_, fields)
-            | Type::RecordVar(_, fields) => {
-                let mut size = 0;
-                for (_, ty) in &fields {
-                    size +=
-                        self.size_of(ty, rt) + self.padding_of(ty, size, rt);
-                }
-                size
-            }
-            Type::Enum(_, fields) => {
-                fields
-                    .iter()
-                    .flat_map(|f| &f.1)
-                    .map(|ty| {
-                        self.size_of(ty, rt) + self.padding_of(ty, 1, rt)
-                    })
-                    .max()
-                    .unwrap_or(0)
-                    + 1 // add the discriminant
-            }
-            Type::Verdict(accept, reject) => {
-                let accept = self.size_of(&accept, rt)
-                    + self.padding_of(&accept, 1, rt);
-                let reject = self.size_of(&reject, rt)
-                    + self.padding_of(&reject, 1, rt);
-                1 + accept.max(reject)
-            }
-            Type::BuiltIn(_, id) => {
-                rt.get_runtime_type(id).unwrap().size() as u32
-            }
-            Type::Primitive(p) => p.size(),
-            Type::List(_) => self.pointer_bytes,
-            _ => 0,
-        }
     }
 }

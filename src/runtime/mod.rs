@@ -29,6 +29,8 @@
 
 pub mod context;
 pub mod func;
+pub mod layout;
+pub mod optional;
 pub mod ty;
 pub mod val;
 pub mod verdict;
@@ -45,6 +47,7 @@ use std::{
 use context::ContextDescription;
 use func::{Func, FunctionDescription};
 use inetnum::{addr::Prefix, asn::Asn};
+use layout::Layout;
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
@@ -110,11 +113,8 @@ pub struct RuntimeType {
     /// Whether this type is `Copy`
     movability: Movability,
 
-    /// Size of the type in bytes
-    size: usize,
-
-    /// Alignment of the type in bytes
-    alignment: usize,
+    /// Layout of the type
+    layout: Layout,
 
     /// Docstring of the type to display in documentation
     docstring: String,
@@ -133,12 +133,8 @@ impl RuntimeType {
         &self.movability
     }
 
-    pub fn size(&self) -> usize {
-        self.size
-    }
-
-    pub fn alignment(&self) -> usize {
-        self.alignment
+    pub fn layout(&self) -> Layout {
+        self.layout.clone()
     }
 }
 
@@ -315,8 +311,7 @@ impl Runtime {
             name: name.into(),
             type_id: TypeId::of::<T>(),
             movability,
-            size: std::mem::size_of::<T>(),
-            alignment: std::mem::align_of::<T>(),
+            layout: Layout::of::<T>(),
             docstring: String::from(docstring),
         });
         Ok(())

@@ -134,6 +134,18 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_expected_enum(
+        &self,
+        ident: &Meta<Identifier>,
+        ty: impl Display,
+    ) -> TypeError {
+        TypeError {
+            description: format!("expected enum, but found type `{ty}`",),
+            location: ident.id,
+            labels: vec![Label::error("expected type", ident.id)],
+        }
+    }
+
     pub fn error_expected_type(
         &self,
         ident: &Meta<Identifier>,
@@ -227,27 +239,27 @@ impl TypeChecker {
         }
     }
 
-    pub fn error_variant_does_not_have_field(
+    pub fn error_variant_does_not_have_fields(
         &self,
         variant: &Meta<Identifier>,
         ty: &Type,
     ) -> TypeError {
         TypeError {
-            description: format!("pattern has a data field, but the variant `{variant}` of `{ty}` doesn't have one"),
+            description: format!("pattern has fields, but the variant `{variant}` of `{ty}` doesn't have one"),
             location: variant.id,
             labels: vec![Label::error("unexpected data field", variant.id)],
         }
     }
 
-    pub fn error_need_data_field_on_pattern(
+    pub fn error_need_arguments_on_pattern(
         &self,
         variant: &Meta<Identifier>,
         ty: &Type,
     ) -> TypeError {
         TypeError {
-            description: format!("pattern has no data field, but variant `{variant}` of `{ty}` does have a data field"),
+            description: format!("pattern has no arguments, but variant `{variant}` of `{ty}` does have arguments"),
             location: variant.id,
-            labels: vec![Label::error("missing data field", variant.id)],
+            labels: vec![Label::error("missing arguments", variant.id)],
         }
     }
 
@@ -395,7 +407,7 @@ impl TypeChecker {
 
     pub fn error_no_field_on_type(
         &self,
-        ty: &Type,
+        ty: impl Display,
         field: &Meta<Identifier>,
     ) -> TypeError {
         self.error_simple(
@@ -411,7 +423,7 @@ fn describe_declaration(d: &StubDeclaration) -> &str {
         StubDeclarationKind::Context => "context",
         StubDeclarationKind::Constant => "constant",
         StubDeclarationKind::Variable => "variable",
-        StubDeclarationKind::Type => "type",
+        StubDeclarationKind::Type(_) => "type",
         StubDeclarationKind::Function => "function",
         StubDeclarationKind::Module => "module",
     }
@@ -432,7 +444,7 @@ fn describe_path(p: &ResolvedPath) -> (&str, Identifier) {
             ("static method", name.ident)
         }
         ResolvedPath::EnumConstructor { variant, .. } => {
-            ("enum constructor", *variant)
+            ("enum constructor", variant.name)
         }
     }
 }

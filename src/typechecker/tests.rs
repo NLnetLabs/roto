@@ -23,11 +23,9 @@ fn typecheck_with_runtime(
         }
     };
 
-    let pointer_bytes = usize::BITS / 8;
-
     // Unwrap on parse because a parse error in this file is never correct.
     // We only want to test for type errors.
-    if let Err(e) = res.typecheck(rt, pointer_bytes) {
+    if let Err(e) = res.typecheck(rt) {
         println!("{e}");
         Err(e)
     } else {

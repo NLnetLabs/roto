@@ -6,7 +6,7 @@ use crate::{
 use super::{
     expr::Context,
     scope::{ScopeRef, ScopeType},
-    types::{Primitive, Type},
+    types::{Type, TypeName},
     TypeChecker, TypeResult,
 };
 
@@ -17,11 +17,16 @@ impl TypeChecker {
         filter_map: &ast::FilterMap,
     ) -> TypeResult<Type> {
         let ast::FilterMap {
-            filter_type,
+            filter_type: _,
             ident,
             params,
             body,
         } = filter_map;
+
+        let ty = self.type_info.type_of(ident);
+        let Type::Function(param_types, return_type) = &ty else {
+            panic!()
+        };
 
         let scope = self
             .type_info
@@ -34,30 +39,32 @@ impl TypeChecker {
             self.insert_var(scope, v.clone(), t)?;
         }
 
-        let a = self.fresh_var();
-        let r = self.fresh_var();
-        let ty = Type::Verdict(Box::new(a.clone()), Box::new(r.clone()));
-
         let ctx = Context {
-            expected_type: ty.clone(),
-            function_return_type: Some(ty.clone()),
+            expected_type: *return_type.clone(),
+            function_return_type: Some(*return_type.clone()),
         };
 
         self.block(scope, &ctx, body)?;
 
-        if let Type::Var(x) = self.resolve_type(&a) {
+        let Type::Name(TypeName { name: _, arguments }) = &**return_type
+        else {
+            panic!()
+        };
+        let [a, r] = &arguments[..] else { panic!() };
+
+        if let Type::Var(x) = self.resolve_type(a) {
             self.unify(
                 &Type::Var(x),
-                &Type::Primitive(Primitive::Unit),
+                &Type::unit(),
                 filter_map.ident.id,
                 None,
             )
             .unwrap();
         }
-        if let Type::Var(x) = self.resolve_type(&r) {
+        if let Type::Var(x) = self.resolve_type(r) {
             self.unify(
                 &Type::Var(x),
-                &Type::Primitive(Primitive::Unit),
+                &Type::unit(),
                 filter_map.ident.id,
                 None,
             )
@@ -65,10 +72,8 @@ impl TypeChecker {
         }
 
         let param_types = params.into_iter().map(|(_, t)| t).collect();
-        Ok(match filter_type {
-            ast::FilterType::FilterMap => Type::FilterMap(param_types),
-            ast::FilterType::Filter => Type::Filter(param_types),
-        })
+
+        Ok(Type::Function(param_types, Box::new(ty)))
     }
 
     pub fn function(
@@ -96,9 +101,9 @@ impl TypeChecker {
         }
 
         let ret = if let Some(ret) = ret {
-            self.resolve_type_path(scope, ret)?
+            self.evaluate_type_expr(scope, ret)?
         } else {
-            Type::Primitive(Primitive::Unit)
+            Type::unit()
         };
 
         let ctx = Context {
@@ -126,10 +131,7 @@ impl TypeChecker {
             scope,
             name.clone(),
             super::types::FunctionDefinition::Roto,
-            Type::Function(
-                Vec::new(),
-                Box::new(Type::Primitive(Primitive::Unit)),
-            ),
+            Type::Function(Vec::new(), Box::new(Type::unit())),
         )?;
 
         let scope = self
@@ -139,8 +141,7 @@ impl TypeChecker {
 
         self.type_info.function_scopes.insert(name.id, scope);
 
-        let unit = Box::new(Type::Primitive(Primitive::Unit));
-        let ret = Type::Verdict(unit.clone(), unit);
+        let ret = Type::verdict(Type::unit(), Type::unit());
         let ctx = Context {
             expected_type: ret.clone(),
             function_return_type: Some(ret),
@@ -155,9 +156,9 @@ impl TypeChecker {
         dec: &ast::FunctionDeclaration,
     ) -> TypeResult<Type> {
         let ret = if let Some(ret) = &dec.ret {
-            self.resolve_type_path(scope, ret)?
+            self.evaluate_type_expr(scope, ret)?
         } else {
-            Type::Primitive(Primitive::Unit)
+            Type::unit()
         };
         let param_types = self
             .params(scope, &dec.params)?
@@ -172,8 +173,8 @@ impl TypeChecker {
         scope: ScopeRef,
         dec: &ast::FilterMap,
     ) -> TypeResult<Type> {
-        let accept = Box::new(self.fresh_var());
-        let reject = Box::new(self.fresh_var());
+        let accept = self.fresh_var();
+        let reject = self.fresh_var();
         let param_types = self
             .params(scope, &dec.params)?
             .into_iter()
@@ -181,7 +182,7 @@ impl TypeChecker {
             .collect();
         Ok(Type::Function(
             param_types,
-            Box::new(Type::Verdict(accept, reject)),
+            Box::new(Type::verdict(accept, reject)),
         ))
     }
 
@@ -193,7 +194,7 @@ impl TypeChecker {
         args.0
             .iter()
             .map(|(field_name, ty)| {
-                let ty = self.resolve_type_path(scope, ty)?;
+                let ty = self.evaluate_type_expr(scope, ty)?;
                 Ok((field_name.clone(), ty))
             })
             .collect()

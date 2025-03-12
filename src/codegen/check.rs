@@ -6,7 +6,8 @@ use crate::{
     },
     typechecker::{
         info::TypeInfo,
-        types::{Primitive, Type},
+        scope::{ResolvedName, ScopeRef},
+        types::{Type, TypeDefinition},
     },
 };
 use std::{
@@ -105,28 +106,29 @@ fn check_roto_type(
     let mut roto_ty = type_info.resolve(roto_ty);
 
     if let Type::IntVar(_) = roto_ty {
-        roto_ty = Type::Primitive(Primitive::I32);
+        roto_ty = Type::named("i32", Vec::new());
     }
 
     match rust_ty.description {
         TypeDescription::Leaf => {
-            let expected_roto = match rust_ty.type_id {
-                x if x == BOOL => Type::Primitive(Primitive::Bool),
-                x if x == U8 => Type::Primitive(Primitive::U8),
-                x if x == U16 => Type::Primitive(Primitive::U16),
-                x if x == U32 => Type::Primitive(Primitive::U32),
-                x if x == U64 => Type::Primitive(Primitive::U64),
-                x if x == I8 => Type::Primitive(Primitive::I8),
-                x if x == I16 => Type::Primitive(Primitive::I16),
-                x if x == I32 => Type::Primitive(Primitive::I32),
-                x if x == I64 => Type::Primitive(Primitive::I64),
-                x if x == UNIT => Type::Primitive(Primitive::Unit),
-                x if x == ASN => Type::Primitive(Primitive::Asn),
-                x if x == IPADDR => Type::Primitive(Primitive::IpAddr),
-                x if x == PREFIX => Type::Primitive(Primitive::Prefix),
-                x if x == STRING => Type::Primitive(Primitive::String),
+            let expected_name = match rust_ty.type_id {
+                x if x == BOOL => "bool",
+                x if x == U8 => "u8",
+                x if x == U16 => "u16",
+                x if x == U32 => "u32",
+                x if x == U64 => "u64",
+                x if x == I8 => "i8",
+                x if x == I16 => "i16",
+                x if x == I32 => "i32",
+                x if x == I64 => "i64",
+                x if x == UNIT => "Unit",
+                x if x == ASN => "Asn",
+                x if x == IPADDR => "IpAddr",
+                x if x == PREFIX => "Prefix",
+                x if x == STRING => "String",
                 _ => panic!(),
             };
+            let expected_roto = Type::named(expected_name, Vec::new());
             if expected_roto == roto_ty {
                 Ok(())
             } else {
@@ -134,7 +136,13 @@ fn check_roto_type(
             }
         }
         TypeDescription::Val(ty) => {
-            let Type::BuiltIn(_, id) = roto_ty else {
+            let Type::Name(type_name) = roto_ty else {
+                return Err(error_message);
+            };
+
+            let TypeDefinition::Runtime(_, id) =
+                type_info.resolve_type_name(&type_name)
+            else {
                 return Err(error_message);
             };
 
@@ -147,18 +155,48 @@ fn check_roto_type(
         TypeDescription::ConstPtr(_) => Err(error_message),
         TypeDescription::MutPtr(_) => Err(error_message), // TODO: actually check this
         TypeDescription::Verdict(rust_accept, rust_reject) => {
-            let Type::Verdict(roto_accept, roto_reject) = &roto_ty else {
+            let Type::Name(type_name) = &roto_ty else {
                 return Err(error_message);
             };
+
+            if type_name.name
+                != (ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: "Verdict".into(),
+                })
+            {
+                return Err(error_message);
+            }
+
+            let [roto_accept, roto_reject] = &type_name.arguments[..] else {
+                return Err(error_message);
+            };
+
             check_roto_type(registry, type_info, rust_accept, roto_accept)?;
             check_roto_type(registry, type_info, rust_reject, roto_reject)?;
             Ok(())
         }
-        // We don't do options and results, we should hint towards verdict
-        // when using them.
-        TypeDescription::Option(_) | TypeDescription::Result(_, _) => {
-            Err(error_message)
+        TypeDescription::Option(rust_ty) => {
+            let Type::Name(type_name) = &roto_ty else {
+                return Err(error_message);
+            };
+
+            if type_name.name
+                != (ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: "Optional".into(),
+                })
+            {
+                return Err(error_message);
+            }
+
+            let [roto_ty] = &type_name.arguments[..] else {
+                return Err(error_message);
+            };
+            check_roto_type(registry, type_info, rust_ty, roto_ty)
         }
+        // We don't do results, we should hint towards verdict when using them.
+        TypeDescription::Result(_, _) => Err(error_message),
     }
 }
 
@@ -172,18 +210,20 @@ fn check_roto_type(
 ///
 /// This trait is implemented on tuples of various sizes.
 pub trait RotoParams {
+    type Transformed;
     /// This type but with [`Reflect::AsParam`] applied to each element.
     type AsParams;
 
+    fn transform(self) -> Self::Transformed;
+
     /// Convert to `Self::AsParams`.
-    fn as_params(&mut self) -> Self::AsParams;
+    fn as_params(transformed: &mut Self::Transformed) -> Self::AsParams;
 
     /// Check whether these parameters match a parameter list from Roto.
     fn check(
         type_info: &mut TypeInfo,
         ty: &[Type],
     ) -> Result<(), FunctionRetrievalError>;
-
     /// Call a function pointer as if it were a function with these parameters.
     ///
     /// This is _extremely_ unsafe, do not pass this arbitrary pointers and
@@ -214,14 +254,18 @@ macro_rules! params {
         #[allow(unused_variables)]
         #[allow(unused_mut)]
         impl<$($t,)*> RotoParams for ($($t,)*)
-        where
-            $($t: Reflect,)*
-        {
+        where $($t: Reflect,)* {
+            type Transformed = ($($t::Transformed,)*);
             type AsParams = ($($t::AsParam,)*);
 
-            fn as_params(&mut self) -> Self::AsParams {
+            fn transform(self) -> Self::Transformed {
                 let ($($t,)*) = self;
-                return ($($t.as_param(),)*);
+                return ($($t.transform(),)*);
+            }
+
+            fn as_params(transformed: &mut Self::Transformed) -> Self::AsParams {
+                let ($($t,)*) = transformed;
+                return ($($t::as_param($t),)*);
             }
 
             fn check(
@@ -246,21 +290,24 @@ macro_rules! params {
                 Ok(())
             }
 
-            unsafe fn invoke<Ctx: 'static, Return: Reflect>(mut self, ctx: &mut Ctx, func_ptr: *const u8, return_by_ref: bool) -> Return {
-                let ($($t,)*) = self.as_params();
+            unsafe fn invoke<Ctx: 'static, Return: Reflect>(self, ctx: &mut Ctx, func_ptr: *const u8, return_by_ref: bool) -> Return {
+                let mut transformed = <Self as RotoParams>::transform(self);
+                let ($($t,)*) = <Self as RotoParams>::as_params(&mut transformed);
 
                 // We forget values that we pass into Roto. The script is responsible
                 // for cleaning them op. Forgetting copy types does nothing, but that's
                 // fine.
                 #[allow(forgetting_copy_types)]
-                std::mem::forget(self);
+                std::mem::forget(transformed);
                 if return_by_ref {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut Return, *mut Ctx, $($t::AsParam),*) -> ()>(func_ptr)
+                        std::mem::transmute::<*const u8, fn(*mut Return::Transformed, *mut Ctx, $($t::AsParam),*) -> ()>(func_ptr)
                     };
-                    let mut ret = MaybeUninit::<Return>::uninit();
+                    let mut ret = MaybeUninit::<Return::Transformed>::uninit();
                     func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx, $($t),*);
-                    unsafe { ret.assume_init() }
+                    let transformed_ret = unsafe { ret.assume_init() };
+                    let ret: Return = Return::untransform(transformed_ret);
+                    ret
                 } else {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, fn(*mut Ctx, $($t::AsParam),*) -> Return>(func_ptr)

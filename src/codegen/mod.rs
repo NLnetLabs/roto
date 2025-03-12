@@ -768,7 +768,7 @@ impl<'c> FuncGen<'c> {
             }
             ir::Instruction::Div {
                 to,
-                ty,
+                signed,
                 left,
                 right,
             } => {
@@ -777,14 +777,9 @@ impl<'c> FuncGen<'c> {
 
                 let var = self.variable(to, left_ty);
 
-                let val = match ty {
-                    IrType::I8 | IrType::I16 | IrType::I32 | IrType::I64 => {
-                        self.ins().sdiv(l, r)
-                    }
-                    IrType::U8 | IrType::U16 | IrType::U32 | IrType::U64 => {
-                        self.ins().udiv(l, r)
-                    }
-                    _ => panic!(),
+                let val = match signed {
+                    true => self.ins().sdiv(l, r),
+                    false => self.ins().udiv(l, r),
                 };
                 self.def(var, val)
             }
@@ -797,16 +792,12 @@ impl<'c> FuncGen<'c> {
                 self.def(var, val)
             }
             ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::Alloc {
-                to,
-                size,
-                align_shift,
-            } => {
+            ir::Instruction::Alloc { to, layout } => {
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
-                        *size,
-                        *align_shift,
+                        layout.size() as u32,
+                        layout.align_shift() as u8,
                     ));
 
                 let pointer_ty = self.module.isa.pointer_type();
@@ -814,17 +805,13 @@ impl<'c> FuncGen<'c> {
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.def(var, p);
             }
-            ir::Instruction::Initialize {
-                to,
-                bytes,
-                align_shift,
-            } => {
+            ir::Instruction::Initialize { to, bytes, layout } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
-                        bytes.len() as u32,
-                        *align_shift,
+                        layout.size() as u32,
+                        layout.align_shift() as u8,
                     ));
 
                 let data_id = self
