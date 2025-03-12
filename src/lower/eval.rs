@@ -239,7 +239,7 @@ impl Allocation {
     }
 }
 
-/// Evaluate HIR
+/// Evaluate IR
 ///
 /// This is mostly used for testing purposes, since this evaluation is
 /// fairly slow. This is because all variables at this point are identified

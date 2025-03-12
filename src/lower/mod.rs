@@ -1,6 +1,6 @@
-//! Compiler stage to transform the AST into HIR
+//! Compiler stage to transform the AST into IR
 //!
-//! For more information on the HIR, see the [ir] module.
+//! For more information on the IR, see the [ir] module.
 
 pub mod eval;
 pub mod ir;
@@ -18,6 +18,7 @@ use value::IrType;
 
 use crate::{
     ast::{self, Identifier, Literal},
+    ice,
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
     runtime::{
@@ -39,26 +40,11 @@ use crate::{
 
 use self::value::IrValue;
 
-/// Internal compiler error
-macro_rules! ice {
-    () => {
-        panic!("ICE")
-    };
-    ($s:literal) => {
-        panic!("ICE: {}", format!($s))
-    };
-    ($s:literal, $e:expr,*) => {
-        panic!("ICE: {}", format!($s, $e,*))
-    }
-}
-
 pub struct IrFunction {
     #[allow(dead_code)]
     pub name: Identifier,
     pub ptr: *const u8,
     pub params: Vec<IrType>,
-    // We keep this for completeness.
-    #[allow(dead_code)]
     pub ret: Option<IrType>,
 }
 
@@ -114,6 +100,7 @@ impl<'r> Lowerer<'r> {
         })
     }
 
+    /// Get the label of the block we are currently building
     fn current_label(&self) -> LabelRef {
         self.blocks.last().unwrap().label
     }
@@ -178,6 +165,8 @@ impl<'r> Lowerer<'r> {
                             .function(x),
                         );
                     }
+                    // We give tests special names, so that they can't be referenced from Roto.
+                    // It's a bit of a hack, but works well enough.
                     ast::Declaration::Test(x) => {
                         functions.push(
                             Lowerer::new(
@@ -211,7 +200,7 @@ impl<'r> Lowerer<'r> {
         } = fm;
 
         let Type::Function(_, ret) = self.type_info.type_of(ident) else {
-            panic!();
+            ice!("The type of a filter(map) must be a function");
         };
         self.function_like(ident, params, &ret, body)
     }
@@ -221,11 +210,11 @@ impl<'r> Lowerer<'r> {
         let dec = self.type_info.scope_graph.get_declaration(name);
 
         let DeclarationKind::Function(_, ty) = dec.kind else {
-            unreachable!();
+            ice!();
         };
 
         let Type::Function(_, ret) = self.type_info.resolve(&ty) else {
-            unreachable!();
+            ice!("A function must have a function type");
         };
 
         self.function_like(
@@ -303,7 +292,7 @@ impl<'r> Lowerer<'r> {
 
         self.drop_locals();
 
-        self.return_expr(&return_type, last);
+        self.return_expr(return_type, last);
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
@@ -601,7 +590,7 @@ impl<'r> Lowerer<'r> {
                     let FunctionDefinition::Runtime(runtime_func_ref) =
                         function.definition.clone()
                     else {
-                        panic!()
+                        ice!("The + operator on strings should have resolved to a runtime function")
                     };
 
                     let layout = Primitive::String.layout();
@@ -640,7 +629,7 @@ impl<'r> Lowerer<'r> {
                     let FunctionDefinition::Runtime(runtime_func_ref) =
                         function.definition.clone()
                     else {
-                        panic!()
+                        ice!("The / div operator should desugar to a runtime function")
                     };
 
                     let layout = Primitive::Prefix.layout();
@@ -826,7 +815,7 @@ impl<'r> Lowerer<'r> {
                         left,
                         right,
                     },
-                    _ => panic!("type checker should prevent this"),
+                    _ => ice!("type checker should prevent this"),
                 };
 
                 self.add(inst);
@@ -1282,7 +1271,7 @@ impl<'r> Lowerer<'r> {
         Some(match ty {
             Type::IntVar(_) => IrType::I32,
             x if self.is_reference_type(&x) => IrType::Pointer,
-            _ => panic!("could not lower: {ty:?}"),
+            _ => ice!("could not lower: {ty:?}"),
         })
     }
 

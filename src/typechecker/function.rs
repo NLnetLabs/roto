@@ -1,5 +1,8 @@
+//! Type checking function-like items
+
 use crate::{
     ast::{self, Identifier},
+    ice,
     parser::meta::Meta,
 };
 
@@ -11,6 +14,7 @@ use super::{
 };
 
 impl TypeChecker {
+    /// Type check a filter map
     pub fn filter_map(
         &mut self,
         scope: ScopeRef,
@@ -24,7 +28,7 @@ impl TypeChecker {
         } = filter_map;
 
         let ty = self.type_info.type_of(ident);
-        let Type::Function(param_types, return_type) = &ty else {
+        let Type::Function(_, return_type) = &ty else {
             panic!()
         };
 
@@ -48,9 +52,11 @@ impl TypeChecker {
 
         let Type::Name(TypeName { name: _, arguments }) = &**return_type
         else {
-            panic!()
+            ice!("return type of a filter-map should always be a verdict")
         };
-        let [a, r] = &arguments[..] else { panic!() };
+        let [a, r] = &arguments[..] else {
+            ice!("return type of a filter-map should always be a verdict")
+        };
 
         if let Type::Var(x) = self.resolve_type(a) {
             self.unify(

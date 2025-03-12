@@ -44,6 +44,7 @@ pub fn detect_type_cycles(
     Ok(())
 }
 
+/// Visit a type name and its subtypes while traversing all types
 fn visit_name(
     types: &HashMap<ResolvedName, TypeDefinition>,
     visited: &mut HashMap<ResolvedName, bool>,
@@ -78,6 +79,7 @@ fn visit_name(
     Ok(())
 }
 
+/// Visit a type name and its subtypes while traversing all types
 fn visit<'a>(
     types: &'a HashMap<ResolvedName, TypeDefinition>,
     visited: &mut HashMap<ResolvedName, bool>,

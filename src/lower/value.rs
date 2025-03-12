@@ -10,7 +10,7 @@ use super::ir::Operand;
 /// A Roto value with type information at runtime
 ///
 /// The purpose of [`IrValue`] is to provide a safe way to test our
-/// generated code. It is the value that is generally used by the HIR.
+/// generated code. It is the value that is generally used by the IR.
 #[derive(Clone, Debug)]
 pub enum IrValue {
     Bool(bool),

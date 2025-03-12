@@ -1,3 +1,5 @@
+//! Types used by the type checker
+
 use crate::{
     ast::Identifier,
     parser::meta::Meta,
@@ -12,12 +14,6 @@ use std::{
 };
 
 use super::scope::ResolvedName;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PolyType {
-    vars: Vec<Identifier>,
-    inner: Type,
-}
 
 impl Type {
     pub fn unit() -> Type {
@@ -72,6 +68,9 @@ impl Type {
     }
 }
 
+/// Types that the type checker deals with
+///
+/// This might represent unconcrete types.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Var(usize),
@@ -84,6 +83,7 @@ pub enum Type {
     Name(TypeName),
 }
 
+/// A definition of a named type
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeDefinition {
     Enum(TypeName, Vec<EnumVariant>),
@@ -98,6 +98,7 @@ pub struct EnumVariant {
     pub fields: Vec<Type>,
 }
 
+/// Primitive Roto types
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Primitive {
     Int(IntKind, IntSize),
@@ -109,6 +110,7 @@ pub enum Primitive {
     Prefix,
 }
 
+/// Size of an integer type
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IntSize {
     I8,
@@ -117,6 +119,7 @@ pub enum IntSize {
     I64,
 }
 
+/// Whether an integer is signed
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IntKind {
     Unsigned,
@@ -150,6 +153,7 @@ impl From<Primitive> for TypeDefinition {
 }
 
 impl TypeDefinition {
+    /// Get the type name that belongs to this type definition
     pub fn type_name(&self) -> TypeName {
         match self {
             TypeDefinition::Enum(type_name, _) => type_name.clone(),
@@ -167,10 +171,14 @@ impl TypeDefinition {
             },
         }
     }
+
+    /// Instatiate the type definition with fresh type variables
     pub fn instantiate(&self, fresh_var: impl FnMut() -> Type) -> Type {
         self.type_name().instantiate(fresh_var)
     }
 
+    /// Get the match patterns for this type definition instantatiated with the
+    /// given type arguments.
     pub fn match_patterns(
         &self,
         type_args: &[Type],
@@ -207,6 +215,7 @@ impl EnumVariant {
 }
 
 impl TypeName {
+    /// Instantiate a type name with fresh type variables
     pub fn instantiate(&self, mut fresh_var: impl FnMut() -> Type) -> Type {
         let TypeName { name, arguments } = self;
         let arguments = arguments
@@ -477,6 +486,7 @@ impl Function {
     }
 }
 
+/// The list of built-in Roto types
 pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
     use Primitive::*;
 
