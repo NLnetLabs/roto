@@ -10,8 +10,7 @@ impl Parser<'_, '_> {
     /// Parse a filtermap or filter expression
     ///
     /// ```ebnf
-    /// FilterMap ::= ( 'filtermap' | 'filter' ) Identifier
-    ///               FilterMapBody
+    /// FilterMap ::= ( 'filtermap' | 'filter' ) Identifier Params RetType Block
     /// ```
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
         let (token, span) = self.next()?;
@@ -42,7 +41,7 @@ impl Parser<'_, '_> {
     /// Parse an optional with clause for filtermap, define and apply
     ///
     /// ```ebnf
-    /// With ::= ( 'with' TypeIdentField (',' TypeIdentField)*)?
+    /// Params ::= '(' TypeIdentField (',' TypeIdentField)* ')'
     /// ```
     pub fn params(&mut self) -> ParseResult<Meta<Params>> {
         let m = self.separated(
@@ -61,7 +60,7 @@ impl Parser<'_, '_> {
     /// Parse an identifier and a type identifier separated by a colon
     ///
     /// ```ebnf
-    /// TypeIdentField ::= Identifier ':' TypeIdentifier
+    /// TypeIdentField ::= Identifier ':' TypeExpr
     /// ```
     fn type_ident_field(
         &mut self,
@@ -75,7 +74,7 @@ impl Parser<'_, '_> {
     /// Parse a record type declaration
     ///
     /// ```ebnf
-    /// Type ::= 'type' TypeIdentifier RibBody
+    /// Type ::= 'type' Identifier RecordType
     /// ```
     pub(super) fn record_type_assignment(
         &mut self,

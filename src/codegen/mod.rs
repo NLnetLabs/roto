@@ -1,4 +1,7 @@
 //! Machine code generation via cranelift
+//!
+//! This module takes Roto IR and translates that to cranelift IR. Cranelift
+//! then does the rest.
 
 use std::{
     any::{type_name, TypeId},
@@ -10,6 +13,7 @@ use std::{
 
 use crate::{
     ast::Identifier,
+    ice,
     lower::{
         ir::{self, IntCmp, Operand, Var, VarKind},
         label::{LabelRef, LabelStore},
@@ -130,6 +134,9 @@ pub struct TypedFunc<Ctx, Params, Return> {
     _ty: PhantomData<(Ctx, Params, Return)>,
 }
 
+/// SAFETY: These implementations are safe because we don't modify anything
+/// the pointer points to and the pointer will stay valid as long as we hold
+/// on to the `ModuleData`, which is stored in the `TypedFunc`.
 unsafe impl<Ctx, Params, Return> Send for TypedFunc<Ctx, Params, Return> {}
 unsafe impl<Ctx, Params, Return> Sync for TypedFunc<Ctx, Params, Return> {}
 
@@ -1011,9 +1018,10 @@ impl<'c> FuncGen<'c> {
             ir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
                     || {
-                        panic!(
+                        ice!(
                             "did not find {:?} in {:#?}",
-                            p, self.module.variable_map,
+                            p,
+                            self.module.variable_map,
                         )
                     },
                     |x| x,
@@ -1033,7 +1041,7 @@ impl<'c> FuncGen<'c> {
                     IrValue::I64(x) => (I64, *x),
                     IrValue::Asn(x) => (I32, x.into_u32() as i64),
                     IrValue::Pointer(x) => (pointer_ty, *x as i64),
-                    _ => todo!(),
+                    _ => ice!(),
                 };
                 (self.ins().iconst(ty, val), ty)
             }

@@ -1,3 +1,10 @@
+//! Parser for Roto scripts
+//!
+//! The parser is a fairly standard recursive descent parser.
+//!
+//! There is currently no way that the parser can recover from invalid syntax.
+//! Therefore, we can only report one parse error.
+
 use crate::ast::{
     Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };

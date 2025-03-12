@@ -13,17 +13,92 @@
 //! they are caused.
 //!
 //! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
+//!
+//! # Type checking steps
+//!
+//! There are several type checking steps that happen at each compilation. The
+//! order of these steps is fixed for a variety of reasons.
+//!
+//! ## Declaring built-in types
+//!
+//! We start by declaring all the built-in types, since these need to be
+//! available for things in the runtime and in the script. This includes
+//! primitives (`bool`, `u32`, etc.), `Optional[T]`, `Verdict[A, R]` and
+//! things like that.
+//!
+//! The methods of these types are also declared.
+//!
+//! See [`TypeChecker::declare_builtin_types`].
+//!
+//! ## Declaring runtime types and functions
+//!
+//! After the built-in types, we move on to the runtime types, methods
+//! and functions. These can reference built-in types. We now have everything
+//! we need up front, so we can move on to type checking the script itself.
+//!
+//! See [`TypeChecker::declare_runtime_items`].
+//!
+//! ## Declaring modules
+//!
+//! We first determine the general structure of the script. Meaning that we
+//! build the scope tree for the modules and add a [`StubDeclaration`] for
+//! the items in it. At this stage, we do not have all the information to
+//! resolve the contents of each declaration, so a [`StubDeclaration`] only
+//! contains the minimal information we need for name resolution.
+//!
+//! See [`TypeChecker::declare_modules`].
+//!
+//! ## Resolving imports
+//!
+//! With the modules in place, it's possible to resolve the module-level imports
+//! in script. An important detail is that the order of imports does not impact
+//! the semantics of the script. Therefore, we keep trying to resolve each of them
+//! until we either have none left or we can't resolve further.
+//!
+//! See [`TypeChecker::declare_imports`].
+//!
+//! ## Declaring types
+//!
+//! The full structure for name resolution is now in place, which means we can
+//! start filling in the each [`StubDeclaration`] we found before and replace it
+//! with its actual [`Declaration`]. We start with the types declared in the
+//! script.
+//!
+//! See [`TypeChecker::declare_types`].
+//!
+//! ## Detecting type cycles
+//!
+//! It's important to ensure that types are not recursive, because a recursive
+//! type has an infinite size, so we have an additional check for this.
+//!
+//! See [`detect_type_cycles`].
+//!
+//! ## Declaring functions
+//!
+//! Since functions can call each other, we first declare each function and
+//! its type without type checking its body.
+//!
+//! See [`TypeChecker::declare_functions`].
+//!
+//! ## Type checking function bodies
+//!
+//! Finally, we can type check the actual expressions in the script.
+//!
+//! See [`TypeChecker::tree`]
+//!
+//! [`StubDeclaration`]: scope::StubDeclaration
+//! [`Declaration`]: scope::Declaration
 
 use crate::{
     ast::{self, Identifier},
+    ice,
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
     runtime::{FunctionKind, Runtime, RuntimeFunction},
 };
 use cycle::detect_type_cycles;
 use scope::{
-    ModuleScope, ResolvedName, ScopeRef, ScopeType,
-    StubDeclarationKind,
+    ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
 };
 use std::{borrow::Borrow, collections::HashMap};
 use types::{FunctionDefinition, Type, TypeDefinition, TypeName};
@@ -36,7 +111,7 @@ use self::{
 mod cycle;
 pub(crate) mod error;
 mod expr;
-mod filter_map;
+mod function;
 pub mod info;
 pub mod scope;
 #[cfg(test)]
@@ -47,6 +122,9 @@ mod unionfind;
 pub use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
 
+/// Holds the state for type checking
+///
+/// Most type checking steps are methods on this type.
 pub struct TypeChecker {
     /// The list of built-in functions, methods and static methods.
     functions: Vec<Function>,
@@ -55,6 +133,7 @@ pub struct TypeChecker {
     if_else_counter: usize,
 }
 
+/// Result of type checking
 pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
@@ -407,10 +486,7 @@ impl TypeChecker {
                                 name,
                                 arguments: Vec::new(),
                             },
-                            self.evaluate_record_type(
-                                scope,
-                                record_type,
-                            )?,
+                            self.evaluate_record_type(scope, record_type)?,
                         );
                         self.type_info
                             .scope_graph
@@ -629,6 +705,7 @@ impl TypeChecker {
         true
     }
 
+    /// Insert a context variable into the global scope
     fn insert_context(
         &mut self,
         k: Meta<Identifier>,
@@ -646,6 +723,7 @@ impl TypeChecker {
         }
     }
 
+    /// Insert a constant into the global scope
     fn insert_global_constant(
         &mut self,
         k: Meta<Identifier>,
@@ -662,6 +740,7 @@ impl TypeChecker {
         }
     }
 
+    /// Insert a function name into the given scope
     fn insert_function(
         &mut self,
         scope: ScopeRef,
@@ -684,6 +763,7 @@ impl TypeChecker {
         }
     }
 
+    /// Insert a variable into the given scope
     fn insert_var(
         &mut self,
         scope: ScopeRef,
@@ -701,6 +781,7 @@ impl TypeChecker {
         }
     }
 
+    /// Insert a variable into the given scope
     fn insert_module(
         &mut self,
         scope: ScopeRef,
@@ -717,6 +798,17 @@ impl TypeChecker {
         }
     }
 
+    /// Unify two types
+    ///
+    /// This function tries to find the most general unification of two
+    /// types. If they cannot be unified an error is generated.
+    ///
+    /// The types do not need to be resolved before this function.
+    ///
+    /// Note that this function modifies the union find structure. The changes
+    /// it makes cannot be undone. This is a possible improvement for the
+    /// future, so that we can attempt multiple unifications to find a correct
+    /// one.
     fn unify(
         &mut self,
         a: &Type,
@@ -737,14 +829,17 @@ impl TypeChecker {
         let b = self.resolve_type(b);
 
         Some(match (a, b) {
-            // We never recurse into NamedRecords, so they are included here.
+            // Evidently, if two types are identical, they trivially unify
             (a, b) if a == b => a,
+            // Explitcit type variables need to be replaced with fresh type
+            // variable. If they appear here, something has gone wrong.
             (a @ ExplicitVar(_), b) => {
-                panic!("Cannot unify explicit var: {a}, {b}")
+                ice!("Cannot unify explicit var: {a}, {b}")
             }
             (a, b @ ExplicitVar(_)) => {
-                panic!("Cannot unify explicit var: {a}, {b}")
+                ice!("Cannot unify explicit var: {a}, {b}")
             }
+            // The never type is special and unifies with anything
             (Never, x) | (x, Never) => x,
             (IntVar(a), b @ IntVar(_)) => {
                 self.type_info.unionfind.set(a, b.clone());
@@ -794,22 +889,27 @@ impl TypeChecker {
                     return None;
                 }
                 let type_def = self.type_info.resolve_type_name(&name);
-                let TypeDefinition::Record(name, named_fields) = type_def else {
+                let TypeDefinition::Record(name, named_fields) = type_def
+                else {
                     return None;
                 };
                 self.unify_fields(&fields, &named_fields)?;
                 self.type_info.unionfind.set(var, Name(name.clone()));
                 Name(name)
             }
+            // Type names unify if they have the same name and their arguments
+            // can be unified.
             (Name(a), Name(b)) => {
                 if a.name != b.name {
                     return None;
                 }
-                for (a_param, b_param) in a.arguments.iter().zip(&b.arguments) {
+                for (a_param, b_param) in a.arguments.iter().zip(&b.arguments)
+                {
                     self.unify_inner(a_param, b_param)?;
                 }
                 Name(b)
             }
+            // Anything else cannot be unified.
             (_a, _b) => {
                 return None;
             }
@@ -837,17 +937,13 @@ impl TypeChecker {
         Some(new_fields)
     }
 
-    /// Resolve type vars to a type.
-    ///
-    /// This procedure does not recurse into records and enums
+    /// Resolve a type variable to a type.
     fn resolve_type(&mut self, t: &Type) -> Type {
-        let mut t = t.clone();
-
         if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
-            t = self.type_info.unionfind.find(x).clone();
+            self.type_info.unionfind.find(*x).clone()
+        } else {
+            t.clone()
         }
-
-        t
     }
 
     /// Instantiate all type variables in a method
@@ -903,6 +999,7 @@ impl TypeChecker {
         }
     }
 
+    /// Evaluate a type expression into a [`Type`]
     fn evaluate_type_expr(
         &self,
         scope: ScopeRef,
@@ -913,15 +1010,15 @@ impl TypeChecker {
                 let path = path.clone();
                 self.resolve_type_path(scope, &path, params)?
             }
-            ast::TypeExpr::Record(record_ty) => Type::Record(
-                self.evaluate_record_type(scope, record_ty)?,
-            ),
+            ast::TypeExpr::Record(record_ty) => {
+                Type::Record(self.evaluate_record_type(scope, record_ty)?)
+            }
             ast::TypeExpr::Optional(inner) => {
                 let inner = self.evaluate_type_expr(scope, inner)?;
                 Type::optional(inner)
             }
             ast::TypeExpr::Never => Type::Never,
-            ast::TypeExpr::Unit => Type::unit()
+            ast::TypeExpr::Unit => Type::unit(),
         })
     }
 

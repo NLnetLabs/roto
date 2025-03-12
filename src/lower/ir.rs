@@ -15,7 +15,7 @@
 //!  - Expressions are simple (as opposed to complex).
 //!  - Control flow is represented with basic blocks.
 //!
-//! The instructions in the HIR are inspired by the instructions defined by
+//! The instructions in the IR are inspired by the instructions defined by
 //! [cranelift].
 //!
 //! [cranelift]: https://docs.rs/cranelift-frontend/latest/cranelift_frontend/

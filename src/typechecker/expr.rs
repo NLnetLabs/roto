@@ -20,6 +20,11 @@ use super::{
     TypeChecker, TypeResult,
 };
 
+/// The context for type checking expressions
+///
+/// This holds:
+///  - the type that this expression is expected to have and
+///  - the type that the current function should return.
 #[derive(Clone)]
 pub struct Context {
     pub expected_type: Type,
@@ -27,6 +32,7 @@ pub struct Context {
 }
 
 impl Context {
+    /// Create a new context with the expected type set to the passed type
     fn with_type(&self, t: impl Borrow<Type>) -> Self {
         Context {
             expected_type: t.borrow().clone(),
@@ -37,23 +43,30 @@ impl Context {
 
 #[derive(Clone)]
 pub enum ResolvedPath {
+    /// The path referenced a free function
     Function {
         name: ResolvedName,
         definition: FunctionDefinition,
         signature: Signature,
     },
+    /// The path referenced a method
     Method {
         value: PathValue,
         name: ResolvedName,
         definition: FunctionDefinition,
         signature: Signature,
     },
+    /// The path referenced a value
+    ///
+    /// A value can be a local variable, constant or context.
     Value(PathValue),
+    /// The path referenced a static method
     StaticMethod {
         name: ResolvedName,
         definition: FunctionDefinition,
         signature: Signature,
     },
+    /// The path referenced an enum constructor
     EnumConstructor {
         ty: TypeDefinition,
         variant: EnumVariant,
@@ -69,6 +82,7 @@ pub struct PathValue {
 }
 
 impl TypeChecker {
+    /// Type check a block
     pub fn block(
         &mut self,
         scope: ScopeRef,
@@ -100,6 +114,8 @@ impl TypeChecker {
             return Ok(diverged);
         };
 
+        // Here we have a last expression but the previous expressions diverged
+        // that makes this expression unreachable.
         if diverged {
             return Err(self.error_unreachable_expression(expr));
         }

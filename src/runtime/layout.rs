@@ -1,3 +1,7 @@
+//! Layout computations for Roto
+//!
+//! The layout of Roto types follows the C-representation of Rust types.
+
 /// Layout of a Roto or Rust type
 ///
 /// The following must hold:

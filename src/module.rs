@@ -1,3 +1,5 @@
+//! Module tree of a Roto script
+
 use std::collections::BTreeMap;
 
 use crate::{

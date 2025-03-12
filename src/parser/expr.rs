@@ -22,6 +22,16 @@ struct Restrictions {
 
 /// # Parsing value expressions
 impl Parser<'_, '_> {
+    /// Parse a block expression
+    ///
+    /// ```ebnf
+    /// Block      ::= '{' Stmt* Expr? '}'
+    /// Stmt       ::= ImportStmt | ExprStmt | IfStmt | MatchStmt
+    /// ImportStmt ::= 'import' Path ';'
+    /// ExprStmt   ::= Expr ';'
+    /// IfStmt     ::= If ';'?
+    /// MatchStmt  ::= Match ';'?
+    /// ```
     pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 
@@ -130,12 +140,22 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse an expression while allowing record literals
+    ///
+    /// ```ebnf
+    /// Expr ::= LogicalExpr
+    /// ```
     pub fn expr(&mut self) -> ParseResult<Meta<Expr>> {
         self.expr_inner(Restrictions {
             forbid_records: false,
         })
     }
 
+    /// Parse an expression without allowing record literals
+    ///
+    /// ```ebnf
+    /// Expr ::= LogicalExpr
+    /// ```
     fn expr_no_records(&mut self) -> ParseResult<Meta<Expr>> {
         self.expr_inner(Restrictions {
             forbid_records: true,
@@ -146,6 +166,13 @@ impl Parser<'_, '_> {
         self.logical_expr(r)
     }
 
+    /// Parse a logical expression
+    ///
+    /// To avoid confusion, we don't allow `&&` and `||` to be chained together.
+    ///
+    /// ```ebnf
+    /// LogicalExpr ::= Comparison ( ('&&' Comparison )* | ('||' Comparsion)* )
+    /// ```
     fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let expr = self.comparison(r)?;
 
@@ -202,6 +229,11 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse a comparison expression
+    ///
+    /// ```ebnf
+    /// Comparison ::= Sum (CompareOp Sum)?
+    /// ```
     fn comparison(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let expr = self.sum(r)?;
 
@@ -253,6 +285,11 @@ impl Parser<'_, '_> {
         Ok(Some(self.spans.add(span, op)))
     }
 
+    /// Parse a sum expression
+    ///
+    /// ```ebnf
+    /// Sum ::= Term (('+' | '-') Sum)?
+    /// ```
     fn sum(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let left = self.term(r)?;
         if self.next_is(Token::Plus) {
@@ -274,6 +311,11 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse a term expression
+    ///
+    /// ```ebnf
+    /// Term ::= Negation (('*' | '/') Term)?
+    /// ```
     fn term(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let left = self.negation(r)?;
         if self.next_is(Token::Star) {
@@ -295,7 +337,14 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse a negation expression
+    ///
+    /// ```ebnf
+    /// Negation ::= 'not' Access
+    /// ```
     fn negation(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        // TODO: A negation should be a unary `-`. The `not` operator should
+        // have much lower precedence.
         if self.peek_is(Token::Not) {
             let span = self.take(Token::Not)?;
             let expr = self.access(r)?;
@@ -306,6 +355,11 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse an access expression
+    ///
+    /// ```ebnf
+    /// Access ::= Atom ('.' Atom)* Args?
+    /// ```
     fn access(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let mut expr = self.atom(r)?;
 
@@ -329,6 +383,18 @@ impl Parser<'_, '_> {
         Ok(expr)
     }
 
+    /// Parse an atom expression
+    ///
+    /// ```ebnf
+    /// Atom ::= '(' Expr ')'
+    ///        | ListExpr
+    ///        | 'accept' Expr?
+    ///        | 'reject' Expr?
+    ///        | 'return' Expr?
+    ///        | IfExpr
+    ///        | MatchExpr
+    ///        | Path RecordExpr?
+    /// ```
     fn atom(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         if self.peek_is(Token::RoundLeft) {
             self.take(Token::RoundLeft)?;
@@ -439,6 +505,11 @@ impl Parser<'_, '_> {
         )
     }
 
+    /// Parse an if expression
+    ///
+    /// ```ebnf
+    /// IfExpr ::= 'if' Expr Block ('else' (IfExpr | Block))
+    /// ```
     fn if_else(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::If)?;
         let cond = self.expr_no_records()?;
@@ -471,6 +542,13 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse a match expression
+    ///
+    /// ```ebnf
+    /// MatchExpr    ::= 'match' Expr '{' MatchArm* MatchArmLast? '}'
+    /// MatchArm     ::= Pattern ('|' Expr)? '->' (Block | (Expr ','))
+    /// MatchArmLast ::= Pattern ('|' Expr)? '->' Expr
+    /// ```
     fn match_expr(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::Match)?;
         let expr = self.expr_no_records()?;

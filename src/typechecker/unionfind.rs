@@ -1,3 +1,7 @@
+//! Unionfind data structure
+//!
+//! See the documentation on [`UnionFind`] for more information.
+
 use super::types::Type;
 
 /// A simple unionfind data structure
@@ -36,7 +40,7 @@ impl UnionFind {
         t
     }
 
-    /// The set value of a type var
+    /// Set value of a type var
     pub fn set(&mut self, index: usize, t: Type) {
         self.inner[index] = t;
     }

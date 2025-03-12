@@ -1,3 +1,5 @@
+//! Type checking scopes
+
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use crate::{
@@ -10,19 +12,25 @@ use super::{
     Type,
 };
 
+/// A reference to a [`Scope`] in a [`ScopeGraph`]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ScopeRef(usize);
 
 impl ScopeRef {
+    /// The scope at the root of a [`ScopeGraph`]
     pub const GLOBAL: Self = Self(0);
 }
 
+/// Combination of a scope and an identifier
+///
+/// This forms a unique name for an item.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ResolvedName {
     pub scope: ScopeRef,
     pub ident: Identifier,
 }
 
+/// A declaration in a [`ScopeGraph`]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Declaration {
     pub name: ResolvedName,
@@ -45,6 +53,9 @@ pub enum ValueKind {
     Context(usize),
 }
 
+/// An incomplete declaration in a [`ScopeGraph`]
+///
+/// This is used to declare types before they can be fully defined.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StubDeclaration {
     pub name: ResolvedName,
@@ -77,6 +88,9 @@ struct Scope {
     imports: BTreeMap<Identifier, (MetaId, ResolvedName)>,
 }
 
+/// The syntactic structure that a scope represents
+///
+/// This is used primarily for printing a roughly human-readable name.
 pub enum ScopeType {
     Root,
     Then(usize),

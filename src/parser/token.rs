@@ -1,3 +1,5 @@
+//! Lexer for Roto scripts
+
 use core::{ops::Range, str};
 use std::{fmt::Display, ops::ControlFlow};
 

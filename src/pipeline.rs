@@ -59,7 +59,7 @@ pub struct TypeChecked {
     context_type: ContextDescription,
 }
 
-/// Compiler stage: HIR
+/// Compiler stage: IR
 pub struct Lowered {
     runtime: Runtime,
     pub ir: Vec<ir::Function>,
