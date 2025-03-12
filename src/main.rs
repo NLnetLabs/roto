@@ -1,7 +1,5 @@
-use std::path::Path;
-
 use clap::Parser;
-use roto::{IrValue, Memory, Runtime};
+use roto::{cli, Runtime};
 
 #[derive(Parser)]
 struct Cli {
@@ -16,27 +14,5 @@ fn main() {
         .format_target(false)
         .init();
 
-    let settings = Cli::parse();
-
-    let args = match settings.rx.as_ref().map(AsRef::as_ref) {
-        Some("true") => vec![IrValue::Bool(true)],
-        Some("false") => vec![IrValue::Bool(false)],
-        Some(x) => vec![IrValue::U32(x.parse().unwrap())],
-        _ => vec![],
-    };
-
-    let mut mem = Memory::new();
-
-    let ptr = mem.allocate(0);
-    let result = roto::interpret(
-        Runtime::new(),
-        Path::new(&settings.file),
-        &mut mem,
-        IrValue::Pointer(ptr),
-        args,
-    );
-    match result {
-        Ok(_) => println!("Ok!"),
-        Err(e) => eprintln!("{e}"),
-    }
+    cli(Runtime::new());
 }
