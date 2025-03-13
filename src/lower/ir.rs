@@ -116,7 +116,7 @@ pub enum Instruction {
     /// Return from the current function (or filtermap)
     Return(Option<Operand>),
 
-    /// Perform a comparison and store the result in `to`
+    /// Perform an integer comparison and store the result in `to`
     IntCmp {
         to: Var,
         cmp: IntCmp,
@@ -124,7 +124,7 @@ pub enum Instruction {
         right: Operand,
     },
 
-    /// Perform a comparison and store the result in `to`
+    /// Perform a floating point comparison and store the result in `to`
     FloatCmp {
         to: Var,
         cmp: FloatCmp,
@@ -157,6 +157,7 @@ pub enum Instruction {
         right: Operand,
     },
 
+    /// Floating point division
     FDiv {
         to: Var,
         left: Operand,
