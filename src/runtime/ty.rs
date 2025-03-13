@@ -373,4 +373,6 @@ simple_reflect!(i8);
 simple_reflect!(i16);
 simple_reflect!(i32);
 simple_reflect!(i64);
+simple_reflect!(f32);
+simple_reflect!(f64);
 simple_reflect!(Asn);

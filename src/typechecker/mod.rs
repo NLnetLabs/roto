@@ -617,6 +617,11 @@ impl TypeChecker {
         self.type_info.unionfind.fresh(Type::IntVar)
     }
 
+    /// Create a fresh integer variable in the unionfind structure
+    fn fresh_float(&mut self) -> Type {
+        self.type_info.unionfind.fresh(Type::FloatVar)
+    }
+
     /// Create a fresh record variable in the unionfind structure
     fn fresh_record(
         &mut self,
@@ -819,7 +824,9 @@ impl TypeChecker {
         if let Some(ty) = self.unify_inner(a, b) {
             Ok(ty)
         } else {
-            Err(self.error_mismatched_types(a, b, span, cause))
+            let a = self.resolve_type(a);
+            let b = self.resolve_type(b);
+            Err(self.error_mismatched_types(&a, &b, span, cause))
         }
     }
 
@@ -827,7 +834,6 @@ impl TypeChecker {
         use Type::*;
         let a = self.resolve_type(a);
         let b = self.resolve_type(b);
-
         Some(match (a, b) {
             // Evidently, if two types are identical, they trivially unify
             (a, b) if a == b => a,
@@ -851,6 +857,21 @@ impl TypeChecker {
                 }
                 let type_def = self.type_info.resolve_type_name(&name);
                 if !type_def.is_int() {
+                    return None;
+                }
+                self.type_info.unionfind.set(b, Name(name.clone()));
+                Name(name)
+            }
+            (FloatVar(a), b @ FloatVar(_)) => {
+                self.type_info.unionfind.set(a, b.clone());
+                b.clone()
+            }
+            (FloatVar(b), Name(name)) | (Name(name), FloatVar(b)) => {
+                if !name.arguments.is_empty() {
+                    return None;
+                }
+                let type_def = self.type_info.resolve_type_name(&name);
+                if !type_def.is_float() {
                     return None;
                 }
                 self.type_info.unionfind.set(b, Name(name.clone()));
@@ -939,7 +960,11 @@ impl TypeChecker {
 
     /// Resolve a type variable to a type.
     fn resolve_type(&mut self, t: &Type) -> Type {
-        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+        if let Type::Var(x)
+        | Type::IntVar(x)
+        | Type::FloatVar(x)
+        | Type::RecordVar(x, _) = t
+        {
             self.type_info.unionfind.find(*x).clone()
         } else {
             t.clone()

@@ -422,6 +422,7 @@ impl TypeChecker {
             IpAddress(_) => Type::ip_addr(),
             Bool(_) => Type::bool(),
             Integer(_) => self.fresh_int(),
+            Float(_) => self.fresh_float(),
         };
 
         self.unify(&ctx.expected_type, &t, span, None)?;
@@ -674,12 +675,17 @@ impl TypeChecker {
             Lt | Le | Gt | Ge => {
                 self.unify(&ctx.expected_type, &Type::bool(), span, None)?;
 
-                let ctx = ctx.with_type(self.fresh_int());
+                let ty = self.fresh_var();
+                let ctx = ctx.with_type(ty.clone());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &ctx, left)?;
-                diverges |= self.expr(scope, &ctx, right)?;
-                Ok(diverges)
+                if self.type_info.is_numeric_type(&ty) {
+                    diverges |= self.expr(scope, &ctx, right)?;
+                    Ok(diverges)
+                } else {
+                    Err(self.error_expected_numeric_value(left, &ty))
+                }
             }
             Eq | Ne => {
                 self.unify(&Type::bool(), &ctx.expected_type, span, None)?;
@@ -719,15 +725,21 @@ impl TypeChecker {
                 Ok(diverges)
             }
             Add | Sub | Mul | Div => {
-                let operand_ty = self.fresh_int();
+                let operand_ty = self.fresh_var();
                 let new_ctx = ctx.with_type(operand_ty.clone());
 
                 let mut diverges = false;
                 diverges |= self.expr(scope, &new_ctx, left)?;
-                diverges |= self.expr(scope, &new_ctx, right)?;
 
-                self.unify(&ctx.expected_type, &operand_ty, span, None)?;
-                Ok(diverges)
+                if self.type_info.is_numeric_type(&operand_ty) {
+                    diverges |= self.expr(scope, &new_ctx, right)?;
+
+                    self.unify(&ctx.expected_type, &operand_ty, span, None)?;
+
+                    Ok(diverges)
+                } else {
+                    Err(self.error_expected_numeric_value(left, &operand_ty))
+                }
             }
             In | NotIn => {
                 self.unify(&Type::bool(), &ctx.expected_type, span, None)?;

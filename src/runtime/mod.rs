@@ -662,10 +662,78 @@ macro_rules! int_docs {
     }};
 }
 
+macro_rules! float_docs {
+    ($t:ty) => {
+        &{
+            #[allow(unused_comparisons)]
+            let bits = std::mem::size_of::<$t>();
+            format!("The {bits}-bit floating point type")
+        }
+    };
+}
+
 impl Default for Runtime {
     fn default() -> Self {
         Self::new()
     }
+}
+
+macro_rules! float_impl {
+    ($rt:ident, $t:ty) => {{
+        /// Returns the largest integer less than or equal to self.
+        #[roto_method($rt, $t, floor)]
+        fn floor(x: $t) -> $t {
+            x.floor()
+        }
+
+        /// Returns the smallest integer greater than or equal to self.
+        #[roto_method($rt, $t, ceil)]
+        fn ceil(x: $t) -> $t {
+            x.ceil()
+        }
+
+        /// Returns the nearest integer to self. If a value is half-way between two integers, round away from 0.0.
+        #[roto_method($rt, $t, round)]
+        fn round(x: $t) -> $t {
+            x.round()
+        }
+
+        /// Computes the absolute value of self.
+        #[roto_method($rt, $t, round)]
+        fn abs(x: $t) -> $t {
+            x.abs()
+        }
+
+        /// Returns the square root of a number.
+        #[roto_method($rt, $t, sqrt)]
+        fn sqrt(x: $t) -> $t {
+            x.sqrt()
+        }
+
+        /// Raises a number to a floating point power.
+        #[roto_method($rt, $t, pow)]
+        fn pow(x: $t, y: $t) -> $t {
+            x.powf(y)
+        }
+
+        /// Returns true if this value is NaN.
+        #[roto_method($rt, $t, is_nan)]
+        fn is_nan(x: $t) -> bool {
+            x.is_nan()
+        }
+
+        /// Returns true if this value is positive infinity or negative infinity, and false otherwise.
+        #[roto_method($rt, $t, is_infinite)]
+        fn is_infinite(x: $t) -> bool {
+            x.is_infinite()
+        }
+
+        /// Returns true if this number is neither infinite nor NaN.
+        #[roto_method($rt, $t, is_finite)]
+        fn is_finite(x: $t) -> bool {
+            x.is_finite()
+        }
+    }};
 }
 
 impl Runtime {
@@ -706,6 +774,8 @@ impl Runtime {
         rt.register_copy_type::<i16>(int_docs!(i16)).unwrap();
         rt.register_copy_type::<i32>(int_docs!(i32)).unwrap();
         rt.register_copy_type::<i64>(int_docs!(i64)).unwrap();
+        rt.register_copy_type::<f32>(float_docs!(f32)).unwrap();
+        rt.register_copy_type::<f64>(float_docs!(f64)).unwrap();
 
         rt.register_copy_type::<Asn>(
             "An ASN: an Autonomous System Number\n\
@@ -751,6 +821,9 @@ impl Runtime {
             ```\n\
             ",
         ).unwrap();
+
+        float_impl!(rt, f32);
+        float_impl!(rt, f64);
 
         /// Construct a new prefix
         ///
@@ -982,6 +1055,8 @@ pub mod tests {
                 "i16",
                 "i32",
                 "i64",
+                "f32",
+                "f64",
                 "Asn",
                 "IpAddr",
                 "Prefix",

@@ -22,6 +22,8 @@ pub enum IrValue {
     I16(i16),
     I32(i32),
     I64(i64),
+    F32(f32),
+    F64(f64),
     Asn(Asn),
     Pointer(usize),
     ExtPointer(*mut ()),
@@ -40,6 +42,8 @@ pub enum IrType {
     I16,
     I32,
     I64,
+    F32,
+    F64,
     Asn,
     Pointer,
     ExtPointer,
@@ -53,8 +57,8 @@ impl IrType {
         match self {
             Bool | U8 | I8 => 1,
             U16 | I16 => 2,
-            U32 | I32 | Asn => 4,
-            U64 | I64 => 8,
+            U32 | I32 | F32 | Asn => 4,
+            U64 | I64 | F64 => 8,
             Pointer | ExtValue | ExtPointer => (usize::BITS / 8) as usize,
         }
     }
@@ -77,6 +81,8 @@ impl Display for IrType {
             I16 => "i16",
             I32 => "i32",
             I64 => "i64",
+            F32 => "f32",
+            F64 => "f64",
             Asn => "Asn",
             Pointer => "Pointer",
             ExtValue => "ExtValue",
@@ -121,6 +127,8 @@ impl IrValue {
             I16(_) => IrType::I16,
             I32(_) => IrType::I32,
             I64(_) => IrType::I64,
+            F32(_) => IrType::F32,
+            F64(_) => IrType::F64,
             Asn(_) => IrType::Asn,
             Pointer(_) => IrType::Pointer,
             ExtValue(_) => IrType::ExtValue,
@@ -139,6 +147,8 @@ impl IrValue {
             Self::I16(x) => x,
             Self::I32(x) => x,
             Self::I64(x) => x,
+            Self::F32(x) => x,
+            Self::F64(x) => x,
             Self::Asn(x) => x,
             Self::Pointer(x) => x,
             Self::ExtValue(x) => x,
@@ -183,6 +193,8 @@ impl IrValue {
             Self::I16(x) => x.to_ne_bytes().into(),
             Self::I32(x) => x.to_ne_bytes().into(),
             Self::I64(x) => x.to_ne_bytes().into(),
+            Self::F32(x) => x.to_ne_bytes().into(),
+            Self::F64(x) => x.to_ne_bytes().into(),
             Self::Asn(x) => x.into_u32().to_ne_bytes().into(),
             Self::Pointer(x) => x.to_ne_bytes().into(),
             Self::ExtValue(x) => x.clone(),
@@ -234,6 +246,14 @@ impl IrValue {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::I64(i64::from_ne_bytes(*val))
             }
+            IrType::F32 => {
+                let val: &[u8; 4] = val.try_into().unwrap();
+                Self::F32(f32::from_ne_bytes(*val))
+            }
+            IrType::F64 => {
+                let val: &[u8; 8] = val.try_into().unwrap();
+                Self::F64(f64::from_ne_bytes(*val))
+            }
             IrType::Asn => {
                 let val: &[u8; 4] = val.try_into().unwrap();
                 Self::Asn(Asn::from_u32(u32::from_ne_bytes(*val)))
@@ -280,6 +300,14 @@ impl IrValue {
         }
     }
 
+    pub fn as_f64(&self) -> f64 {
+        match self {
+            IrValue::F32(x) => *x as f64,
+            IrValue::F64(x) => *x,
+            _ => panic!("Invalid value!"),
+        }
+    }
+
     pub fn switch_on(&self) -> u32 {
         match self {
             IrValue::Bool(b) => *b as u32,
@@ -310,6 +338,8 @@ impl Display for IrValue {
             I16(x) => write!(f, "i16({x})"),
             I32(x) => write!(f, "i32({x})"),
             I64(x) => write!(f, "i64({x})"),
+            F32(x) => write!(f, "f32({x})"),
+            F64(x) => write!(f, "f64({x})"),
             Asn(x) => write!(f, "Asn({x})"),
             Pointer(x) => write!(f, "Pointer({x})"),
             ExtValue(..) => write!(f, "ExtValue(..)"),
@@ -378,6 +408,52 @@ impl TryFrom<&IrValue> for u8 {
     fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
         match value {
             IrValue::U8(x) => Ok(*x),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<f32> for IrValue {
+    fn from(value: f32) -> Self {
+        IrValue::F32(value)
+    }
+}
+
+impl From<f32> for ReturnValue {
+    fn from(value: f32) -> Self {
+        Self(Some(value.into()))
+    }
+}
+
+impl TryFrom<&IrValue> for f32 {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::F32(x) => Ok(*x),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<f64> for IrValue {
+    fn from(value: f64) -> Self {
+        IrValue::F64(value)
+    }
+}
+
+impl From<f64> for ReturnValue {
+    fn from(value: f64) -> Self {
+        Self(Some(value.into()))
+    }
+}
+
+impl TryFrom<&IrValue> for f64 {
+    type Error = ();
+
+    fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+        match value {
+            IrValue::F64(x) => Ok(*x),
             _ => Err(()),
         }
     }

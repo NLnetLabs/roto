@@ -64,6 +64,7 @@ pub enum Token<'s> {
     // === Literals ===
     String(&'s str),
     Integer(&'s str),
+    Float(&'s str),
     Hex(&'s str),
     Asn(&'s str),
     IpV4(&'s str),
@@ -133,7 +134,8 @@ impl<'s> Lexer<'s> {
         self.one_char_punctuation()?;
         self.as_number()?;
         self.hex_number()?;
-        self.numeric()?;
+        self.float()?;
+        self.integer()?;
         self.string()?;
         self.keyword_or_ident()?;
 
@@ -287,7 +289,63 @@ impl<'s> Lexer<'s> {
         ControlFlow::Break((Token::Hex(tok), span))
     }
 
-    fn numeric(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+    fn float(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let mut current_idx = self
+            .input
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(self.input.len());
+
+        if current_idx == 0 {
+            return ControlFlow::Continue(());
+        }
+
+        let mut rest = &self.input[current_idx..];
+        if rest.starts_with('.') {
+            current_idx += 1;
+            rest = &self.input[current_idx..];
+
+            // If we have `10..` or `10._hello` or `10.hello` we should treat this as an integer
+            if let Some(c) = rest.chars().next() {
+                if XID_START.contains(c) || c == '.' || c == '_' {
+                    return ControlFlow::Continue(());
+                }
+            }
+
+            current_idx += rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+            rest = &self.input[current_idx..];
+
+            if rest.starts_with(['e', 'E']) {
+                current_idx += 1;
+                rest = &self.input[current_idx..];
+                if rest.starts_with(['+', '-']) {
+                    current_idx += 1;
+                    rest = &self.input[current_idx..];
+                }
+                current_idx += rest
+                    .find(|c: char| !c.is_ascii_digit())
+                    .unwrap_or(rest.len());
+            }
+        } else if rest.starts_with(['e', 'E']) {
+            current_idx += 1;
+            rest = &self.input[current_idx..];
+            if rest.starts_with(['+', '-']) {
+                current_idx += 1;
+                rest = &self.input[current_idx..];
+            }
+            current_idx += rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+        } else {
+            return ControlFlow::Continue(());
+        }
+
+        let (tok, span) = self.bump(current_idx);
+        ControlFlow::Break((Token::Float(tok), span))
+    }
+
+    fn integer(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
         let non_numeric_idx = self
             .input
             .find(|c: char| !c.is_ascii_digit())
@@ -434,6 +492,7 @@ impl Display for Token<'_> {
             // Literals
             Token::String(s) => s,
             Token::Integer(s) => s,
+            Token::Float(s) => s,
             Token::Hex(s) => s,
             Token::Asn(s) => s,
             Token::IpV4(s) => s,

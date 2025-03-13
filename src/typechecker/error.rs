@@ -375,6 +375,20 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_expected_numeric_value(
+        &self,
+        expr: &Meta<Expr>,
+        ty: &Type,
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "expected a numeric value, found type `{ty}`"
+            ),
+            location: expr.id,
+            labels: vec![Label::error("not a numberic value", expr.id)],
+        }
+    }
+
     pub fn error_expected_value_path(
         &self,
         ident: &Meta<Identifier>,

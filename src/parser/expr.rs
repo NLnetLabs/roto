@@ -497,6 +497,7 @@ impl Parser<'_, '_> {
                 | Token::Bang
                 | Token::Bool(_)
                 | Token::Integer(_)
+                | Token::Float(_)
                 | Token::Hyphen
                 | Token::IpV4(_)
                 | Token::IpV6(_)
@@ -672,13 +673,16 @@ impl Parser<'_, '_> {
                 let trimmed = &s[1..s.len() - 1];
                 Literal::String(trimmed.into())
             }
-            Token::Integer(s) => Literal::Integer(
-                // This parse fails if the literal is too big,
-                // it should be handled properly
-                s.parse::<i64>().map_err(|e| {
+            Token::Integer(s) => {
+                Literal::Integer(s.parse::<i64>().map_err(|e| {
                     ParseError::invalid_literal("integer", token, e, span)
-                })?,
-            ),
+                })?)
+            }
+            Token::Float(s) => {
+                Literal::Float(s.parse::<f64>().map_err(|e| {
+                    ParseError::invalid_literal("float", token, e, span)
+                })?)
+            }
             Token::Hex(s) => Literal::Integer(
                 i64::from_str_radix(&s[2..], 16).map_err(|e| {
                     ParseError::invalid_literal(
