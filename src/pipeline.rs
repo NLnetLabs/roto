@@ -92,7 +92,7 @@ impl std::fmt::Display for RotoReport {
 
         let mut file_cache = ariadne::FnCache::new(
             (move |id| {
-                Err(Box::new(format!("Failed to fetch source '{}'", id)) as _)
+                Err(Box::new(format!("Failed to fetch source '{}'", id)))
             }) as fn(&_) -> _,
         )
         .with_sources(sources);
