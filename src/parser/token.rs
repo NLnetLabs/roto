@@ -282,7 +282,7 @@ impl<'s> Lexer<'s> {
         };
 
         let digit_idx = rest
-            .find(|c: char| !c.is_ascii_digit())
+            .find(|c: char| !c.is_ascii_hexdigit())
             .unwrap_or(rest.len());
 
         let (tok, span) = self.bump(2 + digit_idx);
