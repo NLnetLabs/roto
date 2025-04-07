@@ -388,7 +388,7 @@ impl TypeChecker {
                     self.type_info.diverges.insert(id, diverges);
                     Ok(diverges)
                 } else {
-                    self.unify(&ctx.expected_type, &Type::bool(), id, None)?;
+                    self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
 
                     // An if without else does not always diverge, because
                     // the condition could be false
@@ -398,7 +398,7 @@ impl TypeChecker {
                         .wrap(scope, ScopeType::Then(idx));
                     let _ = self.block(
                         then_scope,
-                        &ctx.with_type(Type::bool()),
+                        &ctx.with_type(Type::unit()),
                         t,
                     )?;
                     self.type_info.diverges.insert(id, false);

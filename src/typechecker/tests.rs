@@ -342,6 +342,19 @@ fn assign_field_to_other_record() {
 }
 
 #[test]
+fn if_without_body() {
+    let s = src!(
+        "
+           function foo() {
+               if true {}
+           }
+        "
+    );
+
+    assert!(typecheck(s).is_ok());
+}
+
+#[test]
 fn ip_addr_method() {
     let s = src!(
         "
