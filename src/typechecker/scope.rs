@@ -1,6 +1,7 @@
 //! Type checking scopes
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use core::fmt;
+use std::collections::btree_map::{BTreeMap, Entry};
 
 use crate::{
     ast::Identifier,
@@ -8,6 +9,7 @@ use crate::{
 };
 
 use super::{
+    scoped_display::ScopedDisplay,
     types::{FunctionDefinition, TypeDefinition},
     Type,
 };
@@ -28,6 +30,21 @@ impl ScopeRef {
 pub struct ResolvedName {
     pub scope: ScopeRef,
     pub ident: Identifier,
+}
+
+impl ScopedDisplay for ResolvedName {
+    fn fmt(
+        &self,
+        graph: &ScopeGraph,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        let scope = graph.print_scope(self.scope);
+        if scope.is_empty() {
+            write!(f, "{}", self.ident)
+        } else {
+            write!(f, "{scope}.{}", self.ident)
+        }
+    }
 }
 
 /// A declaration in a [`ScopeGraph`]

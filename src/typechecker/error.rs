@@ -10,6 +10,7 @@ use crate::{
 
 use super::{
     scope::{StubDeclaration, StubDeclarationKind},
+    scoped_display::ScopedDisplay,
     types::Type,
     ResolvedPath, TypeChecker,
 };
@@ -137,10 +138,13 @@ impl TypeChecker {
     pub fn error_expected_enum(
         &self,
         ident: &Meta<Identifier>,
-        ty: impl Display,
+        ty: &impl ScopedDisplay,
     ) -> TypeError {
         TypeError {
-            description: format!("expected enum, but found type `{ty}`",),
+            description: format!(
+                "expected enum, but found type `{}`",
+                ty.display(&self.type_info.scope_graph)
+            ),
             location: ident.id,
             labels: vec![Label::error("expected type", ident.id)],
         }
@@ -228,12 +232,16 @@ impl TypeChecker {
     ) -> TypeError {
         TypeError {
             description: format!(
-                "cannot match on the type `{ty}`, \
+                "cannot match on the type `{}`, \
                 because only matching on enums is supported.",
+                ty.display(&self.type_info.scope_graph)
             ),
             location: span,
             labels: vec![Label::error(
-                format!("cannot match on type `{ty}`"),
+                format!(
+                    "cannot match on type `{}`",
+                    ty.display(&self.type_info.scope_graph)
+                ),
                 span,
             )],
         }
@@ -245,7 +253,8 @@ impl TypeChecker {
         ty: &Type,
     ) -> TypeError {
         TypeError {
-            description: format!("pattern has fields, but the variant `{variant}` of `{ty}` doesn't have one"),
+            description: format!("pattern has fields, but the variant `{variant}` of `{}` doesn't have one",
+                    ty.display(&self.type_info.scope_graph)),
             location: variant.id,
             labels: vec![Label::error("unexpected data field", variant.id)],
         }
@@ -257,7 +266,8 @@ impl TypeChecker {
         ty: &Type,
     ) -> TypeError {
         TypeError {
-            description: format!("pattern has no arguments, but variant `{variant}` of `{ty}` does have arguments"),
+            description: format!("pattern has no arguments, but variant `{variant}` of `{}` does have arguments",
+                    ty.display(&self.type_info.scope_graph)),
             location: variant.id,
             labels: vec![Label::error("missing arguments", variant.id)],
         }
@@ -270,11 +280,15 @@ impl TypeChecker {
     ) -> TypeError {
         TypeError {
             description: format!(
-                "the variant `{variant}` does not exist on `{ty}`"
+                "the variant `{variant}` does not exist on `{}`",
+                ty.display(&self.type_info.scope_graph),
             ),
             location: variant.id,
             labels: vec![Label::error(
-                format!("variant does not exist on `{ty}`"),
+                format!(
+                    "variant does not exist on `{}`",
+                    ty.display(&self.type_info.scope_graph),
+                ),
                 variant.id,
             )],
         }
@@ -287,13 +301,21 @@ impl TypeChecker {
         span: MetaId,
         cause: Option<MetaId>,
     ) -> TypeError {
+        let graph = &self.type_info.scope_graph;
         let mut labels = vec![Label::error(
-            format!("expected `{expected}`, found `{got}`"),
+            format!(
+                "expected `{}`, found `{}`",
+                expected.display(graph),
+                got.display(graph),
+            ),
             span,
         )];
         if let Some(span) = cause {
             labels.push(Label::info(
-                format!("expected because this is `{expected}`"),
+                format!(
+                    "expected because this is `{}`",
+                    expected.display(graph)
+                ),
                 span,
             ));
         }
@@ -382,7 +404,8 @@ impl TypeChecker {
     ) -> TypeError {
         TypeError {
             description: format!(
-                "expected a numeric value, found type `{ty}`"
+                "expected a numeric value, found type `{}`",
+                ty.display(&self.type_info.scope_graph),
             ),
             location: expr.id,
             labels: vec![Label::error("not a numberic value", expr.id)],
@@ -421,11 +444,14 @@ impl TypeChecker {
 
     pub fn error_no_field_on_type(
         &self,
-        ty: impl Display,
+        ty: &impl ScopedDisplay,
         field: &Meta<Identifier>,
     ) -> TypeError {
         self.error_simple(
-            format!("no field `{field}` on type `{ty}`",),
+            format!(
+                "no field `{field}` on type `{}`",
+                ty.display(&self.type_info.scope_graph)
+            ),
             format!("unknown field `{field}`"),
             field.id,
         )

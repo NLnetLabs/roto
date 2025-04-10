@@ -925,17 +925,18 @@ impl<'c> FuncGen<'c> {
                         clone,
                         &[src, dest],
                     );
+                } else {
+                    self.builder.emit_small_memory_copy(
+                        self.module.isa.frontend_config(),
+                        dest,
+                        src,
+                        *size as u64,
+                        0,
+                        0,
+                        true,
+                        MEMFLAGS,
+                    )
                 }
-                self.builder.emit_small_memory_copy(
-                    self.module.isa.frontend_config(),
-                    dest,
-                    src,
-                    *size as u64,
-                    0,
-                    0,
-                    true,
-                    MEMFLAGS,
-                )
             }
             ir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {

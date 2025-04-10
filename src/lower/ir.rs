@@ -369,7 +369,7 @@ impl<'a> IrPrinter<'a> {
     pub fn var(&self, var: &Var) -> String {
         let f = self.scope(var.scope);
         format!(
-            "{}::{}",
+            "{}.{}",
             f,
             match &var.kind {
                 VarKind::Explicit(name) => self.ident(name).to_string(),

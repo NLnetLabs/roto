@@ -34,6 +34,12 @@ fn typecheck_with_runtime(
 }
 
 #[test]
+fn empty() {
+    let s = src!("");
+    assert!(typecheck(s).is_ok());
+}
+
+#[test]
 fn one_record() {
     let s = src!("type Foo { a: u32 }");
     assert!(typecheck(s).is_ok());
@@ -333,6 +339,19 @@ fn assign_field_to_other_record() {
     "
     );
     assert!(typecheck(s).is_err());
+}
+
+#[test]
+fn if_without_body() {
+    let s = src!(
+        "
+           function foo() {
+               if true {}
+           }
+        "
+    );
+
+    assert!(typecheck(s).is_ok());
 }
 
 #[test]

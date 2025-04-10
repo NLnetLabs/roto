@@ -6,6 +6,7 @@ use crate::{
     ast::Identifier,
     parser::meta::MetaId,
     runtime::layout::{Layout, LayoutBuilder},
+    typechecker::scoped_display::ScopedDisplay,
     Runtime,
 };
 
@@ -199,12 +200,15 @@ impl TypeInfo {
             Type::Name(type_name) => {
                 type_def = self.resolve_type_name(type_name);
                 let TypeDefinition::Record(_, fields) = &type_def else {
-                    panic!("Can't get offsets in a type that's not a record, but {record}")
+                    panic!("Can't get offsets in a type that's not a record, but {}", record.display(&self.scope_graph))
                 };
                 fields
             }
             _ => {
-                panic!("Can't get offsets in a type that's not a record, but {record}")
+                panic!(
+                    "Can't get offsets in a type that's not a record, but {}",
+                    record.display(&self.scope_graph)
+                )
             }
         };
 

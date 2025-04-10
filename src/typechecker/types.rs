@@ -4,8 +4,9 @@ use crate::{
     ast::Identifier,
     parser::meta::Meta,
     runtime::{layout::Layout, RuntimeFunctionRef},
-    typechecker::scope::ScopeRef,
+    typechecker::scope::{ScopeGraph, ScopeRef},
 };
+use core::fmt;
 use std::{
     any::TypeId,
     borrow::Borrow,
@@ -13,7 +14,7 @@ use std::{
     sync::Arc,
 };
 
-use super::scope::ResolvedName;
+use super::{scope::ResolvedName, scoped_display::ScopedDisplay};
 
 impl Type {
     pub fn unit() -> Type {
@@ -284,54 +285,72 @@ impl Display for Primitive {
     }
 }
 
-impl Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ScopedDisplay for Type {
+    fn fmt(
+        &self,
+        graph: &ScopeGraph,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         let fmt_args = |args: &[Type]| {
             use std::fmt::Write;
             let mut iter = args.iter();
             let mut s = String::new();
             if let Some(i) = iter.next() {
-                write!(s, "{i}")?;
+                write!(s, "{}", i.display(graph))?;
             }
             for i in iter {
-                write!(s, ", {i}")?;
+                write!(s, ", {}", i.display(graph))?;
             }
             Ok(s)
         };
 
         match self {
-            Type::Var(_) => write!(f, "{{unknown}}"),
+            Type::Var(_) => write!(f, "_"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
             Type::IntVar(_) => write!(f, "{{integer}}"),
             Type::FloatVar(_) => write!(f, "{{float}}"),
-            Type::RecordVar(_, fields) | Type::Record(fields) => write!(
-                f,
-                "{{ {} }}",
-                fields
-                    .iter()
-                    .map(|(s, t)| { format!("{s}: {t}") })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            Type::RecordVar(_, fields) | Type::Record(fields) => {
+                write!(
+                    f,
+                    "{{ {} }}",
+                    fields
+                        .iter()
+                        .map(|(s, t)| {
+                            format!("{s}: {}", t.display(graph))
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Type::Never => write!(f, "!"),
             Type::Function(args, ret) => {
-                write!(f, "function({}) -> {ret}", fmt_args(args)?)
+                write!(
+                    f,
+                    "function({}) -> {}",
+                    fmt_args(args)?,
+                    ret.display(graph)
+                )
             }
-            Type::Name(x) => write!(f, "{}", x),
+            Type::Name(x) => write!(f, "{}", x.display(graph)),
         }
     }
 }
 
-impl Display for TypeDefinition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl ScopedDisplay for TypeDefinition {
+    fn fmt(
+        &self,
+        graph: &ScopeGraph,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
         match self {
-            TypeDefinition::Enum(type_name, _) => Display::fmt(type_name, f),
+            TypeDefinition::Enum(type_name, _) => {
+                Display::fmt(&type_name.display(graph), f)
+            }
             TypeDefinition::Record(type_name, _) => {
-                Display::fmt(type_name, f)
+                Display::fmt(&type_name.display(graph), f)
             }
             TypeDefinition::Runtime(resolved_name, _) => {
-                // TODO: make resolved name printable somehow.
-                Display::fmt(&resolved_name.ident, f)
+                Display::fmt(&resolved_name.display(graph), f)
             }
             TypeDefinition::Primitive(primitive) => {
                 Display::fmt(primitive, f)
@@ -359,17 +378,21 @@ impl TypeName {
     }
 }
 
-impl Display for TypeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.name.fmt(f)?;
+impl ScopedDisplay for TypeName {
+    fn fmt(
+        &self,
+        graph: &ScopeGraph,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
+        Display::fmt(&self.name.display(graph), f)?;
         let mut args = self.arguments.iter();
         if let Some(arg) = args.next() {
             f.write_char('[')?;
-            Display::fmt(arg, f)?;
+            Display::fmt(&arg.display(graph), f)?;
             for arg in args {
                 f.write_char(',')?;
                 f.write_char(' ')?;
-                Display::fmt(arg, f)?;
+                Display::fmt(&arg.display(graph), f)?;
             }
             f.write_char(']')?;
         }
