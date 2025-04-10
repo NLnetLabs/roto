@@ -1980,3 +1980,33 @@ fn mutate() {
 
     assert_eq!(t.i, 1, "mutated value should be 1");
 }
+
+#[test]
+fn return_vec() {
+    let mut runtime = Runtime::new();
+
+    #[derive(Clone, Debug, Default)]
+    #[allow(dead_code)]
+    struct MyType {
+        v: Vec<u8>,
+    }
+
+    runtime.register_clone_type::<MyType>("my type").unwrap();
+
+    let s = src!(
+        "
+        function main(t: MyType) -> MyType {
+            t
+        }
+    "
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), (roto::Val<MyType>,), roto::Val<MyType>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let t = MyType { v: vec![0x01] };
+    let res = f.call(&mut (), roto::Val(t));
+    println!("Returned with {:?}", res.0.v.as_ptr());
+}

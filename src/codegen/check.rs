@@ -308,6 +308,7 @@ macro_rules! params {
                 // fine.
                 #[allow(forgetting_copy_types)]
                 std::mem::forget(transformed);
+
                 if return_by_ref {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, fn(*mut Return::Transformed, *mut Ctx, $($t::AsParam),*) -> ()>(func_ptr)
