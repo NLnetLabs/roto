@@ -7,6 +7,7 @@ use crate::{
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
+        scoped_display::ScopedDisplay,
         types::{Type, TypeDefinition},
     },
 };
@@ -96,13 +97,13 @@ fn check_roto_type(
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
             rust_ty: "unknown".into(),
-            roto_ty: roto_ty.to_string(),
+            roto_ty: roto_ty.display(&type_info.scope_graph).to_string(),
         });
     };
 
     let error_message = TypeMismatch {
         rust_ty: rust_ty.rust_name.to_string(),
-        roto_ty: roto_ty.to_string(),
+        roto_ty: roto_ty.display(&type_info.scope_graph).to_string(),
     };
 
     let mut roto_ty = type_info.resolve(roto_ty);
@@ -307,6 +308,7 @@ macro_rules! params {
                 // fine.
                 #[allow(forgetting_copy_types)]
                 std::mem::forget(transformed);
+
                 if return_by_ref {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, fn(*mut Return::Transformed, *mut Ctx, $($t::AsParam),*) -> ()>(func_ptr)

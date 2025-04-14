@@ -71,7 +71,13 @@ pub struct Runtime {
 
 #[derive(Debug)]
 pub enum Movability {
+    // This type is passed by value, only available for built-in types.
+    Value,
+
+    // This type can be copied without calling clone and drop.
     Copy,
+
+    // This type needs a clone and drop function.
     CloneDrop {
         clone: unsafe extern "C" fn(*const (), *mut ()),
         drop: unsafe extern "C" fn(*mut ()),
@@ -217,6 +223,32 @@ impl Runtime {
         self.register_clone_type_with_name::<T>(name, docstring)
     }
 
+    /// Register a type that is passed by value with a default name
+    ///
+    /// The functions registering types by value cannot be made public, because
+    /// the compiler needs special knowledge about them.
+    ///
+    /// See [`Runtime::register_clone_type`]
+    fn register_value_type<T: Copy + 'static>(
+        &mut self,
+        docstring: &str,
+    ) -> Result<(), String> {
+        let name = Self::extract_name::<T>();
+        self.register_value_type_with_name::<T>(name, docstring)
+    }
+
+    fn register_value_type_with_name<T: Copy + 'static>(
+        &mut self,
+        name: &str,
+        docstring: &str,
+    ) -> Result<(), String> {
+        self.register_type_with_name_internal::<T>(
+            name,
+            Movability::Value,
+            docstring,
+        )
+    }
+
     /// Register a `Copy` type with a default name
     ///
     /// See [`Runtime::register_clone_type`]
@@ -271,7 +303,7 @@ impl Runtime {
 
     /// Register a type for use in Roto specifying whether the type is `Copy`
     ///
-    /// The `Copy`-ness is not checked. Which is why this
+    /// The `Copy`-ness is not checked. Which is why this is a private function
     fn register_type_with_name_internal<T: 'static>(
         &mut self,
         name: &str,
@@ -350,11 +382,12 @@ impl Runtime {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
         let description = f.to_function_description(self)?;
+        let name = name.into();
         self.check_description(&description)?;
 
         let id = self.functions.len();
         self.functions.push(RuntimeFunction {
-            name: name.into(),
+            name,
             description,
             kind: FunctionKind::Free,
             id,
@@ -372,6 +405,7 @@ impl Runtime {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
         let description = f.to_function_description(self).unwrap();
+        let name = name.into();
         self.check_description(&description)?;
 
         let Some(second) = description.parameter_types().get(1) else {
@@ -402,7 +436,7 @@ impl Runtime {
 
         let id = self.functions.len();
         self.functions.push(RuntimeFunction {
-            name: name.into(),
+            name,
             description,
             kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
             id,
@@ -497,14 +531,64 @@ impl Runtime {
             })
         };
 
-        for ty in description.parameter_types() {
-            check_type(ty)?;
+        let mut parameter_types = description.parameter_types().into_iter();
+        let Some(out_pointer_type_id) = parameter_types.next() else {
+            return Err(format!("Out parameter missing"));
+        };
+
+        let out_pointer_ty =
+            self.type_registry.get(*out_pointer_type_id).unwrap();
+        match out_pointer_ty.description {
+            TypeDescription::MutPtr(id) => {
+                let Some(_) =
+                    self.runtime_types.iter().find(|ty| ty.type_id == id)
+                else {
+                    let ty = self.type_registry.get(id).unwrap();
+                    return Err(format!(
+                        "Registered a function using an unregistered type: `{}`",
+                        ty.rust_name
+                    ));
+                };
+            }
+            _ => return Err(format!("Out pointer must be a `*mut`")),
         }
 
-        check_type(&description.return_type())?;
-        if description.return_type() != TypeId::of::<()>() {
-            return Err("Runtime function cannot have a return type".into());
+        for type_id in parameter_types {
+            let ty = self.type_registry.get(*type_id).unwrap();
+            let runtime_ty = check_type(type_id)?;
+            if let Movability::Value = runtime_ty.movability {
+                if !matches!(ty.description, TypeDescription::Leaf) {
+                    let ty = self.type_registry.get(ty.type_id).unwrap();
+                    return Err(format!(
+                        "Type `{}` should be passed by value. Try removing the `*mut`, `*const`, `&mut` or `&`",
+                        ty.rust_name,
+                    ));
+                }
+            } else {
+                match ty.description {
+                    TypeDescription::ConstPtr(_) => {} // correct!
+                    TypeDescription::Leaf => {
+                        let ty = self.type_registry.get(ty.type_id).unwrap();
+                        return Err(format!(
+                            "Type `{}` should be passed by pointer. Try adding `*const` or `&`",
+                            ty.rust_name,
+                        ));
+                    }
+                    TypeDescription::MutPtr(_) => {
+                        return Err(format!(
+                            "Parameters cannot be mutable pointers. Try removing `&mut` or `*mut`",
+                        ));
+                    }
+                    _ => unreachable!("check_type should fail before this"),
+                }
+                if !matches!(ty.description, TypeDescription::ConstPtr(_)) {}
+            }
         }
+
+        if description.return_type() != TypeId::of::<()>() {
+            return Err("Runtime function cannot have a return type, use an out pointer instead".into());
+        }
+
         Ok(())
     }
 
@@ -699,7 +783,7 @@ macro_rules! float_impl {
         }
 
         /// Computes the absolute value of self.
-        #[roto_method($rt, $t, round)]
+        #[roto_method($rt, $t, abs)]
         fn abs(x: $t) -> $t {
             x.abs()
         }
@@ -750,14 +834,14 @@ impl Runtime {
             string_init_function: init_string as _,
         };
 
-        rt.register_copy_type_with_name::<()>(
+        rt.register_value_type_with_name::<()>(
             "Unit",
             "The unit type that has just one possible value. It can be used \
             when there is nothing meaningful to be returned.",
         )
         .unwrap();
 
-        rt.register_copy_type::<bool>(
+        rt.register_value_type::<bool>(
             "The boolean type\n\n\
             This type has two possible values: `true` and `false`. Several \
             boolean operations can be used with booleans, such as `&&` (\
@@ -766,18 +850,18 @@ impl Runtime {
         .unwrap();
 
         // All the integer types
-        rt.register_copy_type::<u8>(int_docs!(u8)).unwrap();
-        rt.register_copy_type::<u16>(int_docs!(u16)).unwrap();
-        rt.register_copy_type::<u32>(int_docs!(u32)).unwrap();
-        rt.register_copy_type::<u64>(int_docs!(u64)).unwrap();
-        rt.register_copy_type::<i8>(int_docs!(i8)).unwrap();
-        rt.register_copy_type::<i16>(int_docs!(i16)).unwrap();
-        rt.register_copy_type::<i32>(int_docs!(i32)).unwrap();
-        rt.register_copy_type::<i64>(int_docs!(i64)).unwrap();
-        rt.register_copy_type::<f32>(float_docs!(f32)).unwrap();
-        rt.register_copy_type::<f64>(float_docs!(f64)).unwrap();
+        rt.register_value_type::<u8>(int_docs!(u8)).unwrap();
+        rt.register_value_type::<u16>(int_docs!(u16)).unwrap();
+        rt.register_value_type::<u32>(int_docs!(u32)).unwrap();
+        rt.register_value_type::<u64>(int_docs!(u64)).unwrap();
+        rt.register_value_type::<i8>(int_docs!(i8)).unwrap();
+        rt.register_value_type::<i16>(int_docs!(i16)).unwrap();
+        rt.register_value_type::<i32>(int_docs!(i32)).unwrap();
+        rt.register_value_type::<i64>(int_docs!(i64)).unwrap();
+        rt.register_value_type::<f32>(float_docs!(f32)).unwrap();
+        rt.register_value_type::<f64>(float_docs!(f64)).unwrap();
 
-        rt.register_copy_type::<Asn>(
+        rt.register_value_type::<Asn>(
             "An ASN: an Autonomous System Number\n\
             \n\
             An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32). \

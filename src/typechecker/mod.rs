@@ -100,6 +100,7 @@ use cycle::detect_type_cycles;
 use scope::{
     ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
 };
+use scoped_display::ScopedDisplay;
 use std::{borrow::Borrow, collections::HashMap};
 use types::{FunctionDefinition, Type, TypeDefinition, TypeName};
 
@@ -114,6 +115,7 @@ mod expr;
 mod function;
 pub mod info;
 pub mod scope;
+pub mod scoped_display;
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -840,10 +842,18 @@ impl TypeChecker {
             // Explitcit type variables need to be replaced with fresh type
             // variable. If they appear here, something has gone wrong.
             (a @ ExplicitVar(_), b) => {
-                ice!("Cannot unify explicit var: {a}, {b}")
+                ice!(
+                    "Cannot unify explicit var: {}, {}",
+                    a.display(&self.type_info.scope_graph),
+                    b.display(&self.type_info.scope_graph),
+                )
             }
             (a, b @ ExplicitVar(_)) => {
-                ice!("Cannot unify explicit var: {a}, {b}")
+                ice!(
+                    "Cannot unify explicit var: {}, {}",
+                    a.display(&self.type_info.scope_graph),
+                    b.display(&self.type_info.scope_graph),
+                )
             }
             // The never type is special and unifies with anything
             (Never, x) | (x, Never) => x,

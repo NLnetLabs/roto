@@ -147,3 +147,9 @@ fn test_not_true_is_true() {
     let s = "not true == true";
     parse_expr(s).unwrap();
 }
+
+#[test]
+fn hex_number() {
+    let s = "0xffff029";
+    parse_expr(s).unwrap();
+}

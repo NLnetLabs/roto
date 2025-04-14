@@ -5,7 +5,7 @@ use std::{
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
-use roto_macros::{roto_function, roto_static_method};
+use roto_macros::{roto_function, roto_method, roto_static_method};
 
 use crate::{
     file_tree::FileSpec, pipeline::Compiled,
@@ -1931,4 +1931,82 @@ fn use_type_from_other_module_in_type() {
     let main = p.get_function::<(), (i32,), i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
+}
+
+#[test]
+fn mutate() {
+    let mut runtime = Runtime::new();
+
+    #[derive(Copy, Clone, Debug)]
+    struct MyType {
+        i: i16,
+    }
+
+    runtime
+        .register_copy_type::<*mut MyType>("my type")
+        .unwrap();
+
+    #[roto_method(runtime, *mut MyType)]
+    fn increase(t: &*mut MyType) {
+        eprintln!("increase, pre: {}", unsafe { (**t).i });
+        unsafe { (**t).i += 1 };
+        eprintln!("increase, post: {}", unsafe { (**t).i });
+    }
+
+    let s = src!(
+        "
+        filter main(t: MyType) {
+            t.increase();
+            accept t;
+        }
+    "
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), (roto::Val<*mut MyType>,) ,Verdict<roto::Val<*mut MyType>, ()>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let mut t = MyType { i: 0 };
+    let res = f.call(&mut (), roto::Val(&mut t));
+
+    match res {
+        Verdict::Accept(val) => {
+            let val = unsafe { &*val.0 };
+            assert_eq!(val.i, 1, "returned value should be 1")
+        }
+        Verdict::Reject(_) => todo!(),
+    }
+
+    assert_eq!(t.i, 1, "mutated value should be 1");
+}
+
+#[test]
+fn return_vec() {
+    let mut runtime = Runtime::new();
+
+    #[derive(Clone, Debug, Default)]
+    #[allow(dead_code)]
+    struct MyType {
+        v: Vec<u8>,
+    }
+
+    runtime.register_clone_type::<MyType>("my type").unwrap();
+
+    let s = src!(
+        "
+        function main(t: MyType) -> MyType {
+            t
+        }
+    "
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), (roto::Val<MyType>,), roto::Val<MyType>>("main")
+        .expect("No function found (or mismatched types)");
+
+    let t = MyType { v: vec![0x01] };
+    let res = f.call(&mut (), roto::Val(t));
+    println!("Returned with {:?}", res.0.v.as_ptr());
 }

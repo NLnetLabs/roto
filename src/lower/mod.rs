@@ -290,8 +290,6 @@ impl<'r> Lowerer<'r> {
 
         let last = self.block(body);
 
-        self.drop_locals();
-
         self.return_expr(return_type, last);
 
         let name = self.type_info.resolved_name(ident);
@@ -359,7 +357,6 @@ impl<'r> Lowerer<'r> {
 
                 match kind {
                     ast::ReturnKind::Return => {
-                        self.drop_locals();
                         self.return_expr(&ty, op);
                     }
                     ast::ReturnKind::Accept => {
@@ -943,8 +940,10 @@ impl<'r> Lowerer<'r> {
                     ty,
                 );
             }
+            self.drop_locals();
             self.add(Instruction::Return(None));
         } else {
+            self.drop_locals();
             self.add(Instruction::Return(op));
         }
     }
