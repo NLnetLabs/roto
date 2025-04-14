@@ -78,10 +78,13 @@ pub enum Movability {
     Copy,
 
     // This type needs a clone and drop function.
-    CloneDrop {
-        clone: unsafe extern "C" fn(*const (), *mut ()),
-        drop: unsafe extern "C" fn(*mut ()),
-    },
+    CloneDrop(CloneDrop),
+}
+
+#[derive(Debug)]
+pub struct CloneDrop {
+    pub clone: unsafe extern "C" fn(*const (), *mut ()),
+    pub drop: unsafe extern "C" fn(*mut ()),
 }
 
 unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
@@ -281,10 +284,10 @@ impl Runtime {
         name: &str,
         docstring: &str,
     ) -> Result<(), String> {
-        let movability = Movability::CloneDrop {
+        let movability = Movability::CloneDrop(CloneDrop {
             clone: extern_clone::<T> as _,
             drop: extern_drop::<T> as _,
-        };
+        });
         self.register_type_with_name_internal::<T>(
             name, movability, docstring,
         )

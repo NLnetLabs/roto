@@ -191,7 +191,7 @@ impl TypeDefinition {
         }
     }
 
-    /// Instatiate the type definition with fresh type variables
+    /// Instantiate the type definition with fresh type variables
     pub fn instantiate(&self, fresh_var: impl FnMut() -> Type) -> Type {
         self.type_name().instantiate(fresh_var)
     }

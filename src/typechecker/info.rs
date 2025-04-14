@@ -251,7 +251,7 @@ impl TypeInfo {
         let ty = self.resolve(ty);
         match ty {
             Type::Var(_) | Type::ExplicitVar(_) => {
-                panic!("Can't get the layout of an unconcrete type")
+                panic!("Can't get the layout of an unconcrete type: {:?}", ty)
             }
             Type::Function(_, _) => {
                 panic!("Can't get the layout of a function type")
@@ -267,8 +267,8 @@ impl TypeInfo {
             Type::Name(type_name) => {
                 let type_def = self.resolve_type_name(&type_name);
                 match type_def {
-                    TypeDefinition::Enum(enum_name, variants) => {
-                        let subs: Vec<_> = enum_name
+                    TypeDefinition::Enum(type_constructor, variants) => {
+                        let subs: Vec<_> = type_constructor
                             .arguments
                             .iter()
                             .zip(&type_name.arguments)
@@ -289,10 +289,17 @@ impl TypeInfo {
 
                         layout
                     }
-                    // TODO: The type constructors need to be instantiated
-                    TypeDefinition::Record(_, fields) => Layout::concat(
-                        fields.iter().map(|(_, f)| self.layout_of(f, rt)),
-                    ),
+                    TypeDefinition::Record(type_constructor, fields) => {
+                        let subs: Vec<_> = type_constructor
+                            .arguments
+                            .iter()
+                            .zip(&type_name.arguments)
+                            .collect();
+
+                        Layout::concat(fields.iter().map(|(_, f)| {
+                            self.layout_of(&f.substitute_many(&subs), rt)
+                        }))
+                    }
                     TypeDefinition::Runtime(_, type_id) => {
                         rt.get_runtime_type(type_id).unwrap().layout()
                     }
