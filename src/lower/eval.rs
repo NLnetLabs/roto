@@ -637,7 +637,8 @@ pub fn eval(
             }
             Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
-                    let Some(&IrValue::Pointer(val)) = vars.get(var) else {
+                    let &IrValue::Pointer(val) = eval_operand(&vars, var)
+                    else {
                         panic!()
                     };
 
