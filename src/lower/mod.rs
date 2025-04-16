@@ -13,7 +13,12 @@ mod test_eval;
 
 use ir::{Block, Function, Instruction, Operand, Var, VarKind};
 use label::{LabelRef, LabelStore};
-use std::{any::TypeId, collections::HashMap, net::IpAddr};
+use std::{
+    any::TypeId,
+    collections::{BTreeMap, HashMap},
+    net::IpAddr,
+    sync::Arc,
+};
 use value::IrType;
 
 use crate::{
@@ -24,7 +29,7 @@ use crate::{
     runtime::{
         self,
         layout::{Layout, LayoutBuilder},
-        Movability, RuntimeFunction, RuntimeFunctionRef,
+        CloneDrop, Movability, RuntimeFunction, RuntimeFunctionRef,
     },
     typechecker::{
         info::TypeInfo,
@@ -57,7 +62,17 @@ struct Lowerer<'r> {
     runtime_functions: &'r mut HashMap<RuntimeFunctionRef, IrFunction>,
     label_store: &'r mut LabelStore,
     runtime: &'r Runtime,
-    stack_slots: Vec<(Var, Type)>,
+
+    /// All the stack slots allocated in the function
+    stack_slots: BTreeMap<Var, Type>,
+
+    /// All the stack slots that are allocated in each scope
+    ///
+    /// The first element are the variables allocated in the function body,
+    /// the last element is our current scope and between are the parent
+    /// scopes. At the end of a block we drop all variables in the last
+    /// element and then pop that element.
+    live_stack_slots: Vec<Vec<Var>>,
 }
 
 pub fn lower(
@@ -86,7 +101,8 @@ impl<'r> Lowerer<'r> {
             function_scope,
             runtime_functions,
             blocks: Vec::new(),
-            stack_slots: Vec::new(),
+            stack_slots: BTreeMap::new(),
+            live_stack_slots: Vec::new(),
             label_store,
             runtime,
         }
@@ -241,7 +257,7 @@ impl<'r> Lowerer<'r> {
         ident: &Meta<Identifier>,
         params: &ast::Params,
         return_type: &Type,
-        body: &ast::Block,
+        body: &Meta<ast::Block>,
     ) -> Function {
         let label = self.label_store.new_label(self.function_name);
         self.new_block(label);
@@ -253,12 +269,15 @@ impl<'r> Lowerer<'r> {
             parameter_types.push((self.type_info.resolved_name(x), ty));
         }
 
+        self.live_stack_slots.push(Vec::new());
+
         for (name, ty) in &parameter_types {
             let var = Var {
                 scope: name.scope,
                 kind: VarKind::Explicit(name.ident),
             };
-            self.stack_slots.push((var, ty.clone()))
+            self.stack_slots.insert(var.clone(), ty.clone());
+            self.live_stack_slots.last_mut().unwrap().push(var);
         }
 
         let signature = Signature {
@@ -310,13 +329,21 @@ impl<'r> Lowerer<'r> {
     ///
     /// Returns either the value of the expression or the place where the
     /// value can be retrieved.
-    fn block(&mut self, block: &ast::Block) -> Option<Operand> {
+    fn block(&mut self, block: &Meta<ast::Block>) -> Option<Operand> {
+        self.live_stack_slots.push(Vec::new());
+
         // Result is ignored
         for stmt in &block.stmts {
             self.stmt(stmt);
         }
 
-        block.last.as_ref().and_then(|last| self.expr(last))
+        let op = block.last.as_ref().and_then(|last| self.expr(last));
+
+        let to_drop = self.live_stack_slots.pop().unwrap();
+        if !self.type_info.diverges(block) {
+            self.drop(to_drop);
+        }
+        op
     }
 
     fn stmt(&mut self, stmt: &ast::Stmt) {
@@ -403,7 +430,7 @@ impl<'r> Lowerer<'r> {
                                 accept_ty,
                             )
                         }
-                        self.drop_locals();
+                        self.drop_all();
                         self.add(Instruction::Return(None));
                     }
                     ast::ReturnKind::Reject => {
@@ -451,7 +478,7 @@ impl<'r> Lowerer<'r> {
                             )
                         }
 
-                        self.drop_locals();
+                        self.drop_all();
                         self.add(Instruction::Return(None));
                     }
                 };
@@ -940,10 +967,10 @@ impl<'r> Lowerer<'r> {
                     ty,
                 );
             }
-            self.drop_locals();
+            self.drop_all();
             self.add(Instruction::Return(None));
         } else {
-            self.drop_locals();
+            self.drop_all();
             self.add(Instruction::Return(op));
         }
     }
@@ -1044,7 +1071,9 @@ impl<'r> Lowerer<'r> {
 
         let ty = ty.clone();
         let to = self.new_tmp();
-        self.stack_slots.push((to.clone(), ty));
+        self.stack_slots.insert(to.clone(), ty);
+        self.live_stack_slots.last_mut().unwrap().push(to.clone());
+
         self.add(Instruction::Alloc {
             to: to.clone(),
             layout,
@@ -1170,6 +1199,20 @@ impl<'r> Lowerer<'r> {
         }
     }
 
+    fn offset(&mut self, var: Operand, offset: u32) -> Operand {
+        if offset == 0 {
+            var
+        } else {
+            let new = self.new_tmp();
+            self.add(Instruction::Offset {
+                to: new.clone(),
+                from: var,
+                offset,
+            });
+            new.into()
+        }
+    }
+
     fn write_field(
         &mut self,
         to: Operand,
@@ -1177,29 +1220,13 @@ impl<'r> Lowerer<'r> {
         val: Operand,
         ty: &Type,
     ) {
-        let tmp = self.new_tmp();
-        self.add(Instruction::Offset {
-            to: tmp.clone(),
-            from: to,
-            offset,
-        });
+        let to = self.offset(to, offset);
 
         let ty = self.type_info.resolve(ty);
         if self.is_reference_type(&ty) {
-            let size =
-                self.type_info.layout_of(&ty, self.runtime).size() as u32;
-            let clone = self.get_clone_function(&ty);
-            self.add(Instruction::Copy {
-                to: tmp.into(),
-                from: val,
-                size,
-                clone,
-            });
+            self.clone_type(val, to, &ty);
         } else {
-            self.add(Instruction::Write {
-                to: tmp.into(),
-                val,
-            })
+            self.add(Instruction::Write { to, val })
         }
     }
 
@@ -1210,33 +1237,22 @@ impl<'r> Lowerer<'r> {
         ty: &Type,
     ) -> Option<Operand> {
         let ty = self.type_info.resolve(ty);
-        let to = self.new_tmp();
 
         if self.is_reference_type(&ty) {
-            self.add(Instruction::Offset {
-                to: to.clone(),
-                from,
-                offset,
-            })
+            Some(self.offset(from, offset))
         } else {
-            let tmp = self.new_tmp();
-
             let ty = self.lower_type(&ty)?;
 
-            self.add(Instruction::Offset {
-                to: tmp.clone(),
-                from,
-                offset,
-            });
+            let to = self.new_tmp();
+            let tmp = self.offset(from, offset);
 
             self.add(Instruction::Read {
                 to: to.clone(),
-                from: tmp.into(),
+                from: tmp,
                 ty,
             });
+            Some(to.into())
         }
-
-        Some(to.into())
     }
 
     fn path_value(
@@ -1381,61 +1397,264 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn get_clone_function(
-        &mut self,
-        ty: &Type,
-    ) -> Option<unsafe extern "C" fn(*const (), *mut ())> {
-        let Type::Name(type_name) = ty else {
-            return None;
+    fn clone_type(&mut self, from: Operand, to: Operand, ty: &Type) {
+        let new_from = from.clone();
+        let new_to = to.clone();
+        let f = move |lowerer: &mut Self, offset, ty| {
+            lowerer.clone_leaf_type(&new_from, &new_to, offset, ty)
         };
-
-        let type_def = self.type_info.resolve_type_name(type_name);
-        let TypeDefinition::Runtime(_, id) = type_def else {
-            return None;
-        };
-
-        let ty = self.runtime.get_runtime_type(id)?;
-
-        let &Movability::CloneDrop { clone, .. } = ty.movability() else {
-            return None;
-        };
-
-        Some(clone)
+        self.traverse_type(&from, 0, ty.clone(), "clone".into(), &f);
     }
 
-    fn get_drop_function(
+    fn clone_leaf_type(
         &mut self,
-        ty: &Type,
-    ) -> Option<unsafe extern "C" fn(*mut ())> {
-        let Type::Name(type_name) = ty else {
-            return None;
+        from: &Operand,
+        to: &Operand,
+        offset: usize,
+        ty: Type,
+    ) {
+        if let Some(&CloneDrop { clone, .. }) = self.get_leaf_clone_drop(&ty)
+        {
+            let from = self.offset(from.clone(), offset as u32);
+            let to = self.offset(to.clone().into(), offset as u32);
+            let size =
+                self.type_info.layout_of(&ty, &self.runtime).size() as u32;
+            self.add(Instruction::Copy {
+                to,
+                from,
+                size,
+                clone: Some(clone),
+            });
+            return;
+        }
+
+        let size = match ty {
+            // These are invalid at this point
+            Type::Var(_) | Type::ExplicitVar(_) | Type::RecordVar(_, _) => {
+                panic!()
+            }
+            // These aren't copied, since they aren't leafs or zero sized
+            Type::Never | Type::Record(_) | Type::Function(_, _) => return,
+            Type::Name(type_name) => {
+                let type_def = self.type_info.resolve_type_name(&type_name);
+
+                match type_def {
+                    // For enums we will do most of the work in the traversal
+                    // but the discriminant should be done here.
+                    TypeDefinition::Enum(_, _) => 1,
+                    TypeDefinition::Primitive(p) => p.layout().size(),
+                    TypeDefinition::Runtime(_, id) => self
+                        .runtime
+                        .get_runtime_type(id)
+                        .unwrap()
+                        .layout()
+                        .size(),
+                    _ => return,
+                }
+            }
+            Type::IntVar(_) => Primitive::i32().layout().size(),
+            Type::FloatVar(_) => Primitive::f64().layout().size(),
         };
 
-        let type_def = self.type_info.resolve_type_name(type_name);
-        let TypeDefinition::Runtime(_, id) = type_def else {
-            return None;
-        };
-
-        let ty = self.runtime.get_runtime_type(id)?;
-
-        let &Movability::CloneDrop { drop, .. } = ty.movability() else {
-            return None;
-        };
-
-        Some(drop)
+        let from = self.offset(from.clone(), offset as u32);
+        let to = self.offset(to.clone().into(), offset as u32);
+        self.add(Instruction::Copy {
+            to,
+            from,
+            size: size as u32,
+            clone: None,
+        })
     }
 
-    fn drop_locals(&mut self) {
-        let mut instructions = Vec::new();
-        for (var, ty) in &self.stack_slots.clone() {
-            let drop = self.get_drop_function(ty);
-            instructions.push(Instruction::Drop {
-                var: var.clone(),
-                drop,
+    fn drop_all(&mut self) {
+        let to_drop: Vec<_> = self
+            .live_stack_slots
+            .iter()
+            .map(|s| s.iter())
+            .flatten()
+            .map(Clone::clone)
+            .collect();
+        self.drop(to_drop);
+    }
+
+    fn drop(&mut self, iter: impl IntoIterator<Item = Var>) {
+        for var in iter {
+            let ty = &self.stack_slots[&var];
+            let new_var = var.clone();
+            let f = move |lowerer: &mut Self, offset, ty| {
+                lowerer.drop_leaf_type(&new_var, offset, ty)
+            };
+            self.traverse_type(
+                &var.clone().into(),
+                0,
+                ty.clone(),
+                "drop".into(),
+                &f,
+            );
+        }
+    }
+
+    fn drop_leaf_type(&mut self, var: &Var, offset: usize, ty: Type) {
+        if let Some(&CloneDrop { drop, .. }) = self.get_leaf_clone_drop(&ty) {
+            let var = self.offset(var.clone().into(), offset as u32);
+            self.add(Instruction::Drop {
+                var,
+                drop: Some(drop),
             })
         }
-        for inst in instructions {
-            self.add(inst)
+    }
+
+    fn get_leaf_clone_drop(&mut self, ty: &Type) -> Option<&CloneDrop> {
+        let id = match ty {
+            Type::Name(type_name) => {
+                let type_def = self.type_info.resolve_type_name(&type_name);
+                match type_def {
+                    TypeDefinition::Runtime(_, id) => Some(id),
+                    TypeDefinition::Primitive(Primitive::String) => {
+                        Some(TypeId::of::<Arc<str>>())
+                    }
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+
+        let id = id?;
+
+        let ty = self.runtime.get_runtime_type(id).unwrap();
+
+        if let &Movability::CloneDrop(clone_drop) = &ty.movability() {
+            Some(clone_drop)
+        } else {
+            None
+        }
+    }
+
+    fn traverse_type<'a>(
+        &'a mut self,
+        var: &Operand,
+        offset: usize,
+        ty: Type,
+        label: Identifier,
+        f: &impl Fn(&mut Self, usize, Type),
+    ) {
+        let ty = self.type_info.resolve(&ty);
+        f(self, offset, ty.clone());
+        match ty {
+            Type::Record(fields) => {
+                let mut builder = LayoutBuilder::new();
+                for (_, ty) in fields {
+                    let new_offset = builder
+                        .add(&self.type_info.layout_of(&ty, &self.runtime));
+                    self.traverse_type(
+                        var,
+                        offset + new_offset,
+                        ty,
+                        label,
+                        f,
+                    );
+                }
+            }
+            Type::Name(type_name) => {
+                let type_def = self.type_info.resolve_type_name(&type_name);
+                match type_def {
+                    TypeDefinition::Runtime(_, _) => {}
+                    TypeDefinition::Primitive(_) => {}
+                    TypeDefinition::Enum(type_constructor, variants) => {
+                        let subs: Vec<_> = type_constructor
+                            .arguments
+                            .iter()
+                            .zip(&type_name.arguments)
+                            .collect();
+
+                        let current_label = self.current_label();
+                        let lbl_prefix = self
+                            .label_store
+                            .wrap_internal(current_label, label);
+                        let continue_lbl =
+                            self.label_store.next(current_label);
+
+                        let branches: Vec<_> = (0..variants.len())
+                            .map(|i| {
+                                let ident =
+                                    Identifier::from(&format!("variant_{i}"));
+                                let lbl = self
+                                    .label_store
+                                    .wrap_internal(lbl_prefix, ident);
+                                (i, lbl)
+                            })
+                            .collect();
+
+                        let offset_var =
+                            self.offset(var.clone().into(), offset as u32);
+
+                        let discriminant = self.new_tmp();
+                        self.add(Instruction::Read {
+                            to: discriminant.clone(),
+                            from: offset_var,
+                            ty: IrType::U8,
+                        });
+                        self.add(Instruction::Switch {
+                            examinee: discriminant.into(),
+                            branches: branches.clone(),
+                            default: continue_lbl,
+                        });
+
+                        for (idx, lbl) in branches {
+                            self.new_block(lbl);
+                            let variant = &variants[idx];
+
+                            let mut builder = LayoutBuilder::new();
+                            builder.add(&Layout::of::<u8>());
+                            for ty in &variant.fields {
+                                let ty = ty.substitute_many(&subs);
+                                let new_offset = builder.add(
+                                    &self
+                                        .type_info
+                                        .layout_of(&ty, &self.runtime),
+                                );
+                                self.traverse_type(
+                                    var,
+                                    offset + new_offset,
+                                    ty,
+                                    label,
+                                    f,
+                                );
+                            }
+                            self.add(Instruction::Jump(continue_lbl))
+                        }
+
+                        self.new_block(continue_lbl);
+                    }
+                    TypeDefinition::Record(type_constructor, fields) => {
+                        let subs: Vec<_> = type_constructor
+                            .arguments
+                            .iter()
+                            .zip(&type_name.arguments)
+                            .collect();
+
+                        let mut builder = LayoutBuilder::new();
+                        for (_, ty) in &fields {
+                            let ty = ty.substitute_many(&subs);
+                            let new_offset = builder.add(
+                                &self.type_info.layout_of(&ty, &self.runtime),
+                            );
+                            self.traverse_type(
+                                var,
+                                offset + new_offset,
+                                ty,
+                                label,
+                                f,
+                            );
+                        }
+                    }
+                }
+            }
+            Type::Never | Type::IntVar(_) | Type::FloatVar(_) => {}
+            Type::Var(_)
+            | Type::Function(_, _)
+            | Type::ExplicitVar(_)
+            | Type::RecordVar(_, _) => panic!("Can't traverse: {ty:?}"),
         }
     }
 

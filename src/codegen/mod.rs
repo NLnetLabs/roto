@@ -275,7 +275,7 @@ pub fn codegen(
 
     for (func_ref, func) in runtime_functions {
         let f = runtime.get_function(*func_ref);
-        builder.symbol(format!("runtime_function_{}", f.name), func.ptr);
+        builder.symbol(format!("runtime_function_{}", f.id), func.ptr);
     }
 
     let jit = JITModule::new(builder);
@@ -332,7 +332,7 @@ pub fn codegen(
         }
         let f = runtime.get_function(*func_ref);
         let Ok(func_id) = module.inner.declare_function(
-            &format!("runtime_function_{}", f.name),
+            &format!("runtime_function_{}", f.id),
             Linkage::Import,
             &sig,
         ) else {
@@ -940,7 +940,7 @@ impl<'c> FuncGen<'c> {
             }
             ir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
-                    let (var, _) = self.operand(&Operand::Place(var.clone()));
+                    let (var, _) = self.operand(&var);
                     let pointer_ty = self.module.isa.pointer_type();
                     let drop = self
                         .ins()

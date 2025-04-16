@@ -37,13 +37,13 @@ use super::{
 };
 
 /// Human-readable place
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Var {
     pub scope: ScopeRef,
     pub kind: VarKind,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum VarKind {
     Explicit(Identifier),
     Tmp(usize),
@@ -242,7 +242,7 @@ pub enum Instruction {
     /// For primitives and copy types, this is a noop. For more complex types
     /// it matches Rust's Drop.
     Drop {
-        var: Var,
+        var: Operand,
         /// Pointer to the drop implementation of the type
         drop: Option<unsafe extern "C" fn(*mut ())>,
     },
@@ -690,10 +690,10 @@ impl<'a> IrPrinter<'a> {
                 var,
                 drop: Some(drop),
             } => {
-                format!("mem::drop({}, with={drop:?})", self.var(var),)
+                format!("mem::drop({}, with={drop:?})", self.operand(var),)
             }
             Drop { var, drop: None } => {
-                format!("mem::drop({})", self.var(var),)
+                format!("mem::drop({}, noop)", self.operand(var),)
             }
         }
     }

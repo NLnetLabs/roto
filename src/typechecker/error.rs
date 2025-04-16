@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    scope::{StubDeclaration, StubDeclarationKind},
+    scope::{ResolvedName, StubDeclaration, StubDeclarationKind},
     scoped_display::ScopedDisplay,
     types::Type,
     ResolvedPath, TypeChecker,
@@ -454,6 +454,25 @@ impl TypeChecker {
             ),
             format!("unknown field `{field}`"),
             field.id,
+        )
+    }
+
+    pub fn error_multiple_methods(
+        &self,
+        ident: &Meta<Identifier>,
+        candidates: &[ResolvedName],
+    ) -> TypeError {
+        self.error_simple(
+            format!(
+                "multiple possible methods for {ident}: {}",
+                join_quoted(
+                    candidates
+                        .into_iter()
+                        .map(|c| c.display(&self.type_info.scope_graph))
+                )
+            ),
+            format!("multiple possible methods"),
+            ident.id,
         )
     }
 }
