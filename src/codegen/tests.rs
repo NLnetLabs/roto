@@ -2010,3 +2010,29 @@ fn return_vec() {
     let res = f.call(&mut (), roto::Val(t));
     println!("Returned with {:?}", res.0.v.as_ptr());
 }
+
+#[test]
+fn register_renamed_method() {
+    let mut runtime = Runtime::new();
+
+    #[roto_method(runtime, u32, foo)]
+    fn bar(x: u32) -> u32 {
+        2 * x
+    }
+
+    let s = src!(
+        "
+        function main(x: u32) -> u32 {
+            x.foo()
+        }
+    "
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), (u32,), u32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 2);
+    assert_eq!(res, 4);
+}
