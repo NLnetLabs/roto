@@ -467,11 +467,11 @@ impl TypeChecker {
                 "multiple possible methods for {ident}: {}",
                 join_quoted(
                     candidates
-                        .into_iter()
+                        .iter()
                         .map(|c| c.display(&self.type_info.scope_graph))
                 )
             ),
-            format!("multiple possible methods"),
+            "multiple possible methods".to_string(),
             ident.id,
         )
     }
