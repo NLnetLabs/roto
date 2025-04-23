@@ -940,7 +940,7 @@ impl<'c> FuncGen<'c> {
             }
             ir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
-                    let (var, _) = self.operand(&Operand::Place(var.clone()));
+                    let (var, _) = self.operand(&var);
                     let pointer_ty = self.module.isa.pointer_type();
                     let drop = self
                         .ins()
