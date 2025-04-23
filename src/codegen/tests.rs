@@ -2010,3 +2010,83 @@ fn return_vec() {
     let res = f.call(&mut (), roto::Val(t));
     println!("Returned with {:?}", res.0.v.as_ptr());
 }
+
+#[test]
+fn register_renamed_method() {
+    let mut runtime = Runtime::new();
+
+    #[roto_method(runtime, u32, foo)]
+    fn bar(x: u32) -> u32 {
+        2 * x
+    }
+
+    let s = src!(
+        "
+        function main(x: u32) -> u32 {
+            x.foo()
+        }
+    "
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), (u32,), u32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 2);
+    assert_eq!(res, 4);
+}
+
+#[test]
+fn name_collision() {
+    #[derive(Clone)]
+    struct A {
+        _x: u32,
+    }
+
+    #[derive(Clone)]
+    struct B {
+        _x: u32,
+    }
+
+    for _ in 0..100 {
+        let mut runtime = Runtime::new();
+
+        runtime.register_clone_type::<A>("").unwrap();
+        runtime.register_clone_type::<B>("").unwrap();
+
+        #[roto_method(runtime, A, foo)]
+        fn foo_a(_t: &A) -> bool {
+            true
+        }
+
+        #[roto_method(runtime, B, foo)]
+        #[allow(unreachable_code)]
+        fn foo_b(_t: &B) -> bool {
+            unreachable!();
+            false
+        }
+
+        let s = src!(
+            "
+           filter foo(t: B) {
+               accept t.foo()
+           }
+
+           filter main(t: A) {
+               accept t.foo()
+           }
+       "
+        );
+
+        let mut p = compile_with_runtime(s, runtime);
+        let f = p
+            .get_function::<(), (roto::Val<A>,), Verdict<bool, ()>>("main")
+            .expect("No function found (or mismatched types)");
+
+        let t = A { _x: 1 };
+        let res = f.call(&mut (), roto::Val(t));
+        assert_eq!(res, Verdict::Accept(true));
+        eprint!(".");
+    }
+}

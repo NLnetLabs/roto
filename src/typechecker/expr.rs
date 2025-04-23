@@ -786,12 +786,14 @@ impl TypeChecker {
         &mut self,
         kind: &FunctionKind,
         name: Identifier,
-    ) -> Option<(Function, Signature)> {
+    ) -> Result<(Function, Signature), Vec<ResolvedName>> {
         // Free functions are part of the normal scope graph and should not be
         // handled here.
         assert!(!matches!(kind, FunctionKind::Free));
 
         let funcs = self.functions.clone();
+
+        let mut candidates = Vec::new();
         for f in funcs {
             if f.name.ident != name {
                 continue;
@@ -809,10 +811,15 @@ impl TypeChecker {
                 _ => false,
             };
             if is_match {
-                return Some((f, signature));
+                candidates.push((f, signature));
             }
         }
-        None
+
+        match &candidates[..] {
+            [] => Err(Vec::new()),
+            [method] => Ok(method.clone()),
+            _ => Err(candidates.into_iter().map(|x| x.0.name).collect()),
+        }
     }
 
     fn record_fields(
@@ -972,18 +979,31 @@ impl TypeChecker {
                 };
 
                 let ty2 = ty.instantiate(|| self.fresh_var());
-                if let Some((function, signature)) = self.find_method(
+
+                match self.find_method(
                     &FunctionKind::StaticMethod(ty2),
                     **next_ident,
                 ) {
-                    if let Some(field) = idents.next() {
-                        return Err(self.error_no_field_on_type(ty, field));
+                    Ok((function, signature)) => {
+                        if let Some(field) = idents.next() {
+                            return Err(
+                                self.error_no_field_on_type(ty, field)
+                            );
+                        }
+                        return Ok(ResolvedPath::StaticMethod {
+                            name: dec.name,
+                            definition: function.definition.clone(),
+                            signature,
+                        });
                     }
-                    return Ok(ResolvedPath::StaticMethod {
-                        name: dec.name,
-                        definition: function.definition.clone(),
-                        signature,
-                    });
+                    Err(candidates) => {
+                        if !candidates.is_empty() {
+                            return Err(self.error_multiple_methods(
+                                next_ident,
+                                &candidates,
+                            ));
+                        }
+                    }
                 }
 
                 let TypeDefinition::Enum(_, variants) = ty else {
@@ -1033,28 +1053,37 @@ impl TypeChecker {
                 // We loop until we either find the last field or a method.
                 // The method must be the last identifier.
                 while let Some(field) = idents.next() {
-                    if let Some((function, signature)) = self.find_method(
+                    match self.find_method(
                         &FunctionKind::Method(ty.clone()),
                         **field,
                     ) {
-                        if let Some(field) = idents.next() {
-                            return Err(
-                                self.error_no_field_on_type(&ty, field)
-                            );
+                        Ok((function, signature)) => {
+                            if let Some(field) = idents.next() {
+                                return Err(
+                                    self.error_no_field_on_type(&ty, field)
+                                );
+                            }
+                            return Ok(ResolvedPath::Method {
+                                value: PathValue {
+                                    name: dec.name,
+                                    kind: kind.clone(),
+                                    ty: root_ty.clone(),
+                                    fields,
+                                },
+                                name: function.name,
+                                definition: function.definition,
+                                signature,
+                            });
                         }
-                        return Ok(ResolvedPath::Method {
-                            value: PathValue {
-                                name: dec.name,
-                                kind: kind.clone(),
-                                ty: root_ty.clone(),
-                                fields,
-                            },
-                            name: function.name,
-                            definition: function.definition,
-                            signature,
-                        });
+                        Err(candidates) => {
+                            if !candidates.is_empty() {
+                                return Err(self.error_multiple_methods(
+                                    field,
+                                    &candidates,
+                                ));
+                            }
+                        }
                     }
-
                     // The field is not a method, so we try a field access.
                     ty = self.access_field(&ty, field)?;
                     fields.push((field.node, ty.clone()));
@@ -1257,10 +1286,17 @@ impl TypeChecker {
         field: &Meta<Identifier>,
         args: &Meta<Vec<Meta<ast::Expr>>>,
     ) -> TypeResult<bool> {
-        let Some((function, signature)) =
-            self.find_method(&FunctionKind::Method(ty.clone()), **field)
-        else {
-            return Err(self.error_no_field_on_type(&ty, field));
+        let (function, signature) = match self
+            .find_method(&FunctionKind::Method(ty.clone()), **field)
+        {
+            Ok((function, signature)) => (function, signature),
+            Err(candidates) => {
+                return Err(if candidates.is_empty() {
+                    self.error_no_field_on_type(&ty, field)
+                } else {
+                    self.error_multiple_methods(field, &candidates)
+                });
+            }
         };
 
         self.type_info.function_calls.insert(
