@@ -534,9 +534,9 @@ impl Runtime {
             })
         };
 
-        let mut parameter_types = description.parameter_types().into_iter();
+        let mut parameter_types = description.parameter_types().iter();
         let Some(out_pointer_type_id) = parameter_types.next() else {
-            return Err(format!("Out parameter missing"));
+            return Err("Out parameter missing".to_string());
         };
 
         let out_pointer_ty =
@@ -553,7 +553,7 @@ impl Runtime {
                     ));
                 };
             }
-            _ => return Err(format!("Out pointer must be a `*mut`")),
+            _ => return Err("Out pointer must be a `*mut`".to_string()),
         }
 
         for type_id in parameter_types {
@@ -578,9 +578,9 @@ impl Runtime {
                         ));
                     }
                     TypeDescription::MutPtr(_) => {
-                        return Err(format!(
-                            "Parameters cannot be mutable pointers. Try removing `&mut` or `*mut`",
-                        ));
+                        return Err(
+                            "Parameters cannot be mutable pointers. Try removing `&mut` or `*mut`".to_string()
+                        );
                     }
                     _ => unreachable!("check_type should fail before this"),
                 }

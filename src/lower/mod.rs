@@ -1416,9 +1416,9 @@ impl<'r> Lowerer<'r> {
         if let Some(&CloneDrop { clone, .. }) = self.get_leaf_clone_drop(&ty)
         {
             let from = self.offset(from.clone(), offset as u32);
-            let to = self.offset(to.clone().into(), offset as u32);
+            let to = self.offset(to.clone(), offset as u32);
             let size =
-                self.type_info.layout_of(&ty, &self.runtime).size() as u32;
+                self.type_info.layout_of(&ty, self.runtime).size() as u32;
             self.add(Instruction::Copy {
                 to,
                 from,
@@ -1457,7 +1457,7 @@ impl<'r> Lowerer<'r> {
         };
 
         let from = self.offset(from.clone(), offset as u32);
-        let to = self.offset(to.clone().into(), offset as u32);
+        let to = self.offset(to.clone(), offset as u32);
         self.add(Instruction::Copy {
             to,
             from,
@@ -1470,8 +1470,7 @@ impl<'r> Lowerer<'r> {
         let to_drop: Vec<_> = self
             .live_stack_slots
             .iter()
-            .map(|s| s.iter())
-            .flatten()
+            .flat_map(|s| s.iter())
             .map(Clone::clone)
             .collect();
         self.drop(to_drop);
@@ -1507,7 +1506,7 @@ impl<'r> Lowerer<'r> {
     fn get_leaf_clone_drop(&mut self, ty: &Type) -> Option<&CloneDrop> {
         let id = match ty {
             Type::Name(type_name) => {
-                let type_def = self.type_info.resolve_type_name(&type_name);
+                let type_def = self.type_info.resolve_type_name(type_name);
                 match type_def {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
@@ -1530,8 +1529,8 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn traverse_type<'a>(
-        &'a mut self,
+    fn traverse_type(
+        &mut self,
         var: &Operand,
         offset: usize,
         ty: Type,
@@ -1545,7 +1544,7 @@ impl<'r> Lowerer<'r> {
                 let mut builder = LayoutBuilder::new();
                 for (_, ty) in fields {
                     let new_offset = builder
-                        .add(&self.type_info.layout_of(&ty, &self.runtime));
+                        .add(&self.type_info.layout_of(&ty, self.runtime));
                     self.traverse_type(
                         var,
                         offset + new_offset,
@@ -1586,7 +1585,7 @@ impl<'r> Lowerer<'r> {
                             .collect();
 
                         let offset_var =
-                            self.offset(var.clone().into(), offset as u32);
+                            self.offset(var.clone(), offset as u32);
 
                         let discriminant = self.new_tmp();
                         self.add(Instruction::Read {
@@ -1611,7 +1610,7 @@ impl<'r> Lowerer<'r> {
                                 let new_offset = builder.add(
                                     &self
                                         .type_info
-                                        .layout_of(&ty, &self.runtime),
+                                        .layout_of(&ty, self.runtime),
                                 );
                                 self.traverse_type(
                                     var,
@@ -1637,7 +1636,7 @@ impl<'r> Lowerer<'r> {
                         for (_, ty) in &fields {
                             let ty = ty.substitute_many(&subs);
                             let new_offset = builder.add(
-                                &self.type_info.layout_of(&ty, &self.runtime),
+                                &self.type_info.layout_of(&ty, self.runtime),
                             );
                             self.traverse_type(
                                 var,
