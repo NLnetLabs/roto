@@ -4,7 +4,7 @@
 
 Released yyyy-mm-dd.
 
-### Breakin changes
+### Breaking changes
 
 ### New
 
@@ -12,10 +12,74 @@ Released yyyy-mm-dd.
 
 ### Other changes
 
+## 0.5.0
+
+Released 2025-04-23.
+
+### Breaking changes
+
+- Renamed `Runtime::basic()` to `Runtime::new()`.
+- Reading Roto scripts should now be done with a `FileTree` instead of
+  `roto::read_files`.
+- It is no longer necessary to pass the pointer size to Roto.
+- The `roto_method`, `roto_static_method` & `roto_function` macros are more
+  strict about the types they accept. Previously, some parameters could be
+  marked as references where they should have been passed by value and vice
+  versa, leading to incorrect behaviour.
+- Hyphens are no longer allowed in identifiers (such as names of variables,
+  functions, types and filtermaps).
+- `filter-map` should now be written as `filtermap`
+- Some outdated constructs were removed and are now treated as parse errors:
+  `rib`, `table`, `output-stream`.
+
+### New
+
+- There is a full module system for Roto now, meaning that scripts can now be
+  spread out over multiple files. More information can be found in the
+  documentation.
+- Optional types have been added. For any type `T` the type `T?` means an
+  optional value of that type, similar to Rust's `Option<T>`. Values of that
+  type can be constructed with `Optional.None` and `Optional.Some(v)`. It's
+  also possible to match on optional values.
+
+```roto
+match optional_u32 {
+  Some(x) -> x,
+  None -> 0,
+}
+```
+
+- Roto scripts can now contain tests. These are similar to filtermaps
+  where `accept` means a passing test and `reject` a failing one.
+
+```roto
+test this_passes {
+  accept
+}
+
+test this_fails {
+  reject
+}
+```
+
+- The `cli` function in the Roto API can be used to create a simple CLI for
+  any runtime, allowing for easier debugging and testing of Roto scripts.
+- The floating-point types `f32` and `f64` were added, including basic
+  operators and some methods for floating point manipulation.
+
+### Bug fixes
+
+- There are several fixes for cloning and dropping of Rust values in Roto
+  scripts. The implementation is much more sound now and should not lead to
+  leakage and double frees anymore.
+- Fixed an issue where one runtime methods would override another method causing
+  the wrong method to be invoked by a script.
+- Roto now uses a custom lexer instead of `logos` for more flexibility. This
+  fixes some small issues around complex literals.
 
 ## 0.4.0
 
-Release 2025-01-29.
+Released 2025-01-29.
 
 ### Breaking changes
 
