@@ -49,13 +49,15 @@ filtermap main(x: IpAddr) {
   are static.
 - Roto currently does not feature any looping constructs. If you need loops,
   you can use recursion instead as a workaround.
-- All values are currently immutable.
+- All values are currently immutable. If a type should be mutable and shared
+  between multiple variables, it can be wrapped in a type that provides interior
+  mutability such as `Rc<RefCell<T>>` and `Arc<Mutex<T>>`.
 
 ## Learn more
 
 - Documentation of the Roto language is included in the
   [documentation for Rotonda](documentation).
-- The API docs for the latest version are available at <docs.rs/roto>
+- The API docs for the latest version are available on [docs.rs]
 - Some examples are available in the examples folder of the Roto repository.
 
 ## Contributing
@@ -69,6 +71,7 @@ case, we would love to hear from you!
 [GitHub repository]: https://github.com/NLnetLabs/routecore
 [Documentation]: https://rotonda.docs.nlnetlabs.nl/en/latest/roto/00_introduction.html
 [crate]: https://crates.io/crates/roto
+[docs.rs]: https://docs.rs/roto
 
 ## License
 
