@@ -1,25 +1,62 @@
 `Roto`
 ======
 
-`Roto` is a full programming language that is fast, safe and easy to use. It
-is made to integrate especially well with Rotonda, so that writing filters is
-as simple as possible.
+`Roto` is an embedded scripting language that is fast, safe and easy to use. 
 
-Used by [Rotonda], the composable, programmable routing BGP engine.
+Primarily used by [Rotonda], the composable, programmable routing BGP engine. It
+is made to integrate especially well with Rotonda, so that writing filters is as
+simple as possible.
 
-Scripts are compiled to machine code by Rotonda before they are executed. This
-means that they run quickly and introduce minimal latency into your system.
+Read more about it in the [documentation].
 
-A strong and static type system ensures that every expression must be of a
-well defined, unambiguous type. Roto scripts therefore cannot crash Rotonda
-and can be used safely. This does not mean that the user has to specify types
-everywhere, most types can be inferred by the Roto compiler. When the compiler
-detects a mistake in your script, it will emit a friendly message.
+## Example
 
-Roto has no facilities to create loops. The reason for this is that scripts
-need to run only for a short time and should not slow down the application.
+```roto
+# A function that returns true if an IP address is equal to 0.0.0.0
+function is_zero(x: IpAddr) -> bool {
+    x == 0.0.0.0
+}
 
-Read more about in the [documentation].
+# A filtermap that only accepts IP addresses of 0.0.0.0
+filtermap main(x: IpAddr) {
+    if is_zero(x) {
+        accept
+    } else {
+        reject
+    }
+}
+```
+
+## Features
+
+- Roto can be **embedded** into any Rust application. Rust types and functions
+  can be registered for use in Roto.
+- Roto is **strongly and statically-typed**, ensuring that type errors are
+  caught at compile-time. This does not mean that the user has to specify types
+  everywhere, most types can be inferred by the Roto compiler. When the compiler
+  detects a mistake in your script, it will emit a friendly message.
+- Scripts are **compiled** to machine code before they are executed. This
+  means that they run quickly and introduce minimal latency into your system.
+- Roto scripts are **hot-reloadable**. The host application can recompile
+  scripts and use those instead.
+
+## Limitations
+
+- All registered Rust types must implement `Clone` or `Copy`. Rust types that
+  don't implement these traits should be wrapped in an `Rc` or `Arc`. The reason
+  for this limitation is that Roto does not have references.
+- The parameter and return types of functions exported to the host application
+  are static.
+- Roto currently does not feature any looping constructs. If you need loops,
+  you can use recursion instead as a workaround.
+- All values are currently immutable.
+
+## Learn more
+
+- Documentation of the Roto language is included in the
+  [documentation for Rotonda](documentation).
+- The API docs for the latest version are available at <docs.rs/roto>
+- Some examples are available in the examples folder of the Roto repository.
 
 ## Contributing
 
