@@ -27,6 +27,13 @@ filtermap main(x: IpAddr) {
 }
 ```
 
+More examples can be found in the `examples` folder in this repository. They
+can be run with
+
+```
+cargo run --example <example name>
+```
+
 ## Features
 
 - Roto can be **embedded** into any Rust application. Rust types and functions
@@ -38,7 +45,7 @@ filtermap main(x: IpAddr) {
 - Scripts are **compiled** to machine code before they are executed. This
   means that they run quickly and introduce minimal latency into your system.
 - Roto scripts are **hot-reloadable**. The host application can recompile
-  scripts and use those instead.
+  scripts at any time.
 
 ## Limitations
 
