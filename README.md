@@ -30,7 +30,7 @@ filtermap main(x: IpAddr) {
 More examples can be found in the `examples` folder in this repository. They
 can be run with
 
-```
+```sh
 cargo run --example <example name>
 ```
 
