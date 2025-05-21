@@ -76,7 +76,7 @@ case, we would love to hear from you!
 
 [Rotonda]: https://github.com/NlnetLabs/rotonda
 [GitHub repository]: https://github.com/NLnetLabs/routecore
-[Documentation]: https://rotonda.docs.nlnetlabs.nl/en/latest/roto/00_introduction.html
+[Documentation]: https://rotonda.docs.nlnetlabs.nl/en/stable
 [crate]: https://crates.io/crates/roto
 [docs.rs]: https://docs.rs/roto
 
