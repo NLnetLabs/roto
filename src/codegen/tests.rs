@@ -1947,7 +1947,7 @@ fn mutate() {
         .unwrap();
 
     #[roto_method(runtime, *mut MyType)]
-    fn increase(t: &*mut MyType) {
+    fn increase(mut t: Val<*mut MyType>) {
         eprintln!("increase, pre: {}", unsafe { (**t).i });
         unsafe { (**t).i += 1 };
         eprintln!("increase, post: {}", unsafe { (**t).i });
@@ -1964,11 +1964,11 @@ fn mutate() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), (roto::Val<*mut MyType>,) ,Verdict<roto::Val<*mut MyType>, ()>>("main")
+        .get_function::<(), (Val<*mut MyType>,) ,Verdict<Val<*mut MyType>, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let mut t = MyType { i: 0 };
-    let res = f.call(&mut (), roto::Val(&mut t));
+    let res = f.call(&mut (), Val(&mut t));
 
     match res {
         Verdict::Accept(val) => {
@@ -2056,15 +2056,13 @@ fn name_collision() {
         runtime.register_clone_type::<B>("").unwrap();
 
         #[roto_method(runtime, A, foo)]
-        fn foo_a(_t: &A) -> bool {
+        fn foo_a(_: Val<A>) -> bool {
             true
         }
 
         #[roto_method(runtime, B, foo)]
-        #[allow(unreachable_code)]
-        fn foo_b(_t: &B) -> bool {
-            unreachable!();
-            false
+        fn foo_b(_: Val<B>) -> bool {
+            unreachable!()
         }
 
         let s = src!(

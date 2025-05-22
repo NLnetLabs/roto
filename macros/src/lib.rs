@@ -268,30 +268,13 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
     let mut transformed_params = Vec::new();
     let mut transformed_args = Vec::new();
 
-    for (t, a) in input_types.iter().zip(&args) {
-        match &**t {
-            syn::Type::Reference(syn::TypeReference {
-                and_token: _,
-                lifetime,
-                mutability,
-                elem,
-            }) => {
-                if lifetime.is_some() {
-                    panic!("lifetime not allowed")
-                };
-                if mutability.is_some() {
-                    transformed_params.push(quote!(#a: *mut #elem));
-                    transformed_args.push(quote!(unsafe { &mut *#a }));
-                } else {
-                    transformed_params.push(quote!(#a: *const #elem));
-                    transformed_args.push(quote!(unsafe { &*#a }));
-                }
-            }
-            _ => {
-                transformed_params.push(quote!(#a: #t));
-                transformed_args.push(quote!(#a));
-            }
-        }
+    for (i, t) in input_types.iter().enumerate() {
+        let ident =
+            syn::Ident::new(&format!("_{i}"), proc_macro2::Span::call_site());
+        transformed_params
+            .push(quote!(#ident: <#t as roto::Reflect>::AsParam));
+        transformed_args
+            .push(quote!(<#t as roto::Reflect>::untransform(unsafe { <#t as roto::Reflect>::from_param(#ident) })));
     }
 
     let underscored_types = input_types.iter().map(|_| quote!(_));
