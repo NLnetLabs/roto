@@ -1,0 +1,12 @@
+[[language]]
+name = "roto"
+scope = "source.roto"
+injection-regex = "roto"
+file-types = ["roto"]
+comment-tokens = "#"
+indent = { tab-width = 4, unit = "  " }
+language-servers = [ "roto" ]
+
+[language-server.roto]
+command = "roto"
+args = ["lsp"]

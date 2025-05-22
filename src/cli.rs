@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::{tools::print::print_highlighted, FileTree, Runtime};
+use crate::{lsp, tools::print::print_highlighted, FileTree, Runtime};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -36,6 +36,8 @@ enum Command {
         #[arg()]
         file: PathBuf,
     },
+    /// Run an language server for Roto
+    Lsp,
 }
 
 /// Run a basic CLI for a given runtime
@@ -107,6 +109,7 @@ fn cli_inner(rt: &Runtime) -> Result<(), String> {
             let s = std::fs::read_to_string(file).unwrap();
             print_highlighted(&s);
         }
+        Command::Lsp => lsp::run(),
     }
     Ok(())
 }
