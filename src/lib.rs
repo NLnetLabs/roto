@@ -13,6 +13,7 @@ mod module;
 mod parser;
 mod pipeline;
 mod runtime;
+pub mod tools;
 mod typechecker;
 
 pub use cli::cli;
