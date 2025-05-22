@@ -2090,3 +2090,43 @@ fn name_collision() {
         eprint!(".");
     }
 }
+
+#[test]
+fn str_equals() {
+    let s = src!(
+        r#"
+        function is_slash(s: String) -> bool {
+            s == "/"
+        }
+        "#
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled
+        .get_function::<(), (Arc<str>,), bool>("is_slash")
+        .unwrap();
+
+    assert!(func.call(&mut (), "/".into()));
+    assert!(!func.call(&mut (), "foo".into()));
+}
+
+#[test]
+fn str_not_equals() {
+    let s = src!(
+        r#"
+        function is_not_slash(s: String) -> bool {
+            s != "/"
+        }
+        "#
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled
+        .get_function::<(), (Arc<str>,), bool>("is_not_slash")
+        .unwrap();
+
+    assert!(func.call(&mut (), "foo".into()));
+    assert!(!func.call(&mut (), "/".into()));
+}
