@@ -734,7 +734,7 @@ impl<'r> Lowerer<'r> {
                     return Some(place.into());
                 }
 
-                if op == ast::BinOp::Eq && ty == Type::ip_addr() {
+                if op == ast::BinOp::Ne && ty == Type::ip_addr() {
                     let ip_addr_type_id = TypeId::of::<IpAddr>();
                     let runtime_func = self.find_runtime_function(
                         runtime::FunctionKind::Method(ip_addr_type_id),
@@ -750,6 +750,51 @@ impl<'r> Lowerer<'r> {
                         )
                         .unwrap();
 
+                    self.add(Instruction::Not {
+                        to: place.clone(),
+                        val: out,
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Eq && ty == Type::string() {
+                    let str_type_id = TypeId::of::<Arc<str>>();
+                    let runtime_func = self.find_runtime_function(
+                        runtime::FunctionKind::Method(str_type_id),
+                        "eq",
+                    );
+
+                    let out = self
+                        .call_runtime_function(
+                            runtime_func.get_ref(),
+                            [left, right],
+                            &[Type::string(), Type::string()],
+                            &Type::bool(),
+                        )
+                        .unwrap();
+                    self.add(Instruction::Assign {
+                        to: place.clone(),
+                        val: out,
+                        ty: IrType::Bool,
+                    });
+                    return Some(place.into());
+                }
+
+                if op == ast::BinOp::Ne && ty == Type::string() {
+                    let str_type_id = TypeId::of::<Arc<str>>();
+                    let runtime_func = self.find_runtime_function(
+                        runtime::FunctionKind::Method(str_type_id),
+                        "eq",
+                    );
+
+                    let out = self
+                        .call_runtime_function(
+                            runtime_func.get_ref(),
+                            [left, right],
+                            &[Type::string(), Type::string()],
+                            &Type::bool(),
+                        )
+                        .unwrap();
                     self.add(Instruction::Not {
                         to: place.clone(),
                         val: out,
