@@ -569,17 +569,17 @@ impl Runtime {
                 }
             } else {
                 match ty.description {
-                    TypeDescription::ConstPtr(_) => {} // correct!
+                    TypeDescription::MutPtr(_) => {} // correct!
                     TypeDescription::Leaf => {
                         let ty = self.type_registry.get(ty.type_id).unwrap();
                         return Err(format!(
-                            "Type `{}` should be passed by pointer. Try adding `*const` or `&`",
+                            "Type `{}` should be passed by pointer. Try adding `*mut`",
                             ty.rust_name,
                         ));
                     }
-                    TypeDescription::MutPtr(_) => {
+                    TypeDescription::ConstPtr(_) => {
                         return Err(
-                            "Parameters cannot be mutable pointers. Try removing `&mut` or `*mut`".to_string()
+                            "Parameters cannot be mutable pointers. Try removing `&` or `*const`".to_string()
                         );
                     }
                     _ => unreachable!("check_type should fail before this"),
@@ -923,8 +923,8 @@ impl Runtime {
         /// 192.169.0.0 / 16
         /// ```
         #[roto_static_method(rt, Prefix, new)]
-        fn prefix_new(ip: &IpAddr, len: u8) -> Prefix {
-            Prefix::new(*ip, len).unwrap()
+        fn prefix_new(ip: IpAddr, len: u8) -> Prefix {
+            Prefix::new(ip, len).unwrap()
         }
 
         /// Check whether two IP addresses are equal
@@ -944,7 +944,7 @@ impl Runtime {
         /// 192.0.0.0.eq(192.0.0.0)  # -> true
         /// ```
         #[roto_method(rt, IpAddr, eq)]
-        fn ipaddr_eq(a: &IpAddr, b: &IpAddr) -> bool {
+        fn ipaddr_eq(a: IpAddr, b: IpAddr) -> bool {
             a == b
         }
 
@@ -955,7 +955,7 @@ impl Runtime {
         /// ::.is_ipv4()      # -> false
         /// ```
         #[roto_method(rt, IpAddr)]
-        fn is_ipv4(ip: &IpAddr) -> bool {
+        fn is_ipv4(ip: IpAddr) -> bool {
             ip.is_ipv4()
         }
 
@@ -966,13 +966,13 @@ impl Runtime {
         /// ::.is_ipv6()      # -> true
         /// ```
         #[roto_method(rt, IpAddr)]
-        fn is_ipv6(ip: &IpAddr) -> bool {
+        fn is_ipv6(ip: IpAddr) -> bool {
             ip.is_ipv6()
         }
 
         /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address, otherwise it returns self as-is.
         #[roto_method(rt, IpAddr)]
-        fn to_canonical(ip: &IpAddr) -> IpAddr {
+        fn to_canonical(ip: IpAddr) -> IpAddr {
             ip.to_canonical()
         }
 
@@ -1002,7 +1002,7 @@ impl Runtime {
         /// "hello".append(" ").append("world") # -> "hello world"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn append(a: &Arc<str>, b: &Arc<str>) -> Arc<str> {
+        fn append(a: Arc<str>, b: Arc<str>) -> Arc<str> {
             format!("{a}{b}").into()
         }
 
@@ -1013,7 +1013,7 @@ impl Runtime {
         /// "haystack".contains("corn") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn contains(haystack: &Arc<str>, needle: &Arc<str>) -> bool {
+        fn contains(haystack: Arc<str>, needle: Arc<str>) -> bool {
             haystack.contains(needle.as_ref())
         }
 
@@ -1024,7 +1024,7 @@ impl Runtime {
         /// "haystack".contains("trees") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn starts_with(s: &Arc<str>, prefix: &Arc<str>) -> bool {
+        fn starts_with(s: Arc<str>, prefix: Arc<str>) -> bool {
             s.starts_with(prefix.as_ref())
         }
 
@@ -1035,7 +1035,7 @@ impl Runtime {
         /// "haystack".contains("black") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn ends_with(s: &Arc<str>, suffix: &Arc<str>) -> bool {
+        fn ends_with(s: Arc<str>, suffix: Arc<str>) -> bool {
             s.ends_with(suffix.as_ref())
         }
 
@@ -1045,7 +1045,7 @@ impl Runtime {
         /// "LOUD".to_lowercase() # -> "loud"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn to_lowercase(s: &Arc<str>) -> Arc<str> {
+        fn to_lowercase(s: Arc<str>) -> Arc<str> {
             s.to_lowercase().into()
         }
 
@@ -1055,7 +1055,7 @@ impl Runtime {
         /// "quiet".to_uppercase() # -> "QUIET"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn to_uppercase(s: &Arc<str>) -> Arc<str> {
+        fn to_uppercase(s: Arc<str>) -> Arc<str> {
             s.to_uppercase().into()
         }
 
@@ -1065,7 +1065,7 @@ impl Runtime {
         /// "ha".repeat(6) # -> "hahahahahaha"
         /// ```
         #[roto_method(rt, Arc<str>)]
-        fn repeat(s: &Arc<str>, n: u32) -> Arc<str> {
+        fn repeat(s: Arc<str>, n: u32) -> Arc<str> {
             s.repeat(n as usize).into()
         }
 

@@ -27,6 +27,7 @@ pub use roto_macros::{
 pub use runtime::{
     context::{Context, ContextField},
     optional::Optional,
+    ty::Reflect,
     val::Val,
     verdict::Verdict,
     DocumentedFunc, Runtime, RuntimeType,
