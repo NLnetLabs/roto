@@ -12,6 +12,10 @@ mod file_tree;
 mod ir_printer;
 mod label;
 mod lir;
+
+#[cfg(feature = "cli")]
+mod lsp;
+
 mod mir;
 mod module;
 pub(crate) mod parser;

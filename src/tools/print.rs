@@ -1,4 +1,4 @@
-use crate::parser::token::{Lexer, Token};
+use crate::parser::token::{Lexer, TokenClassification};
 
 #[allow(unused)]
 mod ansi {
@@ -30,44 +30,12 @@ pub fn print_highlighted(s: &str) {
         }
         last_end = range.end;
         let token = token.unwrap();
-        let color = match token {
-            Token::Ident(_) => ansi::WHITE,
-            Token::AmpAmp
-            | Token::AngleLeftEq
-            | Token::AngleRightEq
-            | Token::Arrow
-            | Token::Bang
-            | Token::BangEq
-            | Token::Colon
-            | Token::Comma
-            | Token::Eq
-            | Token::EqEq
-            | Token::Hyphen
-            | Token::Period
-            | Token::Pipe
-            | Token::PipePipe
-            | Token::Plus
-            | Token::QuestionMark
-            | Token::SemiColon
-            | Token::Slash
-            | Token::Star
-            | Token::AngleLeft
-            | Token::AngleRight
-            | Token::CurlyLeft
-            | Token::CurlyRight
-            | Token::RoundLeft
-            | Token::RoundRight
-            | Token::SquareLeft
-            | Token::SquareRight => ansi::GRAY,
-            Token::Keyword(_) => ansi::BLUE,
-            Token::String(_) => ansi::GREEN,
-            Token::Integer(_) => ansi::PURPLE,
-            Token::Float(_) => ansi::PURPLE,
-            Token::Hex(_) => ansi::PURPLE,
-            Token::Asn(_) => ansi::PURPLE,
-            Token::IpV4(_) => ansi::PURPLE,
-            Token::IpV6(_) => ansi::PURPLE,
-            Token::Bool(_) => ansi::PURPLE,
+        let color = match token.classify() {
+            TokenClassification::Variable => ansi::WHITE,
+            TokenClassification::Punctuation => ansi::GRAY,
+            TokenClassification::Keyword => ansi::BLUE,
+            TokenClassification::Number => ansi::PURPLE,
+            TokenClassification::String => ansi::GREEN,
         };
         print!("{color}{}{}", &s[range.start..range.end], ansi::RESET);
     }
