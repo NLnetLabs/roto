@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::{FileTree, Runtime};
+use crate::{tools::print::print_highlighted, FileTree, Runtime};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -28,6 +28,11 @@ enum Command {
     },
     /// Run a script
     Run {
+        #[arg()]
+        file: PathBuf,
+    },
+    /// Print a Roto file with syntax highlighting
+    Print {
         #[arg()]
         file: PathBuf,
     },
@@ -95,6 +100,10 @@ fn cli_inner(rt: Runtime) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
 
             f.call(&mut ())
+        }
+        Command::Print { file } => {
+            let s = std::fs::read_to_string(file).unwrap();
+            print_highlighted(&s);
         }
     }
     Ok(())
