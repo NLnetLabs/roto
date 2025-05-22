@@ -5,6 +5,14 @@ use std::{fmt::Display, ops::ControlFlow};
 
 use unicode_ident::{is_xid_continue, is_xid_start};
 
+pub enum TokenClassification {
+    Keyword,
+    String,
+    Number,
+    Variable,
+    Punctuation,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token<'s> {
     Ident(&'s str),
@@ -433,6 +441,50 @@ impl<'s> Lexer<'s> {
             x => return ControlFlow::Break((Token::Ident(x), span)),
         };
         ControlFlow::Break((Token::Keyword(kw), span))
+    }
+}
+
+impl Token<'_> {
+    pub fn classify(&self) -> TokenClassification {
+        match self {
+            Token::Ident(_) => TokenClassification::Variable,
+            Token::AmpAmp
+            | Token::AngleLeftEq
+            | Token::AngleRightEq
+            | Token::Arrow
+            | Token::Bang
+            | Token::BangEq
+            | Token::Colon
+            | Token::Comma
+            | Token::Eq
+            | Token::EqEq
+            | Token::Hyphen
+            | Token::Period
+            | Token::Pipe
+            | Token::PipePipe
+            | Token::Plus
+            | Token::QuestionMark
+            | Token::SemiColon
+            | Token::Slash
+            | Token::Star
+            | Token::AngleLeft
+            | Token::AngleRight
+            | Token::CurlyLeft
+            | Token::CurlyRight
+            | Token::RoundLeft
+            | Token::RoundRight
+            | Token::SquareLeft
+            | Token::SquareRight => TokenClassification::Punctuation,
+            Token::Keyword(_) => TokenClassification::Keyword,
+            Token::String(_) => TokenClassification::String,
+            Token::Integer(_)
+            | Token::Float(_)
+            | Token::Hex(_)
+            | Token::Asn(_)
+            | Token::IpV4(_)
+            | Token::IpV6(_)
+            | Token::Bool(_) => TokenClassification::Number,
+        }
     }
 }
 

@@ -39,6 +39,8 @@ log = "0.4"
 roto-macros = { workspace = true }
 symbol_table = { version = "0.4.0", features = ["global"] }
 rustc-literal-escaper = "0.0.4"
+tower-lsp = "0.20.0"
+tokio = { version = "1.45.0", features = ["rt", "rt-multi-thread", "io-std"] }
 
 [dependencies.cranelift]
 version = "0.120.0"
