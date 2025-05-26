@@ -55,6 +55,13 @@ impl FileTree {
     }
 }
 
+/// Directory structure that makes up a Roto script
+///
+/// This allows for a lot of control about the files loaded and how they
+/// are structured. However, one would typically use [`FileTree::read`] which
+/// uses Roto's standard file discovery procedure. A [`FileSpec`] can also
+/// be used to create complex scripts programmatically from Rust, without
+/// writing scripts to disk.
 pub enum FileSpec {
     File(SourceFile),
     Directory(SourceFile, Vec<FileSpec>),
