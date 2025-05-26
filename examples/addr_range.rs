@@ -21,7 +21,7 @@ fn main() {
 
     // Register the contains method with a docstring
     #[roto_method(runtime, AddrRange)]
-    fn contains(range: &AddrRange, addr: &IpAddr) -> bool {
+    fn contains(range: Val<AddrRange>, addr: Val<IpAddr>) -> bool {
         range.min <= *addr && *addr <= range.max
     }
 

@@ -121,13 +121,23 @@ pub trait Reflect: 'static {
     /// Convert the type to its `AsParam`
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam;
 
+    /// Convert from the `AsParam` to `Transformed`
+    ///
+    /// # Safety
+    ///
+    /// The `AsParam` must be valid. For example, if it is a pointer, it
+    /// must be a valid pointer to that type. This function should not
+    /// take ownership of the underlying value and instead copy the value
+    /// out.
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed;
+
     /// Put information about this type into the [`TypeRegistry`]
     ///
     /// The information is also returned for direct use.
     fn resolve(registry: &mut TypeRegistry) -> Ty;
 }
 
-impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
+impl<A: Reflect + Clone, R: Reflect + Clone> Reflect for Verdict<A, R> {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -141,6 +151,10 @@ impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
 
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
         transformed as _
+    }
+
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        unsafe { &*as_param }.clone()
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -152,7 +166,7 @@ impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R> {
     }
 }
 
-impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
+impl<T: Reflect + Clone, E: Reflect + Clone> Reflect for Result<T, E> {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -168,6 +182,10 @@ impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
         transformed as _
     }
 
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        unsafe { &*as_param }.clone()
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = T::resolve(registry).type_id;
         let e = E::resolve(registry).type_id;
@@ -177,7 +195,7 @@ impl<T: Reflect, E: Reflect> Reflect for Result<T, E> {
     }
 }
 
-impl<T: Reflect> Reflect for Option<T> {
+impl<T: Reflect + Clone> Reflect for Option<T> {
     type Transformed = Optional<T>;
     type AsParam = *mut Optional<T>;
 
@@ -191,6 +209,10 @@ impl<T: Reflect> Reflect for Option<T> {
 
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
         transformed as _
+    }
+
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        unsafe { &*as_param }.clone()
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -217,6 +239,10 @@ impl<T: 'static> Reflect for *mut T {
         *transformed
     }
 
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        as_param
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
@@ -241,6 +267,10 @@ impl<T: 'static> Reflect for *const T {
         *transformed
     }
 
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        as_param
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         let t = registry.store::<T>(TypeDescription::Leaf).type_id;
 
@@ -249,7 +279,7 @@ impl<T: 'static> Reflect for *const T {
     }
 }
 
-impl<T: 'static> Reflect for Val<T> {
+impl<T: 'static + Clone> Reflect for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
 
@@ -263,6 +293,10 @@ impl<T: 'static> Reflect for Val<T> {
 
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
         &mut transformed.0 as _
+    }
+
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        Self(unsafe { &*as_param }.clone())
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -289,6 +323,10 @@ impl Reflect for IpAddr {
         transformed as _
     }
 
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        *unsafe { &*as_param }
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         registry.store::<Self>(TypeDescription::Leaf)
     }
@@ -310,6 +348,10 @@ impl Reflect for Prefix {
         transformed as _
     }
 
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        *unsafe { &*as_param }
+    }
+
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         registry.store::<Self>(TypeDescription::Leaf)
     }
@@ -329,6 +371,10 @@ impl Reflect for Arc<str> {
 
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
         transformed as _
+    }
+
+    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
+        unsafe { &*as_param }.clone()
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -354,6 +400,12 @@ macro_rules! simple_reflect {
                 transformed: &mut Self::Transformed,
             ) -> Self::AsParam {
                 *transformed
+            }
+
+            unsafe fn from_param(
+                as_param: Self::AsParam,
+            ) -> Self::Transformed {
+                as_param
             }
 
             fn resolve(registry: &mut TypeRegistry) -> Ty {
