@@ -1006,9 +1006,31 @@ impl<'r> Lowerer<'r> {
             FunctionDefinition::Roto => {
                 let Signature {
                     kind: _,
-                    parameter_types: _,
+                    parameter_types,
                     return_type,
                 } = func.signature;
+
+                // Clone all the parameters for the callee. This should
+                // probably be done by the callee, because then we could do
+                // the copying only when the value is actually used. For now¸
+                // this seems like a safe solution.
+                let mut new_args = Vec::new();
+                for (arg, ty) in args.into_iter().zip(&parameter_types) {
+                    if self.is_reference_type(ty) {
+                        let new_arg = self.new_tmp();
+                        let layout =
+                            self.type_info.layout_of(ty, self.runtime);
+                        self.add(Instruction::Alloc {
+                            to: new_arg.clone(),
+                            layout,
+                        });
+                        let new_arg = Operand::from(new_arg);
+                        self.clone_type(arg, new_arg.clone(), ty);
+                        new_args.push(new_arg);
+                    } else {
+                        new_args.push(arg);
+                    }
+                }
 
                 let reference_return = self.is_reference_type(&return_type);
                 let (to, out_ptr) = if reference_return {
@@ -1038,7 +1060,7 @@ impl<'r> Lowerer<'r> {
                     to: to.clone(),
                     ctx: ctx.into(),
                     func: name,
-                    args,
+                    args: new_args,
                     return_ptr: out_ptr.clone(),
                 });
 
