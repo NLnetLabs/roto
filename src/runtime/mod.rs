@@ -1071,7 +1071,7 @@ impl Runtime {
 
         /// Check for string equality
         #[roto_method(rt, Arc<str>)]
-        fn eq(s: &Arc<str>, other: &Arc<str>) -> bool {
+        fn eq(s: Arc<str>, other: Arc<str>) -> bool {
             s == other
         }
 
