@@ -16,7 +16,7 @@ use self::meta::{Meta, Span, Spans};
 mod expr;
 mod filter_map;
 pub mod meta;
-mod token;
+pub mod token;
 
 #[cfg(test)]
 mod test_expressions;
