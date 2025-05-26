@@ -2090,6 +2090,43 @@ fn name_collision() {
 }
 
 #[test]
+fn refcounting_in_a_recursive_function() {
+    #[derive(Debug, Clone)]
+    #[allow(unused)]
+    struct Foo;
+
+    let mut runtime = Runtime::new();
+
+    runtime
+        .register_clone_type_with_name::<Arc<Foo>>("Foo", "...")
+        .unwrap();
+
+    let s = src!(
+        r##"
+        function f(foo: Foo, idx: i32) {
+            if idx > 0 { f(foo, idx - 1); }
+        }
+
+        function main(foo: Foo) -> Verdict[i32, i32] {
+            f(foo, 1);
+            reject 3
+        }           
+    "##
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), (Val<Arc<Foo>>,), Verdict<i32, i32>>("main")
+        .unwrap();
+
+    let v = Arc::new(Foo);
+    let res = f.call(&mut (), Val(v.clone()));
+    assert_eq!(res, Verdict::Reject(3));
+
+    assert_eq!(Arc::strong_count(&v), 1);
+}
+
+#[test]
 fn str_equals() {
     let s = src!(
         r#"
