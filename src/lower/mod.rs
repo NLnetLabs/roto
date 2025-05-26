@@ -1190,6 +1190,9 @@ impl<'r> Lowerer<'r> {
                     layout: Primitive::String.layout(),
                 });
 
+                self.stack_slots.insert(to.clone(), Type::string());
+                self.live_stack_slots.last_mut().unwrap().push(to.clone());
+
                 self.add(Instruction::InitString {
                     to: to.clone(),
                     string: s.clone(),
