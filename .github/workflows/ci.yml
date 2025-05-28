@@ -33,3 +33,27 @@ jobs:
     #   run: cargo clippy -- -D warnings
     - run: cargo build --verbose ${{ matrix.args }}
     - run: cargo test --verbose ${{ matrix.args }}
+  valgrind:
+    name: Test with Valgrind
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust: [stable]
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Install Rust
+      uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: ${{ matrix.rust }}
+    - name: Install Valgrind
+      run: sudo apt-get install -y valgrind
+    - name: Install Just
+      run: sudo apt-get install -y just
+    - name: Install cargo-valgrind
+      run: cargo install cargo-valgrind
+    - name: Run Valgrind
+      run: just valgrind
