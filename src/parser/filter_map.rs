@@ -3,7 +3,11 @@ use crate::ast::{
     TypeExpr,
 };
 
-use super::{meta::Meta, token::Token, ParseError, ParseResult, Parser};
+use super::{
+    meta::Meta,
+    token::{Keyword, Token},
+    ParseError, ParseResult, Parser,
+};
 
 /// # Parsing `filtermap` and `filter` sections
 impl Parser<'_, '_> {
@@ -15,11 +19,11 @@ impl Parser<'_, '_> {
     pub(super) fn filter_map(&mut self) -> ParseResult<FilterMap> {
         let (token, span) = self.next()?;
         let filter_type = match token {
-            Token::FilterMap => FilterType::FilterMap,
-            Token::Filter => FilterType::Filter,
+            Token::Keyword(Keyword::FilterMap) => FilterType::FilterMap,
+            Token::Keyword(Keyword::Filter) => FilterType::Filter,
             _ => {
                 return Err(ParseError::expected(
-                    "'filtermap' or 'filter'",
+                    "`filtermap` or `filter`",
                     token,
                     span,
                 ))
@@ -79,7 +83,7 @@ impl Parser<'_, '_> {
     pub(super) fn record_type_assignment(
         &mut self,
     ) -> ParseResult<RecordTypeDeclaration> {
-        self.take(Token::Type)?;
+        self.take(Token::Keyword(Keyword::Type))?;
         let ident = self.identifier()?;
         let record_type = self.record_type()?;
 
