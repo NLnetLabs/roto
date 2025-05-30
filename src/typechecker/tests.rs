@@ -944,3 +944,34 @@ fn silly_import_loop() {
     ));
     typecheck(tree).unwrap_err();
 }
+
+#[test]
+fn filtermap_calling_filtermap() {
+    let s = src!(
+        "
+            filtermap foo() {
+                accept 5
+            }
+
+            filtermap bar() {
+                foo()
+            }
+        "
+    );
+
+    typecheck(s).unwrap();
+
+    let s = src!(
+        "
+            filtermap bar() {
+                foo()
+            }
+
+            filtermap foo() {
+                accept 5
+            }
+        "
+    );
+
+    typecheck(s).unwrap();
+}

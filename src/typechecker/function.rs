@@ -9,7 +9,7 @@ use crate::{
 use super::{
     expr::Context,
     scope::{ScopeRef, ScopeType},
-    types::{Type, TypeName},
+    types::Type,
     TypeChecker, TypeResult,
 };
 
@@ -29,7 +29,7 @@ impl TypeChecker {
 
         let ty = self.type_info.type_of(ident);
         let Type::Function(_, return_type) = &ty else {
-            panic!()
+            ice!()
         };
 
         let scope = self
@@ -49,33 +49,6 @@ impl TypeChecker {
         };
 
         self.block(scope, &ctx, body)?;
-
-        let Type::Name(TypeName { name: _, arguments }) = &**return_type
-        else {
-            ice!("return type of a filter-map should always be a verdict")
-        };
-        let [a, r] = &arguments[..] else {
-            ice!("return type of a filter-map should always be a verdict")
-        };
-
-        if let Type::Var(x) = self.resolve_type(a) {
-            self.unify(
-                &Type::Var(x),
-                &Type::unit(),
-                filter_map.ident.id,
-                None,
-            )
-            .unwrap();
-        }
-        if let Type::Var(x) = self.resolve_type(r) {
-            self.unify(
-                &Type::Var(x),
-                &Type::unit(),
-                filter_map.ident.id,
-                None,
-            )
-            .unwrap();
-        }
 
         let param_types = params.into_iter().map(|(_, t)| t).collect();
 

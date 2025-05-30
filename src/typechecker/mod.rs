@@ -82,9 +82,16 @@
 //!
 //! ## Type checking function bodies
 //!
-//! Finally, we can type check the actual expressions in the script.
+//! We can now type check the actual expressions in the script.
 //!
 //! See [`TypeChecker::tree`]
+//!
+//! ## Force filtermap types to unit
+//!
+//! Some filtermaps only `accept` or `reject`, leaving the other type
+//! undetermined. We force those to the unit type.
+//!
+//! See [`TypeChecker::force_filtermap_types`]
 //!
 //! [`StubDeclaration`]: scope::StubDeclaration
 //! [`Declaration`]: scope::Declaration
@@ -182,6 +189,7 @@ impl TypeChecker {
 
         checker.declare_functions(&modules)?;
         checker.tree(&modules)?;
+        checker.force_filtermap_types(&modules);
 
         Ok(checker.type_info)
     }
@@ -559,6 +567,47 @@ impl TypeChecker {
         }
 
         Ok(())
+    }
+
+    fn force_filtermap_types(&mut self, modules: &[(ScopeRef, &Module)]) {
+        for &(_, module) in modules {
+            for expr in &module.ast.declarations {
+                if let ast::Declaration::FilterMap(f) = &expr {
+                    let ty = self.type_info.type_of(&f.ident);
+                    let Type::Function(_, return_type) = &ty else {
+                        ice!("filtermap should always have a function type")
+                    };
+
+                    let Type::Name(TypeName { name: _, arguments }) =
+                        &**return_type
+                    else {
+                        ice!("return type of a filtermap should always be a verdict")
+                    };
+                    let [a, r] = &arguments[..] else {
+                        ice!("return type of a filtermap should always be a verdict")
+                    };
+
+                    if let Type::Var(x) = self.resolve_type(a) {
+                        self.unify(
+                            &Type::Var(x),
+                            &Type::unit(),
+                            f.ident.id,
+                            None,
+                        )
+                        .unwrap();
+                    }
+                    if let Type::Var(x) = self.resolve_type(r) {
+                        self.unify(
+                            &Type::Var(x),
+                            &Type::unit(),
+                            f.ident.id,
+                            None,
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        }
     }
 
     fn imports(
