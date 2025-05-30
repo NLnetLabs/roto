@@ -29,6 +29,7 @@ type ParseResult<'a, T> = Result<T, ParseError>;
 pub struct ParseError {
     pub location: Span,
     pub kind: ParseErrorKind,
+    pub note: Option<String>,
 }
 
 impl ParseError {
@@ -43,6 +44,7 @@ impl ParseError {
                 got: got.to_string(),
             },
             location: span,
+            note: None,
         }
     }
 
@@ -59,6 +61,7 @@ impl ParseError {
                 inner_error: inner.to_string(),
             },
             location: span,
+            note: None,
         }
     }
 
@@ -73,6 +76,14 @@ impl ParseError {
                 label: label.to_string(),
             },
             location: span,
+            note: None,
+        }
+    }
+
+    fn with_note(self, note: impl Into<String>) -> Self {
+        Self {
+            note: Some(note.into()),
+            ..self
         }
     }
 }
@@ -169,10 +180,12 @@ impl<'source> Parser<'source, '_> {
                     self.file,
                     self.file_length..self.file_length,
                 ),
+                note: None,
             }),
             Some((Err(()), span)) => Err(ParseError {
                 kind: ParseErrorKind::InvalidToken,
                 location: Span::new(self.file, span),
+                note: None,
             }),
             Some((Ok(token), span)) => {
                 Ok((token, Span::new(self.file, span)))
@@ -293,6 +306,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             return Err(ParseError {
                 kind: ParseErrorKind::FailedToParseEntireInput,
                 location: Span::new(file, s),
+                note: None,
             });
         }
         Ok(out)
@@ -320,6 +334,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
                 self.file,
                 self.file_length..self.file_length,
             ),
+            note: None,
         };
         let expr = match self.peek().ok_or(end_of_input)? {
             Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
@@ -399,6 +414,17 @@ impl Parser<'_, '_> {
             Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
             Token::Keyword(Keyword::Type) => "type",
+            Token::Keyword(_) => {
+                return Err(ParseError::expected(
+                    "an identifier",
+                    &token,
+                    span,
+                )
+                .with_note(format!(
+                    "`{}` is a keyword and cannot be used as an identifier.",
+                    &token
+                )))
+            }
             _ => {
                 return Err(ParseError::expected(
                     "an identifier",
