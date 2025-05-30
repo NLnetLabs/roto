@@ -838,9 +838,12 @@ impl Parser<'_, '_> {
             _ => {
                 return Err(ParseError::expected(
                     "an identifier, `super`, `pkg` or `dep`",
-                    tok,
+                    &tok,
                     span,
-                ))
+                )
+                .with_note(format!(
+                "`{tok}` is a keyword and cannot be used as an identifier."
+            )))
             }
         };
         Ok(self.spans.add(span, ident))
