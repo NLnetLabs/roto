@@ -555,10 +555,7 @@ impl<'r> Lowerer<'r> {
                 }
 
                 let to = self.new_tmp();
-                self.add(Instruction::Alloc {
-                    to: to.clone(),
-                    layout,
-                });
+                self.stack_alloc(&to, &ty);
 
                 for (field_name, field_operand) in fields {
                     let (ty, offset) = self.type_info.offset_of(
@@ -641,11 +638,7 @@ impl<'r> Lowerer<'r> {
                         ice!("The + operator on strings should have resolved to a runtime function")
                     };
 
-                    let layout = Primitive::String.layout();
-                    self.add(Instruction::Alloc {
-                        to: place.clone(),
-                        layout,
-                    });
+                    self.stack_alloc(&place, &Type::string());
 
                     let runtime_func =
                         self.runtime.get_function(runtime_func_ref);
@@ -1065,10 +1058,14 @@ impl<'r> Lowerer<'r> {
                         let new_arg = self.new_tmp();
                         let layout =
                             self.type_info.layout_of(ty, self.runtime);
+
+                        // This allocation should not be dropped because
+                        // it's given to the callee.
                         self.add(Instruction::Alloc {
                             to: new_arg.clone(),
                             layout,
                         });
+
                         let new_arg = Operand::from(new_arg);
                         self.clone_type(arg, new_arg.clone(), ty);
                         new_args.push(new_arg);
@@ -1080,12 +1077,7 @@ impl<'r> Lowerer<'r> {
                 let reference_return = self.is_reference_type(&return_type);
                 let (to, out_ptr) = if reference_return {
                     let out_ptr = self.new_tmp();
-                    let layout =
-                        self.type_info.layout_of(&return_type, self.runtime);
-                    self.add(Instruction::Alloc {
-                        to: out_ptr.clone(),
-                        layout,
-                    });
+                    self.stack_alloc(&out_ptr, &return_type);
                     (None, Some(out_ptr))
                 } else {
                     let to = self
@@ -1134,17 +1126,9 @@ impl<'r> Lowerer<'r> {
             .unwrap();
 
         let ty = self.type_info.type_of(id);
-        let layout = self.type_info.layout_of(&ty, self.runtime);
 
-        let ty = ty.clone();
         let to = self.new_tmp();
-        self.stack_slots.insert(to.clone(), ty);
-        self.live_stack_slots.last_mut().unwrap().push(to.clone());
-
-        self.add(Instruction::Alloc {
-            to: to.clone(),
-            layout,
-        });
+        self.stack_alloc(&to, &ty);
         self.add(Instruction::Write {
             to: to.clone().into(),
             val: IrValue::U8(idx as u8).into(),
@@ -1184,12 +1168,7 @@ impl<'r> Lowerer<'r> {
         match &lit.node {
             Literal::String(s) => {
                 let to = self.new_tmp();
-
-                self.add(Instruction::Alloc {
-                    to: to.clone(),
-                    layout: Primitive::String.layout(),
-                });
-
+                self.stack_alloc(&to, &Type::string());
                 self.add(Instruction::InitString {
                     to: to.clone(),
                     string: s.clone(),
@@ -1264,6 +1243,16 @@ impl<'r> Lowerer<'r> {
             }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
         }
+    }
+
+    fn stack_alloc(&mut self, to: &Var, ty: &Type) {
+        self.stack_slots.insert(to.clone(), ty.clone());
+        self.live_stack_slots.last_mut().unwrap().push(to.clone());
+        let layout = self.type_info.layout_of(ty, self.runtime);
+        self.add(Instruction::Alloc {
+            to: to.clone(),
+            layout,
+        });
     }
 
     fn offset(&mut self, var: Operand, offset: u32) -> Operand {
@@ -1423,11 +1412,7 @@ impl<'r> Lowerer<'r> {
         return_type: &Type,
     ) -> Option<Operand> {
         let out_ptr = self.new_tmp();
-        let layout = self.type_info.layout_of(return_type, self.runtime);
-        self.add(Instruction::Alloc {
-            to: out_ptr.clone(),
-            layout,
-        });
+        self.stack_alloc(&out_ptr, return_type);
 
         let mut params = Vec::new();
         params.push(IrType::Pointer);
@@ -1607,7 +1592,7 @@ impl<'r> Lowerer<'r> {
         let ty = self.type_info.resolve(&ty);
         f(self, offset, ty.clone());
         match ty {
-            Type::Record(fields) => {
+            Type::RecordVar(_, fields) | Type::Record(fields) => {
                 let mut builder = LayoutBuilder::new();
                 for (_, ty) in fields {
                     let new_offset = builder
@@ -1717,10 +1702,9 @@ impl<'r> Lowerer<'r> {
                 }
             }
             Type::Never | Type::IntVar(_) | Type::FloatVar(_) => {}
-            Type::Var(_)
-            | Type::Function(_, _)
-            | Type::ExplicitVar(_)
-            | Type::RecordVar(_, _) => panic!("Can't traverse: {ty:?}"),
+            Type::Var(_) | Type::Function(_, _) | Type::ExplicitVar(_) => {
+                panic!("Can't traverse: {ty:?}")
+            }
         }
     }
 
