@@ -41,6 +41,21 @@ pub enum Token<'s> {
     SquareRight,
 
     // === Keywords ===
+    Keyword(Keyword),
+
+    // === Literals ===
+    String(&'s str),
+    Integer(&'s str),
+    Float(&'s str),
+    Hex(&'s str),
+    Asn(&'s str),
+    IpV4(&'s str),
+    IpV6(&'s str),
+    Bool(bool),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Keyword {
     Accept,
     Dep,
     Else,
@@ -60,16 +75,6 @@ pub enum Token<'s> {
     Super,
     Test,
     Type,
-
-    // === Literals ===
-    String(&'s str),
-    Integer(&'s str),
-    Float(&'s str),
-    Hex(&'s str),
-    Asn(&'s str),
-    IpV4(&'s str),
-    IpV6(&'s str),
-    Bool(bool),
 }
 
 const XID_START: CodePointSetDataBorrowed<'static> =
@@ -404,31 +409,33 @@ impl<'s> Lexer<'s> {
             .unwrap_or(self.input.len());
 
         let (ident, span) = self.bump(non_ident_idx);
-        let tok = match ident {
-            "accept" => Token::Accept,
-            "else" => Token::Else,
-            "false" => Token::Bool(false),
-            "filter" => Token::Filter,
-            "filtermap" => Token::FilterMap,
-            "function" => Token::Function,
-            "if" => Token::If,
-            "import" => Token::Import,
-            "in" => Token::In,
-            "let" => Token::Let,
-            "dep" => Token::Dep,
-            "match" => Token::Match,
-            "not" => Token::Not,
-            "pkg" => Token::Pkg,
-            "reject" => Token::Reject,
-            "return" => Token::Return,
-            "std" => Token::Std,
-            "super" => Token::Super,
-            "test" => Token::Test,
-            "true" => Token::Bool(true),
-            "type" => Token::Type,
-            x => Token::Ident(x),
+
+        let kw = match ident {
+            "accept" => Keyword::Accept,
+            "else" => Keyword::Else,
+            "filter" => Keyword::Filter,
+            "filtermap" => Keyword::FilterMap,
+            "function" => Keyword::Function,
+            "if" => Keyword::If,
+            "import" => Keyword::Import,
+            "in" => Keyword::In,
+            "let" => Keyword::Let,
+            "dep" => Keyword::Dep,
+            "match" => Keyword::Match,
+            "not" => Keyword::Not,
+            "pkg" => Keyword::Pkg,
+            "reject" => Keyword::Reject,
+            "return" => Keyword::Return,
+            "std" => Keyword::Std,
+            "super" => Keyword::Super,
+            "test" => Keyword::Test,
+            "type" => Keyword::Type,
+            // ----
+            "true" => return ControlFlow::Break((Token::Bool(true), span)),
+            "false" => return ControlFlow::Break((Token::Bool(false), span)),
+            x => return ControlFlow::Break((Token::Ident(x), span)),
         };
-        ControlFlow::Break((tok, span))
+        ControlFlow::Break((Token::Keyword(kw), span))
     }
 }
 
@@ -469,25 +476,9 @@ impl Display for Token<'_> {
             Token::SquareRight => "]",
 
             // Keywords
-            Token::Accept => "accept",
-            Token::Else => "else",
-            Token::Filter => "filter",
-            Token::FilterMap => "filtermap",
-            Token::Function => "function",
-            Token::If => "if",
-            Token::Import => "import",
-            Token::In => "in",
-            Token::Let => "let",
-            Token::Dep => "dep",
-            Token::Match => "match",
-            Token::Not => "not",
-            Token::Pkg => "pkg",
-            Token::Reject => "reject",
-            Token::Return => "return",
-            Token::Std => "std",
-            Token::Super => "super",
-            Token::Test => "test",
-            Token::Type => "type",
+            Token::Keyword(k) => {
+                return k.fmt(f);
+            }
 
             // Literals
             Token::String(s) => s,
@@ -500,6 +491,35 @@ impl Display for Token<'_> {
             Token::Bool(true) => "true",
             Token::Bool(false) => "false",
         };
-        write!(f, "{s}")
+
+        f.write_str(s)
+    }
+}
+
+impl Display for Keyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Keyword::Accept => "accept",
+            Keyword::Else => "else",
+            Keyword::Filter => "filter",
+            Keyword::FilterMap => "filtermap",
+            Keyword::Function => "function",
+            Keyword::If => "if",
+            Keyword::Import => "import",
+            Keyword::In => "in",
+            Keyword::Let => "let",
+            Keyword::Dep => "dep",
+            Keyword::Match => "match",
+            Keyword::Not => "not",
+            Keyword::Pkg => "pkg",
+            Keyword::Reject => "reject",
+            Keyword::Return => "return",
+            Keyword::Std => "std",
+            Keyword::Super => "super",
+            Keyword::Test => "test",
+            Keyword::Type => "type",
+        };
+
+        f.write_str(s)
     }
 }

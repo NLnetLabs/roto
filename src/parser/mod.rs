@@ -9,7 +9,7 @@ use crate::ast::{
     Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };
 use std::{fmt::Display, iter::Peekable};
-use token::{Lexer, Token};
+use token::{Keyword, Lexer, Token};
 
 use self::meta::{Meta, Span, Spans};
 
@@ -106,7 +106,7 @@ impl ParseErrorKind {
             Self::FailedToParseEntireInput => "parser got stuck here".into(),
             Self::InvalidToken => "invalid token".into(),
             Self::Expected { expected, .. } => {
-                format!("expected `{expected}`")
+                format!("expected {expected}")
             }
             Self::InvalidLiteral { description, .. } => {
                 format!("invalid {description}")
@@ -322,15 +322,19 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             ),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::FilterMap | Token::Filter => {
+            Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Type => {
+            Token::Keyword(Keyword::Type) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Function => Declaration::Function(self.function()?),
-            Token::Test => Declaration::Test(self.test()?),
-            Token::Import => Declaration::Import(self.import()?),
+            Token::Keyword(Keyword::Function) => {
+                Declaration::Function(self.function()?)
+            }
+            Token::Keyword(Keyword::Test) => Declaration::Test(self.test()?),
+            Token::Keyword(Keyword::Import) => {
+                Declaration::Import(self.import()?)
+            }
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
@@ -349,7 +353,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Function ::= 'function' Identifier '{' Body '}'
     /// ```
     fn function(&mut self) -> ParseResult<FunctionDeclaration> {
-        self.take(Token::Function)?;
+        self.take(Token::Keyword(Keyword::Function))?;
         let ident = self.identifier()?;
         let params = self.params()?;
 
@@ -369,14 +373,14 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     }
 
     fn test(&mut self) -> ParseResult<Test> {
-        self.take(Token::Test)?;
+        self.take(Token::Keyword(Keyword::Test))?;
         let ident = self.identifier()?;
         let body = self.block()?;
         Ok(Test { ident, body })
     }
 
     fn import(&mut self) -> ParseResult<Meta<Path>> {
-        self.take(Token::Import)?;
+        self.take(Token::Keyword(Keyword::Import))?;
         let path = self.path()?;
         self.take(Token::SemiColon)?;
         Ok(path)
@@ -394,7 +398,7 @@ impl Parser<'_, '_> {
         let ident = match token {
             Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Type => "type",
+            Token::Keyword(Keyword::Type) => "type",
             _ => {
                 return Err(ParseError::expected(
                     "an identifier",

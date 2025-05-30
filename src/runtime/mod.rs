@@ -546,25 +546,7 @@ impl Runtime {
 
         match tok {
             Token::Ident(_) => Ok(()),
-            Token::Accept
-            | Token::Dep
-            | Token::Else
-            | Token::Filter
-            | Token::FilterMap
-            | Token::Function
-            | Token::If
-            | Token::Import
-            | Token::In
-            | Token::Let
-            | Token::Match
-            | Token::Not
-            | Token::Pkg
-            | Token::Reject
-            | Token::Return
-            | Token::Std
-            | Token::Super
-            | Token::Test
-            | Token::Type => {
+            Token::Keyword(_) => {
                 Err(format!("Name {name:?} is a keyword in Roto and therefore not a valid identifier"))
             }
             _ => {
