@@ -18,7 +18,7 @@ mod typechecker;
 
 pub use cli::cli;
 pub use codegen::TypedFunc;
-pub use file_tree::{FileTree, SourceFile};
+pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub use lower::eval::Memory;
 pub use lower::value::IrValue;
 pub use pipeline::{interpret, Compiled, Lowered, RotoError, RotoReport};
