@@ -2245,6 +2245,64 @@ fn assignment_record_is_by_value() {
 }
 
 #[test]
+fn assignment_nested_record_1() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: { baz: 1 } };
+                x.bar.baz = 6;
+                x.bar.baz
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 6);
+}
+
+#[test]
+fn assignment_nested_record_2() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: { baz: 1 } };
+                x.bar = { baz: 6 };
+                x.bar.baz
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 6);
+}
+
+#[test]
+fn assignment_string() {
+    let s = src!(
+        "
+            function foo() -> String {
+                let x = \"foo\";
+                x = x + x;
+                x = x + x;
+                x
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), Arc<str>>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), "foofoofoofoo".into());
+}
+
+#[test]
 fn let_declaration_is_by_value() {
     let s = src!(
         "

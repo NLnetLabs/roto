@@ -307,9 +307,9 @@ impl<'r> Lowerer<'r> {
             return_type: return_ir_type,
         };
 
-        let last = self.block(body);
+        let (last, to_drop) = self.block(body);
 
-        self.return_expr(return_type, last);
+        self.return_expr(return_type, last, to_drop);
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
@@ -329,7 +329,10 @@ impl<'r> Lowerer<'r> {
     ///
     /// Returns either the value of the expression or the place where the
     /// value can be retrieved.
-    fn block(&mut self, block: &Meta<ast::Block>) -> Option<Operand> {
+    fn block(
+        &mut self,
+        block: &Meta<ast::Block>,
+    ) -> (Option<Operand>, Vec<Var>) {
         self.live_stack_slots.push(Vec::new());
 
         // Result is ignored
@@ -341,9 +344,10 @@ impl<'r> Lowerer<'r> {
 
         let to_drop = self.live_stack_slots.pop().unwrap();
         if !self.type_info.diverges(block) {
-            self.drop(to_drop);
+            (op, to_drop)
+        } else {
+            (op, Vec::new())
         }
-        op
     }
 
     fn stmt(&mut self, stmt: &ast::Stmt) {
@@ -387,7 +391,7 @@ impl<'r> Lowerer<'r> {
 
                 match kind {
                     ast::ReturnKind::Return => {
-                        self.return_expr(&ty, op);
+                        self.return_expr(&ty, op, Vec::new());
                     }
                     ast::ReturnKind::Accept => {
                         let Type::Name(type_name) = &ty else {
@@ -555,7 +559,7 @@ impl<'r> Lowerer<'r> {
                 if fields.is_empty() {
                     if self.is_reference_type(ty) {
                         self.drop([to.clone()]);
-                        self.clone_type(op, to.into(), ty);
+                        self.clone_type(op, to.clone().into(), ty);
                     } else if let Some(ty) = self.lower_type(ty) {
                         self.add(Instruction::Assign { to, val: op, ty });
                     }
@@ -1004,7 +1008,8 @@ impl<'r> Lowerer<'r> {
                 });
 
                 self.new_block(lbl_then);
-                if let Some(op) = self.block(if_true) {
+                let (op, to_drop) = self.block(if_true);
+                if let Some(op) = op {
                     let ty = self.type_info.type_of(if_true);
                     let ty = self.lower_type(&ty)?;
                     self.add(Instruction::Assign {
@@ -1015,13 +1020,16 @@ impl<'r> Lowerer<'r> {
                     any_assigned = true;
                 }
 
+                self.drop(to_drop);
+
                 if !diverges {
                     self.add(Instruction::Jump(lbl_cont));
                 }
 
                 if let Some(if_false) = if_false {
                     self.new_block(lbl_else);
-                    if let Some(op) = self.block(if_false) {
+                    let (op, to_drop) = self.block(if_false);
+                    if let Some(op) = op {
                         let ty = self.type_info.type_of(if_false);
                         let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Assign {
@@ -1031,6 +1039,9 @@ impl<'r> Lowerer<'r> {
                         });
                         any_assigned = true;
                     }
+
+                    self.drop(to_drop);
+
                     if !diverges {
                         self.add(Instruction::Jump(lbl_cont));
                         self.new_block(lbl_cont);
@@ -1046,7 +1057,12 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn return_expr(&mut self, ty: &Type, op: Option<Operand>) {
+    fn return_expr(
+        &mut self,
+        ty: &Type,
+        op: Option<Operand>,
+        additional_drops: Vec<Var>,
+    ) {
         if self.is_reference_type(ty) {
             if let Some(op) = op {
                 self.write_field(
@@ -1060,9 +1076,11 @@ impl<'r> Lowerer<'r> {
                     ty,
                 );
             }
+            self.drop(additional_drops);
             self.drop_all();
             self.add(Instruction::Return(None));
         } else {
+            self.drop(additional_drops);
             self.drop_all();
             self.add(Instruction::Return(op));
         }

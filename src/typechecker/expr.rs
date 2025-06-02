@@ -5,10 +5,7 @@ use std::{borrow::Borrow, collections::HashSet};
 use crate::{
     ast::{self, Identifier, Pattern, TypeExpr},
     parser::meta::{Meta, MetaId},
-    typechecker::{
-        error::TypeError,
-        scope::{Declaration, DeclarationKind},
-    },
+    typechecker::scope::DeclarationKind,
 };
 
 use super::{

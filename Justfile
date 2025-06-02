@@ -17,14 +17,14 @@ build:
 test:
     cargo test
 
-test-verbose TEST:
+test-verbose TEST="":
     RUST_LOG=info cargo nextest run --no-capture '{{TEST}}'
 
-nextest:
+nextest TEST="":
     cargo nextest run
 
 clippy:
     cargo clippy -all
 
-valgrind:
-    VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test
+valgrind TEST="":
+    VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test -- {{TEST}}
