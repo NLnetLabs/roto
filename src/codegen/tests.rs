@@ -2184,3 +2184,22 @@ fn assignment() {
 
     assert_eq!(func.call(&mut ()), 7);
 }
+
+#[test]
+fn assignment_record_field() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                x.bar = x.bar + 3;
+                x.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 7);
+}

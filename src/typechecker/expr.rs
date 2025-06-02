@@ -84,6 +84,12 @@ pub struct PathValue {
     pub fields: Vec<(Identifier, Type)>,
 }
 
+impl PathValue {
+    pub fn final_type(&self) -> &Type {
+        self.fields.last().map_or(&self.ty, |(_, ty)| ty)
+    }
+}
+
 impl TypeChecker {
     /// Type check a block
     pub fn block(
@@ -253,11 +259,8 @@ impl TypeChecker {
                     todo!("cannot assign to this");
                 };
 
-                if !path_value.fields.is_empty() {
-                    todo!("cannot assign to this (yet)");
-                }
-
-                let ctx = ctx.with_type(path_value.ty);
+                let ty = path_value.final_type();
+                let ctx = ctx.with_type(ty);
                 let diverges = self.expr(scope, &ctx, e)?;
                 Ok(diverges)
             }

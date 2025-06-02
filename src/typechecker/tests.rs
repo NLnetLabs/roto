@@ -1002,3 +1002,18 @@ fn assignment() {
 
     typecheck(s).unwrap_err();
 }
+
+#[test]
+fn assignment_to_record() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                x.bar = x.bar + 3;
+                x.bar
+            }
+        "
+    );
+
+    typecheck(s).unwrap();
+}

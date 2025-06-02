@@ -532,28 +532,48 @@ impl<'r> Lowerer<'r> {
                 let op = self.expr(e)?;
 
                 let path_kind = self.type_info.path_kind(p).clone();
-                let ResolvedPath::Value(PathValue {
-                    name,
-                    kind: _,
-                    ty,
-                    fields: _,
-                }) = path_kind
+                let ResolvedPath::Value(
+                    path_value @ PathValue {
+                        name,
+                        kind: _,
+                        ty,
+                        fields,
+                    },
+                ) = &path_kind
                 else {
                     ice!("should be rejected by type checker");
                 };
 
-                let Some(ty) = self.lower_type(&ty) else {
-                    return None;
+                let to = Var {
+                    scope: name.scope,
+                    kind: VarKind::Explicit(name.ident),
                 };
 
-                self.add(Instruction::Assign {
-                    to: Var {
-                        scope: name.scope,
-                        kind: VarKind::Explicit(name.ident),
-                    },
-                    val: op,
-                    ty,
-                });
+                if fields.is_empty() {
+                    if let Some(ty) = self.lower_type(ty) {
+                        self.add(Instruction::Assign { to, val: op, ty });
+                    }
+                    return None;
+                }
+
+                let mut offset = 0;
+                let mut record_ty = ty;
+                for (field, ty) in fields {
+                    let (_, new_offset) = self.type_info.offset_of(
+                        &record_ty,
+                        *field,
+                        self.runtime,
+                    );
+                    record_ty = ty;
+                    offset += new_offset;
+                }
+
+                self.write_field(
+                    to.into(),
+                    offset,
+                    op,
+                    path_value.final_type(),
+                );
 
                 None
             }
