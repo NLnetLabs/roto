@@ -163,7 +163,27 @@ impl Parser<'_, '_> {
     }
 
     fn expr_inner(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        self.logical_expr(r)
+        self.assign_expr(r)
+    }
+
+    /// Parse an assignment expression
+    fn assign_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        let left = self.logical_expr(r)?;
+        if self.next_is(Token::Eq) {
+            let Expr::Path(path) = &*left else {
+                return Err(ParseError::custom(
+                    "left-hand side of an expression must be a single identifier",
+                    "cannot assign to this expression",
+                    self.get_span(&left)));
+            };
+            let right = self.logical_expr(r)?;
+            let span = self.merge_spans(&left, &right);
+            Ok(self
+                .spans
+                .add(span, Expr::Assign(path.clone(), Box::new(right))))
+        } else {
+            Ok(left)
+        }
     }
 
     /// Parse a logical expression

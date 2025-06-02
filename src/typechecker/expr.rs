@@ -5,7 +5,10 @@ use std::{borrow::Borrow, collections::HashSet};
 use crate::{
     ast::{self, Identifier, Pattern, TypeExpr},
     parser::meta::{Meta, MetaId},
-    typechecker::scope::DeclarationKind,
+    typechecker::{
+        error::TypeError,
+        scope::{Declaration, DeclarationKind},
+    },
 };
 
 use super::{
@@ -237,6 +240,25 @@ impl TypeChecker {
                 let ty = self.resolve_type(&ty);
                 let ty = self.access_field(&ty, field)?;
                 self.unify(&ctx.expected_type, &ty, field.id, None)?;
+                Ok(diverges)
+            }
+            Assign(p, e) => {
+                self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
+
+                let resolved_path = self.resolve_expression_path(scope, p)?;
+                self.type_info
+                    .path_kinds
+                    .insert(p.id, resolved_path.clone());
+                let ResolvedPath::Value(path_value) = resolved_path else {
+                    todo!("cannot assign to this");
+                };
+
+                if !path_value.fields.is_empty() {
+                    todo!("cannot assign to this (yet)");
+                }
+
+                let ctx = ctx.with_type(path_value.ty);
+                let diverges = self.expr(scope, &ctx, e)?;
                 Ok(diverges)
             }
             Path(p) => {

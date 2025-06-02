@@ -2165,3 +2165,22 @@ fn str_not_equals() {
     assert!(func.call(&mut (), "foo".into()));
     assert!(!func.call(&mut (), "/".into()));
 }
+
+#[test]
+fn assignment() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = 4;
+                x = x + 3;
+                x
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 7);
+}

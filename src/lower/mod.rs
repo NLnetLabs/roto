@@ -528,6 +528,35 @@ impl<'r> Lowerer<'r> {
                 );
                 self.read_field(op, offset, &ty)
             }
+            ast::Expr::Assign(p, e) => {
+                let op = self.expr(e)?;
+
+                let path_kind = self.type_info.path_kind(p).clone();
+                let ResolvedPath::Value(PathValue {
+                    name,
+                    kind: _,
+                    ty,
+                    fields: _,
+                }) = path_kind
+                else {
+                    ice!("should be rejected by type checker");
+                };
+
+                let Some(ty) = self.lower_type(&ty) else {
+                    return None;
+                };
+
+                self.add(Instruction::Assign {
+                    to: Var {
+                        scope: name.scope,
+                        kind: VarKind::Explicit(name.ident),
+                    },
+                    val: op,
+                    ty,
+                });
+
+                None
+            }
             ast::Expr::Path(p) => {
                 let path_kind = self.type_info.path_kind(p).clone();
 
