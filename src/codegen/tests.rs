@@ -2203,3 +2203,63 @@ fn assignment_record_field() {
 
     assert_eq!(func.call(&mut ()), 7);
 }
+
+#[test]
+fn assignment_record() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                x = { bar: x.bar + 3 };
+                x.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 7);
+}
+
+#[test]
+fn assignment_record_is_by_value() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                let y = { bar: 5 };
+                x = y;
+                x.bar = 6;
+                y.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 5);
+}
+
+#[test]
+fn let_declaration_is_by_value() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let y = { bar: 5 };
+                let x = y;
+                x.bar = 6;
+                y.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 5);
+}

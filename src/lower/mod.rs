@@ -352,16 +352,19 @@ impl<'r> Lowerer<'r> {
                 let val = self.expr(expr);
                 let name = self.type_info.resolved_name(ident);
                 let ty = self.type_info.type_of(ident);
-                if let Some(ty) = self.lower_type(&ty) {
+
+                let to = Var {
+                    scope: name.scope,
+                    kind: VarKind::Explicit(**ident),
+                };
+
+                if self.is_reference_type(&ty) {
                     let val = val.unwrap();
-                    self.add(Instruction::Assign {
-                        to: Var {
-                            scope: name.scope,
-                            kind: VarKind::Explicit(**ident),
-                        },
-                        val,
-                        ty,
-                    })
+                    self.stack_alloc(&to, &ty);
+                    self.clone_type(val, to.into(), &ty);
+                } else if let Some(ty) = self.lower_type(&ty) {
+                    let val = val.unwrap();
+                    self.add(Instruction::Assign { to, val, ty });
                 }
             }
             ast::Stmt::Expr(expr) => {
@@ -550,7 +553,10 @@ impl<'r> Lowerer<'r> {
                 };
 
                 if fields.is_empty() {
-                    if let Some(ty) = self.lower_type(ty) {
+                    if self.is_reference_type(ty) {
+                        self.drop([to.clone()]);
+                        self.clone_type(op, to.into(), ty);
+                    } else if let Some(ty) = self.lower_type(ty) {
                         self.add(Instruction::Assign { to, val: op, ty });
                     }
                     return None;
@@ -568,12 +574,12 @@ impl<'r> Lowerer<'r> {
                     offset += new_offset;
                 }
 
-                self.write_field(
-                    to.into(),
-                    offset,
-                    op,
-                    path_value.final_type(),
-                );
+                if self.is_reference_type(ty) {
+                    self.drop([to.clone()]);
+                }
+
+                let ty = path_value.final_type();
+                self.write_field(to.into(), offset, op, ty);
 
                 None
             }
@@ -1531,11 +1537,14 @@ impl<'r> Lowerer<'r> {
 
         let size = match ty {
             // These are invalid at this point
-            Type::Var(_) | Type::ExplicitVar(_) | Type::RecordVar(_, _) => {
+            Type::Var(_) | Type::ExplicitVar(_) => {
                 panic!()
             }
             // These aren't copied, since they aren't leafs or zero sized
-            Type::Never | Type::Record(_) | Type::Function(_, _) => return,
+            Type::Never
+            | Type::Record(_)
+            | Type::RecordVar(_, _)
+            | Type::Function(_, _) => return,
             Type::Name(type_name) => {
                 let type_def = self.type_info.resolve_type_name(&type_name);
 
