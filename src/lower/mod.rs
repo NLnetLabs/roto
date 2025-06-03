@@ -570,7 +570,7 @@ impl<'r> Lowerer<'r> {
                 let mut record_ty = ty;
                 for (field, ty) in fields {
                     let (_, new_offset) = self.type_info.offset_of(
-                        &record_ty,
+                        record_ty,
                         *field,
                         self.runtime,
                     );
