@@ -59,6 +59,7 @@ use crate::{ast::Identifier, Context};
 /// The idea here is that Roto can be used with different representations
 /// of these types in different applications. The type checker will yield an
 /// error if a literal is provided for an undeclared type.
+#[derive(Clone)]
 pub struct Runtime {
     pub context: Option<ContextDescription>,
     pub runtime_types: Vec<RuntimeType>,
@@ -69,7 +70,7 @@ pub struct Runtime {
         unsafe extern "C" fn(*mut Arc<str>, *mut u8, u32),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Movability {
     // This type is passed by value, only available for built-in types.
     Value,
@@ -81,7 +82,7 @@ pub enum Movability {
     CloneDrop(CloneDrop),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CloneDrop {
     pub clone: unsafe extern "C" fn(*const (), *mut ()),
     pub drop: unsafe extern "C" fn(*mut ()),
@@ -109,7 +110,7 @@ unsafe extern "C" fn init_string(s: *mut Arc<str>, data: *mut u8, len: u32) {
     unsafe { ptr::write(s, str.into()) };
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RuntimeType {
     /// The name the type can be referenced by from Roto
     name: String,

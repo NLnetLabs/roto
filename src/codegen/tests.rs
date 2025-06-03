@@ -2373,3 +2373,47 @@ fn sigill() {
     let Val(a) = func.call(&mut ());
     assert_eq!(Arc::strong_count(&a.0), 1);
 }
+
+/// The normal Rust string type will fail more often than Arc<str>
+/// if we treat it wrong, so this test stress-tests Roto a bit with that
+/// type.
+#[test]
+fn rust_string_string() {
+    let mut runtime = Runtime::new();
+
+    runtime
+        .register_clone_type_with_name::<String>("RustString", "...")
+        .unwrap();
+
+    #[roto_static_method(runtime, String)]
+    fn new(s: Arc<str>) -> String {
+        s.as_ref().into()
+    }
+
+    let s = src!(
+        "
+            function foo() -> RustString {
+                let s = RustString.new(\"hello\");
+                s = s;
+                s
+            }
+
+            function bar() -> RustString {
+                let s = RustString.new(\"hello\");
+                let a = { str: s };
+                a.str = a.str;
+                a.str
+            }
+        "
+    );
+
+    let mut compiled = s
+        .compile(runtime)
+        .inspect_err(|e| eprintln!("{e}"))
+        .unwrap();
+    let func = compiled.get_function::<(), (), Val<String>>("foo").unwrap();
+    assert_eq!(func.call(&mut ()), Val("hello".into()));
+
+    let func = compiled.get_function::<(), (), Val<String>>("bar").unwrap();
+    assert_eq!(func.call(&mut ()), Val("hello".into()));
+}

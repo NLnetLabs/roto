@@ -535,6 +535,26 @@ impl<'r> Lowerer<'r> {
                 );
                 self.read_field(op, offset, &ty)
             }
+            // An assignment is suprisingly hard to compile. The expression
+            // ```
+            // x = e
+            // ```
+            // generally compiles to the following steps:
+            //
+            // 1. evaluate `e`
+            // 2. copy that to a temporary variable `t`
+            // 3. drop `x`
+            // 4. move the contents of `t` to `x`
+            //
+            // If we don't use the temporary variable, then we get in trouble
+            // with the expression
+            // ```
+            // x = x
+            // ```
+            // because then we'd need to drop `x` before we clone it again.
+            //
+            // With simple types (such as integers), this whole thing is
+            // simplified greatly. Then it just works to assign it directly.
             ast::Expr::Assign(p, e) => {
                 let op = self.expr(e)?;
 
@@ -543,7 +563,7 @@ impl<'r> Lowerer<'r> {
                     path_value @ PathValue {
                         name,
                         kind: _,
-                        ty,
+                        ty: root_ty,
                         fields,
                     },
                 ) = &path_kind
@@ -557,9 +577,26 @@ impl<'r> Lowerer<'r> {
                 };
 
                 if fields.is_empty() {
+                    let ty = root_ty;
                     if self.is_reference_type(ty) {
+                        let tmp = self.new_tmp();
+                        let layout =
+                            self.type_info.layout_of(ty, self.runtime);
+                        self.add(Instruction::Alloc {
+                            to: tmp.clone(),
+                            layout: layout.clone(),
+                        });
+                        self.clone_type(op, tmp.clone().into(), ty);
                         self.drop([to.clone()]);
-                        self.clone_type(op, to.clone().into(), ty);
+
+                        // Do a simple memcpy from `tmp` to `to`. We treat
+                        // this as a move (so don't drop `tmp`).
+                        self.add(Instruction::Copy {
+                            to: to.into(),
+                            from: tmp.into(),
+                            size: layout.size() as u32,
+                            clone: None,
+                        })
                     } else if let Some(ty) = self.lower_type(ty) {
                         self.add(Instruction::Assign { to, val: op, ty });
                     }
@@ -567,7 +604,7 @@ impl<'r> Lowerer<'r> {
                 }
 
                 let mut offset = 0;
-                let mut record_ty = ty;
+                let mut record_ty = root_ty;
                 for (field, ty) in fields {
                     let (_, new_offset) = self.type_info.offset_of(
                         record_ty,
@@ -578,12 +615,32 @@ impl<'r> Lowerer<'r> {
                     offset += new_offset;
                 }
 
-                if self.is_reference_type(ty) {
-                    self.drop([to.clone()]);
-                }
-
                 let ty = path_value.final_type();
-                self.write_field(to.into(), offset, op, ty);
+
+                if self.is_reference_type(ty) {
+                    let tmp = self.new_tmp();
+                    let layout = self.type_info.layout_of(ty, self.runtime);
+                    self.add(Instruction::Alloc {
+                        to: tmp.clone(),
+                        layout: layout.clone(),
+                    });
+
+                    self.clone_type(op.clone(), tmp.clone().into(), ty);
+
+                    let target = self.offset(to.clone().into(), offset);
+                    self.drop_with_type(target.clone(), ty.clone());
+
+                    // Do a simple memcpy from `tmp` to `to`. We treat
+                    // this as a move (so don't drop `tmp`).
+                    self.add(Instruction::Copy {
+                        to: target.into(),
+                        from: tmp.into(),
+                        size: layout.size() as u32,
+                        clone: None,
+                    })
+                } else {
+                    self.write_field(to.into(), offset, op, ty);
+                }
 
                 None
             }
@@ -1606,24 +1663,28 @@ impl<'r> Lowerer<'r> {
 
     fn drop(&mut self, iter: impl IntoIterator<Item = Var>) {
         for var in iter {
-            let ty = &self.stack_slots[&var];
-            let new_var = var.clone();
-            let f = move |lowerer: &mut Self, offset, ty| {
-                lowerer.drop_leaf_type(&new_var, offset, ty)
-            };
-            self.traverse_type(
-                &var.clone().into(),
-                0,
-                ty.clone(),
-                "drop".into(),
-                &f,
-            );
+            let ty = self.stack_slots[&var].clone();
+            self.drop_with_type(var.into(), ty)
         }
     }
 
-    fn drop_leaf_type(&mut self, var: &Var, offset: usize, ty: Type) {
+    fn drop_with_type(&mut self, var: Operand, ty: Type) {
+        let new_var = var.clone();
+        let f = move |lowerer: &mut Self, offset, ty| {
+            lowerer.drop_leaf_type(&new_var, offset, ty)
+        };
+        self.traverse_type(
+            &var.clone().into(),
+            0,
+            ty.clone(),
+            "drop".into(),
+            &f,
+        );
+    }
+
+    fn drop_leaf_type(&mut self, var: &Operand, offset: usize, ty: Type) {
         if let Some(&CloneDrop { drop, .. }) = self.get_leaf_clone_drop(&ty) {
-            let var = self.offset(var.clone().into(), offset as u32);
+            let var = self.offset(var.clone(), offset as u32);
             self.add(Instruction::Drop {
                 var,
                 drop: Some(drop),
