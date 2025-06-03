@@ -2321,3 +2321,55 @@ fn let_declaration_is_by_value() {
 
     assert_eq!(func.call(&mut ()), 5);
 }
+
+#[test]
+fn sigill() {
+    let mut runtime = Runtime::new();
+
+    struct Arcane(Arc<()>);
+    runtime.register_clone_type::<Arcane>("...").unwrap();
+
+    impl Clone for Arcane {
+        fn clone(&self) -> Self {
+            assert!(Arc::strong_count(&self.0) > 0);
+            Arcane(self.0.clone())
+        }
+    }
+
+    impl Drop for Arcane {
+        fn drop(&mut self) {
+            assert!(Arc::strong_count(&self.0) > 0);
+        }
+    }
+
+    #[roto_method(runtime, Arcane)]
+    fn get(Val(a): Val<Arcane>) -> u64 {
+        Arc::strong_count(&a.0) as u64
+    }
+
+    #[roto_function(runtime)]
+    fn make_arcane() -> Arcane {
+        Arcane(Arc::new(()))
+    }
+
+    let s = src!(
+        "
+        function bar(a: Arcane) -> u64 {
+            a.get()
+        }
+
+
+        function foo() -> Arcane {
+            let a = make_arcane();
+            bar(a);
+            bar(a);
+            a
+        }
+    "
+    );
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), (), Val<Arcane>>("foo").unwrap();
+    let Val(a) = func.call(&mut ());
+    assert_eq!(Arc::strong_count(&a.0), 1);
+}
