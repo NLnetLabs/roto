@@ -18,7 +18,7 @@ fn parse(s: &str) -> ParseResult<SyntaxTree> {
 #[test]
 fn function_1() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             send-to(a,b);
         }
     ";
@@ -28,7 +28,7 @@ fn function_1() {
 #[test]
 fn function_2() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             send_to(a,b);
             pph_asn.asn.set(AS200);
         }
@@ -39,7 +39,7 @@ fn function_2() {
 #[test]
 fn block_with_if() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             if true { send_to(a,b); }
             pph_asn.asn.set(AS200);
         }
@@ -50,7 +50,7 @@ fn block_with_if() {
 #[test]
 fn block_with_if_with_semicolon() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             if true { send_to(a,b); };
             pph_asn.asn.set(AS200);
         }
@@ -63,7 +63,7 @@ fn top_level_import() {
     let s = "
         import foo.bar;
 
-        function myfunction() {
+        fn myfunction() {
             1 + 1;
         }
     ";
@@ -73,7 +73,7 @@ fn top_level_import() {
 #[test]
 fn block_import_1() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             import foo.bar;
             1 + 1;
         }
@@ -84,7 +84,7 @@ fn block_import_1() {
 #[test]
 fn block_import_2() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             1 + 1;
             import foo.bar;
         }
@@ -95,7 +95,7 @@ fn block_import_2() {
 #[test]
 fn list_import() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             import foo.{bar1, bar2};
             1 + 1;
         }
@@ -107,7 +107,7 @@ fn list_import() {
 #[test]
 fn nested_list_import() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             import foo.{baz.{fn1, fn2, fn3}, baz.{bar1, bar2}};
             1 + 1;
         }
@@ -119,7 +119,7 @@ fn nested_list_import() {
 #[test]
 fn sublists_only_import() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             import foo.{{fn1, fn2, fn3}, {bar1, bar2}};
             1 + 1;
         }
@@ -131,7 +131,7 @@ fn sublists_only_import() {
 #[test]
 fn sublist_sublist_import() {
     let s = "
-        function myfunction() {
+        fn myfunction() {
             import foo.{item1.{fn1, fn2}, item2.{item3.fn3, item4.{fn5, fn6}}};
             1 + 1;
         }

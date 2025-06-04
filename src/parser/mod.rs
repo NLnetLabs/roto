@@ -343,7 +343,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Keyword(Keyword::Type) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Keyword(Keyword::Function) => {
+            Token::Keyword(Keyword::Fn) => {
                 Declaration::Function(self.function()?)
             }
             Token::Keyword(Keyword::Test) => Declaration::Test(self.test()?),
@@ -365,10 +365,10 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Parse a term section
     ///
     /// ```ebnf
-    /// Function ::= 'function' Identifier '{' Body '}'
+    /// Function ::= 'fn' Identifier '{' Body '}'
     /// ```
     fn function(&mut self) -> ParseResult<FunctionDeclaration> {
-        self.take(Token::Keyword(Keyword::Function))?;
+        self.take(Token::Keyword(Keyword::Fn))?;
         let ident = self.identifier()?;
         let params = self.params()?;
 

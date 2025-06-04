@@ -329,7 +329,7 @@ impl TypeDisplay for Type {
             Type::Function(args, ret) => {
                 write!(
                     f,
-                    "function({}) -> {}",
+                    "fn({}) -> {}",
                     fmt_args(args)?,
                     ret.display(type_info)
                 )

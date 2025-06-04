@@ -345,7 +345,7 @@ fn assign_field_to_other_record() {
 fn if_without_body() {
     let s = src!(
         "
-           function foo() {
+           fn foo() {
                if true {}
            }
         "
@@ -425,7 +425,7 @@ fn prefix_method() {
 fn logical_expr() {
     let s = src!(
         "
-        function foo() -> Bool {
+        fn foo() -> Bool {
             (10 == 10) || (10 == 11)
         }
 
@@ -439,7 +439,7 @@ fn logical_expr() {
 
     let s = src!(
         r#"
-        function foo() -> Bool {
+        fn foo() -> Bool {
             (10 == 10) || ("hello" == 11)
         }
 
@@ -461,7 +461,7 @@ fn send_output_stream() {
             foo: String
         }
 
-        function hello() {
+        fn hello() {
             stream.send(Msg {
                 foo: "hello",
             });
@@ -482,7 +482,7 @@ fn send_output_stream() {
 
         type Bar { bar: String }
 
-        function hello() {
+        fn hello() {
             stream.send(Bar {
                 bar: "hello",
             });
@@ -505,7 +505,7 @@ fn send_output_stream() {
             bar: String
         }
         
-        function hello() {
+        fn hello() {
             foos.send(Foo {
                 foo: "hello",
             });
@@ -531,7 +531,7 @@ fn send_output_stream() {
             bar: String
         }
 
-        function hello() {
+        fn hello() {
             foos.send(Foo {
                 foo: "hello",
             });
@@ -555,7 +555,7 @@ fn record_inference() {
         "
         output-stream s contains Msg { a: u32 }
         
-        function bar(a: Msg) {
+        fn bar(a: Msg) {
             s.send(a);
         }
         
@@ -572,7 +572,7 @@ fn record_inference() {
         "
         output-stream s contains Msg { a: u32 }
         
-        function bar(a: Msg) {
+        fn bar(a: Msg) {
             s.send(a);
         }
 
@@ -589,7 +589,7 @@ fn record_inference() {
         "
         type A { a: u32 }
 
-        function bla(a: A, b: A) -> Bool {
+        fn bla(a: A, b: A) -> Bool {
             a == b
         }
         
@@ -610,7 +610,7 @@ fn record_inference() {
         type A { a: u32 }
         type B { a: u32 }
 
-        function bla() -> Bool {
+        fn bla() -> Bool {
             a == b && a == c
         }
 
@@ -629,7 +629,7 @@ fn record_inference() {
 fn return_keyword() {
     let s = src!(
         "
-        function bar() -> bool {
+        fn bar() -> bool {
             return true
         }
         
@@ -642,7 +642,7 @@ fn return_keyword() {
 
     let s = src!(
         "
-        function bar() -> bool {
+        fn bar() -> bool {
             return 2
         }
         
@@ -659,9 +659,9 @@ fn unit_block() {
     let s = src!(
         "
         # workaround for not having a ()
-        function unit() {}
+        fn unit() {}
 
-        function bar() -> Bool {
+        fn bar() -> Bool {
             unit();
         }
 
@@ -677,7 +677,7 @@ fn unit_block() {
 fn unreachable_expression() {
     let s = src!(
         "
-        function bar() -> Bool {
+        fn bar() -> Bool {
             return true;
             return false;
         }
@@ -907,7 +907,7 @@ fn expected_module() {
     let foo = source_file!(
         "foo",
         "
-            function bar() {}
+            fn bar() {}
         "
     );
 
@@ -923,11 +923,11 @@ fn silly_import_loop() {
     let pkg = source_file!(
         "pkg",
         "
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 foo.super.bar(x)    
             }
 
-            function bar(x: i32) -> i32 {
+            fn bar(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -980,7 +980,7 @@ fn filtermap_calling_filtermap() {
 fn assignment() {
     let s = src!(
         "
-            function foo() -> i32 {
+            fn foo() -> i32 {
                 let x = 4;
                 x = x + 3;
                 x
@@ -992,7 +992,7 @@ fn assignment() {
 
     let s = src!(
         "
-            function foo() -> i32 {
+            fn foo() -> i32 {
                 let x = false;
                 x = x + 3;
                 x
@@ -1007,7 +1007,7 @@ fn assignment() {
 fn assignment_to_record() {
     let s = src!(
         "
-            function foo() -> i32 {
+            fn foo() -> i32 {
                 let x = { bar: 4 };
                 x.bar = x.bar + 3;
                 x.bar
