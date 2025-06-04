@@ -64,7 +64,7 @@ pub fn print_highlighted(s: &str) {
             | Token::Else
             | Token::Filter
             | Token::FilterMap
-            | Token::Function
+            | Token::Fn
             | Token::If
             | Token::Import
             | Token::In

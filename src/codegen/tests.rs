@@ -124,7 +124,7 @@ fn equal_to_10() {
 fn equal_to_10_with_function() {
     let s = src!(
         "
-        function is_10(x: i32) -> bool {
+        fn is_10(x: i32) -> bool {
             x == 10
         }
         
@@ -154,11 +154,11 @@ fn equal_to_10_with_function() {
 fn equal_to_10_with_two_functions() {
     let s = src!(
         "
-        function equals(x: u32, y: u32) -> bool {
+        fn equals(x: u32, y: u32) -> bool {
             x == y
         }
 
-        function is_10(x: u32) -> bool {
+        fn is_10(x: u32) -> bool {
             equals(x, 10)
         }
 
@@ -739,7 +739,7 @@ fn float_div_zero() {
 
 #[test]
 fn float_floor() {
-    let s = src!("function floor(x: f32) -> f32 { x.floor() }");
+    let s = src!("fn floor(x: f32) -> f32 { x.floor() }");
     let mut p = compile(s);
     let f = p
         .get_function::<(), (f32,), f32>("floor")
@@ -753,7 +753,7 @@ fn float_floor() {
 
 #[test]
 fn float_ceil() {
-    let s = src!("function ceil(x: f32) -> f32 { x.ceil() }");
+    let s = src!("fn ceil(x: f32) -> f32 { x.ceil() }");
     let mut p = compile(s);
     let f = p
         .get_function::<(), (f32,), f32>("ceil")
@@ -767,7 +767,7 @@ fn float_ceil() {
 
 #[test]
 fn float_round() {
-    let s = src!("function round(x: f32) -> f32 { x.round() }");
+    let s = src!("fn round(x: f32) -> f32 { x.round() }");
     let mut p = compile(s);
     let f = p
         .get_function::<(), (f32,), f32>("round")
@@ -781,7 +781,7 @@ fn float_round() {
 
 #[test]
 fn float_pow() {
-    let s = src!("function pow(x: f32, y: f32) -> f32 { x.pow(y) }");
+    let s = src!("fn pow(x: f32, y: f32) -> f32 { x.pow(y) }");
     let mut p = compile(s);
     let f = p
         .get_function::<(), (f32, f32), f32>("pow")
@@ -795,7 +795,7 @@ fn float_pow() {
 
 #[test]
 fn float_scientific_notation_one() {
-    let s = src!("function main() -> f32 { 20.0e4 }");
+    let s = src!("fn main() -> f32 { 20.0e4 }");
 
     let mut p = compile(s);
     let f = p
@@ -808,7 +808,7 @@ fn float_scientific_notation_one() {
 
 #[test]
 fn float_scientific_notation_two() {
-    let s = src!("function main() -> f32 { 20.0e-4 }");
+    let s = src!("fn main() -> f32 { 20.0e-4 }");
 
     let mut p = compile(s);
     let f = p
@@ -1129,7 +1129,7 @@ fn use_context() {
 fn use_a_roto_function() {
     let s = src!(
         "
-        function double(x: i32) -> i32 {
+        fn double(x: i32) -> i32 {
             2 * x
         }"
     );
@@ -1147,7 +1147,7 @@ fn use_a_roto_function() {
 fn use_a_test() {
     let s = src!(
         "
-        function double(x: i32) -> i32 {
+        fn double(x: i32) -> i32 {
             x # oops! not correct
         }
         
@@ -1168,7 +1168,7 @@ fn use_a_test() {
 
     let s = src!(
         "
-        function double(x: i32) -> i32 {
+        fn double(x: i32) -> i32 {
             2 * x
         }
         
@@ -1399,7 +1399,7 @@ fn string_repeat() {
 fn match_optional_value() {
     let s = src!(
         "
-        function or_fortytwo(x: u32?) -> u32 {
+        fn or_fortytwo(x: u32?) -> u32 {
             match x {
                 Some(x) -> x,
                 None -> 42,
@@ -1424,7 +1424,7 @@ fn match_optional_value() {
 fn construct_optional_value() {
     let s = src!(
         "
-        function sub_one(x: u32) -> u32? {
+        fn sub_one(x: u32) -> u32? {
             if x == 0 {
                 Optional.None
             } else {
@@ -1511,7 +1511,7 @@ fn match_on_verdict() {
 fn non_sugar_optional() {
     let s = src!(
         "
-        function foo() -> Optional[u32] {
+        fn foo() -> Optional[u32] {
             Optional.Some(2)
         }
         "
@@ -1530,7 +1530,7 @@ fn top_level_import() {
         "pkg",
         "
             import foo.bar;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 bar(x)    
             }
         "
@@ -1538,7 +1538,7 @@ fn top_level_import() {
     let foo = source_file!(
         "foo",
         "
-            function bar(x: i32) -> i32 {
+            fn bar(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1559,7 +1559,7 @@ fn local_import() {
     let pkg = source_file!(
         "pkg",
         "
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 import foo.bar;
                 bar(x)    
             }
@@ -1568,7 +1568,7 @@ fn local_import() {
     let foo = source_file!(
         "foo",
         "
-            function bar(x: i32) -> i32 {
+            fn bar(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1590,11 +1590,11 @@ fn parent_import() {
         "pkg",
         "
             import foo.quadruple;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 quadruple(x)
             }
 
-            function double(x: i32) -> i32 {
+            fn double(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1603,7 +1603,7 @@ fn parent_import() {
         "foo",
         "
             import super.double;
-            function quadruple(x: i32) -> i32 {
+            fn quadruple(x: i32) -> i32 {
                 double(double(x))
             }
         "
@@ -1625,11 +1625,11 @@ fn package_import() {
         "pkg",
         "
             import foo.quadruple;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 quadruple(x)
             }
 
-            function double(x: i32) -> i32 {
+            fn double(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1638,7 +1638,7 @@ fn package_import() {
         "foo",
         "
             import pkg.double;
-            function quadruple(x: i32) -> i32 {
+            fn quadruple(x: i32) -> i32 {
                 double(double(x))
             }
         "
@@ -1660,7 +1660,7 @@ fn import_via_super() {
         "pkg",
         "
             import foo.a;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 a(x)  
             }
         "
@@ -1669,7 +1669,7 @@ fn import_via_super() {
         "foo",
         "
             import super.bar.b;
-            function a(x: i32) -> i32 {
+            fn a(x: i32) -> i32 {
                 b(x)
             }
         "
@@ -1677,7 +1677,7 @@ fn import_via_super() {
     let bar = source_file!(
         "bar",
         "
-            function b(x: i32) -> i32 {
+            fn b(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1699,7 +1699,7 @@ fn import_module_first() {
         "pkg",
         "
             import foo.a;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 a(x)  
             }
         "
@@ -1709,7 +1709,7 @@ fn import_module_first() {
         "
             import super.bar;
             import bar.b;
-            function a(x: i32) -> i32 {
+            fn a(x: i32) -> i32 {
                 b(x)
             }
         "
@@ -1717,7 +1717,7 @@ fn import_module_first() {
     let bar = source_file!(
         "bar",
         "
-            function b(x: i32) -> i32 {
+            fn b(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1739,7 +1739,7 @@ fn import_module_second() {
         "pkg",
         "
             import foo.a;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 a(x)  
             }
         "
@@ -1749,7 +1749,7 @@ fn import_module_second() {
         "
             import bar.b;
             import super.bar;
-            function a(x: i32) -> i32 {
+            fn a(x: i32) -> i32 {
                 b(x)
             }
         "
@@ -1757,7 +1757,7 @@ fn import_module_second() {
     let bar = source_file!(
         "bar",
         "
-            function b(x: i32) -> i32 {
+            fn b(x: i32) -> i32 {
                 2 * x
             }
         "
@@ -1778,7 +1778,7 @@ fn use_type_from_module() {
     let pkg = source_file!(
         "pkg",
         "
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 let foofoo = foo.Foo { bar: x };
                 foofoo.bar
             }
@@ -1809,7 +1809,7 @@ fn use_imported_type() {
         "pkg",
         "
             import foo.Foo;
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 let foofoo = Foo { bar: x };
                 foofoo.bar
             }
@@ -1839,11 +1839,11 @@ fn use_type_in_function_argument() {
     let pkg = source_file!(
         "pkg",
         "
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 get_bar(foo.Foo { bar: x }) 
             }
 
-            function get_bar(f: foo.Foo) -> i32 {
+            fn get_bar(f: foo.Foo) -> i32 {
                 f.bar
             }
         "
@@ -1872,11 +1872,11 @@ fn use_type_in_function_return_type() {
     let pkg = source_file!(
         "pkg",
         "
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 make_foo(x).bar
             }
 
-            function make_foo(x: i32) -> foo.Foo {
+            fn make_foo(x: i32) -> foo.Foo {
                 foo.Foo { bar: x }
             }
         "
@@ -1909,7 +1909,7 @@ fn use_type_from_other_module_in_type() {
                 bla: foo.Bla,
             }
 
-            function main(x: i32) -> i32 {
+            fn main(x: i32) -> i32 {
                 Bli { bla: foo.Bla { blubb: x }}.bla.blubb
             }
         "
@@ -1995,7 +1995,7 @@ fn return_vec() {
 
     let s = src!(
         "
-        function main(t: MyType) -> MyType {
+        fn main(t: MyType) -> MyType {
             t
         }
     "
@@ -2022,7 +2022,7 @@ fn register_renamed_method() {
 
     let s = src!(
         "
-        function main(x: u32) -> u32 {
+        fn main(x: u32) -> u32 {
             x.foo()
         }
     "
@@ -2103,11 +2103,11 @@ fn refcounting_in_a_recursive_function() {
 
     let s = src!(
         r##"
-        function f(foo: Foo, idx: i32) {
+        fn f(foo: Foo, idx: i32) {
             if idx > 0 { f(foo, idx - 1); }
         }
 
-        function main(foo: Foo) -> Verdict[i32, i32] {
+        fn main(foo: Foo) -> Verdict[i32, i32] {
             f(foo, 1);
             reject 3
         }           
@@ -2130,7 +2130,7 @@ fn refcounting_in_a_recursive_function() {
 fn str_equals() {
     let s = src!(
         r#"
-        function is_slash(s: String) -> bool {
+        fn is_slash(s: String) -> bool {
             s == "/"
         }
         "#
@@ -2150,7 +2150,7 @@ fn str_equals() {
 fn str_not_equals() {
     let s = src!(
         r#"
-        function is_not_slash(s: String) -> bool {
+        fn is_not_slash(s: String) -> bool {
             s != "/"
         }
         "#

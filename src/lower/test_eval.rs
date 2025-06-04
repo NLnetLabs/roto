@@ -209,11 +209,11 @@ fn variable() {
 fn calling_function() {
     let s = src!(
         "
-        function smaller_than(a: u32, b: u32) -> bool {
+        fn smaller_than(a: u32, b: u32) -> bool {
             a < b
         }
 
-        function small(x: u32) -> bool {
+        fn small(x: u32) -> bool {
             smaller_than(10, x) && smaller_than(x, 20)
         }
 
@@ -244,7 +244,7 @@ fn calling_function() {
 fn anonymous_record() {
     let s = src!(
         "
-        function in_range(x: u32, low: u32, high: u32) -> bool {
+        fn in_range(x: u32, low: u32, high: u32) -> bool {
             low < x && x < high
         }
 
@@ -281,7 +281,7 @@ fn typed_record() {
             high: u32,
         }
 
-        function in_range(x: u32, c: Range) -> bool {
+        fn in_range(x: u32, c: Range) -> bool {
             c.low < x && x < c.high
         }
 
