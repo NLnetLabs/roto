@@ -324,12 +324,7 @@ impl ScopedDisplay for Type {
             }
             Type::Never => write!(f, "!"),
             Type::Function(args, ret) => {
-                write!(
-                    f,
-                    "function({}) -> {}",
-                    fmt_args(args)?,
-                    ret.display(graph)
-                )
+                write!(f, "fn({}) -> {}", fmt_args(args)?, ret.display(graph))
             }
             Type::Name(x) => write!(f, "{}", x.display(graph)),
         }

@@ -328,7 +328,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Type => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Function => Declaration::Function(self.function()?),
+            Token::Fn => Declaration::Function(self.function()?),
             Token::Test => Declaration::Test(self.test()?),
             Token::Import => Declaration::Import(self.import()?),
             _ => {
@@ -349,7 +349,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Function ::= 'function' Identifier '{' Body '}'
     /// ```
     fn function(&mut self) -> ParseResult<FunctionDeclaration> {
-        self.take(Token::Function)?;
+        self.take(Token::Fn)?;
         let ident = self.identifier()?;
         let params = self.params()?;
 
