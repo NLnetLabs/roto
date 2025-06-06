@@ -8,6 +8,12 @@ alias v := valgrind
 default:
     @just --list
 
+ci:
+    @just test
+    @just clippy
+    @just fmt-check
+    @just valgrind
+
 run CMD SCRIPT:
     cargo run -- '{{CMD}}' '{{SCRIPT}}'
 
@@ -17,14 +23,20 @@ build:
 test:
     cargo test
 
-test-verbose TEST:
+fmt-check:
+    cargo fmt --all --check
+
+fmt:
+    cargo fmt --all
+
+test-verbose TEST="":
     RUST_LOG=info cargo nextest run --no-capture '{{TEST}}'
 
-nextest:
+nextest TEST="":
     cargo nextest run
 
 clippy:
-    cargo clippy -all
+    cargo clippy --all
 
-valgrind:
-    VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test
+valgrind TEST="":
+    VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test -- {{TEST}}
