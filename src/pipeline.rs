@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::Path};
 use crate::{
     codegen::{
         self,
-        check::{FunctionRetrievalError, RotoParams},
+        check::{FunctionRetrievalError, RotoFunc},
         Module, TypedFunc,
     },
     file_tree::SourceFile,
@@ -24,7 +24,6 @@ use crate::{
     },
     runtime::{
         context::{Context, ContextDescription},
-        ty::Reflect,
         Runtime, RuntimeConstant, RuntimeFunctionRef,
     },
     typechecker::{
@@ -322,10 +321,10 @@ impl Compiled {
         self.module.run_tests(ctx)
     }
 
-    pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
+    pub fn get_function<Ctx: 'static, F: RotoFunc>(
         &mut self,
         name: &str,
-    ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
+    ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         self.module.get_function(name)
     }
 }

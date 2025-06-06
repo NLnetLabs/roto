@@ -49,7 +49,7 @@ fn accept() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), Verdict<(), ()>>("main")
+        .get_function::<(), fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
@@ -68,7 +68,7 @@ fn accept_with_semicolon() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), Verdict<(), ()>>("main")
+        .get_function::<(), fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
@@ -87,7 +87,7 @@ fn reject() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), Verdict<(), ()>>("main")
+        .get_function::<(), fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
@@ -110,7 +110,7 @@ fn equal_to_10() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (u32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 5);
@@ -140,7 +140,7 @@ fn equal_to_10_with_function() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 5);
@@ -176,7 +176,7 @@ fn equal_to_10_with_two_functions() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (u32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     assert_eq!(f.call(&mut (), 5), Verdict::Reject(()));
@@ -201,7 +201,7 @@ fn negation() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..20 {
@@ -235,7 +235,7 @@ fn a_bunch_of_comparisons() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -271,7 +271,7 @@ fn record() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -306,7 +306,7 @@ fn record_with_fields_flipped() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)")
         .into_func();
 
@@ -342,7 +342,7 @@ fn nested_record() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -376,7 +376,7 @@ fn misaligned_fields() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for x in 0..100 {
@@ -410,7 +410,7 @@ fn enum_match() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (bool,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(bool) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     assert_eq!(f.call(&mut (), true), Verdict::Accept(()));
@@ -433,7 +433,7 @@ fn arithmetic() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (i32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 5);
@@ -462,7 +462,7 @@ fn call_runtime_function() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (u32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for (value, expected) in
@@ -489,7 +489,7 @@ fn call_runtime_method() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (u32,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     for (value, expected) in
@@ -512,7 +512,7 @@ fn int_var() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), Verdict<i32, ()>>("main")
+        .get_function::<(), fn() -> Verdict<i32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     assert_eq!(f.call(&mut ()), Verdict::Accept(32));
@@ -546,20 +546,21 @@ fn issue_52() {
 }
 
 #[test]
+#[should_panic]
 fn issue_54() {
     let mut rt = Runtime::new();
 
+    #[derive(Clone)]
     struct Foo {
         _x: i32,
     }
-    extern "C" fn bar(_foo: *mut Foo, _x: u32) {}
 
     // We 'forget' to register type Foo:
     // rt.register_type::<Foo>().unwrap();
 
     // But we do register a method on it:
-    rt.register_method::<Foo, _, _>("bar", bar as extern "C" fn(_, _) -> _)
-        .unwrap_err();
+    #[roto_method(rt, Foo)]
+    fn bar(_foo: Val<Foo>, _x: u32) {}
 }
 
 #[test]
@@ -578,7 +579,7 @@ fn asn() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (Asn,), Verdict<Asn, Asn>>("main")
+        .get_function::<(), fn(Asn) -> Verdict<Asn, Asn>>("main")
         .expect("No function found (or mismatched types)");
 
     assert_eq!(
@@ -604,7 +605,7 @@ fn mismatched_types() {
     let mut p = compile(s);
 
     let err = p
-        .get_function::<(), (i8,), Verdict<i8, ()>>("main")
+        .get_function::<(), fn(i8) -> Verdict<i8, ()>>("main")
         .unwrap_err();
 
     eprintln!("{err}");
@@ -627,7 +628,7 @@ fn multiply() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (u8,), Verdict<u8, ()>>("main")
+        .get_function::<(), fn(u8) -> Verdict<u8, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20);
@@ -646,7 +647,7 @@ fn float_mul() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .get_function::<(), fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.0);
@@ -665,7 +666,7 @@ fn float_add() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .get_function::<(), fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.0);
@@ -684,7 +685,7 @@ fn float_sub() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .get_function::<(), fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 2.0);
@@ -703,7 +704,7 @@ fn float_cmp() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), Verdict<bool, ()>>("main")
+        .get_function::<(), fn(f32) -> Verdict<bool, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.0);
@@ -722,7 +723,7 @@ fn float_div_zero() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), Verdict<f32, ()>>("main")
+        .get_function::<(), fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.0);
@@ -742,7 +743,7 @@ fn float_floor() {
     let s = src!("function floor(x: f32) -> f32 { x.floor() }");
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), f32>("floor")
+        .get_function::<(), fn(f32) -> f32>("floor")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.5);
@@ -756,7 +757,7 @@ fn float_ceil() {
     let s = src!("function ceil(x: f32) -> f32 { x.ceil() }");
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), f32>("ceil")
+        .get_function::<(), fn(f32) -> f32>("ceil")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.5);
@@ -770,7 +771,7 @@ fn float_round() {
     let s = src!("function round(x: f32) -> f32 { x.round() }");
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32,), f32>("round")
+        .get_function::<(), fn(f32) -> f32>("round")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.6);
@@ -784,7 +785,7 @@ fn float_pow() {
     let s = src!("function pow(x: f32, y: f32) -> f32 { x.pow(y) }");
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f32, f32), f32>("pow")
+        .get_function::<(), fn(f32, f32) -> f32>("pow")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 2.0, 2.0);
@@ -799,7 +800,7 @@ fn float_scientific_notation_one() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), f32>("main")
+        .get_function::<(), fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
@@ -812,7 +813,7 @@ fn float_scientific_notation_two() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), f32>("main")
+        .get_function::<(), fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
@@ -831,7 +832,7 @@ fn float_add_f64() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (f64,), Verdict<f64, ()>>("main")
+        .get_function::<(), fn(f64) -> Verdict<f64, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 20.0);
@@ -850,7 +851,7 @@ fn ip_output() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), Verdict<IpAddr, ()>>("main")
+        .get_function::<(), fn() -> Verdict<IpAddr, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([1, 2, 3, 4]);
@@ -870,7 +871,7 @@ fn ip_passthrough() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (IpAddr,), Verdict<IpAddr, ()>>("main")
+        .get_function::<(), fn(IpAddr) -> Verdict<IpAddr, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([1, 2, 3, 4]);
@@ -896,7 +897,7 @@ fn ipv4_compare() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .get_function::<(), fn(IpAddr) -> Verdict<IpAddr, IpAddr>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([0, 0, 0, 0]);
@@ -935,7 +936,7 @@ fn ipv6_compare() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (IpAddr,), Verdict<IpAddr, IpAddr>>("main")
+        .get_function::<(), fn(IpAddr) -> Verdict<IpAddr, IpAddr>>("main")
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
@@ -966,7 +967,7 @@ fn construct_prefix() {
     );
     let mut p = compile(s);
     let f = p
-        .get_function::<(), (), Verdict<Prefix, ()>>("main")
+        .get_function::<(), fn() -> Verdict<Prefix, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let p = Prefix::new("192.168.0.0".parse().unwrap(), 16).unwrap();
@@ -991,7 +992,7 @@ fn function_returning_unit() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), (), Verdict<(), ()>>("main")
+        .get_function::<(), fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut ());
@@ -1045,9 +1046,13 @@ fn arc_type() {
     );
 
     let mut p = s.compile(rt).unwrap();
-    let f = p.get_function::<(), (bool, Val<CloneDrop>, Val<CloneDrop>), Verdict<Val<CloneDrop>, ()>>(
-        "main",
-    ).unwrap();
+    let f = p
+        .get_function::<(), fn(
+            bool,
+            Val<CloneDrop>,
+            Val<CloneDrop>,
+        ) -> Verdict<Val<CloneDrop>, ()>>("main")
+        .unwrap();
 
     let input = CloneDrop {
         clones: &CLONES,
@@ -1080,7 +1085,9 @@ fn use_constant() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<(), (), Verdict<(), ()>>("main").unwrap();
+    let f = p
+        .get_function::<(), fn() -> Verdict<(), ()>>("main")
+        .unwrap();
     let output = f.call(&mut ());
     assert_eq!(output, Verdict::Reject(()));
 }
@@ -1110,11 +1117,13 @@ fn use_context() {
     let mut p = compile_with_runtime(s, rt);
 
     // Try getting the wrong ctx, which should fail
-    p.get_function::<(), (), Verdict<i32, ()>>("main")
+    p.get_function::<(), fn() -> Verdict<i32, ()>>("main")
         .unwrap_err();
 
     // And then with the correct ctx type
-    let f = p.get_function::<Ctx, (), Verdict<i32, ()>>("main").unwrap();
+    let f = p
+        .get_function::<Ctx, fn() -> Verdict<i32, ()>>("main")
+        .unwrap();
 
     let mut ctx = Ctx { foo: 9, bar: false };
     let output = f.call(&mut ctx);
@@ -1135,7 +1144,7 @@ fn use_a_roto_function() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<(), (i32,), i32>("double").unwrap();
+    let f = p.get_function::<(), fn(i32) -> i32>("double").unwrap();
     let output = f.call(&mut (), 2);
     assert_eq!(output, 4);
 
@@ -1201,7 +1210,7 @@ fn string() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (), Verdict<Arc<str>, ()>>("main")
+        .get_function::<(), fn() -> Verdict<Arc<str>, ()>>("main")
         .unwrap();
 
     let res = f.call(&mut ());
@@ -1221,7 +1230,7 @@ fn string_append() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .get_function::<(), fn(Arc<str>) -> Verdict<Arc<str>, ()>>("main")
         .unwrap();
 
     let res = f.call(&mut (), "Martin".into());
@@ -1241,7 +1250,7 @@ fn string_plus_operator() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .get_function::<(), fn(Arc<str>) -> Verdict<Arc<str>, ()>>("main")
         .unwrap();
 
     let res = f.call(&mut (), "Martin".into());
@@ -1265,7 +1274,7 @@ fn string_contains() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(Arc<str>) -> Verdict<(), ()>>("main")
         .unwrap();
 
     let res = f.call(&mut (), "incompre".into());
@@ -1298,7 +1307,7 @@ fn string_starts_with() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(Arc<str>) -> Verdict<(), ()>>("main")
         .unwrap();
 
     let res = f.call(&mut (), "incompre".into());
@@ -1331,7 +1340,7 @@ fn string_ends_with() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Arc<str>,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(Arc<str>) -> Verdict<(), ()>>("main")
         .unwrap();
 
     let res = f.call(&mut (), "incompre".into());
@@ -1364,7 +1373,9 @@ fn string_to_lowercase_and_uppercase() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (bool, Arc<str>), Verdict<Arc<str>, ()>>("main")
+        .get_function::<(), fn(bool, Arc<str>) -> Verdict<Arc<str>, ()>>(
+            "main",
+        )
         .unwrap();
 
     let res = f.call(&mut (), true, "WHISPER THIS!".into());
@@ -1388,7 +1399,7 @@ fn string_repeat() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Arc<str>,), Verdict<Arc<str>, ()>>("main")
+        .get_function::<(), fn(Arc<str>) -> Verdict<Arc<str>, ()>>("main")
         .unwrap();
 
     let res = f.call(&mut (), "boo".into());
@@ -1411,7 +1422,7 @@ fn match_optional_value() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (Option<u32>,), u32>("or_fortytwo")
+        .get_function::<(), fn(Option<u32>) -> u32>("or_fortytwo")
         .unwrap();
 
     let res = f.call(&mut (), Some(10));
@@ -1437,7 +1448,7 @@ fn construct_optional_value() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (u32,), Option<u32>>("sub_one")
+        .get_function::<(), fn(u32) -> Option<u32>>("sub_one")
         .unwrap();
 
     let res = f.call(&mut (), 0);
@@ -1463,7 +1474,7 @@ fn filter_map_with_manual_verdict() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (i32,), Verdict<i32, i32>>("foo")
+        .get_function::<(), fn(i32) -> Verdict<i32, i32>>("foo")
         .unwrap();
 
     let res = f.call(&mut (), 0);
@@ -1496,7 +1507,7 @@ fn match_on_verdict() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<(), (i32,), Verdict<i32, i32>>("foo")
+        .get_function::<(), fn(i32) -> Verdict<i32, i32>>("foo")
         .unwrap();
 
     let res = f.call(&mut (), 5);
@@ -1518,7 +1529,7 @@ fn non_sugar_optional() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<(), (), Option<u32>>("foo").unwrap();
+    let f = p.get_function::<(), fn() -> Option<u32>>("foo").unwrap();
 
     let res = f.call(&mut ());
     assert_eq!(res, Some(2));
@@ -1549,7 +1560,7 @@ fn top_level_import() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 8);
 }
@@ -1579,7 +1590,7 @@ fn local_import() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 8);
 }
@@ -1614,7 +1625,7 @@ fn parent_import() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 16);
 }
@@ -1649,7 +1660,7 @@ fn package_import() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 16);
 }
@@ -1688,7 +1699,7 @@ fn import_via_super() {
         vec![FileSpec::File(foo), FileSpec::File(bar)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 8);
 }
@@ -1728,7 +1739,7 @@ fn import_module_first() {
         vec![FileSpec::File(foo), FileSpec::File(bar)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 8);
 }
@@ -1768,7 +1779,7 @@ fn import_module_second() {
         vec![FileSpec::File(foo), FileSpec::File(bar)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 8);
 }
@@ -1798,7 +1809,7 @@ fn use_type_from_module() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
@@ -1829,7 +1840,7 @@ fn use_imported_type() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
@@ -1862,7 +1873,7 @@ fn use_type_in_function_argument() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
@@ -1895,7 +1906,7 @@ fn use_type_in_function_return_type() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
@@ -1928,7 +1939,7 @@ fn use_type_from_other_module_in_type() {
         vec![FileSpec::File(foo)],
     ));
     let mut p = compile(tree);
-    let main = p.get_function::<(), (i32,), i32>("main").unwrap();
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
 }
@@ -1964,7 +1975,7 @@ fn mutate() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), (Val<*mut MyType>,) ,Verdict<Val<*mut MyType>, ()>>("main")
+        .get_function::<(), fn(Val<*mut MyType>) -> Verdict<Val<*mut MyType>, ()>>("main")
         .expect("No function found (or mismatched types)");
 
     let mut t = MyType { i: 0 };
@@ -2003,7 +2014,7 @@ fn return_vec() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), (roto::Val<MyType>,), roto::Val<MyType>>("main")
+        .get_function::<(), fn(Val<MyType>) -> Val<MyType>>("main")
         .expect("No function found (or mismatched types)");
 
     let t = MyType { v: vec![0x01] };
@@ -2030,7 +2041,7 @@ fn register_renamed_method() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), (u32,), u32>("main")
+        .get_function::<(), fn(u32) -> u32>("main")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(&mut (), 2);
@@ -2079,7 +2090,7 @@ fn name_collision() {
 
         let mut p = compile_with_runtime(s, runtime);
         let f = p
-            .get_function::<(), (roto::Val<A>,), Verdict<bool, ()>>("main")
+            .get_function::<(), fn(Val<A>) -> Verdict<bool, ()>>("main")
             .expect("No function found (or mismatched types)");
 
         let t = A { _x: 1 };
@@ -2116,7 +2127,7 @@ fn refcounting_in_a_recursive_function() {
 
     let mut p = compile_with_runtime(s, runtime);
     let f = p
-        .get_function::<(), (Val<Arc<Foo>>,), Verdict<i32, i32>>("main")
+        .get_function::<(), fn(Val<Arc<Foo>>) -> Verdict<i32, i32>>("main")
         .unwrap();
 
     let v = Arc::new(Foo);
@@ -2139,7 +2150,7 @@ fn str_equals() {
 
     let mut compiled = s.compile(runtime).unwrap();
     let func = compiled
-        .get_function::<(), (Arc<str>,), bool>("is_slash")
+        .get_function::<(), fn(Arc<str>) -> bool>("is_slash")
         .unwrap();
 
     assert!(func.call(&mut (), "/".into()));
@@ -2159,9 +2170,34 @@ fn str_not_equals() {
 
     let mut compiled = s.compile(runtime).unwrap();
     let func = compiled
-        .get_function::<(), (Arc<str>,), bool>("is_not_slash")
+        .get_function::<(), fn(Arc<str>) -> bool>("is_not_slash")
         .unwrap();
 
     assert!(func.call(&mut (), "foo".into()));
     assert!(!func.call(&mut (), "/".into()));
+}
+
+#[test]
+fn return_verdict_from_runtime_function() {
+    let mut runtime = Runtime::new();
+
+    #[roto_function(runtime)]
+    fn foo() -> Verdict<(), ()> {
+        Verdict::Accept(())
+    }
+
+    let s = src!(
+        "
+            filtermap bar() {
+                foo()
+            }
+        "
+    );
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled
+        .get_function::<(), fn() -> Verdict<(), ()>>("bar")
+        .unwrap();
+
+    assert_eq!(Verdict::Accept(()), func.call(&mut ()));
 }

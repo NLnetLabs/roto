@@ -51,7 +51,7 @@ use layout::Layout;
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
-use crate::{ast::Identifier, Context};
+use crate::{ast::Identifier, codegen::check::RotoFunc, Context};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -180,12 +180,6 @@ impl RuntimeFunction {
     pub fn get_ref(&self) -> RuntimeFunctionRef {
         RuntimeFunctionRef(self.id)
     }
-}
-
-pub struct DocumentedFunc<F> {
-    pub func: F,
-    pub docstring: &'static str,
-    pub argument_names: &'static [&'static str],
 }
 
 #[derive(Clone)]
@@ -364,7 +358,7 @@ impl Runtime {
         // The context type likely hasn't been registered yet in the
         // type registry, so we do that, so that we can reason about
         // it more easily and make better error messages.
-        self.type_registry.resolve::<*mut Ctx>();
+        self.type_registry.store::<Ctx>(TypeDescription::Leaf);
 
         // All fields in the context must be known because they'll
         // be accessible from Roto.
@@ -377,14 +371,14 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_function<A, R>(
+    pub fn register_function<F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
-        f: impl Func<A, R>,
+        f: Func<F>,
     ) -> Result<(), String> {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
-        let description = f.to_function_description(self)?;
+        let description = f.to_function_description(&mut self.type_registry);
         let name = name.into();
         self.check_description(&description)?;
 
@@ -400,28 +394,28 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_method<T: 'static, A, R>(
+    pub fn register_method<T: 'static, F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
-        f: impl Func<A, R>,
+        f: Func<F>,
     ) -> Result<(), String> {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
-        let description = f.to_function_description(self).unwrap();
+        let description = f.to_function_description(&mut self.type_registry);
         let name = name.into();
         self.check_description(&description)?;
 
-        let Some(second) = description.parameter_types().get(1) else {
-            panic!()
+        let Some(first) = description.parameter_types().first() else {
+            return Err("a method must have at least one parameter".into());
         };
 
         // `to_function_description` already checks the validity of the types
         // so unwrap is ok.
-        let ty = self.type_registry.get(*second).unwrap();
+        let ty = self.type_registry.get(*first).unwrap();
 
         let type_id = match ty.description {
             TypeDescription::Leaf => ty.type_id,
-            TypeDescription::ConstPtr(id) | TypeDescription::MutPtr(id) => id,
+            TypeDescription::Val(type_id) => type_id,
             _ => {
                 return Err(format!(
                     "Cannot register a method on {}",
@@ -450,14 +444,14 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_static_method<T: 'static, A, R>(
+    pub fn register_static_method<T: 'static, F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
-        f: impl Func<A, R>,
+        f: Func<F>,
     ) -> Result<(), String> {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
-        let description = f.to_function_description(self).unwrap();
+        let description = f.to_function_description(&mut self.type_registry);
         self.check_description(&description)?;
 
         let id = self.functions.len();
@@ -513,8 +507,7 @@ impl Runtime {
         let ty = self.type_registry.get(id)?;
         let id = match ty.description {
             TypeDescription::Leaf => id,
-            TypeDescription::ConstPtr(id) => id,
-            TypeDescription::MutPtr(id) => id,
+            TypeDescription::Val(id) => id,
             _ => panic!(),
         };
         self.runtime_types.iter().find(|ty| ty.type_id == id)
@@ -534,62 +527,19 @@ impl Runtime {
             })
         };
 
-        let mut parameter_types = description.parameter_types().iter();
-        let Some(out_pointer_type_id) = parameter_types.next() else {
-            return Err("Out parameter missing".to_string());
-        };
-
-        let out_pointer_ty =
-            self.type_registry.get(*out_pointer_type_id).unwrap();
-        match out_pointer_ty.description {
-            TypeDescription::MutPtr(id) => {
-                let Some(_) =
-                    self.runtime_types.iter().find(|ty| ty.type_id == id)
-                else {
-                    let ty = self.type_registry.get(id).unwrap();
-                    return Err(format!(
-                        "Registered a function using an unregistered type: `{}`",
-                        ty.rust_name
-                    ));
-                };
-            }
-            _ => return Err("Out pointer must be a `*mut`".to_string()),
-        }
-
-        for type_id in parameter_types {
+        // TODO: This check needs to be done recursively
+        for type_id in description.parameter_types() {
             let ty = self.type_registry.get(*type_id).unwrap();
             let runtime_ty = check_type(type_id)?;
             if let Movability::Value = runtime_ty.movability {
                 if !matches!(ty.description, TypeDescription::Leaf) {
                     let ty = self.type_registry.get(ty.type_id).unwrap();
                     return Err(format!(
-                        "Type `{}` should be passed by value. Try removing the `*mut`, `*const`, `&mut` or `&`",
+                        "Type `{}` should be passed by value. Try removing the `Val<T>` around `T`",
                         ty.rust_name,
                     ));
                 }
-            } else {
-                match ty.description {
-                    TypeDescription::MutPtr(_) => {} // correct!
-                    TypeDescription::Leaf => {
-                        let ty = self.type_registry.get(ty.type_id).unwrap();
-                        return Err(format!(
-                            "Type `{}` should be passed by pointer. Try adding `*mut`",
-                            ty.rust_name,
-                        ));
-                    }
-                    TypeDescription::ConstPtr(_) => {
-                        return Err(
-                            "Parameters cannot be mutable pointers. Try removing `&` or `*const`".to_string()
-                        );
-                    }
-                    _ => unreachable!("check_type should fail before this"),
-                }
-                if !matches!(ty.description, TypeDescription::ConstPtr(_)) {}
             }
-        }
-
-        if description.return_type() != TypeId::of::<()>() {
-            return Err("Runtime function cannot have a return type, use an out pointer instead".into());
         }
 
         Ok(())

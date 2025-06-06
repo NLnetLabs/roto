@@ -158,7 +158,7 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_method::<#ty, _, _>(stringify!(#name), #identifier).unwrap();
+        #runtime_ident.register_method::<#ty, _>(stringify!(#name), #identifier).unwrap();
     };
 
     TokenStream::from(expanded)
@@ -187,7 +187,7 @@ pub fn roto_static_method(
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_static_method::<#ty, _, _>(stringify!(#name), #identifier).unwrap();
+        #runtime_ident.register_static_method::<#ty, _>(stringify!(#name), #identifier).unwrap();
     };
 
     TokenStream::from(expanded)
@@ -274,7 +274,7 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         transformed_params
             .push(quote!(#ident: <#t as roto::Reflect>::AsParam));
         transformed_args
-            .push(quote!(<#t as roto::Reflect>::untransform(unsafe { <#t as roto::Reflect>::from_param(#ident) })));
+            .push(quote!(<#t as roto::Reflect>::untransform(unsafe { <#t as roto::Reflect>::to_value(#ident) })));
     }
 
     let underscored_types = input_types.iter().map(|_| quote!(_));
@@ -290,11 +290,11 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
     };
 
     let identifier = quote! {
-        roto::DocumentedFunc {
-            func: #ident as extern "C" fn(#arg_types),
-            docstring: #docstring,
-            argument_names: &[#(stringify!(#args)),*]
-        }
+        unsafe { roto::Func::<fn(#(#input_types),*) -> #ret>::new(
+            #ident as extern "C" fn(#arg_types),
+            #docstring,
+            &[#(stringify!(#args)),*]
+        ) }
     };
 
     Intermediate {

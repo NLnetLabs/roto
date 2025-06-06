@@ -10,7 +10,7 @@ mod codegen;
 mod file_tree;
 mod lower;
 mod module;
-mod parser;
+pub(crate) mod parser;
 mod pipeline;
 mod runtime;
 pub mod tools;
@@ -27,11 +27,12 @@ pub use roto_macros::{
 };
 pub use runtime::{
     context::{Context, ContextField},
+    func::Func,
     optional::Optional,
     ty::Reflect,
     val::Val,
     verdict::Verdict,
-    DocumentedFunc, Runtime, RuntimeType,
+    Runtime, RuntimeType,
 };
 
 pub(crate) const FIND_HELP: &str = "\n\

@@ -400,15 +400,12 @@ pub fn eval(
                 program_counter = block_map[&f.entry_block];
                 continue;
             }
-            Instruction::CallRuntime { to, func, args } => {
+            Instruction::CallRuntime { func, args } => {
                 let args: Vec<_> = args
                     .iter()
                     .map(|a| eval_operand(&vars, a).clone())
                     .collect();
-                let ret = call_runtime_function(rt, mem, *func, args);
-                if let Some((to, _ty)) = to {
-                    vars.insert(to.clone(), ret.unwrap());
-                }
+                call_runtime_function(rt, mem, *func, args);
             }
             Instruction::Return(ret) => {
                 let val =
@@ -689,9 +686,9 @@ fn call_runtime_function(
     mem: &mut Memory,
     func: RuntimeFunctionRef,
     mut args: Vec<IrValue>,
-) -> Option<IrValue> {
+) {
     let func = rt.get_function(func);
-    assert_eq!(func.description.parameter_types().len(), args.len());
+    assert_eq!(func.description.parameter_types().len() + 1, args.len());
 
     // Runtime functions don't understand our pointers, so we need to resolve
     // them to ExtPointers which are real Rust pointers.
@@ -701,7 +698,7 @@ fn call_runtime_function(
         }
     }
 
-    (func.description.wrapped())(args)
+    (func.description.wrapped())(mem, args)
 }
 
 fn eval_operand<'a>(

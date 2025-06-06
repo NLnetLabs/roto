@@ -101,14 +101,14 @@ use crate::{
     ice,
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
-    runtime::{FunctionKind, Runtime, RuntimeFunction},
+    runtime::{ty::TypeDescription, FunctionKind, Runtime, RuntimeFunction},
 };
 use cycle::detect_type_cycles;
 use scope::{
     ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
 };
 use scoped_display::ScopedDisplay;
-use std::{borrow::Borrow, collections::HashMap};
+use std::{any::TypeId, borrow::Borrow, collections::HashMap};
 use types::{FunctionDefinition, Type, TypeDefinition, TypeName};
 
 use self::{
@@ -274,22 +274,16 @@ impl TypeChecker {
                 ident: name.into(),
             };
 
-            let mut rust_parameters =
-                description.parameter_types().iter().map(|ty| {
-                    let ident = runtime.get_runtime_type(*ty).unwrap().name();
-                    let name = ResolvedName {
-                        scope: ScopeRef::GLOBAL,
-                        ident: ident.into(),
-                    };
-                    Type::Name(TypeName {
-                        name,
-                        arguments: Vec::new(),
-                    })
-                });
+            let parameter_types: Vec<_> = description
+                .parameter_types()
+                .iter()
+                .map(|ty| Self::rust_type_to_roto_type(runtime, *ty))
+                .collect::<Result<_, _>>()?;
 
-            let return_type = rust_parameters.next().unwrap();
-
-            let parameter_types: Vec<_> = rust_parameters.collect();
+            let return_type = Self::rust_type_to_roto_type(
+                runtime,
+                description.return_type(),
+            )?;
 
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
@@ -349,6 +343,45 @@ impl TypeChecker {
         }
 
         Ok(())
+    }
+
+    fn rust_type_to_roto_type(
+        runtime: &Runtime,
+        t: TypeId,
+    ) -> Result<Type, TypeError> {
+        let ty = runtime.type_registry.get(t).unwrap();
+        match ty.description {
+            TypeDescription::Leaf => {
+                let ident =
+                    runtime.get_runtime_type(ty.type_id).unwrap().name();
+                let name = ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: ident.into(),
+                };
+                Ok(Type::Name(TypeName {
+                    name,
+                    arguments: Vec::new(),
+                }))
+            }
+            TypeDescription::Option(t) => {
+                Ok(Type::optional(Self::rust_type_to_roto_type(runtime, t)?))
+            }
+            TypeDescription::Verdict(a, r) => Ok(Type::verdict(
+                Self::rust_type_to_roto_type(runtime, a)?,
+                Self::rust_type_to_roto_type(runtime, r)?,
+            )),
+            TypeDescription::Val(type_id) => {
+                let ident = runtime.get_runtime_type(type_id).unwrap().name();
+                let name = ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: ident.into(),
+                };
+                Ok(Type::Name(TypeName {
+                    name,
+                    arguments: Vec::new(),
+                }))
+            }
+        }
     }
 
     fn declare_constants(&mut self, runtime: &Runtime) -> TypeResult<()> {
