@@ -546,23 +546,6 @@ fn issue_52() {
 }
 
 #[test]
-fn issue_54() {
-    let mut rt = Runtime::new();
-
-    struct Foo {
-        _x: i32,
-    }
-    extern "C" fn bar(_foo: *mut Foo, _x: u32) {}
-
-    // We 'forget' to register type Foo:
-    // rt.register_type::<Foo>().unwrap();
-
-    // But we do register a method on it:
-    rt.register_method::<Foo, _, _>("bar", bar as extern "C" fn(_, _) -> _)
-        .unwrap_err();
-}
-
-#[test]
 fn asn() {
     let s = src!(
         "

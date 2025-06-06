@@ -35,6 +35,9 @@ pub mod ty;
 pub mod val;
 pub mod verdict;
 
+#[cfg(test)]
+pub mod tests;
+
 use core::{slice, str};
 use std::{
     any::{type_name, TypeId},
@@ -51,7 +54,11 @@ use layout::Layout;
 use roto_macros::{roto_method, roto_static_method};
 use ty::{Ty, TypeDescription, TypeRegistry};
 
-use crate::{ast::Identifier, Context};
+use crate::{
+    ast::Identifier,
+    parser::token::{Lexer, Token},
+    Context,
+};
 
 /// Provides the types and functions that Roto can access via FFI
 ///
@@ -313,6 +320,8 @@ impl Runtime {
         movability: Movability,
         docstring: &str,
     ) -> Result<(), String> {
+        Self::check_name(name)?;
+
         if let Some(ty) = self.runtime_types.iter().find(|ty| ty.name == name)
         {
             let name = self.type_registry.get(ty.type_id).unwrap().rust_name;
@@ -336,10 +345,6 @@ impl Runtime {
                 ty.name,
             ));
         }
-
-        // We do not allow registering reference types and such, at least
-        // for now.
-        assert!(!name.starts_with(['&', '*']));
 
         self.type_registry.store::<T>(ty::TypeDescription::Leaf);
         self.runtime_types.push(RuntimeType {
@@ -386,6 +391,8 @@ impl Runtime {
         let argument_names = f.argument_names();
         let description = f.to_function_description(self)?;
         let name = name.into();
+
+        Self::check_name(&name)?;
         self.check_description(&description)?;
 
         let id = self.functions.len();
@@ -409,6 +416,8 @@ impl Runtime {
         let argument_names = f.argument_names();
         let description = f.to_function_description(self).unwrap();
         let name = name.into();
+
+        Self::check_name(&name)?;
         self.check_description(&description)?;
 
         let Some(second) = description.parameter_types().get(1) else {
@@ -458,11 +467,14 @@ impl Runtime {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
         let description = f.to_function_description(self).unwrap();
+        let name = name.into();
+
+        Self::check_name(&name)?;
         self.check_description(&description)?;
 
         let id = self.functions.len();
         self.functions.push(RuntimeFunction {
-            name: name.into(),
+            name,
             description,
             kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
             id,
@@ -518,6 +530,29 @@ impl Runtime {
             _ => panic!(),
         };
         self.runtime_types.iter().find(|ty| ty.type_id == id)
+    }
+
+    fn check_name(name: &str) -> Result<(), String> {
+        let mut lexer = Lexer::new(name);
+        let Some((Ok(tok), _)) = lexer.next() else {
+            return Err(format!(
+                "Name {name:?} is not a valid Roto identifier"
+            ));
+        };
+
+        if lexer.next().is_some() {
+            return Err(format!("Name {name:?} contains multiple tokens and is not a valid Roto identifier"));
+        }
+
+        match tok {
+            Token::Ident(_) => Ok(()),
+            Token::Keyword(_) => {
+                Err(format!("Name {name:?} is a keyword in Roto and therefore not a valid identifier"))
+            }
+            _ => {
+                Err(format!("Name {name:?} is not a valid Roto identifier."))
+            }
+        }
     }
 
     fn check_description(
@@ -1087,79 +1122,5 @@ impl Runtime {
                 "Type `{name}` has not been registered and cannot be inspected by Roto"
             )),
         }
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use super::Runtime;
-    use roto_macros::{roto_function, roto_method};
-    use routecore::bgp::{
-        aspath::{AsPath, HopPath},
-        communities::{Community, Wellknown},
-        types::{LocalPref, OriginType},
-    };
-
-    pub fn routecore_runtime() -> Result<Runtime, String> {
-        let mut rt = Runtime::new();
-
-        rt.register_clone_type::<OriginType>("TODO")?;
-        rt.register_clone_type::<LocalPref>("TODO")?;
-        rt.register_clone_type::<Community>("TODO")?;
-        rt.register_clone_type::<HopPath>("TODO")?;
-        rt.register_clone_type::<AsPath<Vec<u8>>>("TODO")?;
-
-        #[roto_function(rt)]
-        fn pow(x: u32, y: u32) -> u32 {
-            x.pow(y)
-        }
-
-        #[roto_method(rt, u32)]
-        fn is_even(x: u32) -> bool {
-            x % 2 == 0
-        }
-
-        rt.register_constant(
-            "BLACKHOLE",
-            "The well-known BLACKHOLE community.",
-            Community::from(Wellknown::Blackhole),
-        )
-        .unwrap();
-
-        Ok(rt)
-    }
-
-    #[test]
-    fn default_runtime() {
-        let rt = routecore_runtime().unwrap();
-
-        let names: Vec<_> =
-            rt.runtime_types.iter().map(|ty| &ty.name).collect();
-        assert_eq!(
-            names,
-            &[
-                "Unit",
-                "bool",
-                "u8",
-                "u16",
-                "u32",
-                "u64",
-                "i8",
-                "i16",
-                "i32",
-                "i64",
-                "f32",
-                "f64",
-                "Asn",
-                "IpAddr",
-                "Prefix",
-                "String",
-                "OriginType",
-                "LocalPref",
-                "Community",
-                "HopPath",
-                "AsPath"
-            ]
-        );
     }
 }
