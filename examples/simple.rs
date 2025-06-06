@@ -21,7 +21,7 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(), (IpAddr,), Verdict<(), ()>>("main")
+        .get_function::<(), fn(IpAddr) -> Verdict<(), ()>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
@@ -32,7 +32,7 @@ fn main() -> Result<(), roto::RotoReport> {
     println!("main(1.1.1.1) = {res:?}");
 
     let is_zero = compiled
-        .get_function::<(), (IpAddr,), bool>("is_zero")
+        .get_function::<(), fn(IpAddr) -> bool>("is_zero")
         .unwrap();
 
     let res = is_zero.call(&mut (), "0.0.0.0".parse().unwrap());

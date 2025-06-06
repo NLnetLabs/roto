@@ -68,7 +68,7 @@ mod hidden {
 use hidden::*;
 
 type Log = *mut OutputStream<Output>;
-type Func = TypedFunc<(), (Val<Log>, Val<RotondaRoute>), Verdict<(), ()>>;
+type Func = TypedFunc<(), fn(Val<Log>, Val<RotondaRoute>) -> Verdict<(), ()>>;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rt = roto::Runtime::new();
@@ -80,13 +80,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     rt.register_clone_type_with_name::<Log>("Log", "A thing to log to")?;
 
     #[roto_method(rt, RotondaRoute)]
-    fn prefix_matches(
-        rr: *const RotondaRoute,
-        to_match: *const Prefix,
-    ) -> bool {
-        let rr = unsafe { &*rr };
-        let to_match = unsafe { &*to_match };
-        let rr_prefix = match rr {
+    fn prefix_matches(rr: Val<RotondaRoute>, to_match: Val<Prefix>) -> bool {
+        let rr_prefix = match &*rr {
             RotondaRoute::Ipv4Unicast(n) => n.nlri().prefix(),
             RotondaRoute::Ipv6Unicast(n) => n.nlri().prefix(),
             RotondaRoute::Ipv4Multicast(n) => n.nlri().prefix(),
@@ -98,8 +93,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     #[allow(improper_ctypes_definitions)] // While Asn in inetnum is not FFI-safe
     #[roto_method(rt, RotondaRoute, aspath_origin)]
-    fn rr_aspath_origin(rr: *const RotondaRoute, to_match: Asn) -> bool {
-        let rr = unsafe { &*rr };
+    fn rr_aspath_origin(rr: Val<RotondaRoute>, to_match: Asn) -> bool {
         if let Some(hoppath) = rr.attributes().get::<HopPath>() {
             if let Some(Hop::Asn(asn)) = hoppath.origin() {
                 return *asn == to_match;
@@ -110,14 +104,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     #[roto_method(rt, Log)]
-    fn log_prefix(stream: *mut Log, prefix: *const Prefix) {
+    fn log_prefix(mut stream: Val<Log>, prefix: Val<Prefix>) {
         let stream = unsafe { &mut **stream };
-        let prefix = unsafe { &*prefix };
         stream.push(Output::Prefix(*prefix));
     }
 
     #[roto_method(rt, Log)]
-    fn log_custom(stream: *mut Log, id: u32, local: u32) {
+    fn log_custom(mut stream: Val<Log>, id: u32, local: u32) {
         let stream = unsafe { &mut **stream };
         stream.push(Output::Custom(id, local));
     }

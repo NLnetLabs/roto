@@ -17,6 +17,8 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
+use crate::{IrValue, Memory};
+
 use super::{optional::Optional, val::Val, verdict::Verdict};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,17 +26,8 @@ pub enum TypeDescription {
     /// Some type that we don't know how to decompose
     Leaf,
 
-    /// `*const T`
-    ConstPtr(TypeId),
-
-    /// `*mut T`
-    MutPtr(TypeId),
-
     /// `Option<T>`
     Option(TypeId),
-
-    /// `Result<T, E>`
-    Result(TypeId, TypeId),
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
@@ -110,51 +103,102 @@ impl TypeRegistry {
 ///
 /// Additionally, this trait specifies how a type should be passed to Roto, via
 /// the `AsParam` associated type.
-pub trait Reflect: 'static {
+pub trait Reflect: Sized + 'static {
+    /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed;
+
     /// The type that this type should be converted into when passed to Roto
-    type AsParam;
+    type AsParam: Param<Self::Transformed>;
 
     fn transform(self) -> Self::Transformed;
+
     fn untransform(transformed: Self::Transformed) -> Self;
 
-    /// Convert the type to its `AsParam`
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam;
+    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
+        Self::AsParam::as_param(transformed)
+    }
 
-    /// Convert from the `AsParam` to `Transformed`
-    ///
-    /// # Safety
-    ///
-    /// The `AsParam` must be valid. For example, if it is a pointer, it
-    /// must be a valid pointer to that type. This function should not
-    /// take ownership of the underlying value and instead copy the value
-    /// out.
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed;
+    fn to_value(param: Self::AsParam) -> Self::Transformed {
+        Self::AsParam::to_value(param)
+    }
+
+    /// Attempt to convert an IR value into `Self`
+    fn from_ir_value(
+        mem: &mut Memory,
+        value: IrValue,
+    ) -> Result<Self::AsParam, IrValueDoesNotMatchType> {
+        Self::AsParam::from_ir_value(mem, value)
+    }
 
     /// Put information about this type into the [`TypeRegistry`]
     ///
     /// The information is also returned for direct use.
     fn resolve(registry: &mut TypeRegistry) -> Ty;
+
+    /// Turn this value into bytes
+    ///
+    /// This is used by the IR evaluator
+    fn to_bytes(mut transformed: Self::Transformed) -> Vec<u8> {
+        let ptr = &mut transformed as *mut Self::Transformed as *mut u8;
+        std::mem::forget(transformed);
+        let size = std::mem::size_of::<Self::Transformed>();
+        unsafe { Vec::from_raw_parts(ptr, size, size) }
+    }
 }
 
-impl<A: Reflect + Clone, R: Reflect + Clone> Reflect for Verdict<A, R> {
-    type Transformed = Self;
-    type AsParam = *mut Self;
+pub struct IrValueDoesNotMatchType;
+
+pub trait Param<T>: Sized {
+    fn as_param(value: &mut T) -> Self;
+
+    fn to_value(self) -> T;
+
+    fn from_ir_value(
+        mem: &mut Memory,
+        value: IrValue,
+    ) -> Result<Self, IrValueDoesNotMatchType>;
+}
+
+impl<T: Clone> Param<T> for *mut T {
+    fn as_param(transformed: &mut T) -> Self {
+        transformed as *mut T
+    }
+
+    fn to_value(self) -> T {
+        unsafe { &*self }.clone()
+    }
+
+    fn from_ir_value(
+        mem: &mut Memory,
+        value: IrValue,
+    ) -> Result<Self, IrValueDoesNotMatchType> {
+        let IrValue::Pointer(p) = value else {
+            return Err(IrValueDoesNotMatchType);
+        };
+        Ok(mem.read_slice(p, std::mem::size_of::<T>()).as_ptr() as *mut T)
+    }
+}
+
+impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R>
+where
+    A::Transformed: Clone,
+    R::Transformed: Clone,
+{
+    type Transformed = Verdict<A::Transformed, R::Transformed>;
+    type AsParam = *mut Self::Transformed;
 
     fn transform(self) -> Self::Transformed {
-        self
+        match self {
+            Self::Accept(a) => Verdict::Accept(a.transform()),
+            Self::Reject(r) => Verdict::Reject(r.transform()),
+        }
     }
 
     fn untransform(transformed: Self::Transformed) -> Self {
-        transformed
-    }
-
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        transformed as _
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        unsafe { &*as_param }.clone()
+        match transformed {
+            Verdict::Accept(a) => Self::Accept(A::untransform(a)),
+            Verdict::Reject(r) => Self::Reject(R::untransform(r)),
+        }
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -166,53 +210,25 @@ impl<A: Reflect + Clone, R: Reflect + Clone> Reflect for Verdict<A, R> {
     }
 }
 
-impl<T: Reflect + Clone, E: Reflect + Clone> Reflect for Result<T, E> {
-    type Transformed = Self;
-    type AsParam = *mut Self;
+impl<T: Reflect> Reflect for Option<T>
+where
+    T::Transformed: Clone,
+{
+    type Transformed = Optional<T::Transformed>;
+    type AsParam = *mut Self::Transformed;
 
     fn transform(self) -> Self::Transformed {
-        self
+        match self {
+            Some(t) => Optional::Some(t.transform()),
+            None => Optional::None,
+        }
     }
 
     fn untransform(transformed: Self::Transformed) -> Self {
-        transformed
-    }
-
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        transformed as _
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        unsafe { &*as_param }.clone()
-    }
-
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        let t = T::resolve(registry).type_id;
-        let e = E::resolve(registry).type_id;
-
-        let desc = TypeDescription::Result(t, e);
-        registry.store::<Self>(desc)
-    }
-}
-
-impl<T: Reflect + Clone> Reflect for Option<T> {
-    type Transformed = Optional<T>;
-    type AsParam = *mut Optional<T>;
-
-    fn transform(self) -> Self::Transformed {
-        self.into()
-    }
-
-    fn untransform(transformed: Self::Transformed) -> Self {
-        transformed.into()
-    }
-
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        transformed as _
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        unsafe { &*as_param }.clone()
+        match transformed {
+            Optional::Some(t) => Some(T::untransform(t)),
+            Optional::None => None,
+        }
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -223,59 +239,23 @@ impl<T: Reflect + Clone> Reflect for Option<T> {
     }
 }
 
-impl<T: 'static> Reflect for *mut T {
-    type Transformed = Self;
-    type AsParam = Self;
-
-    fn transform(self) -> Self::Transformed {
-        self
+impl<T: Clone> Param<Val<T>> for *mut T {
+    fn as_param(value: &mut Val<T>) -> Self {
+        &mut value.0 as *mut _
     }
 
-    fn untransform(transformed: Self::Transformed) -> Self {
-        transformed
+    fn to_value(self) -> Val<T> {
+        Val(unsafe { &*self }.clone())
     }
 
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        *transformed
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        as_param
-    }
-
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        let t = registry.store::<T>(TypeDescription::Leaf).type_id;
-
-        let desc = TypeDescription::MutPtr(t);
-        registry.store::<Self>(desc)
-    }
-}
-
-impl<T: 'static> Reflect for *const T {
-    type Transformed = Self;
-    type AsParam = Self;
-
-    fn transform(self) -> Self::Transformed {
-        self
-    }
-
-    fn untransform(transformed: Self::Transformed) -> Self {
-        transformed
-    }
-
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        *transformed
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        as_param
-    }
-
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        let t = registry.store::<T>(TypeDescription::Leaf).type_id;
-
-        let desc = TypeDescription::ConstPtr(t);
-        registry.store::<Self>(desc)
+    fn from_ir_value(
+        mem: &mut Memory,
+        value: IrValue,
+    ) -> Result<Self, IrValueDoesNotMatchType> {
+        let IrValue::Pointer(p) = value else {
+            return Err(IrValueDoesNotMatchType);
+        };
+        Ok(mem.read_slice(p, std::mem::size_of::<T>()).as_ptr() as *mut T)
     }
 }
 
@@ -289,14 +269,6 @@ impl<T: 'static + Clone> Reflect for Val<T> {
 
     fn untransform(transformed: Self::Transformed) -> Self {
         transformed
-    }
-
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        &mut transformed.0 as _
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        Self(unsafe { &*as_param }.clone())
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -319,14 +291,6 @@ impl Reflect for IpAddr {
         transformed
     }
 
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        transformed as _
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        *unsafe { &*as_param }
-    }
-
     fn resolve(registry: &mut TypeRegistry) -> Ty {
         registry.store::<Self>(TypeDescription::Leaf)
     }
@@ -342,14 +306,6 @@ impl Reflect for Prefix {
 
     fn untransform(transformed: Self::Transformed) -> Self {
         transformed
-    }
-
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        transformed as _
-    }
-
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        *unsafe { &*as_param }
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -369,12 +325,42 @@ impl Reflect for Arc<str> {
         transformed
     }
 
-    fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
-        transformed as _
+    fn resolve(registry: &mut TypeRegistry) -> Ty {
+        registry.store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+impl TryFrom<&IrValue> for () {
+    type Error = ();
+
+    fn try_from(_: &IrValue) -> Result<Self, Self::Error> {
+        Err(())
+    }
+}
+
+impl Param<()> for () {
+    fn as_param(_: &mut ()) -> Self {}
+
+    fn to_value(self) {}
+
+    fn from_ir_value(
+        _mem: &mut Memory,
+        _value: IrValue,
+    ) -> Result<Self, IrValueDoesNotMatchType> {
+        Ok(())
+    }
+}
+
+impl Reflect for () {
+    type Transformed = Self;
+    type AsParam = Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
     }
 
-    unsafe fn from_param(as_param: Self::AsParam) -> Self::Transformed {
-        unsafe { &*as_param }.clone()
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
     }
 
     fn resolve(registry: &mut TypeRegistry) -> Ty {
@@ -383,7 +369,44 @@ impl Reflect for Arc<str> {
 }
 
 macro_rules! simple_reflect {
-    ($t:ty) => {
+    ($t:ty, $ir:ident) => {
+        impl From<$t> for IrValue {
+            fn from(value: $t) -> Self {
+                IrValue::$ir(value)
+            }
+        }
+
+        impl TryFrom<&IrValue> for $t {
+            type Error = ();
+
+            fn try_from(value: &IrValue) -> Result<Self, Self::Error> {
+                match value {
+                    IrValue::$ir(x) => Ok(*x),
+                    _ => Err(()),
+                }
+            }
+        }
+
+        impl Param<$t> for $t {
+            fn as_param(value: &mut $t) -> Self {
+                *value
+            }
+
+            fn to_value(self) -> $t {
+                self
+            }
+
+            fn from_ir_value(
+                _: &mut Memory,
+                value: IrValue,
+            ) -> Result<Self, IrValueDoesNotMatchType> {
+                let IrValue::$ir(p) = value else {
+                    return Err(IrValueDoesNotMatchType);
+                };
+                Ok(p)
+            }
+        }
+
         impl Reflect for $t {
             type Transformed = Self;
             type AsParam = Self;
@@ -396,18 +419,6 @@ macro_rules! simple_reflect {
                 transformed
             }
 
-            fn as_param(
-                transformed: &mut Self::Transformed,
-            ) -> Self::AsParam {
-                *transformed
-            }
-
-            unsafe fn from_param(
-                as_param: Self::AsParam,
-            ) -> Self::Transformed {
-                as_param
-            }
-
             fn resolve(registry: &mut TypeRegistry) -> Ty {
                 registry.store::<Self>(TypeDescription::Leaf)
             }
@@ -415,16 +426,15 @@ macro_rules! simple_reflect {
     };
 }
 
-simple_reflect!(());
-simple_reflect!(bool);
-simple_reflect!(u8);
-simple_reflect!(u16);
-simple_reflect!(u32);
-simple_reflect!(u64);
-simple_reflect!(i8);
-simple_reflect!(i16);
-simple_reflect!(i32);
-simple_reflect!(i64);
-simple_reflect!(f32);
-simple_reflect!(f64);
-simple_reflect!(Asn);
+simple_reflect!(bool, Bool);
+simple_reflect!(u8, U8);
+simple_reflect!(u16, U16);
+simple_reflect!(u32, U32);
+simple_reflect!(u64, U64);
+simple_reflect!(i8, I8);
+simple_reflect!(i16, I16);
+simple_reflect!(i32, I32);
+simple_reflect!(i64, I64);
+simple_reflect!(f32, F32);
+simple_reflect!(f64, F64);
+simple_reflect!(Asn, Asn);

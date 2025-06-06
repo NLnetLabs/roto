@@ -658,7 +658,6 @@ impl<'r> Lowerer<'r> {
                     self.runtime_functions.insert(runtime_func_ref, ir_func);
 
                     self.add(Instruction::CallRuntime {
-                        to: None,
                         func: runtime_func_ref,
                         args: vec![place.clone().into(), left, right],
                     });
@@ -697,7 +696,6 @@ impl<'r> Lowerer<'r> {
                     self.runtime_functions.insert(runtime_func_ref, ir_func);
 
                     self.add(Instruction::CallRuntime {
-                        to: None,
                         func: runtime_func_ref,
                         args: vec![place.clone().into(), left, right],
                     });
@@ -1437,7 +1435,6 @@ impl<'r> Lowerer<'r> {
         self.runtime_functions.insert(runtime_func_ref, ir_func);
 
         self.add(Instruction::CallRuntime {
-            to: None,
             func: runtime_func_ref,
             args,
         });
