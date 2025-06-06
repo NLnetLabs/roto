@@ -476,9 +476,7 @@ impl Display for Token<'_> {
             Token::SquareRight => "]",
 
             // Keywords
-            Token::Keyword(k) => {
-                return k.fmt(f);
-            }
+            Token::Keyword(k) => k.as_str(),
 
             // Literals
             Token::String(s) => s,
@@ -496,9 +494,9 @@ impl Display for Token<'_> {
     }
 }
 
-impl Display for Keyword {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
+impl Keyword {
+    fn as_str(&self) -> &'static str {
+        match self {
             Keyword::Accept => "accept",
             Keyword::Else => "else",
             Keyword::Filter => "filter",
@@ -518,8 +516,6 @@ impl Display for Keyword {
             Keyword::Super => "super",
             Keyword::Test => "test",
             Keyword::Type => "type",
-        };
-
-        f.write_str(s)
+        }
     }
 }
