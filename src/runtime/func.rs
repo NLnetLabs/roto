@@ -1,4 +1,4 @@
-use std::{any::TypeId, marker::PhantomData};
+use std::any::TypeId;
 
 use crate::codegen::check::{RotoFunc, RustIrFunction};
 
@@ -8,7 +8,6 @@ pub struct Func<F: RotoFunc> {
     wrapper: <F as RotoFunc>::RustWrapper,
     docstring: &'static str,
     argument_names: &'static [&'static str],
-    _phantom: PhantomData<F>,
 }
 
 impl<F: RotoFunc> Func<F> {
@@ -30,7 +29,6 @@ impl<F: RotoFunc> Func<F> {
             wrapper,
             docstring,
             argument_names,
-            _phantom: PhantomData,
         }
     }
 
