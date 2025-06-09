@@ -215,7 +215,7 @@ fn check_roto_type(
 /// The `invoke` method can (unsafely) invoke a pointer as if it were a function
 /// with these parameters.
 ///
-/// This trait is implemented on tuples of various sizes.
+/// This trait is implemented on function pointers with several numbers of parameters.
 pub trait RotoFunc {
     /// Argument types of this function
     type Args;
@@ -257,7 +257,6 @@ pub trait RotoFunc {
     fn parameter_types(type_registry: &mut TypeRegistry) -> Vec<TypeId>;
     fn return_type(type_registry: &mut TypeRegistry) -> TypeId;
 
-    #[allow(clippy::type_complexity)]
     fn ir_function(f: &Self::RustWrapper) -> RustIrFunction;
 }
 

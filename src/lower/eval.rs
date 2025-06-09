@@ -698,7 +698,7 @@ fn call_runtime_function(
         }
     }
 
-    (func.description.wrapped())(mem, args)
+    (func.description.ir_function())(mem, args)
 }
 
 fn eval_operand<'a>(

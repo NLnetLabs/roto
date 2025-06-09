@@ -49,13 +49,13 @@ impl<F: RotoFunc> Func<F> {
         let parameter_types = F::parameter_types(type_registry);
         let return_type = F::return_type(type_registry);
         let pointer = F::ptr(&self.wrapper);
-        let wrapped = F::ir_function(&self.wrapper);
+        let ir_function = F::ir_function(&self.wrapper);
 
         FunctionDescription {
             parameter_types,
             return_type,
             pointer,
-            wrapped,
+            ir_function,
         }
     }
 }
@@ -65,7 +65,7 @@ pub struct FunctionDescription {
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
     pointer: *const u8,
-    wrapped: RustIrFunction,
+    ir_function: RustIrFunction,
 }
 
 // SAFETY: FunctionDescription is only not Send and Sync because of the function
@@ -88,8 +88,8 @@ impl FunctionDescription {
         self.pointer
     }
 
-    pub fn wrapped(&self) -> RustIrFunction {
-        self.wrapped.clone()
+    pub fn ir_function(&self) -> RustIrFunction {
+        self.ir_function.clone()
     }
 }
 
