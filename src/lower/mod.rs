@@ -555,7 +555,10 @@ impl<'r> Lowerer<'r> {
             //
             // With simple types (such as integers), this whole thing is
             // simplified greatly. Then it just works to assign it directly.
-            ast::Expr::Assign(p, e) => self.assignment(p, e),
+            ast::Expr::Assign(p, e) => {
+                self.assignment(p, e);
+                None
+            }
             ast::Expr::Path(p) => {
                 let path_kind = self.type_info.path_kind(p).clone();
 
@@ -1026,12 +1029,10 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn assignment(
-        &mut self,
-        p: &Meta<ast::Path>,
-        e: &Meta<ast::Expr>,
-    ) -> Option<Operand> {
-        let op = self.expr(e)?;
+    fn assignment(&mut self, p: &Meta<ast::Path>, e: &Meta<ast::Expr>) {
+        let Some(op) = self.expr(e) else {
+            return;
+        };
 
         let path_kind = self.type_info.path_kind(p).clone();
         let ResolvedPath::Value(
@@ -1058,7 +1059,7 @@ impl<'r> Lowerer<'r> {
             } else if let Some(ty) = self.lower_type(ty) {
                 self.add(Instruction::Assign { to, val: op, ty });
             }
-            return None;
+            return;
         }
 
         let mut offset = 0;
@@ -1078,8 +1079,6 @@ impl<'r> Lowerer<'r> {
         } else {
             self.write_field(to.into(), offset, op, ty);
         }
-
-        None
     }
 
     fn assign_reference_type(
