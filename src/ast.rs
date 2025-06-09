@@ -134,9 +134,8 @@ pub enum Expr {
     Not(Box<Meta<Expr>>),
 
     /// An assignment expression
-    ///
-    /// Arbitrary place expressions should be allowed at some point, but for
-    /// now that's not supported.
+    // TODO: Arbitrary place expressions should be allowed at some point, but
+    //       for now that's not supported.
     Assign(Meta<Path>, Box<Meta<Expr>>),
 
     /// A binary operator expression
