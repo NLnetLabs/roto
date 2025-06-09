@@ -1,6 +1,6 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, fmt, path::Path};
 
 use crate::{
     codegen::{
@@ -73,8 +73,8 @@ pub struct Compiled {
     module: Module,
 }
 
-impl std::fmt::Display for RotoReport {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl RotoReport {
+    pub fn write(&self, mut f: impl fmt::Write, color: bool) -> fmt::Result {
         use ariadne::{Color, Label, Report, ReportKind};
 
         let sources = self
@@ -97,6 +97,8 @@ impl std::fmt::Display for RotoReport {
         )
         .with_sources(sources);
 
+        let config = ariadne::Config::new().with_color(color);
+
         for error in &self.errors {
             match error {
                 RotoError::Read(name, io) => {
@@ -117,6 +119,7 @@ impl std::fmt::Display for RotoReport {
                         ReportKind::Error,
                         (file, error.location.start..error.location.end),
                     )
+                    .with_config(config)
                     .with_message(format!("Parse error: {}", error))
                     .with_label(label);
 
@@ -149,6 +152,7 @@ impl std::fmt::Display for RotoReport {
                         ReportKind::Error,
                         (file, span.start..span.end),
                     )
+                    .with_config(config)
                     .with_message(format!(
                         "Type error: {}",
                         &error.description
@@ -165,6 +169,12 @@ impl std::fmt::Display for RotoReport {
         }
 
         Ok(())
+    }
+}
+
+impl std::fmt::Display for RotoReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.write(f, true)
     }
 }
 

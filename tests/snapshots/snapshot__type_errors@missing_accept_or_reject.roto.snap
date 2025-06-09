@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/missing_accept_or_reject.roto
+---
+Error: Type error: mismatched types
+   ╭─[tests/scripts/type_errors/missing_accept_or_reject.roto:2:5]
+   │
+ 2 │     if 2 == 4 { reject }
+   │     ──────────┬─────────  
+   │               ╰─────────── expected `Verdict[_, _]`, found `Unit`
+───╯

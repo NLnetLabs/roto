@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/accept_in_function.roto
+---
+Error: Type error: mismatched types
+   ╭─[tests/scripts/type_errors/accept_in_function.roto:2:5]
+   │
+ 2 │     accept
+   │     ───┬──  
+   │        ╰──── expected `bool`, found `Verdict[_, _]`
+───╯

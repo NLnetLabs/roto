@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/match_on_record.roto
+---
+Error: Type error: cannot match on the type `pkg.Foo`, because only matching on enums is supported.
+   ╭─[tests/scripts/type_errors/match_on_record.roto:4:8]
+   │
+ 4 │     match msg {}
+   │           ─┬─  
+   │            ╰─── cannot match on type `pkg.Foo`
+───╯

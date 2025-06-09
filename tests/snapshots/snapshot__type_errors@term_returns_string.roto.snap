@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/term_returns_string.roto
+---
+Error: Type error: mismatched types
+   ╭─[tests/scripts/type_errors/term_returns_string.roto:2:12]
+   │
+ 2 │     return "hello"
+   │            ───┬───  
+   │               ╰───── expected `bool`, found `String`
+───╯

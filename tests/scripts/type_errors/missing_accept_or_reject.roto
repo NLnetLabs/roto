@@ -1,0 +1,3 @@
+filter foo() {
+    if 2 == 4 { reject }
+}

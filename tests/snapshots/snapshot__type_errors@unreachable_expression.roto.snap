@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/unreachable_expression.roto
+---
+Error: Type error: mismatched types
+   ╭─[tests/scripts/type_errors/unreachable_expression.roto:2:12]
+   │
+ 2 │     return true;
+   │            ──┬─  
+   │              ╰─── expected `Unit`, found `bool`
+───╯

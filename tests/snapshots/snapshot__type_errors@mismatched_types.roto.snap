@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/mismatched_types.roto
+---
+Error: Type error: mismatched types
+   ╭─[tests/scripts/type_errors/mismatched_types.roto:8:6]
+   │
+ 8 │     bar(a, b);
+   │         ┬  
+   │         ╰── expected `u32`, found `bool`
+───╯
