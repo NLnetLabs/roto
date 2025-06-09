@@ -23,7 +23,7 @@ mod test_expressions;
 #[cfg(test)]
 mod test_sections;
 
-type ParseResult<'a, T> = Result<T, ParseError>;
+type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -272,7 +272,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<'source, SyntaxTree> {
+    ) -> ParseResult<SyntaxTree> {
         Self::run_parser(Self::tree, file, spans, input)
     }
 
@@ -281,7 +281,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<'source, T> {
+    ) -> ParseResult<T> {
         let mut p = Self {
             file,
             file_length: input.len(),
