@@ -307,9 +307,9 @@ impl<'r> Lowerer<'r> {
             return_type: return_ir_type,
         };
 
-        let last = self.block(body);
+        let (last, to_drop) = self.block(body);
 
-        self.return_expr(return_type, last);
+        self.return_expr(return_type, last, to_drop);
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
@@ -329,7 +329,10 @@ impl<'r> Lowerer<'r> {
     ///
     /// Returns either the value of the expression or the place where the
     /// value can be retrieved.
-    fn block(&mut self, block: &Meta<ast::Block>) -> Option<Operand> {
+    fn block(
+        &mut self,
+        block: &Meta<ast::Block>,
+    ) -> (Option<Operand>, Vec<Var>) {
         self.live_stack_slots.push(Vec::new());
 
         // Result is ignored
@@ -341,9 +344,10 @@ impl<'r> Lowerer<'r> {
 
         let to_drop = self.live_stack_slots.pop().unwrap();
         if !self.type_info.diverges(block) {
-            self.drop(to_drop);
+            (op, to_drop)
+        } else {
+            (op, Vec::new())
         }
-        op
     }
 
     fn stmt(&mut self, stmt: &ast::Stmt) {
@@ -352,16 +356,19 @@ impl<'r> Lowerer<'r> {
                 let val = self.expr(expr);
                 let name = self.type_info.resolved_name(ident);
                 let ty = self.type_info.type_of(ident);
-                if let Some(ty) = self.lower_type(&ty) {
+
+                let to = Var {
+                    scope: name.scope,
+                    kind: VarKind::Explicit(**ident),
+                };
+
+                if self.is_reference_type(&ty) {
                     let val = val.unwrap();
-                    self.add(Instruction::Assign {
-                        to: Var {
-                            scope: name.scope,
-                            kind: VarKind::Explicit(**ident),
-                        },
-                        val,
-                        ty,
-                    })
+                    self.stack_alloc(&to, &ty);
+                    self.clone_type(val, to.into(), &ty);
+                } else if let Some(ty) = self.lower_type(&ty) {
+                    let val = val.unwrap();
+                    self.add(Instruction::Assign { to, val, ty });
                 }
             }
             ast::Stmt::Expr(expr) => {
@@ -384,7 +391,7 @@ impl<'r> Lowerer<'r> {
 
                 match kind {
                     ast::ReturnKind::Return => {
-                        self.return_expr(&ty, op);
+                        self.return_expr(&ty, op, Vec::new());
                     }
                     ast::ReturnKind::Accept => {
                         let Type::Name(type_name) = &ty else {
@@ -527,6 +534,30 @@ impl<'r> Lowerer<'r> {
                     self.runtime,
                 );
                 self.read_field(op, offset, &ty)
+            }
+            // An assignment is suprisingly hard to compile. The expression
+            // ```
+            // x = e
+            // ```
+            // generally compiles to the following steps:
+            //
+            // 1. evaluate `e`
+            // 2. copy that to a temporary variable `t`
+            // 3. drop `x`
+            // 4. move the contents of `t` to `x`
+            //
+            // If we don't use the temporary variable, then we get in trouble
+            // with the expression
+            // ```
+            // x = x
+            // ```
+            // because then we'd need to drop `x` before we clone it again.
+            //
+            // With simple types (such as integers), this whole thing is
+            // simplified greatly. Then it just works to assign it directly.
+            ast::Expr::Assign(p, e) => {
+                self.assignment(p, e);
+                None
             }
             ast::Expr::Path(p) => {
                 let path_kind = self.type_info.path_kind(p).clone();
@@ -949,7 +980,8 @@ impl<'r> Lowerer<'r> {
                 });
 
                 self.new_block(lbl_then);
-                if let Some(op) = self.block(if_true) {
+                let (op, to_drop) = self.block(if_true);
+                if let Some(op) = op {
                     let ty = self.type_info.type_of(if_true);
                     let ty = self.lower_type(&ty)?;
                     self.add(Instruction::Assign {
@@ -960,13 +992,16 @@ impl<'r> Lowerer<'r> {
                     any_assigned = true;
                 }
 
+                self.drop(to_drop);
+
                 if !diverges {
                     self.add(Instruction::Jump(lbl_cont));
                 }
 
                 if let Some(if_false) = if_false {
                     self.new_block(lbl_else);
-                    if let Some(op) = self.block(if_false) {
+                    let (op, to_drop) = self.block(if_false);
+                    if let Some(op) = op {
                         let ty = self.type_info.type_of(if_false);
                         let ty = self.lower_type(&ty)?;
                         self.add(Instruction::Assign {
@@ -976,6 +1011,9 @@ impl<'r> Lowerer<'r> {
                         });
                         any_assigned = true;
                     }
+
+                    self.drop(to_drop);
+
                     if !diverges {
                         self.add(Instruction::Jump(lbl_cont));
                         self.new_block(lbl_cont);
@@ -991,7 +1029,89 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn return_expr(&mut self, ty: &Type, op: Option<Operand>) {
+    fn assignment(&mut self, p: &Meta<ast::Path>, e: &Meta<ast::Expr>) {
+        let Some(op) = self.expr(e) else {
+            return;
+        };
+
+        let path_kind = self.type_info.path_kind(p).clone();
+        let ResolvedPath::Value(
+            path_value @ PathValue {
+                name,
+                kind: _,
+                ty: root_ty,
+                fields,
+            },
+        ) = &path_kind
+        else {
+            ice!("should be rejected by type checker");
+        };
+
+        let to = Var {
+            scope: name.scope,
+            kind: VarKind::Explicit(name.ident),
+        };
+
+        if fields.is_empty() {
+            let ty = root_ty;
+            if self.is_reference_type(ty) {
+                self.assign_reference_type(&op, &to.into(), ty);
+            } else if let Some(ty) = self.lower_type(ty) {
+                self.add(Instruction::Assign { to, val: op, ty });
+            }
+            return;
+        }
+
+        let mut offset = 0;
+        let mut record_ty = root_ty;
+        for (field, ty) in fields {
+            let (_, new_offset) =
+                self.type_info.offset_of(record_ty, *field, self.runtime);
+            record_ty = ty;
+            offset += new_offset;
+        }
+
+        let ty = path_value.final_type();
+
+        if self.is_reference_type(ty) {
+            let to = self.offset(to.clone().into(), offset);
+            self.assign_reference_type(&op, &to, ty);
+        } else {
+            self.write_field(to.into(), offset, op, ty);
+        }
+    }
+
+    fn assign_reference_type(
+        &mut self,
+        op: &Operand,
+        to: &Operand,
+        ty: &Type,
+    ) {
+        let tmp = self.new_tmp();
+        let layout = self.type_info.layout_of(ty, self.runtime);
+        self.add(Instruction::Alloc {
+            to: tmp.clone(),
+            layout: layout.clone(),
+        });
+        self.clone_type(op.clone(), tmp.clone().into(), ty);
+        self.drop_with_type(to.clone(), ty.clone());
+
+        // Do a simple memcpy from `tmp` to `to`. We treat
+        // this as a move (so don't drop `tmp`).
+        self.add(Instruction::Copy {
+            to: to.clone(),
+            from: tmp.into(),
+            size: layout.size() as u32,
+            clone: None,
+        })
+    }
+
+    fn return_expr(
+        &mut self,
+        ty: &Type,
+        op: Option<Operand>,
+        additional_drops: Vec<Var>,
+    ) {
         if self.is_reference_type(ty) {
             if let Some(op) = op {
                 self.write_field(
@@ -1005,9 +1125,11 @@ impl<'r> Lowerer<'r> {
                     ty,
                 );
             }
+            self.drop(additional_drops);
             self.drop_all();
             self.add(Instruction::Return(None));
         } else {
+            self.drop(additional_drops);
             self.drop_all();
             self.add(Instruction::Return(op));
         }
@@ -1482,11 +1604,14 @@ impl<'r> Lowerer<'r> {
 
         let size = match ty {
             // These are invalid at this point
-            Type::Var(_) | Type::ExplicitVar(_) | Type::RecordVar(_, _) => {
+            Type::Var(_) | Type::ExplicitVar(_) => {
                 panic!()
             }
             // These aren't copied, since they aren't leafs or zero sized
-            Type::Never | Type::Record(_) | Type::Function(_, _) => return,
+            Type::Never
+            | Type::Record(_)
+            | Type::RecordVar(_, _)
+            | Type::Function(_, _) => return,
             Type::Name(type_name) => {
                 let type_def = self.type_info.resolve_type_name(&type_name);
 
@@ -1530,24 +1655,22 @@ impl<'r> Lowerer<'r> {
 
     fn drop(&mut self, iter: impl IntoIterator<Item = Var>) {
         for var in iter {
-            let ty = &self.stack_slots[&var];
-            let new_var = var.clone();
-            let f = move |lowerer: &mut Self, offset, ty| {
-                lowerer.drop_leaf_type(&new_var, offset, ty)
-            };
-            self.traverse_type(
-                &var.clone().into(),
-                0,
-                ty.clone(),
-                "drop".into(),
-                &f,
-            );
+            let ty = self.stack_slots[&var].clone();
+            self.drop_with_type(var.into(), ty)
         }
     }
 
-    fn drop_leaf_type(&mut self, var: &Var, offset: usize, ty: Type) {
+    fn drop_with_type(&mut self, var: Operand, ty: Type) {
+        let new_var = var.clone();
+        let f = move |lowerer: &mut Self, offset, ty| {
+            lowerer.drop_leaf_type(&new_var, offset, ty)
+        };
+        self.traverse_type(&var.clone(), 0, ty.clone(), "drop".into(), &f);
+    }
+
+    fn drop_leaf_type(&mut self, var: &Operand, offset: usize, ty: Type) {
         if let Some(&CloneDrop { drop, .. }) = self.get_leaf_clone_drop(&ty) {
-            let var = self.offset(var.clone().into(), offset as u32);
+            let var = self.offset(var.clone(), offset as u32);
             self.add(Instruction::Drop {
                 var,
                 drop: Some(drop),

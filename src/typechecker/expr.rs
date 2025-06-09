@@ -81,6 +81,12 @@ pub struct PathValue {
     pub fields: Vec<(Identifier, Type)>,
 }
 
+impl PathValue {
+    pub fn final_type(&self) -> &Type {
+        self.fields.last().map_or(&self.ty, |(_, ty)| ty)
+    }
+}
+
 impl TypeChecker {
     /// Type check a block
     pub fn block(
@@ -237,6 +243,22 @@ impl TypeChecker {
                 let ty = self.resolve_type(&ty);
                 let ty = self.access_field(&ty, field)?;
                 self.unify(&ctx.expected_type, &ty, field.id, None)?;
+                Ok(diverges)
+            }
+            Assign(p, e) => {
+                self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
+
+                let resolved_path = self.resolve_expression_path(scope, p)?;
+                self.type_info
+                    .path_kinds
+                    .insert(p.id, resolved_path.clone());
+                let ResolvedPath::Value(path_value) = resolved_path else {
+                    todo!("cannot assign to this");
+                };
+
+                let ty = path_value.final_type();
+                let ctx = ctx.with_type(ty);
+                let diverges = self.expr(scope, &ctx, e)?;
                 Ok(diverges)
             }
             Path(p) => {

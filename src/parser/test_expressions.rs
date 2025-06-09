@@ -11,6 +11,24 @@ fn parse_expr(s: &str) -> ParseResult<Meta<Expr>> {
 }
 
 #[test]
+fn assign_expr_1() {
+    let s = "a = 4";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn assign_expr_2() {
+    let s = "a + 3 = 4";
+    parse_expr(s).unwrap_err();
+}
+
+#[test]
+fn assign_expr_3() {
+    let s = "a = 4 + 3";
+    parse_expr(s).unwrap();
+}
+
+#[test]
 fn test_logical_expr_1() {
     let s =
         "( blaffer.waf().contains(my_set) ) || ( blaffer.blaf() < bop() )";
