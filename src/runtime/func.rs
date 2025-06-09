@@ -12,12 +12,12 @@ pub struct Func<F: RotoFunc> {
 }
 
 impl<F: RotoFunc> Func<F> {
-    /// Construct a new [`Func`]
+    /// Construct a new [`Func`] to register to Roto.
     ///
     /// # Safety
     ///
-    /// The `wrapper` parameter must be a valid wrapper around a function
-    /// of type `F`.
+    /// The `wrapper` argument must be a function that can be called safely
+    /// from Roto.
     ///
     /// Use the [`roto_function`], [`roto_method`] and [`roto_static_method`]
     /// macros to be sure of that.
@@ -34,15 +34,15 @@ impl<F: RotoFunc> Func<F> {
         }
     }
 
-    pub fn docstring(&self) -> &'static str {
+    pub(crate) fn docstring(&self) -> &'static str {
         self.docstring
     }
 
-    pub fn argument_names(&self) -> &'static [&'static str] {
+    pub(crate) fn argument_names(&self) -> &'static [&'static str] {
         self.argument_names
     }
 
-    pub fn to_function_description(
+    pub(crate) fn to_function_description(
         self,
         type_registry: &mut TypeRegistry,
     ) -> FunctionDescription {

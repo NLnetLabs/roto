@@ -688,7 +688,11 @@ fn call_runtime_function(
     args: Vec<IrValue>,
 ) {
     let func = rt.get_function(func);
+
+    // The number of passed arguments should be the number of arguments the
+    // function takes plus 1 for the out pointer.
     assert_eq!(func.description.parameter_types().len() + 1, args.len());
+
     (func.description.ir_function())(mem, args)
 }
 
