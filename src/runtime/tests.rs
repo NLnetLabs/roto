@@ -89,6 +89,7 @@ fn invalid_method_name() {
         true
     }
 }
+
 #[test]
 #[should_panic]
 fn invalid_static_method_name() {
