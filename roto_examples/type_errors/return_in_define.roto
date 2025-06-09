@@ -1,8 +1,0 @@
-filter foo() {
-    define {
-        rx msg: u32;
-        a = return true;
-    }
-
-    apply { accept }
-}

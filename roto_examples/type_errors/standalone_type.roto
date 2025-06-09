@@ -1,8 +1,4 @@
 filter foo() {
-	define {
-		rx msg: u32;
-		a = String;
-	}
-
-	apply { accept }
+	let a = String;
+	accept
 }

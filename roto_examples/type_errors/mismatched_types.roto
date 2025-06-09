@@ -1,14 +1,9 @@
-function foo(a: u32, b: u32) -> bool {
+function bar(a: u32, b: u32) -> bool {
 	a == b
 }
 
-filter foo() {
-	define {
-		rx msg: BmpMessage;
-		a = true;
-		b = 4;
-	}
-
-	
-	apply { accept }
+function foo() {
+	let a = true;
+	let b = 4;
+	bar(a, b);
 }

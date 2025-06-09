@@ -1,7 +1,3 @@
-filter foo(msg: u32) {
-	define {
-		b = msg.foo(); // should error here
-	}
-
-	apply { accept }
+function foo(msg: u32) {
+	msg.foo();
 }

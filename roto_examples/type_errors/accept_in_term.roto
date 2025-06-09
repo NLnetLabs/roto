@@ -1,7 +1,0 @@
-function bar() -> bool {
-    accept
-}
-
-filter foo(msg: u32) {
-    accept
-}

@@ -1,16 +1,6 @@
 type Foo { a: u32 }
 
-function bar() -> bool {
-	match msg {
-
-	}
-}
-
-filter foo() {
-	define {
-		rx msg: Foo;
-	}
-
-
-	apply { accept }
+filter foo(msg: Foo) {
+	match msg {}
+	accept
 }
