@@ -414,14 +414,12 @@ impl Parser<'_, '_> {
             Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
             Token::Keyword(Keyword::Type) => "type",
-            Token::Keyword(_) => return Err(ParseError::expected(
-                "an identifier",
-                &token,
-                span,
-            )
-            .with_note(format!(
-                "`{token}` is a keyword and cannot be used as an identifier.",
-            ))),
+            Token::Keyword(_) => {
+                let note = format!("`{token}` is a keyword and cannot be used as an identifier.");
+                let err = ParseError::expected("an identifier", &token, span)
+                    .with_note(note);
+                return Err(err);
+            }
             _ => {
                 return Err(ParseError::expected(
                     "an identifier",

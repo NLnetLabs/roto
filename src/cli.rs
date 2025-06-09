@@ -96,7 +96,7 @@ fn cli_inner(rt: Runtime) -> Result<(), String> {
                 .codegen();
 
             let f = p
-                .get_function::<(), (), ()>("main")
+                .get_function::<(), fn()>("main")
                 .map_err(|e| e.to_string())?;
 
             f.call(&mut ())

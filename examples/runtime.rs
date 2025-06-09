@@ -16,8 +16,8 @@ fn main() -> Result<(), roto::RotoReport> {
         .unwrap();
 
     #[roto_method(runtime, Bla, x)]
-    fn get_x(bla: *const Bla) -> u32 {
-        unsafe { &*bla }.x
+    fn get_x(bla: Val<Bla>) -> u32 {
+        bla.x
     }
 
     let mut compiled = FileTree::single_file("examples/runtime.roto")
@@ -25,7 +25,7 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(), (Val<Bla>,), Verdict<u32, ()>>("main")
+        .get_function::<(), fn(Val<Bla>) -> Verdict<u32, ()>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 

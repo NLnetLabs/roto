@@ -189,7 +189,7 @@ impl Memory {
         self.pointers.len() - 1
     }
 
-    fn get(&self, p: usize) -> *mut () {
+    pub fn get(&self, p: usize) -> *mut () {
         let p = &self.pointers[p];
         let frame = &self.stack[p.stack_index];
         frame.get(p)
@@ -400,15 +400,12 @@ pub fn eval(
                 program_counter = block_map[&f.entry_block];
                 continue;
             }
-            Instruction::CallRuntime { to, func, args } => {
+            Instruction::CallRuntime { func, args } => {
                 let args: Vec<_> = args
                     .iter()
                     .map(|a| eval_operand(&vars, a).clone())
                     .collect();
-                let ret = call_runtime_function(rt, mem, *func, args);
-                if let Some((to, _ty)) = to {
-                    vars.insert(to.clone(), ret.unwrap());
-                }
+                call_runtime_function(rt, mem, *func, args);
             }
             Instruction::Return(ret) => {
                 let val =
@@ -688,20 +685,15 @@ fn call_runtime_function(
     rt: &Runtime,
     mem: &mut Memory,
     func: RuntimeFunctionRef,
-    mut args: Vec<IrValue>,
-) -> Option<IrValue> {
+    args: Vec<IrValue>,
+) {
     let func = rt.get_function(func);
-    assert_eq!(func.description.parameter_types().len(), args.len());
 
-    // Runtime functions don't understand our pointers, so we need to resolve
-    // them to ExtPointers which are real Rust pointers.
-    for arg in &mut args {
-        if let IrValue::Pointer(x) = arg {
-            *arg = IrValue::ExtPointer(mem.get(*x))
-        }
-    }
+    // The number of passed arguments should be the number of arguments the
+    // function takes plus 1 for the out pointer.
+    assert_eq!(func.description.parameter_types().len() + 1, args.len());
 
-    (func.description.wrapped())(args)
+    (func.description.ir_function())(mem, args)
 }
 
 fn eval_operand<'a>(

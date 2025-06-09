@@ -30,7 +30,7 @@ fn main() {
 
     // Extract the function
     let function = program
-        .get_function::<(), (Val<AddrRange>, IpAddr), Verdict<IpAddr, ()>>(
+        .get_function::<(), fn(Val<AddrRange>, IpAddr) -> Verdict<IpAddr, ()>>(
             "within_range",
         )
         .unwrap();

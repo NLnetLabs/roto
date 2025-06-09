@@ -108,7 +108,6 @@ pub enum Instruction {
 
     /// Call a runtime function (i.e. a Rust function)
     CallRuntime {
-        to: Option<(Var, IrType)>,
         func: runtime::RuntimeFunctionRef,
         args: Vec<Operand>,
     },
@@ -445,24 +444,7 @@ impl<'a> IrPrinter<'a> {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            CallRuntime {
-                to: Some((to, ty)),
-                func,
-                args,
-            } => format!(
-                "{}: {ty} = <runtime function {:?}>({})",
-                self.var(to),
-                func,
-                args.iter()
-                    .map(|a| self.operand(a))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            CallRuntime {
-                to: None,
-                func,
-                args,
-            } => format!(
+            CallRuntime { func, args } => format!(
                 "<rust function {:?}>({})",
                 func,
                 args.iter()

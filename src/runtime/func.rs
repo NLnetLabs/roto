@@ -1,18 +1,69 @@
-use std::{any::TypeId, sync::Arc};
+use std::any::TypeId;
 
-use crate::{lower::value::ReturnValue, IrValue, Runtime};
+use crate::codegen::check::{RotoFunc, RustIrFunction};
 
-use super::{
-    ty::{Reflect, TypeRegistry},
-    DocumentedFunc,
-};
+use super::ty::TypeRegistry;
+
+pub struct Func<F: RotoFunc> {
+    wrapper: <F as RotoFunc>::RustWrapper,
+    docstring: &'static str,
+    argument_names: &'static [&'static str],
+}
+
+impl<F: RotoFunc> Func<F> {
+    /// Construct a new [`Func`] to register to Roto.
+    ///
+    /// # Safety
+    ///
+    /// The `wrapper` argument must be a function that can be called safely
+    /// from Roto.
+    ///
+    /// Use the [`roto_function`], [`roto_method`] and [`roto_static_method`]
+    /// macros to be sure of that.
+    pub unsafe fn new(
+        wrapper: <F as RotoFunc>::RustWrapper,
+        docstring: &'static str,
+        argument_names: &'static [&'static str],
+    ) -> Self {
+        Self {
+            wrapper,
+            docstring,
+            argument_names,
+        }
+    }
+
+    pub(crate) fn docstring(&self) -> &'static str {
+        self.docstring
+    }
+
+    pub(crate) fn argument_names(&self) -> &'static [&'static str] {
+        self.argument_names
+    }
+
+    pub(crate) fn to_function_description(
+        self,
+        type_registry: &mut TypeRegistry,
+    ) -> FunctionDescription {
+        let parameter_types = F::parameter_types(type_registry);
+        let return_type = F::return_type(type_registry);
+        let pointer = F::ptr(&self.wrapper);
+        let ir_function = F::ir_function(&self.wrapper);
+
+        FunctionDescription {
+            parameter_types,
+            return_type,
+            pointer,
+            ir_function,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct FunctionDescription {
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
     pointer: *const u8,
-    wrapped: Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>,
+    ir_function: RustIrFunction,
 }
 
 // SAFETY: FunctionDescription is only not Send and Sync because of the function
@@ -35,8 +86,8 @@ impl FunctionDescription {
         self.pointer
     }
 
-    pub fn wrapped(&self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
-        self.wrapped.clone()
+    pub fn ir_function(&self) -> RustIrFunction {
+        self.ir_function.clone()
     }
 }
 
@@ -60,128 +111,3 @@ impl std::fmt::Debug for FunctionDescription {
             .finish()
     }
 }
-
-pub trait Func<A, R>: Sized {
-    type FunctionType;
-
-    fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId>;
-    fn return_type(reg: &mut TypeRegistry) -> TypeId;
-    fn ptr(&self) -> *const u8;
-    fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>>;
-    fn docstring(&self) -> &'static str {
-        ""
-    }
-    fn argument_names(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn to_function_description(
-        self,
-        rt: &mut Runtime,
-    ) -> Result<FunctionDescription, String> {
-        let parameter_types = Self::parameter_types(&mut rt.type_registry);
-        let return_type = Self::return_type(&mut rt.type_registry);
-        let pointer = self.ptr();
-        let wrapped = self.wrapped();
-
-        Ok(FunctionDescription {
-            parameter_types,
-            return_type,
-            pointer,
-            wrapped,
-        })
-    }
-}
-
-impl<F, A, R> Func<A, R> for DocumentedFunc<F>
-where
-    F: Func<A, R>,
-{
-    type FunctionType = F;
-
-    fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId> {
-        F::parameter_types(reg)
-    }
-
-    fn return_type(reg: &mut TypeRegistry) -> TypeId {
-        F::return_type(reg)
-    }
-
-    fn ptr(&self) -> *const u8 {
-        self.func.ptr()
-    }
-
-    fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
-        self.func.wrapped()
-    }
-
-    fn docstring(&self) -> &'static str {
-        self.docstring
-    }
-
-    fn argument_names(&self) -> &'static [&'static str] {
-        self.argument_names
-    }
-}
-
-macro_rules! func_impl {
-    ($($arg:ident),*) => {
-        impl<$($arg,)* Ret> Func<($($arg,)*), Ret> for for<'a> extern "C" fn($($arg),*) -> Ret
-        where
-            $(
-                $arg: Reflect + for<'a> TryFrom<&'a IrValue> + 'static,
-            )*
-            Ret: Reflect + Into<ReturnValue> + 'static,
-        {
-            type FunctionType = Self;
-
-            #[allow(unused_variables)]
-            fn parameter_types(reg: &mut TypeRegistry) -> Vec<TypeId> {
-                vec![$(reg.resolve::<$arg>().type_id),*]
-            }
-
-            fn return_type(reg: &mut TypeRegistry) -> TypeId {
-                reg.resolve::<Ret>().type_id
-            }
-
-            fn ptr(&self) -> *const u8 {
-                // Make sure to deref before casting to get the function
-                // pointer and not the pointer to the function pointer.
-                (*self) as *const u8
-            }
-
-            fn wrapped(self) -> Arc<dyn Fn(Vec<IrValue>) -> Option<IrValue>> {
-                // We reuse the type names as variable names, so they are
-                // uppercase, but that's the easiest way to do this.
-                #[allow(non_snake_case)]
-                let f = move |args: Vec<IrValue>| {
-                    let [$($arg),*]: &[IrValue] = &args else {
-                        panic!("Number of arguments is not correct")
-                    };
-                    $(
-                        let Ok($arg) = $arg.try_into() else {
-                            panic!("Type of argument is not correct: {}", $arg)
-                        };
-                    )*
-                    let ret: ReturnValue = self($($arg),*).into();
-                    ret.0
-                };
-                Arc::new(f)
-            }
-        }
-    };
-}
-
-func_impl!();
-func_impl!(A);
-func_impl!(A, B);
-func_impl!(A, B, C);
-func_impl!(A, B, C, D);
-func_impl!(A, B, C, D, E);
-func_impl!(A, B, C, D, E, F);
-func_impl!(A, B, C, D, E, F, G);
-func_impl!(A, B, C, D, E, F, G, H);
-func_impl!(A, B, C, D, E, F, G, H, I);
-func_impl!(A, B, C, D, E, F, G, H, I, J);
-func_impl!(A, B, C, D, E, F, G, H, I, J, K);
-func_impl!(A, B, C, D, E, F, G, H, I, J, K, L);

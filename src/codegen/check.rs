@@ -10,9 +10,11 @@ use crate::{
         scoped_display::ScopedDisplay,
         types::{Type, TypeDefinition},
     },
+    IrValue, Memory,
 };
 use std::{
-    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
+    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, ops::Deref,
+    sync::Arc,
 };
 
 #[derive(Debug)]
@@ -161,8 +163,6 @@ fn check_roto_type(
 
             Ok(())
         }
-        TypeDescription::ConstPtr(_) => Err(error_message),
-        TypeDescription::MutPtr(_) => Err(error_message), // TODO: actually check this
         TypeDescription::Verdict(rust_accept, rust_reject) => {
             let Type::Name(type_name) = &roto_ty else {
                 return Err(error_message);
@@ -204,8 +204,6 @@ fn check_roto_type(
             };
             check_roto_type(registry, type_info, rust_ty, roto_ty)
         }
-        // We don't do results, we should hint towards verdict when using them.
-        TypeDescription::Result(_, _) => Err(error_message),
     }
 }
 
@@ -217,22 +215,29 @@ fn check_roto_type(
 /// The `invoke` method can (unsafely) invoke a pointer as if it were a function
 /// with these parameters.
 ///
-/// This trait is implemented on tuples of various sizes.
-pub trait RotoParams {
-    type Transformed;
-    /// This type but with [`Reflect::AsParam`] applied to each element.
-    type AsParams;
+/// This trait is implemented on function pointers with several numbers of parameters.
+pub trait RotoFunc {
+    /// Argument types of this function
+    type Args;
 
-    fn transform(self) -> Self::Transformed;
+    /// Return type of this function
+    type Return: Reflect;
 
-    /// Convert to `Self::AsParams`.
-    fn as_params(transformed: &mut Self::Transformed) -> Self::AsParams;
+    /// Type of a Roto function with this type using a return pointer
+    type RotoWithReturnPointer;
+
+    /// Type of a Roto function with this type returning directly
+    type RotoWithoutReturnPointer;
+
+    /// The type of a Rust function wrapping a function of this type
+    type RustWrapper;
 
     /// Check whether these parameters match a parameter list from Roto.
-    fn check(
+    fn check_args(
         type_info: &mut TypeInfo,
         ty: &[Type],
     ) -> Result<(), FunctionRetrievalError>;
+
     /// Call a function pointer as if it were a function with these parameters.
     ///
     /// This is _extremely_ unsafe, do not pass this arbitrary pointers and
@@ -241,12 +246,30 @@ pub trait RotoParams {
     ///
     /// A [`TypedFunc`](super::TypedFunc) is a safe abstraction around this
     /// function.
-    unsafe fn invoke<Ctx: 'static, Return: Reflect>(
-        self,
+    unsafe fn invoke<Ctx: 'static>(
         ctx: &mut Ctx,
+        args: Self::Args,
         func_ptr: *const u8,
         return_by_ref: bool,
-    ) -> Return;
+    ) -> Self::Return;
+
+    fn ptr(w: &Self::RustWrapper) -> *const u8;
+    fn parameter_types(type_registry: &mut TypeRegistry) -> Vec<TypeId>;
+    fn return_type(type_registry: &mut TypeRegistry) -> TypeId;
+
+    fn ir_function(f: &Self::RustWrapper) -> RustIrFunction;
+}
+
+#[allow(clippy::type_complexity)]
+#[derive(Clone)]
+pub struct RustIrFunction(Arc<dyn Fn(&mut Memory, Vec<IrValue>)>);
+
+impl Deref for RustIrFunction {
+    type Target = Arc<dyn Fn(&mut Memory, Vec<IrValue>)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 /// Little helper macro to create a unit
@@ -257,51 +280,50 @@ macro_rules! unit {
 }
 
 /// Implement the [`RotoParams`] trait for a tuple with some type parameters.
-macro_rules! params {
-    ($($t:ident),*) => {
+macro_rules! func {
+    (fn($($a:ident),*) -> $r:ident) => {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         #[allow(unused_mut)]
-        impl<$($t,)*> RotoParams for ($($t,)*)
-        where $($t: Reflect,)* {
-            type Transformed = ($($t::Transformed,)*);
-            type AsParams = ($($t::AsParam,)*);
+        impl<$($a,)* $r> RotoFunc for fn($($a,)*) -> $r
+        where $($a: Reflect,)* $r: Reflect {
+            type Args = ($($a,)*);
+            type Return = $r;
 
-            fn transform(self) -> Self::Transformed {
-                let ($($t,)*) = self;
-                return ($($t.transform(),)*);
-            }
+            type RotoWithReturnPointer = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
+            type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> $r::Transformed;
+            type RustWrapper = extern "C" fn (*mut $r::Transformed, $($a::AsParam),*) -> ();
 
-            fn as_params(transformed: &mut Self::Transformed) -> Self::AsParams {
-                let ($($t,)*) = transformed;
-                return ($($t::as_param($t),)*);
-            }
-
-            fn check(
+            fn check_args(
                 type_info: &mut TypeInfo,
                 ty: &[Type]
             ) -> Result<(), FunctionRetrievalError> {
-                let [$($t),*] = ty else {
-                    let x: &[()] = &[$(unit!($t)),*];
+                let [$($a),*] = ty else {
+                    let x: &[()] = &[$(unit!($a)),*];
                     return Err(FunctionRetrievalError::IncorrectNumberOfArguments {
                         expected: ty.len(),
                         got: x.len(),
                     });
                 };
 
-                // Little hack to return a bool even with no parameters
                 let mut i = 0;
                 $(
                     i += 1;
-                    check_roto_type_reflect::<$t>(type_info, $t)
+                    check_roto_type_reflect::<$a>(type_info, $a)
                         .map_err(|e| FunctionRetrievalError::TypeMismatch(format!("argument {i}"), e))?;
                 )*
                 Ok(())
             }
 
-            unsafe fn invoke<Ctx: 'static, Return: Reflect>(self, ctx: &mut Ctx, func_ptr: *const u8, return_by_ref: bool) -> Return {
-                let mut transformed = <Self as RotoParams>::transform(self);
-                let ($($t,)*) = <Self as RotoParams>::as_params(&mut transformed);
+            fn ptr(w: &Self::RustWrapper) -> *const u8 {
+                (*w) as *const u8
+            }
+
+            unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8, return_by_ref: bool) -> R {
+                let ($($a,)*) = args;
+                let mut transformed = ($(<$a as Reflect>::transform($a),)*);
+                let ($($a,)*) = &mut transformed;
+                let ($($a,)*) = ($(<$a as Reflect>::as_param($a),)*);
 
                 // We forget values that we pass into Roto. The script is responsible
                 // for cleaning them op. Forgetting copy types does nothing, but that's
@@ -311,29 +333,64 @@ macro_rules! params {
 
                 if return_by_ref {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut Return::Transformed, *mut Ctx, $($t::AsParam),*) -> ()>(func_ptr)
+                        std::mem::transmute::<*const u8, Self::RotoWithReturnPointer>(func_ptr)
                     };
-                    let mut ret = MaybeUninit::<Return::Transformed>::uninit();
-                    func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx, $($t),*);
+                    let mut ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
+                    func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
                     let transformed_ret = unsafe { ret.assume_init() };
-                    let ret: Return = Return::untransform(transformed_ret);
+                    let ret: Self::Return = Self::Return::untransform(transformed_ret);
                     ret
                 } else {
                     let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, fn(*mut Ctx, $($t::AsParam),*) -> Return>(func_ptr)
+                        std::mem::transmute::<*const u8, Self::RotoWithoutReturnPointer>(func_ptr)
                     };
-                    func_ptr(ctx as *mut Ctx, $($t),*)
+                    let ret = func_ptr(ctx as *mut Ctx as *mut (), $($a),*);
+                    <R as Reflect>::untransform(ret)
                 }
+            }
+
+            fn parameter_types(type_registry: &mut TypeRegistry) -> Vec<TypeId> {
+                vec![$($a::resolve(type_registry).type_id,)*]
+            }
+
+            fn return_type(type_registry: &mut TypeRegistry) -> TypeId {
+                $r::resolve(type_registry).type_id
+            }
+
+            fn ir_function(f: &Self::RustWrapper) -> RustIrFunction {
+                let f = *f;
+                // We reuse the type names as variable names, so they are
+                // uppercase, but that's the easiest way to do this.
+                #[allow(non_snake_case)]
+                let f = move |mem: &mut Memory, args: Vec<IrValue>| {
+                    let [$r, $($a),*]: &[IrValue] = &args else {
+                        panic!("Number of arguments is not correct")
+                    };
+
+                    let &IrValue::Pointer($r) = $r else {
+                        panic!("Out pointer is not a pointer")
+                    };
+                    let $r = mem.get($r);
+
+                    $(
+                        let Ok($a) = <$a as Reflect>::from_ir_value(mem, $a.clone()) else {
+                            panic!("Type of argument is not correct: {}", $a)
+                        };
+                    )*
+                    let mut uninit_ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
+                    f($r as *mut <$r as Reflect>::Transformed, $($a),*);
+                };
+                RustIrFunction(Arc::new(f))
             }
         }
     };
 }
 
-params!();
-params!(A1);
-params!(A1, A2);
-params!(A1, A2, A3);
-params!(A1, A2, A3, A4);
-params!(A1, A2, A3, A4, A5);
-params!(A1, A2, A3, A4, A5, A6);
-params!(A1, A2, A3, A4, A5, A6, A7);
+func!(fn() -> R);
+func!(fn(A1) -> R);
+func!(fn(A1, A2) -> R);
+func!(fn(A1, A2, A3) -> R);
+func!(fn(A1, A2, A3, A4) -> R);
+func!(fn(A1, A2, A3, A4, A5) -> R);
+func!(fn(A1, A2, A3, A4, A5, A6) -> R);
+func!(fn(A1, A2, A3, A4, A5, A6, A7) -> R);

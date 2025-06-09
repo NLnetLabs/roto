@@ -28,7 +28,7 @@ use crate::{
     IrValue, Runtime, Verdict,
 };
 use check::{
-    check_roto_type_reflect, FunctionRetrievalError, RotoParams, TypeMismatch,
+    check_roto_type_reflect, FunctionRetrievalError, RotoFunc, TypeMismatch,
 };
 use cranelift::{
     codegen::{
@@ -122,7 +122,7 @@ pub struct Module {
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone, Debug)]
-pub struct TypedFunc<Ctx, Params, Return> {
+pub struct TypedFunc<Ctx, F> {
     func: *const u8,
     return_by_ref: bool,
 
@@ -131,30 +131,27 @@ pub struct TypedFunc<Ctx, Params, Return> {
     // for the safety of calling this function. Without it, the data that
     // the `func` pointer points to might have been dropped.
     _module: ModuleData,
-    _ty: PhantomData<(Ctx, Params, Return)>,
+    _ty: PhantomData<(Ctx, F)>,
 }
 
 /// SAFETY: These implementations are safe because we don't modify anything
 /// the pointer points to and the pointer will stay valid as long as we hold
 /// on to the `ModuleData`, which is stored in the `TypedFunc`.
-unsafe impl<Ctx, Params, Return> Send for TypedFunc<Ctx, Params, Return> {}
-unsafe impl<Ctx, Params, Return> Sync for TypedFunc<Ctx, Params, Return> {}
+unsafe impl<Ctx, F> Send for TypedFunc<Ctx, F> {}
+unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 
-impl<Ctx: 'static, Params: RotoParams, Return: Reflect>
-    TypedFunc<Ctx, Params, Return>
-{
-    pub fn call_tuple(&self, ctx: &mut Ctx, params: Params) -> Return {
-        unsafe {
-            params.invoke::<Ctx, Return>(ctx, self.func, self.return_by_ref)
-        }
+impl<Ctx: 'static, F: RotoFunc> TypedFunc<Ctx, F> {
+    pub fn call_tuple(&self, ctx: &mut Ctx, args: F::Args) -> F::Return {
+        unsafe { F::invoke::<Ctx>(ctx, args, self.func, self.return_by_ref) }
     }
 }
 
 macro_rules! call_impl {
     ($($ty:ident),*) => {
-        impl<Ctx: 'static, $($ty,)* Return: Reflect> TypedFunc<Ctx, ($($ty,)*), Return>
+        impl<Ctx: 'static, $($ty,)* Return> TypedFunc<Ctx, fn($($ty,)*) -> Return>
         where
-            ($($ty,)*): RotoParams,
+            $($ty: Reflect,)*
+            Return: Reflect
         {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
@@ -523,8 +520,7 @@ impl ModuleBuilder {
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
-            IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
-            IrType::ExtValue => todo!(),
+            IrType::Pointer => self.isa.pointer_type(),
         }
     }
 }
@@ -689,7 +685,7 @@ impl<'c> FuncGen<'c> {
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
-            ir::Instruction::CallRuntime { to, func, args } => {
+            ir::Instruction::CallRuntime { func, args } => {
                 let func_id = self.module.runtime_functions[func];
                 let func_ref = self
                     .module
@@ -698,13 +694,7 @@ impl<'c> FuncGen<'c> {
 
                 let args: Vec<_> =
                     args.iter().map(|op| self.operand(op).0).collect();
-                let inst = self.ins().call(func_ref, &args);
-
-                if let Some((to, ty)) = to {
-                    let ty = self.module.cranelift_type(ty);
-                    let var = self.variable(to, ty);
-                    self.def(var, self.builder.inst_results(inst)[0]);
-                }
+                self.ins().call(func_ref, &args);
             }
             ir::Instruction::Return(Some(v)) => {
                 let (val, _) = self.operand(v);
@@ -1180,7 +1170,7 @@ impl Module {
             let test_display = test.replace("test#", "");
             print!("Test {n:>total_width$} / {total}: {test_display}... ");
             let test_fn = self
-                .get_function::<Ctx, (), Verdict<(), ()>>(
+                .get_function::<Ctx, fn() -> Verdict<(), ()>>(
                     test.strip_prefix("pkg.").unwrap(),
                 )
                 .unwrap();
@@ -1207,10 +1197,10 @@ impl Module {
         }
     }
 
-    pub fn get_function<Ctx: 'static, Params: RotoParams, Return: Reflect>(
+    pub fn get_function<Ctx: 'static, F: RotoFunc>(
         &mut self,
         name: &str,
-    ) -> Result<TypedFunc<Ctx, Params, Return>, FunctionRetrievalError> {
+    ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         let name = format!("pkg.{name}");
         let function_info = self.functions.get(&name).ok_or_else(|| {
             FunctionRetrievalError::DoesNotExist {
@@ -1232,9 +1222,9 @@ impl Module {
             ));
         }
 
-        Params::check(&mut self.type_info, &sig.parameter_types)?;
+        F::check_args(&mut self.type_info, &sig.parameter_types)?;
 
-        check_roto_type_reflect::<Return>(
+        check_roto_type_reflect::<F::Return>(
             &mut self.type_info,
             &sig.return_type,
         )
