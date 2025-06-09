@@ -1,10 +1,5 @@
 type Foo { a: u32, a: u32 } // should error here
 
 filter foo() {
-	define {
-		rx msg: u32;
-		a = Foo { };
-	}
-
-	apply { accept }
+	accept
 }

@@ -1,9 +1,3 @@
 type u32 { b: u32 } // should error here
 
-filter foo() {
-	define {
-		rx msg: u32;
-	}
-
-	apply { accept }
-}
+function foo() {}

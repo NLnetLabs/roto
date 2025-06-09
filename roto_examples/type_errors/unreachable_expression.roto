@@ -1,12 +1,4 @@
-filter foo() {
-    define {
-        rx msg: u32;
-    }
-
-    function bar() -> bool {
-        return true;
-        return false;
-    }
-
-    apply { accept }
+function foo() {
+    return true;
+    return false;
 }

@@ -1,9 +1,7 @@
-filter foo() {
-	define {
-		rx msg: u32;
-		x = ["foo", "bar"];
-		b = x.contains(); // should error error: not enough arguments 
-	}
+function bar(a: u32) -> u32 {
+	a
+}
 
-	apply { accept }
+function foo() {
+	bar()
 }

@@ -1,11 +1,6 @@
 type Foo { a: u32 }
 
-filter foo() {
-    define {
-		rx msg: u32;
-        foo = Foo { a: 8 };
-        a = foo.b;
-    }
-
-	apply { accept }
+function foo() {
+    let foo = Foo { a: 8 };
+    let a = foo.b;
 }

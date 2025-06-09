@@ -2,10 +2,4 @@ function bar() -> bool {
     return "hello"
 }
 
-filter foo() {
-    define {
-        rx msg: u32;
-    }
-
-    apply { accept }
-}
+function foo() {}
