@@ -367,9 +367,10 @@ macro_rules! func {
                         panic!("Number of arguments is not correct")
                     };
 
-                    let &IrValue::ExtPointer($r) = $r else {
+                    let &IrValue::Pointer($r) = $r else {
                         panic!("Out pointer is not a pointer")
                     };
+                    let $r = mem.get($r);
 
                     $(
                         let Ok($a) = <$a as Reflect>::from_ir_value(mem, $a.clone()) else {

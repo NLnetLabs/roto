@@ -26,8 +26,6 @@ pub enum IrValue {
     F64(f64),
     Asn(Asn),
     Pointer(usize),
-    ExtPointer(*mut ()),
-    ExtValue(Vec<u8>),
 }
 
 /// The types for [`IrValue`]s
@@ -46,8 +44,6 @@ pub enum IrType {
     F64,
     Asn,
     Pointer,
-    ExtPointer,
-    ExtValue,
 }
 
 impl IrType {
@@ -59,7 +55,7 @@ impl IrType {
             U16 | I16 => 2,
             U32 | I32 | F32 | Asn => 4,
             U64 | I64 | F64 => 8,
-            Pointer | ExtValue | ExtPointer => (usize::BITS / 8) as usize,
+            Pointer => (usize::BITS / 8) as usize,
         }
     }
 
@@ -85,8 +81,6 @@ impl Display for IrType {
             F64 => "f64",
             Asn => "Asn",
             Pointer => "Pointer",
-            ExtValue => "ExtValue",
-            ExtPointer => "ExtPointer",
         };
         write!(f, "{s}")
     }
@@ -105,8 +99,6 @@ impl PartialEq for IrValue {
             (I32(l), I32(r)) => l == r,
             (Asn(l), Asn(r)) => l == r,
             (Pointer(l), Pointer(r)) => l == r,
-            (ExtValue(_), ExtValue(_)) => false,
-            (ExtPointer(_), ExtPointer(_)) => false,
             _ => panic!("tried comparing different types"),
         }
     }
@@ -131,8 +123,6 @@ impl IrValue {
             F64(_) => IrType::F64,
             Asn(_) => IrType::Asn,
             Pointer(_) => IrType::Pointer,
-            ExtValue(_) => IrType::ExtValue,
-            ExtPointer(_) => IrType::ExtPointer,
         }
     }
 
@@ -151,8 +141,6 @@ impl IrValue {
             Self::F64(x) => x,
             Self::Asn(x) => x,
             Self::Pointer(x) => x,
-            Self::ExtValue(x) => x,
-            Self::ExtPointer(x) => x,
         }
     }
 
@@ -197,10 +185,6 @@ impl IrValue {
             Self::F64(x) => x.to_ne_bytes().into(),
             Self::Asn(x) => x.into_u32().to_ne_bytes().into(),
             Self::Pointer(x) => x.to_ne_bytes().into(),
-            Self::ExtValue(x) => x.clone(),
-            Self::ExtPointer(x) => {
-                (x as *const _ as usize).to_ne_bytes().into()
-            }
         }
     }
 
@@ -263,13 +247,6 @@ impl IrValue {
                 let val: &[u8; SIZE] = val.try_into().unwrap();
                 Self::Pointer(usize::from_ne_bytes(*val))
             }
-            IrType::ExtPointer => {
-                const SIZE: usize = (usize::BITS / 8) as usize;
-                let val: &[u8; SIZE] = val.try_into().unwrap();
-                let val = usize::from_ne_bytes(*val);
-                Self::ExtPointer(val as *mut _)
-            }
-            IrType::ExtValue => Self::ExtValue(val.into()),
         }
     }
 
@@ -342,8 +319,6 @@ impl Display for IrValue {
             F64(x) => write!(f, "f64({x})"),
             Asn(x) => write!(f, "Asn({x})"),
             Pointer(x) => write!(f, "Pointer({x})"),
-            ExtValue(..) => write!(f, "ExtValue(..)"),
-            ExtPointer(..) => write!(f, "ExtPointer(..)"),
         }
     }
 }

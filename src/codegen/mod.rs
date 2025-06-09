@@ -520,8 +520,7 @@ impl ModuleBuilder {
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
-            IrType::Pointer | IrType::ExtPointer => self.isa.pointer_type(),
-            IrType::ExtValue => todo!(),
+            IrType::Pointer => self.isa.pointer_type(),
         }
     }
 }

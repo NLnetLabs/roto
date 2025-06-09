@@ -189,7 +189,7 @@ impl Memory {
         self.pointers.len() - 1
     }
 
-    fn get(&self, p: usize) -> *mut () {
+    pub fn get(&self, p: usize) -> *mut () {
         let p = &self.pointers[p];
         let frame = &self.stack[p.stack_index];
         frame.get(p)
@@ -685,19 +685,10 @@ fn call_runtime_function(
     rt: &Runtime,
     mem: &mut Memory,
     func: RuntimeFunctionRef,
-    mut args: Vec<IrValue>,
+    args: Vec<IrValue>,
 ) {
     let func = rt.get_function(func);
     assert_eq!(func.description.parameter_types().len() + 1, args.len());
-
-    // Runtime functions don't understand our pointers, so we need to resolve
-    // them to ExtPointers which are real Rust pointers.
-    for arg in &mut args {
-        if let IrValue::Pointer(x) = arg {
-            *arg = IrValue::ExtPointer(mem.get(*x))
-        }
-    }
-
     (func.description.ir_function())(mem, args)
 }
 

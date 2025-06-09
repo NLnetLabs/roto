@@ -1512,7 +1512,7 @@ impl<'r> Lowerer<'r> {
                 }
             }
             if let TypeDefinition::Runtime(_, _) = type_def {
-                return Some(IrType::ExtPointer);
+                return Some(IrType::Pointer);
             }
         }
 
