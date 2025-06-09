@@ -113,13 +113,18 @@ impl std::fmt::Display for RotoReport {
 
                     let file = self.filename(error.location);
 
-                    let report = Report::build(
+                    let mut report = Report::build(
                         ReportKind::Error,
                         (file, error.location.start..error.location.end),
                     )
                     .with_message(format!("Parse error: {}", error))
-                    .with_label(label)
-                    .finish();
+                    .with_label(label);
+
+                    if let Some(note) = &error.note {
+                        report = report.with_note(note);
+                    }
+
+                    let report = report.finish();
 
                     let mut v = Vec::new();
                     report.write(&mut file_cache, &mut v).unwrap();

@@ -975,3 +975,45 @@ fn filtermap_calling_filtermap() {
 
     typecheck(s).unwrap();
 }
+
+#[test]
+fn assignment() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = 4;
+                x = x + 3;
+                x
+            }
+        "
+    );
+
+    typecheck(s).unwrap();
+
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = false;
+                x = x + 3;
+                x
+            }
+        "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn assignment_to_record() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                x.bar = x.bar + 3;
+                x.bar
+            }
+        "
+    );
+
+    typecheck(s).unwrap();
+}

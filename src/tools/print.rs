@@ -59,25 +59,7 @@ pub fn print_highlighted(s: &str) {
             | Token::RoundRight
             | Token::SquareLeft
             | Token::SquareRight => ansi::GRAY,
-            Token::Accept
-            | Token::Dep
-            | Token::Else
-            | Token::Filter
-            | Token::FilterMap
-            | Token::Function
-            | Token::If
-            | Token::Import
-            | Token::In
-            | Token::Let
-            | Token::Match
-            | Token::Not
-            | Token::Pkg
-            | Token::Reject
-            | Token::Return
-            | Token::Std
-            | Token::Super
-            | Token::Test
-            | Token::Type => ansi::BLUE,
+            Token::Keyword(_) => ansi::BLUE,
             Token::String(_) => ansi::GREEN,
             Token::Integer(_) => ansi::PURPLE,
             Token::Float(_) => ansi::PURPLE,

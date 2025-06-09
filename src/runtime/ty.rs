@@ -70,7 +70,7 @@ pub static GLOBAL_TYPE_REGISTRY: LazyLock<Mutex<TypeRegistry>> =
     LazyLock::new(|| Mutex::new(TypeRegistry::default()));
 
 /// A map from [`TypeId`] to a [`Ty`], which is a description of the type
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct TypeRegistry {
     map: HashMap<TypeId, Ty>,
 }

@@ -133,6 +133,11 @@ pub enum Expr {
     /// A unary not expression
     Not(Box<Meta<Expr>>),
 
+    /// An assignment expression
+    // TODO: Arbitrary place expressions should be allowed at some point, but
+    //       for now that's not supported.
+    Assign(Meta<Path>, Box<Meta<Expr>>),
+
     /// A binary operator expression
     ///
     /// Takes a left operand, the operator and the right operand

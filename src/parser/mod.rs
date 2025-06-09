@@ -9,7 +9,7 @@ use crate::ast::{
     Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };
 use std::{fmt::Display, iter::Peekable};
-use token::{Lexer, Token};
+use token::{Keyword, Lexer, Token};
 
 use self::meta::{Meta, Span, Spans};
 
@@ -23,12 +23,13 @@ mod test_expressions;
 #[cfg(test)]
 mod test_sections;
 
-type ParseResult<'a, T> = Result<T, ParseError>;
+type ParseResult<T> = Result<T, ParseError>;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
     pub location: Span,
     pub kind: ParseErrorKind,
+    pub note: Option<String>,
 }
 
 impl ParseError {
@@ -43,6 +44,7 @@ impl ParseError {
                 got: got.to_string(),
             },
             location: span,
+            note: None,
         }
     }
 
@@ -59,6 +61,7 @@ impl ParseError {
                 inner_error: inner.to_string(),
             },
             location: span,
+            note: None,
         }
     }
 
@@ -73,6 +76,14 @@ impl ParseError {
                 label: label.to_string(),
             },
             location: span,
+            note: None,
+        }
+    }
+
+    fn with_note(self, note: impl Into<String>) -> Self {
+        Self {
+            note: Some(note.into()),
+            ..self
         }
     }
 }
@@ -106,7 +117,7 @@ impl ParseErrorKind {
             Self::FailedToParseEntireInput => "parser got stuck here".into(),
             Self::InvalidToken => "invalid token".into(),
             Self::Expected { expected, .. } => {
-                format!("expected `{expected}`")
+                format!("expected {expected}")
             }
             Self::InvalidLiteral { description, .. } => {
                 format!("invalid {description}")
@@ -169,10 +180,12 @@ impl<'source> Parser<'source, '_> {
                     self.file,
                     self.file_length..self.file_length,
                 ),
+                note: None,
             }),
             Some((Err(()), span)) => Err(ParseError {
                 kind: ParseErrorKind::InvalidToken,
                 location: Span::new(self.file, span),
+                note: None,
             }),
             Some((Ok(token), span)) => {
                 Ok((token, Span::new(self.file, span)))
@@ -272,7 +285,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<'source, SyntaxTree> {
+    ) -> ParseResult<SyntaxTree> {
         Self::run_parser(Self::tree, file, spans, input)
     }
 
@@ -281,7 +294,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<'source, T> {
+    ) -> ParseResult<T> {
         let mut p = Self {
             file,
             file_length: input.len(),
@@ -293,6 +306,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             return Err(ParseError {
                 kind: ParseErrorKind::FailedToParseEntireInput,
                 location: Span::new(file, s),
+                note: None,
             });
         }
         Ok(out)
@@ -320,17 +334,22 @@ impl<'source, 'spans> Parser<'source, 'spans> {
                 self.file,
                 self.file_length..self.file_length,
             ),
+            note: None,
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::FilterMap | Token::Filter => {
+            Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Type => {
+            Token::Keyword(Keyword::Type) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Function => Declaration::Function(self.function()?),
-            Token::Test => Declaration::Test(self.test()?),
-            Token::Import => Declaration::Import(self.import()?),
+            Token::Keyword(Keyword::Function) => {
+                Declaration::Function(self.function()?)
+            }
+            Token::Keyword(Keyword::Test) => Declaration::Test(self.test()?),
+            Token::Keyword(Keyword::Import) => {
+                Declaration::Import(self.import()?)
+            }
             _ => {
                 let (token, span) = self.next()?;
                 return Err(ParseError::expected(
@@ -349,7 +368,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Function ::= 'function' Identifier '{' Body '}'
     /// ```
     fn function(&mut self) -> ParseResult<FunctionDeclaration> {
-        self.take(Token::Function)?;
+        self.take(Token::Keyword(Keyword::Function))?;
         let ident = self.identifier()?;
         let params = self.params()?;
 
@@ -369,14 +388,14 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     }
 
     fn test(&mut self) -> ParseResult<Test> {
-        self.take(Token::Test)?;
+        self.take(Token::Keyword(Keyword::Test))?;
         let ident = self.identifier()?;
         let body = self.block()?;
         Ok(Test { ident, body })
     }
 
     fn import(&mut self) -> ParseResult<Meta<Path>> {
-        self.take(Token::Import)?;
+        self.take(Token::Keyword(Keyword::Import))?;
         let path = self.path()?;
         self.take(Token::SemiColon)?;
         Ok(path)
@@ -394,7 +413,15 @@ impl Parser<'_, '_> {
         let ident = match token {
             Token::Ident(s) => s,
             // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Type => "type",
+            Token::Keyword(Keyword::Type) => "type",
+            Token::Keyword(_) => return Err(ParseError::expected(
+                "an identifier",
+                &token,
+                span,
+            )
+            .with_note(format!(
+                "`{token}` is a keyword and cannot be used as an identifier.",
+            ))),
             _ => {
                 return Err(ParseError::expected(
                     "an identifier",

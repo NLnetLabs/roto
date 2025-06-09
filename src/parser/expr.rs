@@ -10,7 +10,11 @@ use crate::{
     parser::ParseError,
 };
 
-use super::{meta::Meta, token::Token, ParseResult, Parser};
+use super::{
+    meta::Meta,
+    token::{Keyword, Token},
+    ParseResult, Parser,
+};
 
 /// Contextual restrictions on the expression parsing
 ///
@@ -51,13 +55,13 @@ impl Parser<'_, '_> {
                 ));
             }
 
-            if self.peek_is(Token::Import) {
-                self.take(Token::Import)?;
+            if self.peek_is(Token::Keyword(Keyword::Import)) {
+                self.take(Token::Keyword(Keyword::Import))?;
                 let path = self.path()?;
                 self.take(Token::SemiColon)?;
                 imports.push(path);
-            } else if self.peek_is(Token::Let) {
-                let start = self.take(Token::Let)?;
+            } else if self.peek_is(Token::Keyword(Keyword::Let)) {
+                let start = self.take(Token::Keyword(Keyword::Let))?;
                 let identifier = self.identifier()?;
                 self.take(Token::Eq)?;
                 let expr = self.expr()?;
@@ -71,7 +75,7 @@ impl Parser<'_, '_> {
             // but if they appear at the end, they are the last
             // expression. This is what Rust does too and while it looks
             // hacky, it works really well in practice.
-            else if self.peek_is(Token::If) {
+            else if self.peek_is(Token::Keyword(Keyword::If)) {
                 let expr = self.if_else()?;
                 if self.peek_is(Token::CurlyRight) {
                     let end = self.take(Token::CurlyRight)?;
@@ -94,7 +98,7 @@ impl Parser<'_, '_> {
 
                 // Semicolon is allowed but not mandatory after if
                 self.next_is(Token::SemiColon);
-            } else if self.peek_is(Token::Match) {
+            } else if self.peek_is(Token::Keyword(Keyword::Match)) {
                 let expr = self.match_expr()?;
                 if self.peek_is(Token::CurlyRight) {
                     let end = self.take(Token::CurlyRight)?;
@@ -163,7 +167,27 @@ impl Parser<'_, '_> {
     }
 
     fn expr_inner(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        self.logical_expr(r)
+        self.assign_expr(r)
+    }
+
+    /// Parse an assignment expression
+    fn assign_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        let left = self.logical_expr(r)?;
+        if self.next_is(Token::Eq) {
+            let Expr::Path(path) = &*left else {
+                return Err(ParseError::custom(
+                    "left-hand side of an expression must be a single identifier",
+                    "cannot assign to this expression",
+                    self.get_span(&left)));
+            };
+            let right = self.logical_expr(r)?;
+            let span = self.merge_spans(&left, &right);
+            Ok(self
+                .spans
+                .add(span, Expr::Assign(path.clone(), Box::new(right))))
+        } else {
+            Ok(left)
+        }
     }
 
     /// Parse a logical expression
@@ -270,10 +294,10 @@ impl Parser<'_, '_> {
             Token::AngleRight => BinOp::Gt,
             Token::AngleLeftEq => BinOp::Le,
             Token::AngleRightEq => BinOp::Ge,
-            Token::In => BinOp::In,
-            Token::Not => {
-                let span1 = self.take(Token::Not)?;
-                let span2 = self.take(Token::In)?;
+            Token::Keyword(Keyword::In) => BinOp::In,
+            Token::Keyword(Keyword::Not) => {
+                let span1 = self.take(Token::Keyword(Keyword::Not))?;
+                let span2 = self.take(Token::Keyword(Keyword::In))?;
                 let span = span1.merge(span2);
                 let x = self.spans.add(span, BinOp::NotIn);
                 return Ok(Some(x));
@@ -345,8 +369,8 @@ impl Parser<'_, '_> {
     fn negation(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         // TODO: A negation should be a unary `-`. The `not` operator should
         // have much lower precedence.
-        if self.peek_is(Token::Not) {
-            let span = self.take(Token::Not)?;
+        if self.peek_is(Token::Keyword(Keyword::Not)) {
+            let span = self.take(Token::Keyword(Keyword::Not))?;
             let expr = self.access(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
@@ -422,15 +446,16 @@ impl Parser<'_, '_> {
             return Ok(self.spans.add(span, Expr::Record(key_values)));
         }
 
-        if let Some(Token::Accept | Token::Reject | Token::Return) =
-            self.peek()
+        if let Some(Token::Keyword(
+            Keyword::Accept | Keyword::Reject | Keyword::Return,
+        )) = self.peek()
         {
             let (t, mut span) = self.next()?;
 
             let kind = match t {
-                Token::Accept => ReturnKind::Accept,
-                Token::Reject => ReturnKind::Reject,
-                Token::Return => ReturnKind::Return,
+                Token::Keyword(Keyword::Accept) => ReturnKind::Accept,
+                Token::Keyword(Keyword::Reject) => ReturnKind::Reject,
+                Token::Keyword(Keyword::Return) => ReturnKind::Return,
                 _ => unreachable!(),
             };
 
@@ -446,11 +471,11 @@ impl Parser<'_, '_> {
             return Ok(self.spans.add(span, Expr::Return(kind, val)));
         }
 
-        if self.peek_is(Token::If) {
+        if self.peek_is(Token::Keyword(Keyword::If)) {
             return self.if_else();
         }
 
-        if self.peek_is(Token::Match) {
+        if self.peek_is(Token::Keyword(Keyword::Match)) {
             return self.match_expr();
         }
 
@@ -458,10 +483,12 @@ impl Parser<'_, '_> {
             self.peek(),
             Some(
                 Token::Ident(_)
-                    | Token::Super
-                    | Token::Pkg
-                    | Token::Dep
-                    | Token::Std
+                    | Token::Keyword(
+                        Keyword::Super
+                            | Keyword::Pkg
+                            | Keyword::Dep
+                            | Keyword::Std
+                    )
             )
         ) {
             let path = self.path()?;
@@ -512,12 +539,12 @@ impl Parser<'_, '_> {
     /// IfExpr ::= 'if' Expr Block ('else' (IfExpr | Block))
     /// ```
     fn if_else(&mut self) -> ParseResult<Meta<Expr>> {
-        let start = self.take(Token::If)?;
+        let start = self.take(Token::Keyword(Keyword::If))?;
         let cond = self.expr_no_records()?;
         let then_block = self.block()?;
 
-        if self.next_is(Token::Else) {
-            let else_block = if self.peek_is(Token::If) {
+        if self.next_is(Token::Keyword(Keyword::Else)) {
+            let else_block = if self.peek_is(Token::Keyword(Keyword::If)) {
                 let expr = self.if_else()?;
                 Meta {
                     id: expr.id,
@@ -551,7 +578,7 @@ impl Parser<'_, '_> {
     /// MatchArmLast ::= Pattern ('|' Expr)? '->' Expr
     /// ```
     fn match_expr(&mut self) -> ParseResult<Meta<Expr>> {
-        let start = self.take(Token::Match)?;
+        let start = self.take(Token::Keyword(Keyword::Match))?;
         let expr = self.expr_no_records()?;
 
         let mut arms = Vec::new();
@@ -824,16 +851,19 @@ impl Parser<'_, '_> {
     fn path_item(&mut self) -> ParseResult<Meta<Identifier>> {
         let (tok, span) = self.next()?;
         let ident: Identifier = match tok {
-            Token::Pkg => "pkg".into(),
-            Token::Dep => "dep".into(),
-            Token::Super => "super".into(),
+            Token::Keyword(Keyword::Pkg) => "pkg".into(),
+            Token::Keyword(Keyword::Dep) => "dep".into(),
+            Token::Keyword(Keyword::Super) => "super".into(),
             Token::Ident(s) => s.into(),
             _ => {
                 return Err(ParseError::expected(
-                    "identifier, `super`, `pkg` or `dep`",
-                    tok,
+                    "an identifier, `super`, `pkg` or `dep`",
+                    &tok,
                     span,
-                ))
+                )
+                .with_note(format!(
+                "`{tok}` is a keyword and cannot be used as an identifier."
+            )))
             }
         };
         Ok(self.spans.add(span, ident))

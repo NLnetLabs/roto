@@ -213,7 +213,7 @@ impl Lowerer<'_> {
         for (_, arm, arm_index) in branches {
             self.new_block(arm_labels[&arm_index]);
             let ty = self.type_info.type_of(&arm.body);
-            let val = self.block(&arm.body);
+            let (val, to_drop) = self.block(&arm.body);
             if let Some(val) = val {
                 if let Some(ty) = self.lower_type(&ty) {
                     self.add(Instruction::Assign {
@@ -224,6 +224,7 @@ impl Lowerer<'_> {
                 }
                 any_assigned = true;
             }
+            self.drop(to_drop);
             self.add(Instruction::Jump(continue_lbl));
         }
 

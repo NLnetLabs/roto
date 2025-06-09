@@ -2178,6 +2178,266 @@ fn str_not_equals() {
 }
 
 #[test]
+fn assignment() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = 4;
+                x = x + 3;
+                x
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 7);
+}
+
+#[test]
+fn assignment_record_field() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                x.bar = x.bar + 3;
+                x.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 7);
+}
+
+#[test]
+fn assignment_record() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                x = { bar: x.bar + 3 };
+                x.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 7);
+}
+
+#[test]
+fn assignment_record_is_by_value() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: 4 };
+                let y = { bar: 5 };
+                x = y;
+                x.bar = 6;
+                y.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 5);
+}
+
+#[test]
+fn assignment_nested_record_1() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: { baz: 1 } };
+                x.bar.baz = 6;
+                x.bar.baz
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 6);
+}
+
+#[test]
+fn assignment_nested_record_2() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let x = { bar: { baz: 1 } };
+                x.bar = { baz: 6 };
+                x.bar.baz
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 6);
+}
+
+#[test]
+fn assignment_string() {
+    let s = src!(
+        "
+            function foo() -> String {
+                let x = \"foo\";
+                x = x + x;
+                x = x + x;
+                x
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled
+        .get_function::<(), fn() -> Arc<str>>("foo")
+        .unwrap();
+
+    assert_eq!(func.call(&mut ()), "foofoofoofoo".into());
+}
+
+#[test]
+fn let_declaration_is_by_value() {
+    let s = src!(
+        "
+            function foo() -> i32 {
+                let y = { bar: 5 };
+                let x = y;
+                x.bar = 6;
+                y.bar
+            }
+        "
+    );
+    let runtime = Runtime::new();
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(&mut ()), 5);
+}
+
+#[test]
+fn sigill() {
+    let mut runtime = Runtime::new();
+
+    struct Arcane(Arc<()>);
+    runtime.register_clone_type::<Arcane>("...").unwrap();
+
+    impl Clone for Arcane {
+        fn clone(&self) -> Self {
+            assert!(Arc::strong_count(&self.0) > 0);
+            Arcane(self.0.clone())
+        }
+    }
+
+    impl Drop for Arcane {
+        fn drop(&mut self) {
+            assert!(Arc::strong_count(&self.0) > 0);
+        }
+    }
+
+    #[roto_method(runtime, Arcane)]
+    fn get(Val(a): Val<Arcane>) -> u64 {
+        Arc::strong_count(&a.0) as u64
+    }
+
+    #[roto_function(runtime)]
+    fn make_arcane() -> Val<Arcane> {
+        Val(Arcane(Arc::new(())))
+    }
+
+    let s = src!(
+        "
+        function bar(a: Arcane) -> u64 {
+            a.get()
+        }
+
+
+        function foo() -> Arcane {
+            let a = make_arcane();
+            bar(a);
+            bar(a);
+            a
+        }
+    "
+    );
+
+    let mut compiled = s.compile(runtime).unwrap();
+    let func = compiled
+        .get_function::<(), fn() -> Val<Arcane>>("foo")
+        .unwrap();
+    let Val(a) = func.call(&mut ());
+    assert_eq!(Arc::strong_count(&a.0), 1);
+}
+
+/// The normal Rust string type will fail more often than Arc<str>
+/// if we treat it wrong, so this test stress-tests Roto a bit with that
+/// type.
+#[test]
+fn rust_string_string() {
+    let mut runtime = Runtime::new();
+
+    runtime
+        .register_clone_type_with_name::<String>("RustString", "...")
+        .unwrap();
+
+    #[roto_static_method(runtime, String)]
+    fn new(s: Arc<str>) -> Val<String> {
+        Val(s.as_ref().into())
+    }
+
+    let s = src!(
+        "
+            function foo() -> RustString {
+                let s = RustString.new(\"hello\");
+                s = s;
+                s
+            }
+
+            function bar() -> RustString {
+                let s = RustString.new(\"hello\");
+                let a = { str: s };
+                a.str = a.str;
+                a.str
+            }
+        "
+    );
+
+    let mut compiled = s
+        .compile(runtime)
+        .inspect_err(|e| eprintln!("{e}"))
+        .unwrap();
+    let func = compiled
+        .get_function::<(), fn() -> Val<String>>("foo")
+        .unwrap();
+    assert_eq!(func.call(&mut ()), Val("hello".into()));
+
+    let func = compiled
+        .get_function::<(), fn() -> Val<String>>("bar")
+        .unwrap();
+    assert_eq!(func.call(&mut ()), Val("hello".into()));
+}
+
+#[test]
 fn return_verdict_from_runtime_function() {
     let mut runtime = Runtime::new();
 
@@ -2188,10 +2448,10 @@ fn return_verdict_from_runtime_function() {
 
     let s = src!(
         "
-            filtermap bar() {
-                foo()
-            }
-        "
+        filtermap bar() {
+            foo()
+        }
+    "
     );
 
     let mut compiled = s.compile(runtime).unwrap();
