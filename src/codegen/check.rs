@@ -288,11 +288,11 @@ macro_rules! func {
         impl<$($a,)* $r> RotoFunc for fn($($a,)*) -> $r
         where $($a: Reflect,)* $r: Reflect {
             type Args = ($($a,)*);
-            type Return = R;
+            type Return = $r;
 
-            type RotoWithReturnPointer = extern "C" fn(*mut R::Transformed, *mut (), $($a::AsParam),*) -> ();
-            type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> R::Transformed;
-            type RustWrapper = extern "C" fn (*mut R::Transformed, $($a::AsParam),*) -> ();
+            type RotoWithReturnPointer = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
+            type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> $r::Transformed;
+            type RustWrapper = extern "C" fn (*mut $r::Transformed, $($a::AsParam),*) -> ();
 
             fn check_args(
                 type_info: &mut TypeInfo,
@@ -335,7 +335,7 @@ macro_rules! func {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, Self::RotoWithReturnPointer>(func_ptr)
                     };
-                    let mut ret = MaybeUninit::<<R as Reflect>::Transformed>::uninit();
+                    let mut ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
                     func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
                     let transformed_ret = unsafe { ret.assume_init() };
                     let ret: Self::Return = Self::Return::untransform(transformed_ret);
