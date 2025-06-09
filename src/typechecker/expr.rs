@@ -853,7 +853,7 @@ impl TypeChecker {
         span: MetaId,
     ) -> TypeResult<bool> {
         let mut used_fields = HashSet::new();
-        let mut missing_fields: HashSet<_> =
+        let mut missing_fields: Vec<_> =
             field_types.iter().map(|x| x.0.node).collect();
         let mut invalid_fields = Vec::new();
         let mut duplicate_fields = Vec::new();
@@ -861,7 +861,10 @@ impl TypeChecker {
         for (ident, _) in &record.fields {
             if used_fields.contains(&ident.node) {
                 duplicate_fields.push(ident);
-            } else if missing_fields.remove(&ident.node) {
+            } else if let Some(idx) =
+                missing_fields.iter().position(|f| f == &ident.node)
+            {
+                missing_fields.remove(idx);
                 used_fields.insert(ident.node);
             } else {
                 invalid_fields.push(ident);
