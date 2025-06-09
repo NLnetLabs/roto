@@ -4,7 +4,7 @@ expression: string
 input_file: tests/scripts/type_errors/types_with_the_same_name.roto
 ---
 Error: Type error: type `Foo` is declared multiple times
-   ╭─[tests/scripts/type_errors/types_with_the_same_name.roto:2:6]
+   ╭─[ tests/scripts/type_errors/types_with_the_same_name.roto:2:6 ]
    │
  1 │ type Foo { a: u32 }
    │      ─┬─  

@@ -4,7 +4,7 @@ expression: string
 input_file: tests/scripts/type_errors/undefined_variable.roto
 ---
 Error: Type error: cannot find value `b` in this scope
-   ╭─[tests/scripts/type_errors/undefined_variable.roto:2:10]
+   ╭─[ tests/scripts/type_errors/undefined_variable.roto:2:10 ]
    │
  2 │     let a = b;
    │             ┬  

@@ -3,8 +3,8 @@ source: tests/snapshot.rs
 expression: string
 input_file: tests/scripts/type_errors/missing_fields.roto
 ---
-Error: Type error: field mismatch: missing fields `c` and `b` in record literal
-   ╭─[tests/scripts/type_errors/missing_fields.roto:4:10]
+Error: Type error: field mismatch: missing fields `b` and `c` in record literal
+   ╭─[ tests/scripts/type_errors/missing_fields.roto:4:10 ]
    │
  4 │ ╭─▶     let a = Foo {
    ┆ ┆   
@@ -19,5 +19,5 @@ Error: Type error: field mismatch: missing fields `c` and `b` in record literal
    │ │             ╰──── invalid field
  9 │ ├─▶     };
    │ │            
-   │ ╰──────────── field mismatch: missing fields `c` and `b` in record literal
+   │ ╰──────────── field mismatch: missing fields `b` and `c` in record literal
 ───╯

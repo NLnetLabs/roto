@@ -4,7 +4,7 @@ expression: string
 input_file: tests/scripts/type_errors/standalone_type.roto
 ---
 Error: Type error: expected a value, but found type `String`
-   ╭─[tests/scripts/type_errors/standalone_type.roto:2:10]
+   ╭─[ tests/scripts/type_errors/standalone_type.roto:2:10 ]
    │
  1 │ filter foo() {
    │ ┬  

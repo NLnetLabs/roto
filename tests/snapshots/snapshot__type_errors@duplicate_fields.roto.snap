@@ -4,7 +4,7 @@ expression: string
 input_file: tests/scripts/type_errors/duplicate_fields.roto
 ---
 Error: Type error: field `a` appears multiple times in the same record
-   ╭─[tests/scripts/type_errors/duplicate_fields.roto:1:12]
+   ╭─[ tests/scripts/type_errors/duplicate_fields.roto:1:12 ]
    │
  1 │ type Foo { a: u32, a: u32 }
    │            ┬       ┬  
