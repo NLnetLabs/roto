@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/missing_arguments.roto
+---
+Error: Type error: function `bar` takes 1 arguments but 0 arguments were given
+   ╭─[ tests/scripts/type_errors/missing_arguments.roto:6:2 ]
+   │
+ 6 │     bar()
+   │     ─┬─  
+   │      ╰─── takes 1 arguments but 0 arguments were given
+───╯

@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/parse_errors/logical_chain.roto
+---
+Error: Parse error: `||` cannot be chained with `&&`
+   ╭─[ tests/scripts/parse_errors/logical_chain.roto:2:19 ]
+   │
+ 2 │     true && false || true && false;
+   │                   ─┬  
+   │                    ╰── cannot be chained with `&&`
+───╯

@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/record_literal_on_non_record.roto
+---
+Error: Type error: Expected a named record type, but found `String`
+   ╭─[ tests/scripts/type_errors/record_literal_on_non_record.roto:2:5 ]
+   │
+ 2 │     String { a: 8 };
+   │     ───┬──  
+   │        ╰──── not a named record type
+───╯

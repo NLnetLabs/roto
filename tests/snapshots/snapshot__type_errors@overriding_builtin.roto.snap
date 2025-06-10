@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/overriding_builtin.roto
+---
+Error: Type error: cycle detected!
+   ╭─[ tests/scripts/type_errors/overriding_builtin.roto:1:1 ]
+   │
+ 1 │ type u32 { b: u32 }
+   │ ┬  
+   │ ╰── type cycle detected
+───╯

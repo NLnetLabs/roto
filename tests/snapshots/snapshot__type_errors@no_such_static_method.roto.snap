@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/no_such_static_method.roto
+---
+Error: Type error: expected enum, but found type `String`
+   ╭─[ tests/scripts/type_errors/no_such_static_method.roto:2:5 ]
+   │
+ 2 │     String.bar();
+   │     ───┬──  
+   │        ╰──── expected type
+───╯

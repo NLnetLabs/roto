@@ -1,5 +1,0 @@
-type Foo { a: u32, a: u32 } // should error here
-
-filter foo() {
-	accept
-}

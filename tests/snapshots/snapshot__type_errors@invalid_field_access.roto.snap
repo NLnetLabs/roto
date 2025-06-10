@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/invalid_field_access.roto
+---
+Error: Type error: expected enum, but found type `String`
+   ╭─[ tests/scripts/type_errors/invalid_field_access.roto:2:10 ]
+   │
+ 2 │     let b = String.foo;
+   │             ───┬──  
+   │                ╰──── expected type
+───╯

@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/method_does_not_exist.roto
+---
+Error: Type error: no field `foo` on type `u32`
+   ╭─[ tests/scripts/type_errors/method_does_not_exist.roto:2:6 ]
+   │
+ 2 │     msg.foo();
+   │         ─┬─  
+   │          ╰─── unknown field `foo`
+───╯

@@ -1,0 +1,5 @@
+type Foo { a: u32, a: u32 }
+
+filter foo() {
+	accept
+}

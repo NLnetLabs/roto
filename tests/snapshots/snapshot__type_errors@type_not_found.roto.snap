@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/type_not_found.roto
+---
+Error: Type error: cannot find value `Foo` in this scope
+   ╭─[ tests/scripts/type_errors/type_not_found.roto:1:17 ]
+   │
+ 1 │ filter foo(msg: Foo) {
+   │                 ─┬─  
+   │                  ╰─── not found in this scope
+───╯
