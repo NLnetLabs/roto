@@ -12,6 +12,74 @@ Released yyyy-mm-dd.
 
 ### Other changes
 
+## 0.6.0
+
+Released 2025-06-10.
+
+### Breaking changes
+
+- The minimum supported Rust version is now 1.84.
+- The `Compiled::get_function` method no longer takes separate type parameters
+  for the parameter types and the return type, but a single function pointer
+  type. (#163)
+
+```rust
+// old
+compiled.get_function::<Ctx, (bool, i32), Val<Verdict>>("main");
+
+// new
+compiled.get_function::<Ctx, fn(bool, i32) -> Val<Verdict>>("main");
+```
+
+- Registered functions no longer take arguments of runtime types by reference.
+  Instead they take `Val<T>`, mirroring how they are passed in from Rust to Roto.
+  (#138)
+
+```rust
+// old
+#[roto_function(runtime)]
+fn foo(x: &Foo) -> Foo {
+    todo!()
+}
+
+// new
+#[roto_function(runtime)]
+fn foo(x: Val<Foo>) -> Val<Foo> {
+    todo!()
+}
+```
+
+- The return type of registered functions now needs to implement the `Reflect`
+  trait. (#163)
+
+### New
+
+- Roto now features an assignment operator to update the value of a variable
+  or a field. (#158)
+- The CLI now has a subcommand `print` to print out a Roto file with basic
+  syntax highlighting. (#139)
+- The return type of registered functions can now be `Optional` or a `Verdict`.
+  (#163)
+- The `FileSpec` type is now public in the `roto` crate. This allows users to
+  set up their own systems for script discovery and easier testing. (#151)
+- Roto will now give better error messages when keywords are used as
+  identifiers. (#157)
+
+### Bug fixes
+
+- Fixed the implementation of the `==` and `!=` operators for `String`. (#141)
+- Fixed a couple of double frees and memory leaks. We now run the entire test
+  suite under Valgrind to ensure that we will find these issues sooner.
+  (#147, #149, #158)
+- Fixed an issue with the type inference of the return types of `filtermaps`.
+  (#152)
+
+### Other changes
+
+- Several outdated examples have been removed and examples of several errors
+  have been updated. (#164)
+- We now do snapshot testing of error messages emitted by Roto. (#165)
+
 ## 0.5.0
 
 Released 2025-04-23.
