@@ -3,7 +3,7 @@
 use core::{ops::Range, str};
 use std::{fmt::Display, ops::ControlFlow};
 
-use icu::properties::sets::CodePointSetDataBorrowed;
+use icu_properties::sets::CodePointSetDataBorrowed;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token<'s> {
@@ -78,9 +78,9 @@ pub enum Keyword {
 }
 
 const XID_START: CodePointSetDataBorrowed<'static> =
-    icu::properties::sets::xid_start();
+    icu_properties::sets::xid_start();
 const XID_CONTINUE: CodePointSetDataBorrowed<'static> =
-    icu::properties::sets::xid_continue();
+    icu_properties::sets::xid_continue();
 
 pub struct Lexer<'a> {
     input: &'a str,
