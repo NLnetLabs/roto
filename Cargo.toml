@@ -17,10 +17,21 @@ exclude = [
   "/vscode-extension",
 ]
 
+[[bin]]
+name = "roto"
+path = "src/main.rs"
+required-features = ["cli"]
+test = false
+bench = false
+
+[features]
+cli = ["clap"]
+logger = ["env_logger"]
+
 [dependencies]
 ariadne = "0.5.1"
-clap = { version = "4.4.6", features = ["derive"] }
-env_logger = "0.11"
+clap = { version = "4.4.6", features = ["derive"], optional = true }
+env_logger = { version = "0.11", optional = true }
 icu = { version = "1.5.0", features = ["compiled_data"] }
 inetnum = "0.1.0"
 log = "0.4"

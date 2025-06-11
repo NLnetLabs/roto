@@ -9,6 +9,7 @@ struct Cli {
 }
 
 fn main() {
+    #[cfg(feature = "logger")]
     env_logger::builder()
         .format_timestamp(None)
         .format_target(false)

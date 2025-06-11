@@ -5,6 +5,7 @@ extern crate self as roto;
 
 mod ast;
 
+#[cfg(feature = "cli")]
 mod cli;
 mod codegen;
 mod file_tree;
@@ -16,7 +17,9 @@ mod runtime;
 pub mod tools;
 mod typechecker;
 
+#[cfg(feature = "cli")]
 pub use cli::cli;
+
 pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub use lower::eval::Memory;
