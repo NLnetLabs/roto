@@ -11,6 +11,11 @@ repository.workspace = true
 homepage.workspace = true
 keywords.workspace = true
 categories.workspace = true
+exclude = [
+  "/.github",
+  "/tests",
+  "/vscode-extension",
+]
 
 [dependencies]
 ariadne = "0.5.1"
