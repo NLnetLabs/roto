@@ -96,6 +96,19 @@ impl Layout {
         builder.add(&Layout::new(n, 1));
         builder.add(self)
     }
+
+    pub fn array(&self, n: usize) -> Self {
+        Self {
+            size: self.size * n,
+            align: self.align,
+        }
+    }
+}
+
+impl From<Layout> for std::alloc::Layout {
+    fn from(value: Layout) -> Self {
+        Self::from_size_align(value.size, value.align).unwrap()
+    }
 }
 
 impl Default for LayoutBuilder {

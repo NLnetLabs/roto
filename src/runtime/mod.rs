@@ -30,6 +30,7 @@
 pub mod context;
 pub mod func;
 pub mod layout;
+pub mod list;
 pub mod optional;
 pub mod ty;
 pub mod val;
@@ -136,6 +137,29 @@ pub struct RuntimeType {
 
     /// Docstring of the type to display in documentation
     docstring: String,
+}
+
+struct VTable {
+    type_id: TypeId,
+
+    /// Whether this type is `Copy`
+    movability: Movability,
+
+    /// Layout of the type
+    layout: Layout,
+}
+
+impl VTable {
+    fn of<T>() -> Self {
+        Self {
+            type_id: TypeId::of::<T>(),
+            movability: Movability::CloneDrop(CloneDrop {
+                clone: extern_clone::<T>,
+                drop: extern_drop::<T>,
+            }),
+            layout: todo!(),
+        }
+    }
 }
 
 impl RuntimeType {
