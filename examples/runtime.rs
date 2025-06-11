@@ -7,6 +7,7 @@ struct Bla {
 }
 
 fn main() -> Result<(), roto::RotoReport> {
+    #[cfg(feature = "logger")]
     env_logger::init();
 
     let mut runtime = Runtime::new();

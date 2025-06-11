@@ -3,6 +3,7 @@ use std::path::Path;
 use roto::{FileTree, Runtime};
 
 fn main() -> Result<(), roto::RotoReport> {
+    #[cfg(feature = "logger")]
     env_logger::init();
 
     let runtime = Runtime::new();

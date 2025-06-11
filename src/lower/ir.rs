@@ -351,11 +351,13 @@ pub struct Block {
     pub instructions: Vec<Instruction>,
 }
 
+#[allow(dead_code)]
 pub struct IrPrinter<'a> {
     pub scope_graph: &'a ScopeGraph,
     pub label_store: &'a LabelStore,
 }
 
+#[allow(dead_code)]
 impl<'a> IrPrinter<'a> {
     pub fn ident(&self, ident: &Identifier) -> &'a str {
         ident.as_str()

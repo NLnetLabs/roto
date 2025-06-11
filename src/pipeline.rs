@@ -12,7 +12,7 @@ use crate::{
     lower::{
         self,
         eval::{self, Memory},
-        ir::{self, IrPrinter},
+        ir,
         label::LabelStore,
         value::IrValue,
         IrFunction,
@@ -274,14 +274,18 @@ impl TypeChecked {
             &runtime,
         );
 
-        let _ = env_logger::try_init();
-        if log::log_enabled!(log::Level::Info) {
-            let s = IrPrinter {
-                scope_graph: &type_info.scope_graph,
-                label_store: &label_store,
+        #[cfg(feature = "logger")]
+        {
+            use ir::IrPrinter;
+            let _ = env_logger::try_init();
+            if log::log_enabled!(log::Level::Info) {
+                let s = IrPrinter {
+                    scope_graph: &type_info.scope_graph,
+                    label_store: &label_store,
+                }
+                .program(&ir);
+                println!("{s}");
             }
-            .program(&ir);
-            println!("{s}");
         }
 
         let runtime_constants = runtime.constants.values().cloned().collect();
