@@ -18,6 +18,7 @@ use super::{
 };
 
 /// The output of the type checker that is used for lowering
+#[derive(Clone)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,

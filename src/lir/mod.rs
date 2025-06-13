@@ -4,15 +4,13 @@
 
 pub mod eval;
 pub mod ir;
-pub mod label;
 mod match_expr;
 pub mod value;
 
 #[cfg(test)]
 mod test_eval;
 
-use ir::{Block, Function, Instruction, Operand, Var, VarKind};
-use label::{LabelRef, LabelStore};
+use ir::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
 use std::{
     any::TypeId,
     collections::{BTreeMap, HashMap},
@@ -24,6 +22,7 @@ use value::IrType;
 use crate::{
     ast::{self, Identifier, Literal},
     ice,
+    label::{LabelRef, LabelStore},
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
     runtime::{
@@ -68,10 +67,10 @@ struct Lowerer<'r> {
 
     /// All the stack slots that are allocated in each scope
     ///
-    /// The first element are the variables allocated in the function body,
+    /// The first element contains the variables allocated in the function body,
     /// the last element is our current scope and between are the parent
-    /// scopes. At the end of a block we drop all variables in the last
-    /// element and then pop that element.
+    /// scopes. At the end of a block we drop all variables in the last element
+    /// and then pop that element.
     live_stack_slots: Vec<Vec<Var>>,
 }
 
@@ -81,7 +80,7 @@ pub fn lower(
     runtime_functions: &mut HashMap<RuntimeFunctionRef, IrFunction>,
     label_store: &mut LabelStore,
     runtime: &Runtime,
-) -> Vec<Function> {
+) -> Lir {
     Lowerer::tree(type_info, runtime_functions, tree, label_store, runtime)
 }
 
@@ -151,7 +150,7 @@ impl<'r> Lowerer<'r> {
         tree: &ModuleTree,
         label_store: &mut LabelStore,
         runtime: &'r Runtime,
-    ) -> Vec<Function> {
+    ) -> Lir {
         let mut functions = Vec::new();
 
         for m in &tree.modules {
@@ -203,7 +202,7 @@ impl<'r> Lowerer<'r> {
                 }
             }
         }
-        functions
+        Lir { functions }
     }
 
     /// Lower a filtermap
@@ -335,7 +334,7 @@ impl<'r> Lowerer<'r> {
     ) -> (Option<Operand>, Vec<Var>) {
         self.live_stack_slots.push(Vec::new());
 
-        // Result is ignored
+        // Resulting operand is ignored
         for stmt in &block.stmts {
             self.stmt(stmt);
         }
@@ -535,7 +534,7 @@ impl<'r> Lowerer<'r> {
                 );
                 self.read_field(op, offset, &ty)
             }
-            // An assignment is suprisingly hard to compile. The expression
+            // An assignment is surprisingly hard to compile. The expression
             // ```
             // x = e
             // ```
@@ -1037,7 +1036,7 @@ impl<'r> Lowerer<'r> {
             path_value @ PathValue {
                 name,
                 kind: _,
-                ty: root_ty,
+                root_ty,
                 fields,
             },
         ) = &path_kind
@@ -1362,6 +1361,7 @@ impl<'r> Lowerer<'r> {
                 ice!("should be a type error");
             }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
+            Literal::Unit => todo!(),
         }
     }
 
@@ -1435,7 +1435,7 @@ impl<'r> Lowerer<'r> {
         &mut self,
         PathValue {
             kind,
-            ty,
+            root_ty: ty,
             name,
             fields,
         }: &PathValue,

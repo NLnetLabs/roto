@@ -14,9 +14,9 @@ use std::{
 use crate::{
     ast::Identifier,
     ice,
-    lower::{
+    label::{LabelRef, LabelStore},
+    lir::{
         ir::{self, FloatCmp, IntCmp, Operand, Var, VarKind},
-        label::{LabelRef, LabelStore},
         value::IrType,
         IrFunction,
     },

@@ -235,13 +235,13 @@ pub struct RecordType {
 
 #[derive(Clone, Debug)]
 pub enum Literal {
-    #[allow(dead_code)]
     String(String),
     Asn(Asn),
     IpAddress(std::net::IpAddr),
     Integer(i64),
     Float(f64),
     Bool(bool),
+    Unit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

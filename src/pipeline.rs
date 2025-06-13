@@ -2,6 +2,8 @@
 
 use std::{collections::HashMap, fmt, path::Path};
 
+use log::info;
+
 use crate::{
     codegen::{
         self,
@@ -9,11 +11,12 @@ use crate::{
         Module, TypedFunc,
     },
     file_tree::SourceFile,
-    lower::{
+    hir,
+    label::LabelStore,
+    lir::{
         self,
         eval::{self, Memory},
-        ir::{self, IrPrinter},
-        label::LabelStore,
+        ir::{IrPrinter, Printable},
         value::IrValue,
         IrFunction,
     },
@@ -58,10 +61,20 @@ pub struct TypeChecked {
     context_type: ContextDescription,
 }
 
-/// Compiler stage: IR
-pub struct Lowered {
+/// Compiler stage: HIR
+#[allow(dead_code)]
+pub struct LoweredToHir {
     runtime: Runtime,
-    pub ir: Vec<ir::Function>,
+    pub ir: hir::ir::Hir,
+    label_store: LabelStore,
+    type_info: TypeInfo,
+    context_type: ContextDescription,
+}
+
+/// Compiler stage: LIR
+pub struct LoweredToLir {
+    runtime: Runtime,
+    pub ir: lir::ir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, IrFunction>,
     runtime_constants: Vec<RuntimeConstant>,
     label_store: LabelStore,
@@ -214,7 +227,10 @@ pub fn interpret(
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Result<Option<IrValue>, RotoReport> {
-    let lowered = FileTree::read(path).parse()?.typecheck(runtime)?.lower();
+    let lowered = FileTree::read(path)
+        .parse()?
+        .typecheck(runtime)?
+        .lower_to_lir();
 
     let res = lowered.eval(mem, ctx, args);
     Ok(res)
@@ -257,7 +273,38 @@ impl Parsed {
 }
 
 impl TypeChecked {
-    pub fn lower(self) -> Lowered {
+    pub fn lower_to_hir(&self) -> LoweredToHir {
+        let TypeChecked {
+            module_tree,
+            type_info,
+            runtime,
+            context_type,
+        } = self;
+
+        let mut type_info = type_info.clone();
+        let mut label_store = LabelStore::default();
+        let ir =
+            hir::lower_to_hir(&module_tree, &mut type_info, &mut label_store);
+
+        if log::log_enabled!(log::Level::Info) {
+            let printer = IrPrinter {
+                scope_graph: &type_info.scope_graph,
+                label_store: &label_store,
+            };
+            let s = ir.print(&printer);
+            info!("\n{s}");
+        }
+
+        LoweredToHir {
+            ir,
+            runtime: runtime.clone(),
+            label_store,
+            context_type: context_type.clone(),
+            type_info,
+        }
+    }
+
+    pub fn lower_to_lir(self) -> LoweredToLir {
         let TypeChecked {
             module_tree,
             mut type_info,
@@ -266,7 +313,7 @@ impl TypeChecked {
         } = self;
         let mut runtime_functions = HashMap::new();
         let mut label_store = LabelStore::default();
-        let ir = lower::lower(
+        let ir = lir::lower(
             &module_tree,
             &mut type_info,
             &mut runtime_functions,
@@ -276,17 +323,17 @@ impl TypeChecked {
 
         let _ = env_logger::try_init();
         if log::log_enabled!(log::Level::Info) {
-            let s = IrPrinter {
+            let printer = IrPrinter {
                 scope_graph: &type_info.scope_graph,
                 label_store: &label_store,
-            }
-            .program(&ir);
-            println!("{s}");
+            };
+            let s = ir.print(&printer);
+            info!("{s}");
         }
 
         let runtime_constants = runtime.constants.values().cloned().collect();
 
-        Lowered {
+        LoweredToLir {
             ir,
             runtime,
             runtime_functions,
@@ -298,7 +345,7 @@ impl TypeChecked {
     }
 }
 
-impl Lowered {
+impl LoweredToLir {
     pub fn eval(
         &self,
         mem: &mut Memory,
@@ -307,7 +354,7 @@ impl Lowered {
     ) -> Option<IrValue> {
         eval::eval(
             &self.runtime,
-            &self.ir,
+            &self.ir.functions,
             "main",
             mem,
             &self.runtime_constants,
@@ -319,7 +366,7 @@ impl Lowered {
     pub fn codegen(self) -> Compiled {
         let module = codegen::codegen(
             &self.runtime,
-            &self.ir,
+            &self.ir.functions,
             &self.runtime_functions,
             &self.runtime_constants,
             self.label_store,

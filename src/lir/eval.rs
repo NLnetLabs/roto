@@ -6,11 +6,12 @@
 
 use log::trace;
 
-use super::ir::{Function, Operand, Var};
 use crate::{
     ast::Identifier,
-    lower::{
-        ir::{FloatCmp, Instruction, IntCmp, VarKind},
+    lir::{
+        ir::{
+            FloatCmp, Function, Instruction, IntCmp, Operand, Var, VarKind,
+        },
         value::IrValue,
     },
     runtime::{RuntimeConstant, RuntimeFunctionRef},

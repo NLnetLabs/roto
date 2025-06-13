@@ -24,6 +24,7 @@ use std::{fmt::Display, sync::Arc};
 
 use crate::{
     ast::Identifier,
+    label::{LabelRef, LabelStore},
     runtime::{self, layout::Layout},
     typechecker::{
         self,
@@ -31,10 +32,7 @@ use crate::{
     },
 };
 
-use super::{
-    label::{LabelRef, LabelStore},
-    value::{IrType, IrValue},
-};
+use super::value::{IrType, IrValue};
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -351,51 +349,75 @@ pub struct Block {
     pub instructions: Vec<Instruction>,
 }
 
+pub struct Lir {
+    pub functions: Vec<Function>,
+}
+
 pub struct IrPrinter<'a> {
     pub scope_graph: &'a ScopeGraph,
     pub label_store: &'a LabelStore,
 }
 
-impl<'a> IrPrinter<'a> {
-    pub fn ident(&self, ident: &Identifier) -> &'a str {
-        ident.as_str()
-    }
+pub trait Printable {
+    fn print(&self, printer: &IrPrinter) -> String;
+}
 
-    pub fn scope(&self, scope: ScopeRef) -> String {
-        self.scope_graph.print_scope(scope)
+impl Printable for Identifier {
+    fn print(&self, _printer: &IrPrinter) -> String {
+        self.as_str().into()
     }
+}
 
-    pub fn var(&self, var: &Var) -> String {
-        let f = self.scope(var.scope);
+impl Printable for ScopeRef {
+    fn print(&self, printer: &IrPrinter) -> String {
+        printer.scope_graph.print_scope(*self)
+    }
+}
+
+impl Printable for Var {
+    fn print(&self, printer: &IrPrinter) -> String {
+        let f = self.scope.print(printer);
         format!(
             "{}.{}",
             f,
-            match &var.kind {
-                VarKind::Explicit(name) => self.ident(name).to_string(),
+            match &self.kind {
+                VarKind::Explicit(name) => name.print(printer).to_string(),
                 VarKind::Tmp(idx) => format!("$tmp-{idx}"),
                 VarKind::NamedTmp(name, idx) =>
-                    format!("${}-{idx}", self.ident(name)),
+                    format!("${}-{idx}", name.print(printer)),
                 VarKind::Return => "$return".to_string(),
                 VarKind::Context => "$context".to_string(),
             }
         )
     }
+}
 
-    pub fn operand(&self, operand: &Operand) -> String {
-        match operand {
-            Operand::Place(x) => self.var(x),
+impl Printable for Operand {
+    fn print(&self, printer: &IrPrinter) -> String {
+        match self {
+            Operand::Place(x) => x.print(printer),
             Operand::Value(x) => x.to_string(),
         }
     }
+}
 
-    pub fn instruction(&self, instruction: &Instruction) -> String {
+impl Printable for Instruction {
+    fn print(&self, printer: &IrPrinter) -> String {
         use Instruction::*;
-        match instruction {
+        match self {
             Assign { to, val, ty } => {
-                format!("{}: {ty} = {}", self.var(to), self.operand(val),)
+                format!(
+                    "{}: {ty} = {}",
+                    to.print(printer),
+                    val.print(printer),
+                )
             }
             LoadConstant { to, name, ty } => {
-                format!("{}: {ty} = LoadConstant(\"{}\")", self.var(to), name)
+                format!(
+                    "{}: {ty} = LoadConstant(\"{}\")",
+                    to.print(printer),
+                    name
+                )
             }
             Call {
                 to: Some((to, ty)),
@@ -405,11 +427,11 @@ impl<'a> IrPrinter<'a> {
                 return_ptr: _,
             } => format!(
                 "{}: {ty} = {}({}, {})",
-                self.var(to),
-                self.ident(func),
-                self.operand(ctx),
+                to.print(printer),
+                func.print(printer),
+                ctx.print(printer),
                 args.iter()
-                    .map(|a| self.operand(a).to_string())
+                    .map(|a| a.print(printer))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -421,11 +443,11 @@ impl<'a> IrPrinter<'a> {
                 return_ptr: Some(ret),
             } => format!(
                 "{}({}, {}, {})",
-                self.ident(func),
-                self.var(ret),
-                self.operand(ctx),
+                func.print(printer),
+                ret.print(printer),
+                ctx.print(printer),
                 args.iter()
-                    .map(|a| self.operand(a).to_string())
+                    .map(|a| a.print(printer).to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -437,10 +459,10 @@ impl<'a> IrPrinter<'a> {
                 return_ptr: None,
             } => format!(
                 "{}({}, {})",
-                self.ident(func),
-                self.operand(ctx),
+                func.print(printer),
+                ctx.print(printer),
                 args.iter()
-                    .map(|a| self.operand(a).to_string())
+                    .map(|a| a.print(printer))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -448,7 +470,7 @@ impl<'a> IrPrinter<'a> {
                 "<rust function {:?}>({})",
                 func,
                 args.iter()
-                    .map(|a| self.operand(a))
+                    .map(|a| a.print(printer))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -457,11 +479,11 @@ impl<'a> IrPrinter<'a> {
                 string,
                 init_func: _,
             } => {
-                format!("{}: String = \"{string}\"", self.var(to),)
+                format!("{}: String = \"{string}\"", to.print(printer),)
             }
             Return(None) => "return".to_string(),
             Return(Some(v)) => {
-                format!("return {}", self.operand(v))
+                format!("return {}", v.print(printer))
             }
             IntCmp {
                 to,
@@ -471,9 +493,9 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "{} = {cmp}({}, {})",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             FloatCmp {
@@ -484,60 +506,60 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "{} = {cmp}({}, {})",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Eq { to, left, right } => {
                 format!(
                     "{} = {} == {}",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Not { to, val } => {
-                format!("{} = not({})", self.var(to), self.operand(val),)
+                format!("{} = not({})", to.print(printer), val.print(printer))
             }
             And { to, left, right } => {
                 format!(
                     "{} = {} & {}",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Or { to, left, right } => {
                 format!(
                     "{} = {} | {}",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Add { to, left, right } => {
                 format!(
                     "{} = {} + {}",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Sub { to, left, right } => {
                 format!(
                     "{} = {} - {}",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Mul { to, left, right } => {
                 format!(
                     "{} = {} * {}",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Div {
@@ -548,29 +570,29 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "{}: = {} / {} ({})",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                     if *signed { "signed" } else { "unsigned" },
                 )
             }
             FDiv { to, left, right } => {
                 format!(
                     "{}: = {} / {} (float)",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
                 )
             }
             Extend { to, ty, from } => {
                 format!(
                     "{}: extend({ty}, {})",
-                    self.var(to),
-                    self.operand(from),
+                    to.print(printer),
+                    from.print(printer),
                 )
             }
             Jump(to) => {
-                format!("jump {}", self.label(to))
+                format!("jump {}", to.print(printer))
             }
             Switch {
                 examinee,
@@ -579,19 +601,19 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "switch {} [{}] else {}",
-                    self.operand(examinee),
+                    examinee.print(printer),
                     branches
                         .iter()
-                        .map(|(i, b)| format!("{i} => {}", self.label(b)))
+                        .map(|(i, b)| format!("{i} => {}", b.print(printer)))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    self.label(default)
+                    default.print(printer),
                 )
             }
             Alloc { to, layout } => {
                 format!(
                     "{} = mem::alloc(size={}, align={})",
-                    self.var(to),
+                    to.print(printer),
                     layout.size(),
                     layout.align(),
                 )
@@ -599,7 +621,7 @@ impl<'a> IrPrinter<'a> {
             Initialize { to, bytes, layout } => {
                 format!(
                     "{} = mem::initialize([{}], size={}, align={})",
-                    self.var(to),
+                    to.print(printer),
                     bytes
                         .iter()
                         .map(|b| b.to_string())
@@ -612,22 +634,22 @@ impl<'a> IrPrinter<'a> {
             Offset { to, from, offset } => {
                 format!(
                     "{} = ptr::offset({}, {offset})",
-                    self.var(to),
-                    self.operand(from),
+                    to.print(printer),
+                    from.print(printer),
                 )
             }
             Read { to, from, ty } => {
                 format!(
                     "{}: {ty} = mem::read({})",
-                    self.var(to),
-                    self.operand(from),
+                    to.print(printer),
+                    from.print(printer),
                 )
             }
             Write { to, val } => {
                 format!(
                     "mem::write({}, {})",
-                    self.operand(to),
-                    self.operand(val)
+                    to.print(printer),
+                    val.print(printer),
                 )
             }
             Copy {
@@ -638,8 +660,8 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "mem::copy({}, {}, {size})",
-                    self.operand(to),
-                    self.operand(from),
+                    to.print(printer),
+                    from.print(printer),
                 )
             }
             Copy {
@@ -650,8 +672,8 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "mem::copy({}, {}, {size}, with={clone:?})",
-                    self.operand(to),
-                    self.operand(from),
+                    to.print(printer),
+                    from.print(printer),
                 )
             }
             MemCmp {
@@ -662,30 +684,32 @@ impl<'a> IrPrinter<'a> {
             } => {
                 format!(
                     "{} = mem::cmp({}, {}, {})",
-                    self.var(to),
-                    self.operand(left),
-                    self.operand(right),
-                    self.operand(size),
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
+                    size.print(printer),
                 )
             }
             Drop {
                 var,
                 drop: Some(drop),
             } => {
-                format!("mem::drop({}, with={drop:?})", self.operand(var),)
+                format!("mem::drop({}, with={drop:?})", var.print(printer))
             }
             Drop { var, drop: None } => {
-                format!("mem::drop({}, noop)", self.operand(var),)
+                format!("mem::drop({}, noop)", var.print(printer))
             }
         }
     }
+}
 
-    pub fn label(&self, label: &LabelRef) -> String {
-        let mut label = self.label_store.get(*label);
+impl Printable for LabelRef {
+    fn print(&self, printer: &IrPrinter) -> String {
+        let mut label = printer.label_store.get(*self);
         let mut strings = Vec::new();
         loop {
             let dollar = if label.internal { "$" } else { "" };
-            let ident = self.ident(&label.identifier);
+            let ident = label.identifier.print(printer);
             let counter = if label.counter > 0 {
                 format!("({})", label.counter)
             } else {
@@ -695,26 +719,30 @@ impl<'a> IrPrinter<'a> {
             let Some(parent) = label.parent else {
                 break;
             };
-            label = self.label_store.get(parent);
+            label = printer.label_store.get(parent);
         }
 
         strings.reverse();
         strings.join("::")
     }
+}
 
-    pub fn block(&self, block: &Block) -> String {
+impl Printable for Block {
+    fn print(&self, printer: &IrPrinter) -> String {
         use std::fmt::Write;
         let mut s = String::new();
-        writeln!(s, ".{}", self.label(&block.label)).unwrap();
-        for i in &block.instructions {
-            writeln!(s, "  {}", self.instruction(i)).unwrap();
+        writeln!(s, ".{}", &self.label.print(printer)).unwrap();
+        for i in &self.instructions {
+            writeln!(s, "  {}", i.print(printer)).unwrap();
         }
         s
     }
+}
 
-    pub fn function(&self, function: &Function) -> String {
+impl Printable for Function {
+    fn print(&self, printer: &IrPrinter) -> String {
         use std::fmt::Write;
-        let mut blocks = function.blocks.iter();
+        let mut blocks = self.blocks.iter();
 
         let mut s = String::new();
 
@@ -723,19 +751,21 @@ impl<'a> IrPrinter<'a> {
             return s;
         };
 
-        s.push_str(&self.block(b));
+        s.push_str(&b.print(printer));
 
         for b in blocks {
             writeln!(s).unwrap();
-            s.push_str(&self.block(b));
+            s.push_str(&b.print(printer));
         }
 
         s
     }
+}
 
-    pub fn program(&self, program: &[Function]) -> String {
+impl Printable for Lir {
+    fn print(&self, printer: &IrPrinter) -> String {
         let strings: Vec<_> =
-            program.iter().map(|f| self.function(f)).collect();
+            self.functions.iter().map(|f| f.print(printer)).collect();
         strings.join("\n")
     }
 }

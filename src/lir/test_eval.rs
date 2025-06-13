@@ -1,8 +1,8 @@
 use super::{eval::Memory, value::IrValue};
-use crate::{runtime::tests::routecore_runtime, src, FileTree, Lowered};
+use crate::{runtime::tests::routecore_runtime, src, FileTree, LoweredToLir};
 
 #[track_caller]
-fn compile(s: FileTree) -> Lowered {
+fn compile(s: FileTree) -> LoweredToLir {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     let _ = env_logger::builder()
@@ -11,7 +11,7 @@ fn compile(s: FileTree) -> Lowered {
         .try_init();
 
     let runtime = routecore_runtime().unwrap();
-    s.parse().unwrap().typecheck(runtime).unwrap().lower()
+    s.parse().unwrap().typecheck(runtime).unwrap().lower_to_lir()
 }
 
 /// Helper for constructing complex values for Roto
