@@ -32,7 +32,7 @@ logger = ["env_logger"]
 ariadne = "0.5.1"
 clap = { version = "4.4.6", features = ["derive"], optional = true }
 env_logger = { version = "0.11", optional = true }
-icu = { version = "1.5.0", features = ["compiled_data"] }
+unicode-ident = "1.0.18"
 inetnum = "0.1.0"
 log = "0.4"
 roto-macros = { workspace = true }
