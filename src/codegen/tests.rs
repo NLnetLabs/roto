@@ -21,6 +21,7 @@ fn compile(f: FileTree) -> Compiled {
 
 #[track_caller]
 fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
+    #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
     let res = f.parse().and_then(|x| x.typecheck(runtime)).map(|x| {
