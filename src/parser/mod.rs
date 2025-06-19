@@ -394,9 +394,9 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         Ok(Test { ident, body })
     }
 
-    fn import(&mut self) -> ParseResult<Meta<Path>> {
+    fn import(&mut self) -> ParseResult<Vec<Meta<Path>>> {
         self.take(Token::Keyword(Keyword::Import))?;
-        let path = self.path()?;
+        let path = self.path_expr()?;
         self.take(Token::SemiColon)?;
         Ok(path)
     }

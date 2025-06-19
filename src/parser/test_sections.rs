@@ -91,3 +91,51 @@ fn block_import_2() {
     ";
     parse(s).unwrap();
 }
+
+#[test]
+fn list_import() {
+    let s = "
+        function myfunction() {
+            import foo.{bar1, bar2};
+            1 + 1;
+        }
+    ";
+
+    parse(s).unwrap();
+}
+
+#[test]
+fn nested_list_import() {
+    let s = "
+        function myfunction() {
+            import foo.{baz.{fn1, fn2, fn3}, baz.{bar1, bar2}};
+            1 + 1;
+        }
+    ";
+
+    parse(s).unwrap();
+}
+
+#[test]
+fn sublists_only_import() {
+    let s = "
+        function myfunction() {
+            import foo.{{fn1, fn2, fn3}, {bar1, bar2}};
+            1 + 1;
+        }
+    ";
+
+    parse(s).unwrap();
+}
+
+#[test]
+fn sublist_sublist_import() {
+    let s = "
+        function myfunction() {
+            import foo.{item1.{fn1, fn2}, item2.{item3.fn3, item4.{fn5, fn6}}};
+            1 + 1;
+        }
+    ";
+
+    parse(s).unwrap();
+}
