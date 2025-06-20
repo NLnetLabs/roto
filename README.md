@@ -49,16 +49,31 @@ cargo run --example <example name>
 
 ## Limitations
 
+These are the limitations that are fundamental to the design of Roto. They
+stem from the fact that Roto is a scripting language and that Rust's reflection
+system is limited.
+
 - All registered Rust types must implement `Clone` or `Copy`. Rust types that
   don't implement these traits should be wrapped in an `Rc` or `Arc`. The reason
-  for this limitation is that Roto does not have references.
+  for this limitation is that Roto does not have references and freely clones
+  values.
+- It is not possible to register types that are not concrete. For example,
+  `Vec<u32>` is possible, but `Vec<T>` not. We plan to support some generics
+  via some form of type erasure.
 - The parameter and return types of functions exported to the host application
-  are static.
-- Roto currently does not feature any looping constructs. If you need loops,
+  must have a `'static` lifetime.
+
+## Pending features
+
+Some limitations are only present because we haven't come around to
+implementing them yet. Most limitations can be found in the issue tracker, but
+we've summarized the most important missing features here.
+
+- Roto does not feature any looping constructs yet. If you need loops,
   you can use recursion instead as a workaround.
-- All values are currently immutable. If a type should be mutable and shared
-  between multiple variables, it can be wrapped in a type that provides interior
-  mutability such as `Rc<RefCell<T>>` and `Arc<Mutex<T>>`.
+- Lists are not supported yet. (https://github.com/NLnetLabs/roto/issues/102)
+- It's not yet possible to declare your own `enum` types.
+- It's not yet possible to declare types with generics and write generic functions.
 
 ## Learn more
 
