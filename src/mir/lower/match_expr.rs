@@ -170,8 +170,7 @@ impl Lowerer<'_> {
         let examinee = self.assign_to_var(examinee, examinee_ty.clone());
         let discriminant = self.undropped_tmp();
         self.emit_assign(
-            Place::from(discriminant.clone()),
-            Type::u8(),
+            Place::new(discriminant.clone(), Type::u8()),
             Type::u8(),
             Value::Discriminant(examinee.clone()),
         );
@@ -200,6 +199,7 @@ impl Lowerer<'_> {
                 .collect();
             self.match_case(
                 examinee.clone(),
+                &examinee_ty,
                 Some(&variants[discriminant]),
                 lbl,
                 &branches,
@@ -210,6 +210,7 @@ impl Lowerer<'_> {
         if !default_branches.is_empty() {
             self.match_case(
                 examinee,
+                &examinee_ty,
                 None,
                 default_lbl,
                 &default_branches,
@@ -225,8 +226,7 @@ impl Lowerer<'_> {
             self.new_block(arm_labels[&arm_index]);
             let val = self.block(&arm.body);
             self.emit_assign(
-                Place::from(out.clone()),
-                ty.clone(),
+                Place::new(out.clone(), ty.clone()),
                 ty.clone(),
                 val,
             );
@@ -242,6 +242,7 @@ impl Lowerer<'_> {
     fn match_case(
         &mut self,
         examinee: Var,
+        examinee_ty: &Type,
         variant: Option<&EnumVariant>,
         lbl: LabelRef,
         branches: &[&(Option<usize>, &ast::MatchArm, usize)],
@@ -275,11 +276,11 @@ impl Lowerer<'_> {
                     };
 
                     self.emit_assign(
-                        Place::from(var),
-                        ty.clone(),
+                        Place::new(var, ty.clone()),
                         ty,
                         Value::Clone(Place {
                             var: examinee.clone(),
+                            root_ty: examinee_ty.clone(),
                             projection: vec![Projection::VariantField(
                                 variant.clone(),
                                 i,

@@ -60,13 +60,15 @@ pub struct Block {
 #[derive(Clone, Debug)]
 pub struct Place {
     pub var: Var,
+    pub root_ty: Type,
     pub projection: Vec<Projection>,
 }
 
-impl From<Var> for Place {
-    fn from(value: Var) -> Self {
+impl Place {
+    pub fn new(value: Var, ty: Type) -> Self {
         Self {
             var: value,
+            root_ty: ty,
             projection: Vec::new(),
         }
     }
@@ -121,7 +123,6 @@ pub enum Instruction {
 
     Assign {
         to: Place,
-        root_ty: Type,
         ty: Type,
         value: Value,
     },

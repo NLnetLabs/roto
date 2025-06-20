@@ -31,6 +31,75 @@ impl Lowerer<'_> {
         }
     }
 
+    pub fn clone_type(&mut self, from: Operand, to: Operand, ty: &Type) {
+        let new_from = from.clone();
+        let new_to = to.clone();
+        let f = move |lowerer: &mut Self, offset, ty| {
+            lowerer.clone_leaf_type(&new_from, &new_to, offset, ty)
+        };
+        self.traverse_type(&from, 0, ty.clone(), "clone".into(), &f);
+    }
+
+    fn clone_leaf_type(
+        &mut self,
+        from: &Operand,
+        to: &Operand,
+        offset: usize,
+        ty: Type,
+    ) {
+        if let Some(&CloneDrop { clone, .. }) = self.get_leaf_clone_drop(&ty)
+        {
+            let from = self.offset(from.clone(), offset as u32);
+            let to = self.offset(to.clone(), offset as u32);
+            self.emit(Instruction::Clone {
+                to,
+                from,
+                clone_fn: clone,
+            });
+            return;
+        }
+
+        let size = match ty {
+            // These are invalid at this point
+            Type::Var(_) | Type::ExplicitVar(_) => {
+                panic!()
+            }
+            // These aren't copied, since they aren't leafs or zero sized
+            Type::Never
+            | Type::Record(_)
+            | Type::RecordVar(_, _)
+            | Type::Function(_, _) => return,
+            Type::Name(type_name) => {
+                let type_def = self.type_info.resolve_type_name(&type_name);
+
+                match type_def {
+                    // For enums we will do most of the work in the traversal
+                    // but the discriminant should be done here.
+                    TypeDefinition::Enum(_, _) => 1,
+                    TypeDefinition::Primitive(p) => p.layout().size(),
+                    TypeDefinition::Runtime(_, id) => self
+                        .runtime
+                        .get_runtime_type(id)
+                        .unwrap()
+                        .layout()
+                        .size(),
+                    _ => return,
+                }
+            }
+            Type::IntVar(_) => Primitive::i32().layout().size(),
+            Type::FloatVar(_) => Primitive::f64().layout().size(),
+        };
+
+        let from = self.offset(from.clone(), offset as u32);
+        let to = self.offset(to.clone(), offset as u32);
+        self.add(Instruction::Copy {
+            to,
+            from,
+            size: size as u32,
+            clone: None,
+        })
+    }
+
     fn get_leaf_clone_drop(&mut self, ty: &Type) -> Option<&CloneDrop> {
         let id = match ty {
             Type::Name(type_name) => {

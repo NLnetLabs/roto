@@ -110,12 +110,9 @@ impl Lowerer<'_> {
 
     fn instruction(&mut self, instruction: mir::Instruction) {
         match instruction {
-            mir::Instruction::Assign {
-                to,
-                root_ty,
-                ty,
-                value,
-            } => self.assign(to, root_ty, ty, value),
+            mir::Instruction::Assign { to, ty, value } => {
+                self.assign(to, ty, value)
+            }
             mir::Instruction::Jump(lbl) => {
                 self.emit_jump(lbl);
             }
@@ -133,13 +130,7 @@ impl Lowerer<'_> {
         }
     }
 
-    fn assign(
-        &mut self,
-        to: mir::Place,
-        root_ty: Type,
-        ty: Type,
-        value: mir::Value,
-    ) {
+    fn assign(&mut self, to: mir::Place, ty: Type, value: mir::Value) {
         // A call value is the only value that can have a side effect.
         // We can ignore the others if the return type is zero-sized.
         if self.type_info.layout_of(&ty, self.runtime).size() == 0 {
@@ -152,21 +143,72 @@ impl Lowerer<'_> {
             return;
         }
 
-        let location = if to.projection.is_empty() {
+        let location = self.location(to, ty.clone());
+        let op = match value {
+            mir::Value::Const(lit, ty) => self.literal(&lit, &ty),
+            mir::Value::Move(var) => self.var(var).into(),
+            mir::Value::Discriminant(v) => self.get_discriminant(v),
+            mir::Value::Not(var) => {
+                let val = self.var(var);
+                let tmp = self.new_tmp();
+                self.emit_not(tmp.clone(), val.into());
+                tmp.into()
+            }
+            mir::Value::Clone(place) => {
+                let from_location = self.location(place, ty.clone());
+                self.clone_place(location, from_location, &ty);
+                return;
+            }
+            mir::Value::BinOp { .. } => todo!(),
+            mir::Value::Call { .. } => todo!(),
+            mir::Value::CallRuntime { .. } => todo!(),
+        };
+    }
+
+    fn clone_place(&mut self, to: Location, from: Location, ty: &Type) {
+        match (to, from) {
+            // This is a not-by-reference type so we'll just assign it.
+            (Location::Var(to), Location::Var(from)) => {
+                todo!()
+            }
+            // We read a not-by-reference type from a field
+            (Location::Var(x), Location::Pointer { base, offset }) => todo!(),
+            // We write a not-by-reference type to a field
+            (Location::Pointer { base, offset }, Location::Var(x)) => todo!(),
+            (
+                Location::Pointer {
+                    base: base_to,
+                    offset: offset_to,
+                },
+                Location::Pointer {
+                    base: base_from,
+                    offset: offset_from,
+                },
+            ) => {
+                let from = self.offset(base_from.into(), offset_from as u32);
+                let to = self.offset(base_to.into(), offset_to as u32);
+                self.clone_type(from, to, ty);
+            }
+        }
+    }
+
+    fn location(&mut self, place: mir::Place, ty: Type) -> Location {
+        let root_ty = place.root_ty;
+        if place.projection.is_empty() {
             if self.type_info.is_reference_type(&ty, self.runtime) {
                 Location::Pointer {
-                    base: self.var(to.var),
+                    base: self.var(place.var),
                     offset: 0,
                 }
             } else {
-                Location::Var(self.var(to.var))
+                Location::Var(self.var(place.var))
             }
         } else {
-            let base = self.var(to.var);
+            let base = self.var(place.var);
 
             let mut offset = 0;
             let mut ty = root_ty;
-            for p in to.projection {
+            for p in place.projection {
                 match p {
                     mir::Projection::Field(ident) => {
                         let Type::Name(name) = &ty else { ice!() };
@@ -211,18 +253,7 @@ impl Lowerer<'_> {
             }
 
             Location::Pointer { base, offset }
-        };
-
-        let op = match value {
-            mir::Value::Const(lit, ty) => self.literal(&lit, &ty),
-            mir::Value::Move(var) => self.var(var).into(),
-            mir::Value::Discriminant(v) => self.get_discriminant(v),
-            mir::Value::Not(..) => todo!(),
-            mir::Value::Clone(..) => todo!(),
-            mir::Value::BinOp { .. } => todo!(),
-            mir::Value::Call { .. } => todo!(),
-            mir::Value::CallRuntime { .. } => todo!(),
-        };
+        }
     }
 
     fn switch(
@@ -412,6 +443,10 @@ impl Lowerer<'_> {
             .push(instruction)
     }
 
+    fn emit_not(&mut self, to: Var, val: Operand) {
+        self.emit(Instruction::Not { to, val })
+    }
+
     fn emit_jump(&mut self, lbl: LabelRef) {
         self.emit(Instruction::Jump(lbl))
     }
@@ -424,13 +459,17 @@ impl Lowerer<'_> {
         self.emit(Instruction::Write { to, val })
     }
 
+    fn emit_clone(
+        &mut self,
+        to: Operand,
+        from: Operand,
+        clone_fn: unsafe extern "C" fn(*const (), *mut ()),
+    ) {
+        self.emit(Instruction::Clone { to, from, clone_fn })
+    }
+
     fn emit_memcpy(&mut self, to: Operand, from: Operand, size: u32) {
-        self.emit(Instruction::Copy {
-            to,
-            from,
-            size,
-            clone: None,
-        })
+        self.emit(Instruction::Copy { to, from, size })
     }
 
     fn emit_switch(

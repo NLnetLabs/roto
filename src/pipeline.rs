@@ -283,8 +283,12 @@ impl TypeChecked {
 
         let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
-        let ir =
-            mir::lower_to_mir(&module_tree, &mut type_info, &mut label_store);
+        let ir = mir::lower_to_mir(
+            &module_tree,
+            &runtime,
+            &mut type_info,
+            &mut label_store,
+        );
 
         if log::log_enabled!(log::Level::Info) {
             let printer = IrPrinter {
@@ -312,6 +316,7 @@ impl TypeChecked {
             runtime,
             context_type,
         } = self;
+
         let mut runtime_functions = HashMap::new();
         let mut label_store = LabelStore::default();
         let ir = lir::lower(
@@ -343,6 +348,31 @@ impl TypeChecked {
             label_store,
             context_type,
             type_info,
+        }
+    }
+}
+
+impl LoweredToMir {
+    pub fn lower_to_lir(self) -> LoweredToLir {
+        let LoweredToMir {
+            runtime,
+            ir,
+            mut label_store,
+            mut type_info,
+            context_type,
+        } = self;
+
+        let ir =
+            lir::lower_to_lir(&runtime, &mut type_info, &mut label_store, ir);
+
+        LoweredToLir {
+            runtime,
+            ir,
+            label_store,
+            type_info,
+            context_type,
+            runtime_functions: todo!(),
+            runtime_constants: todo!(),
         }
     }
 }

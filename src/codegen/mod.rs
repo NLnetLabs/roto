@@ -895,38 +895,33 @@ impl<'c> FuncGen<'c> {
                 let to = self.variable(to, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
-            ir::Instruction::Copy {
-                to,
-                from,
-                size,
-                clone,
-            } => {
+            ir::Instruction::Copy { to, from, size } => {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
 
-                if let Some(clone) = clone {
-                    let pointer_ty = self.module.isa.pointer_type();
-                    let clone = self.ins().iconst(
-                        pointer_ty,
-                        *clone as *mut u8 as usize as i64,
-                    );
-                    self.builder.ins().call_indirect(
-                        self.clone_signature,
-                        clone,
-                        &[src, dest],
-                    );
-                } else {
-                    self.builder.emit_small_memory_copy(
-                        self.module.isa.frontend_config(),
-                        dest,
-                        src,
-                        *size as u64,
-                        0,
-                        0,
-                        true,
-                        MEMFLAGS,
-                    )
-                }
+                self.builder.emit_small_memory_copy(
+                    self.module.isa.frontend_config(),
+                    dest,
+                    src,
+                    *size as u64,
+                    0,
+                    0,
+                    true,
+                    MEMFLAGS,
+                )
+            }
+            ir::Instruction::Clone { to, from, clone_fn } => {
+                let (dest, _) = self.operand(to);
+                let (src, _) = self.operand(from);
+                let pointer_ty = self.module.isa.pointer_type();
+                let clone = self
+                    .ins()
+                    .iconst(pointer_ty, *clone_fn as *mut u8 as usize as i64);
+                self.builder.ins().call_indirect(
+                    self.clone_signature,
+                    clone,
+                    &[src, dest],
+                );
             }
             ir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {

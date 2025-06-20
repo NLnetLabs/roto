@@ -609,12 +609,7 @@ pub fn eval(
                 let val = IrValue::from_slice(ty, res);
                 vars.insert(to.clone(), val);
             }
-            Instruction::Copy {
-                to,
-                from,
-                size,
-                clone,
-            } => {
+            Instruction::Copy { to, from, size } => {
                 let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
                     panic!()
                 };
@@ -624,14 +619,21 @@ pub fn eval(
                     panic!()
                 };
 
-                match clone {
-                    Some(clone) => {
-                        let to = mem.get(to);
-                        let from = mem.get(from);
-                        unsafe { (clone)(to, from) }
-                    }
-                    None => mem.copy(to, from, *size as usize),
-                }
+                mem.copy(to, from, *size as usize)
+            }
+            Instruction::Clone { to, from, clone_fn } => {
+                let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
+                    panic!()
+                };
+
+                let &IrValue::Pointer(from) = eval_operand(&vars, from)
+                else {
+                    panic!()
+                };
+
+                let to = mem.get(to);
+                let from = mem.get(from);
+                unsafe { (clone_fn)(to, from) }
             }
             Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {

@@ -13,6 +13,7 @@ pub mod value;
 mod test_eval;
 
 pub use ir::*;
+pub use lower::lower_to_lir;
 
 use ir::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
 use std::{

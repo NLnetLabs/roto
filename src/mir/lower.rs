@@ -1,6 +1,8 @@
 mod match_expr;
 
-use std::{any::TypeId, net::IpAddr};
+use std::{any::TypeId, net::IpAddr, sync::Arc};
+
+use inetnum::addr::Prefix;
 
 use super::{
     Block, Function, Instruction, Mir, Place, Projection, Value, Var, VarKind,
@@ -13,7 +15,7 @@ use crate::{
     label::{LabelRef, LabelStore},
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
-    runtime::{self, FunctionKind, RuntimeFunction},
+    runtime::{self, RuntimeFunction},
     typechecker::{
         self,
         info::TypeInfo,
@@ -116,7 +118,7 @@ impl<'r> Lowerer<'r> {
             return x;
         }
         let to = self.tmp(ty.clone());
-        self.emit_assign(Place::from(to.clone()), ty.clone(), ty, value);
+        self.emit_assign(Place::new(to.clone(), ty.clone()), ty, value);
         to
     }
 
@@ -322,8 +324,7 @@ impl<'r> Lowerer<'r> {
     fn move_var(&mut self, to: Var, var: Var) {
         let ty = self.remove_live_variable(var.clone());
         self.emit_assign(
-            Place::from(to.clone()),
-            ty.clone(),
+            Place::new(to.clone(), ty.clone()),
             ty.clone(),
             Value::Move(var),
         );
@@ -347,7 +348,7 @@ impl<'r> Lowerer<'r> {
                     kind: VarKind::Explicit(**ident),
                 };
 
-                self.emit_assign(Place::from(to), ty.clone(), ty, val);
+                self.emit_assign(Place::new(to, ty.clone()), ty, val);
             }
             ast::Stmt::Expr(expr) => {
                 let value = self.expr(expr);
@@ -431,7 +432,7 @@ impl<'r> Lowerer<'r> {
 
     fn return_value(&mut self, val: Value) -> Value {
         let var = self.assign_to_var(val, self.return_type.clone());
-        let ty = self.remove_live_variable(var.clone());
+        let _ty = self.remove_live_variable(var.clone());
         for frame in self.stack_slots.clone().iter().rev() {
             for (var, ty) in frame.iter().rev() {
                 self.emit_drop(var.clone(), ty.clone());
@@ -502,8 +503,7 @@ impl<'r> Lowerer<'r> {
             let tmp = self.undropped_tmp();
 
             self.emit_assign(
-                Place::from(tmp.clone()),
-                ty.clone(),
+                Place::new(tmp.clone(), ty.clone()),
                 ty,
                 receiver,
             );
@@ -516,7 +516,7 @@ impl<'r> Lowerer<'r> {
             // These values will be dropped by the callee
             let tmp = self.undropped_tmp();
 
-            self.emit_assign(Place::from(tmp.clone()), ty.clone(), ty, op);
+            self.emit_assign(Place::new(tmp.clone(), ty.clone()), ty, op);
             tmp
         }));
 
@@ -550,12 +550,12 @@ impl<'r> Lowerer<'r> {
             self.emit_assign(
                 Place {
                     var: to.clone(),
+                    root_ty: ty.clone(),
                     projection: vec![Projection::VariantField(
                         variant.clone(),
                         i,
                     )],
                 },
-                ty.clone(),
                 field_ty,
                 value.clone(),
             );
@@ -571,9 +571,10 @@ impl<'r> Lowerer<'r> {
     ) -> Value {
         let op = self.expr(expr);
         let ty = self.type_info.type_of(id);
-        let var = self.assign_to_var(op, ty);
+        let var = self.assign_to_var(op, ty.clone());
         Value::Clone(Place {
             var,
+            root_ty: ty,
             projection: vec![Projection::Field((&**field).clone())],
         })
     }
@@ -606,9 +607,9 @@ impl<'r> Lowerer<'r> {
             self.emit_assign(
                 Place {
                     var: to.clone(),
+                    root_ty: ty.clone(),
                     projection: vec![Projection::Field(**s)],
                 },
-                ty.clone(),
                 field_ty,
                 op,
             );
@@ -632,7 +633,7 @@ impl<'r> Lowerer<'r> {
         let ResolvedPath::Value(PathValue {
             name,
             kind: _,
-            root_ty: _,
+            root_ty,
             fields,
         }) = resolved_path.clone()
         else {
@@ -646,6 +647,7 @@ impl<'r> Lowerer<'r> {
 
         let place = Place {
             var: to,
+            root_ty,
             projection: fields
                 .iter()
                 .map(|(s, _)| Projection::Field(*s))
@@ -654,7 +656,7 @@ impl<'r> Lowerer<'r> {
 
         let val = self.expr(expr);
         let ty = self.type_info.type_of(expr);
-        self.emit_assign(place, ty.clone(), ty, val);
+        self.emit_assign(place, ty, val);
 
         Value::Const(ast::Literal::Unit, Type::unit())
     }
@@ -695,10 +697,33 @@ impl<'r> Lowerer<'r> {
         binop: &ast::BinOp,
         r: &Meta<ast::Expr>,
     ) -> Value {
+        let type_id = TypeId::of::<Arc<str>>();
         match binop {
-            ast::BinOp::Eq => todo!(),
-            ast::BinOp::Ne => todo!(),
-            ast::BinOp::Add => todo!(),
+            ast::BinOp::Eq => self.desugared_binop(
+                runtime::FunctionKind::Method(type_id),
+                "eq".into(),
+                Type::bool(),
+                (l, Type::string()),
+                (r, Type::string()),
+            ),
+            ast::BinOp::Ne => {
+                let val = self.desugared_binop(
+                    runtime::FunctionKind::Method(type_id),
+                    "eq".into(),
+                    Type::bool(),
+                    (l, Type::string()),
+                    (r, Type::string()),
+                );
+                let var = self.assign_to_var(val, Type::bool());
+                Value::Not(var)
+            }
+            ast::BinOp::Add => self.desugared_binop(
+                runtime::FunctionKind::Method(type_id),
+                "append".into(),
+                Type::string(),
+                (l, Type::string()),
+                (r, Type::string()),
+            ),
             _ => {
                 ice!("Operator {binop} is not implemented for String")
             }
@@ -714,14 +739,33 @@ impl<'r> Lowerer<'r> {
         let type_id = TypeId::of::<IpAddr>();
         match binop {
             ast::BinOp::Eq => self.desugared_binop(
-                FunctionKind::Method(type_id),
+                runtime::FunctionKind::Method(type_id),
                 "eq".into(),
                 Type::bool(),
                 (l, Type::ip_addr()),
                 (r, Type::ip_addr()),
             ),
-            ast::BinOp::Ne => todo!(),
-            ast::BinOp::Div => todo!(),
+            ast::BinOp::Ne => {
+                let val = self.desugared_binop(
+                    runtime::FunctionKind::Method(type_id),
+                    "eq".into(),
+                    Type::bool(),
+                    (l, Type::ip_addr()),
+                    (r, Type::ip_addr()),
+                );
+                let var = self.assign_to_var(val, Type::bool());
+                Value::Not(var)
+            }
+            ast::BinOp::Div => {
+                let type_id = TypeId::of::<Prefix>();
+                self.desugared_binop(
+                    runtime::FunctionKind::StaticMethod(type_id),
+                    "new".into(),
+                    Type::prefix(),
+                    (l, Type::ip_addr()),
+                    (r, Type::u8()),
+                )
+            }
             _ => {
                 ice!("Operator {binop} is not implemented for IpAddr")
             }
@@ -730,7 +774,7 @@ impl<'r> Lowerer<'r> {
 
     fn desugared_binop(
         &mut self,
-        kind: FunctionKind,
+        kind: runtime::FunctionKind,
         name: &str,
         return_type: Type,
         (l, l_ty): (&Meta<ast::Expr>, Type),
@@ -746,8 +790,7 @@ impl<'r> Lowerer<'r> {
 
         let tmp = self.tmp(Type::bool());
         self.emit_assign(
-            Place::from(tmp.clone()),
-            return_type.clone(),
+            Place::new(tmp.clone(), return_type.clone()),
             return_type,
             Value::CallRuntime {
                 func: "IpAddr.eq".into(),
@@ -791,12 +834,7 @@ impl<'r> Lowerer<'r> {
 
         let ty = self.type_info.type_of(id);
         let res = self.undropped_tmp();
-        self.emit_assign(
-            Place::from(res.clone()),
-            ty.clone(),
-            ty.clone(),
-            op,
-        );
+        self.emit_assign(Place::new(res.clone(), ty.clone()), ty.clone(), op);
 
         self.emit_jump(lbl_cont);
 
@@ -804,8 +842,7 @@ impl<'r> Lowerer<'r> {
             self.new_block(lbl_else);
             let op = self.block(r#else);
             self.emit_assign(
-                Place::from(res.clone()),
-                ty.clone(),
+                Place::new(res.clone(), ty.clone()),
                 ty.clone(),
                 op,
             );
@@ -817,14 +854,26 @@ impl<'r> Lowerer<'r> {
     }
 
     fn path_value(&mut self, path_value: &PathValue) -> Value {
-        let name = path_value.name;
+        let PathValue {
+            name,
+            kind,
+            root_ty,
+            fields,
+        } = path_value;
 
         let var = Var {
             scope: name.scope,
             kind: VarKind::Explicit(name.ident),
         };
 
-        Value::Clone(Place::from(var))
+        let projection =
+            fields.iter().map(|f| Projection::Field(f.0)).collect();
+
+        Value::Clone(Place {
+            var,
+            root_ty: root_ty.clone(),
+            projection,
+        })
     }
 
     fn add_live_variable(&mut self, var: Var, ty: Type) {
@@ -848,7 +897,7 @@ impl<'r> Lowerer<'r> {
 
     fn find_runtime_function(
         &self,
-        kind: FunctionKind,
+        kind: runtime::FunctionKind,
         name: &str,
     ) -> &RuntimeFunction {
         self.runtime
@@ -868,19 +917,8 @@ impl Lowerer<'_> {
             .push(instruction)
     }
 
-    fn emit_assign(
-        &mut self,
-        to: Place,
-        root_ty: Type,
-        ty: Type,
-        value: Value,
-    ) {
-        self.emit(Instruction::Assign {
-            to,
-            root_ty,
-            ty,
-            value,
-        });
+    fn emit_assign(&mut self, to: Place, ty: Type, value: Value) {
+        self.emit(Instruction::Assign { to, ty, value });
     }
 
     fn emit_set_discriminant(

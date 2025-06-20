@@ -227,8 +227,13 @@ pub enum Instruction {
         to: Operand,
         from: Operand,
         size: u32,
+    },
+
+    Clone {
+        to: Operand,
+        from: Operand,
         /// Pointer to the clone implementation of the type
-        clone: Option<unsafe extern "C" fn(*const (), *mut ())>,
+        clone_fn: unsafe extern "C" fn(*const (), *mut ()),
     },
 
     /// Drop a value
