@@ -856,7 +856,12 @@ impl Parser<'_, '_> {
                 for mut sp in sub_paths {
                     let mut new_idents = root.idents.clone();
                     new_idents.append(&mut sp.idents);
-                    paths.push(sp);
+                    let new_path = Meta {
+                        node: Path { idents: new_idents },
+                        id: sp.id,
+                    };
+
+                    paths.push(new_path);
                 }
                 break;
             }
