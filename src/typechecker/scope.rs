@@ -9,7 +9,8 @@ use crate::{
 };
 
 use super::{
-    scoped_display::ScopedDisplay,
+    info::TypeInfo,
+    scoped_display::TypeDisplay,
     types::{FunctionDefinition, TypeDefinition},
     Type,
 };
@@ -32,13 +33,13 @@ pub struct ResolvedName {
     pub ident: Identifier,
 }
 
-impl ScopedDisplay for ResolvedName {
+impl TypeDisplay for ResolvedName {
     fn fmt(
         &self,
-        graph: &ScopeGraph,
+        type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        let scope = graph.print_scope(self.scope);
+        let scope = type_info.scope_graph.print_scope(self.scope);
         if scope.is_empty() {
             write!(f, "{}", self.ident)
         } else {

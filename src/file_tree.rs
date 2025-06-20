@@ -51,7 +51,7 @@ pub struct FileTree {
 impl FileTree {
     pub fn compile(self, rt: Runtime) -> Result<Compiled, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
-        checked.lower_to_hir();
+        checked.lower_to_mir();
         let compiled = checked.lower_to_lir().codegen();
         Ok(compiled)
     }

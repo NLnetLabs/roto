@@ -4,11 +4,15 @@
 
 pub mod eval;
 pub mod ir;
+mod lower;
 mod match_expr;
+mod print;
 pub mod value;
 
 #[cfg(test)]
 mod test_eval;
+
+pub use ir::*;
 
 use ir::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
 use std::{
@@ -1657,7 +1661,7 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn drop_with_type(&mut self, var: Operand, ty: Type) {
+    pub fn drop_with_type(&mut self, var: Operand, ty: Type) {
         let new_var = var.clone();
         let f = move |lowerer: &mut Self, offset, ty| {
             lowerer.drop_leaf_type(&new_var, offset, ty)

@@ -11,15 +11,15 @@ use crate::{
         Module, TypedFunc,
     },
     file_tree::SourceFile,
-    hir,
+    ir_printer::{IrPrinter, Printable},
     label::LabelStore,
     lir::{
         self,
         eval::{self, Memory},
-        ir::{IrPrinter, Printable},
         value::IrValue,
         IrFunction,
     },
+    mir,
     module::{ModuleTree, Parsed},
     parser::{
         meta::{Span, Spans},
@@ -61,11 +61,11 @@ pub struct TypeChecked {
     context_type: ContextDescription,
 }
 
-/// Compiler stage: HIR
+/// Compiler stage: MIR
 #[allow(dead_code)]
-pub struct LoweredToHir {
+pub struct LoweredToMir {
     runtime: Runtime,
-    pub ir: hir::ir::Hir,
+    pub ir: mir::ir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_type: ContextDescription,
@@ -273,7 +273,7 @@ impl Parsed {
 }
 
 impl TypeChecked {
-    pub fn lower_to_hir(&self) -> LoweredToHir {
+    pub fn lower_to_mir(&self) -> LoweredToMir {
         let TypeChecked {
             module_tree,
             type_info,
@@ -284,18 +284,19 @@ impl TypeChecked {
         let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
         let ir =
-            hir::lower_to_hir(&module_tree, &mut type_info, &mut label_store);
+            mir::lower_to_mir(&module_tree, &mut type_info, &mut label_store);
 
         if log::log_enabled!(log::Level::Info) {
             let printer = IrPrinter {
-                scope_graph: &type_info.scope_graph,
+                type_info: &type_info,
                 label_store: &label_store,
+                scope: None,
             };
             let s = ir.print(&printer);
             info!("\n{s}");
         }
 
-        LoweredToHir {
+        LoweredToMir {
             ir,
             runtime: runtime.clone(),
             label_store,
@@ -324,8 +325,9 @@ impl TypeChecked {
         let _ = env_logger::try_init();
         if log::log_enabled!(log::Level::Info) {
             let printer = IrPrinter {
-                scope_graph: &type_info.scope_graph,
+                type_info: &type_info,
                 label_store: &label_store,
+                scope: None,
             };
             let s = ir.print(&printer);
             info!("{s}");

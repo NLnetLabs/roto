@@ -6,12 +6,13 @@ use crate::{
     ast::{self, Identifier, Match, Pattern},
     ice,
     label::LabelRef,
+    mir::{Place, Projection, Value},
     parser::meta::Meta,
-    typechecker::types::Type,
+    typechecker::types::{EnumVariant, Type},
 };
 
 use super::{
-    super::ir::{Field, Operand, Var, VarKind},
+    super::ir::{Var, VarKind},
     Lowerer,
 };
 
@@ -105,7 +106,7 @@ impl Lowerer<'_> {
     /// We do this by checking which variants occur in patterns and then
     /// making those chains for all branches that match that discriminant or
     /// are `_`.
-    pub fn r#match(&mut self, m: &Meta<Match>) -> Operand {
+    pub fn r#match(&mut self, m: &Meta<Match>) -> Value {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
@@ -165,22 +166,21 @@ impl Lowerer<'_> {
             branches.iter().filter(|(d, _, _)| d.is_none()).collect();
 
         let examinee = self.expr(expr);
-        let discriminant = self.new_tmp();
-        self.emit_read_field(
-            discriminant.clone(),
-            examinee.clone().into(),
-            Field::Discriminant,
+        let examinee_ty = self.type_info.type_of(expr);
+        let examinee = self.assign_to_var(examinee, examinee_ty.clone());
+        let discriminant = self.undropped_tmp();
+        self.emit_assign(
+            Place::from(discriminant.clone()),
+            Type::u8(),
+            Type::u8(),
+            Value::Discriminant(examinee.clone()),
         );
         let default_branch = if default_branches.is_empty() {
             continue_lbl
         } else {
             default_lbl
         };
-        self.emit_switch(
-            discriminant.into(),
-            switch_branches,
-            default_branch,
-        );
+        self.emit_switch(discriminant, switch_branches, default_branch);
 
         let arm_labels: HashMap<_, _> = branches
             .iter()
@@ -198,12 +198,19 @@ impl Lowerer<'_> {
                 .iter()
                 .filter(|(d, _, _)| *d == Some(discriminant) || d.is_none())
                 .collect();
-            self.match_case(examinee.clone(), lbl, &branches, &arm_labels);
+            self.match_case(
+                examinee.clone(),
+                Some(&variants[discriminant]),
+                lbl,
+                &branches,
+                &arm_labels,
+            );
         }
 
         if !default_branches.is_empty() {
             self.match_case(
                 examinee,
+                None,
                 default_lbl,
                 &default_branches,
                 &arm_labels,
@@ -212,23 +219,30 @@ impl Lowerer<'_> {
 
         // Here we finally create all the blocks for the expression of each
         // arm.
-        let out = self.new_tmp();
+        let ty = self.type_info.type_of(m);
+        let out = self.undropped_tmp();
         for (_, arm, arm_index) in branches {
             self.new_block(arm_labels[&arm_index]);
-            let ty = self.type_info.type_of(&arm.body);
             let val = self.block(&arm.body);
-            self.emit_assign(out.clone(), ty, Vec::new(), val);
+            self.emit_assign(
+                Place::from(out.clone()),
+                ty.clone(),
+                ty.clone(),
+                val,
+            );
             self.emit_jump(continue_lbl);
         }
 
         self.new_block(continue_lbl);
+        self.add_live_variable(out.clone(), ty);
 
-        out.into()
+        Value::Move(out)
     }
 
     fn match_case(
         &mut self,
-        examinee: Operand,
+        examinee: Var,
+        variant: Option<&EnumVariant>,
         lbl: LabelRef,
         branches: &[&(Option<usize>, &ast::MatchArm, usize)],
         arm_labels: &HashMap<usize, LabelRef>,
@@ -250,18 +264,27 @@ impl Lowerer<'_> {
                 variant: _,
             } = &arm.pattern.node
             {
+                let variant = variant.unwrap();
                 for (i, field_binding) in (&**fields).into_iter().enumerate()
                 {
                     let name = self.type_info.resolved_name(field_binding);
+                    let ty = self.type_info.type_of(field_binding);
                     let var = Var {
                         scope: name.scope,
                         kind: VarKind::Explicit(name.ident),
                     };
 
-                    self.emit_read_field(
-                        var,
-                        examinee.clone().into(),
-                        Field::Numbered(i),
+                    self.emit_assign(
+                        Place::from(var),
+                        ty.clone(),
+                        ty,
+                        Value::Clone(Place {
+                            var: examinee.clone(),
+                            projection: vec![Projection::VariantField(
+                                variant.clone(),
+                                i,
+                            )],
+                        }),
                     );
                 }
             }
@@ -272,6 +295,7 @@ impl Lowerer<'_> {
             let arm_lbl = arm_labels[arm_index];
             if let Some(guard) = &arm.guard {
                 let op = self.expr(guard);
+                let op = self.assign_to_var(op, Type::bool());
                 self.emit_switch(op, vec![(1, arm_lbl)], next_lbl);
             } else {
                 self.emit_jump(arm_lbl);

@@ -6,7 +6,7 @@ use crate::{
     ast::Identifier,
     parser::meta::MetaId,
     runtime::layout::{Layout, LayoutBuilder},
-    typechecker::scoped_display::ScopedDisplay,
+    typechecker::scoped_display::TypeDisplay,
     Runtime,
 };
 
@@ -201,14 +201,14 @@ impl TypeInfo {
             Type::Name(type_name) => {
                 type_def = self.resolve_type_name(type_name);
                 let TypeDefinition::Record(_, fields) = &type_def else {
-                    panic!("Can't get offsets in a type that's not a record, but {}", record.display(&self.scope_graph))
+                    panic!("Can't get offsets in a type that's not a record, but {}", record.display(&self))
                 };
                 fields
             }
             _ => {
                 panic!(
                     "Can't get offsets in a type that's not a record, but {}",
-                    record.display(&self.scope_graph)
+                    record.display(&self)
                 )
             }
         };
@@ -310,6 +310,14 @@ impl TypeInfo {
                 }
             }
         }
+    }
+
+    pub fn resolve_ref<'a>(&'a self, mut t: &'a Type) -> &'a Type {
+        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+            t = self.unionfind.find_ref(*x);
+        }
+
+        t
     }
 
     pub fn resolve(&mut self, t: &Type) -> Type {

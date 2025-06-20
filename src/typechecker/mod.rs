@@ -107,7 +107,7 @@ use cycle::detect_type_cycles;
 use scope::{
     ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
 };
-use scoped_display::ScopedDisplay;
+use scoped_display::TypeDisplay;
 use std::{any::TypeId, borrow::Borrow, collections::HashMap};
 use types::{FunctionDefinition, Type, TypeDefinition, TypeName};
 
@@ -926,15 +926,15 @@ impl TypeChecker {
             (a @ ExplicitVar(_), b) => {
                 ice!(
                     "Cannot unify explicit var: {}, {}",
-                    a.display(&self.type_info.scope_graph),
-                    b.display(&self.type_info.scope_graph),
+                    a.display(&self.type_info),
+                    b.display(&self.type_info),
                 )
             }
             (a, b @ ExplicitVar(_)) => {
                 ice!(
                     "Cannot unify explicit var: {}, {}",
-                    a.display(&self.type_info.scope_graph),
-                    b.display(&self.type_info.scope_graph),
+                    a.display(&self.type_info),
+                    b.display(&self.type_info),
                 )
             }
             // The never type is special and unifies with anything
