@@ -21,7 +21,7 @@ pub enum Declaration {
     Record(RecordTypeDeclaration),
     Function(FunctionDeclaration),
     Test(Test),
-    Import(Meta<Path>),
+    Import(Vec<Meta<Path>>),
 }
 
 #[derive(Clone, Debug)]

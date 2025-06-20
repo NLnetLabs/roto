@@ -56,10 +56,8 @@ impl Parser<'_, '_> {
             }
 
             if self.peek_is(Token::Keyword(Keyword::Import)) {
-                self.take(Token::Keyword(Keyword::Import))?;
-                let path = self.path()?;
-                self.take(Token::SemiColon)?;
-                imports.push(path);
+                let mut paths = self.import()?;
+                imports.append(&mut paths);
             } else if self.peek_is(Token::Keyword(Keyword::Let)) {
                 let start = self.take(Token::Keyword(Keyword::Let))?;
                 let identifier = self.identifier()?;
@@ -846,6 +844,56 @@ impl Parser<'_, '_> {
         let span =
             self.merge_spans(idents.first().unwrap(), idents.last().unwrap());
         Ok(self.add_span(span, Path { idents }))
+    }
+
+    pub(super) fn path_expr(&mut self) -> ParseResult<Vec<Meta<Path>>> {
+        let mut paths: Vec<Meta<Path>> = Vec::new();
+        let mut root: Path = Path { idents: Vec::new() };
+        loop {
+            if self.peek_is(Token::CurlyLeft) {
+                let sub_paths = self.path_list()?;
+
+                for mut sp in sub_paths {
+                    let mut new_idents = root.idents.clone();
+                    new_idents.append(&mut sp.idents);
+                    let new_path = Meta {
+                        node: Path { idents: new_idents },
+                        id: sp.id,
+                    };
+
+                    paths.push(new_path);
+                }
+                break;
+            }
+
+            let ident: Meta<Identifier> = self.path_item()?;
+            root.idents.push(ident);
+
+            if !self.next_is(Token::Period) {
+                let span = self.merge_spans(
+                    root.idents.first().unwrap(),
+                    root.idents.last().unwrap(),
+                );
+                paths.push(self.add_span(span, root));
+                break;
+            }
+        }
+
+        Ok(paths)
+    }
+
+    fn path_list(&mut self) -> ParseResult<Vec<Meta<Path>>> {
+        let mut paths: Vec<Meta<Path>> = Vec::new();
+        self.take(Token::CurlyLeft)?;
+        loop {
+            let mut path = self.path_expr()?;
+            paths.append(&mut path);
+            if !self.next_is(Token::Comma) {
+                break;
+            }
+        }
+        self.take(Token::CurlyRight)?;
+        Ok(paths)
     }
 
     fn path_item(&mut self) -> ParseResult<Meta<Identifier>> {

@@ -1880,6 +1880,40 @@ fn use_type_in_function_argument() {
 }
 
 #[test]
+fn import_list() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.{double, triple};
+            function main(x: i32) -> i32 {
+                triple(double(x))
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function double(x: i32) -> i32 {
+                2 * x
+            }
+
+            function triple(x: i32) -> i32 {
+                3 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
+    let res = main.call(&mut (), 1);
+    assert_eq!(res, 6);
+}
+
+#[test]
 fn use_type_in_function_return_type() {
     let pkg = source_file!(
         "pkg",
