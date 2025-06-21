@@ -1145,9 +1145,14 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
-    pub fn run_tests<Ctx: 'static>(
+    pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
+        self.run_tests_with_writer(ctx, &mut std::io::stdout())
+    }
+
+    pub fn run_tests_with_writer<Ctx: 'static>(
         &mut self,
         mut ctx: Ctx,
+        mut w: &mut impl std::io::Write,
     ) -> Result<(), ()> {
         let tests: Vec<_> = self
             .functions
@@ -1168,7 +1173,11 @@ impl Module {
         for (n, test) in tests.into_iter().enumerate() {
             let n = n + 1;
             let test_display = test.replace("test#", "");
-            print!("Test {n:>total_width$} / {total}: {test_display}... ");
+            write!(
+                &mut w,
+                "Test {n:>total_width$} / {total}: {test_display}... "
+            )
+            .map_err(|_| ())?;
             let test_fn = self
                 .get_function::<Ctx, fn() -> Verdict<(), ()>>(
                     test.strip_prefix("pkg.").unwrap(),
@@ -1178,17 +1187,19 @@ impl Module {
             match test_fn.call(&mut ctx) {
                 Verdict::Accept(()) => {
                     successes += 1;
-                    println!("\x1B[92mok\x1B[m");
+                    writeln!(&mut w, "\x1B[92mok\x1B[m").map_err(|_| ())?;
                 }
                 Verdict::Reject(()) => {
                     failures += 1;
-                    println!("\x1B[91mfail\x1B[m");
+                    writeln!(&mut w, "\x1B[91mfail\x1B[m").map_err(|_| ())?;
                 }
             }
         }
-        println!(
+        writeln!(
+            &mut w,
             "Ran {total} tests, {successes} succeeded, {failures} failed"
-        );
+        )
+        .map_err(|_| ())?;
 
         if failures == 0 {
             Result::Ok(())

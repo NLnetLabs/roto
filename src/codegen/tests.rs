@@ -1199,6 +1199,23 @@ fn use_a_test() {
 }
 
 #[test]
+fn run_tests_with_writer() {
+    let s = src!(
+        "
+        test check_output {
+            accept
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let mut w = Vec::new();
+    p.run_tests_with_writer((), &mut w).unwrap();
+
+    assert!(!w.is_empty());
+}
+
+#[test]
 fn string() {
     let s = src!(
         r#"

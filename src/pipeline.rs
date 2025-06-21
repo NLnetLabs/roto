@@ -340,6 +340,15 @@ impl Compiled {
         self.module.run_tests(ctx)
     }
 
+    #[allow(clippy::result_unit_err)]
+    pub fn run_tests_with_writer<Ctx: 'static>(
+        &mut self,
+        ctx: Ctx,
+        w: &mut impl std::io::Write,
+    ) -> Result<(), ()> {
+        self.module.run_tests_with_writer(ctx, w)
+    }
+
     pub fn get_function<Ctx: 'static, F: RotoFunc>(
         &mut self,
         name: &str,
