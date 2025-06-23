@@ -335,6 +335,12 @@ impl Lowered {
 }
 
 impl Compiled {
+    pub fn get_tests<Ctx: 'static>(
+        &mut self,
+    ) -> impl Iterator<Item = codegen::TestCase<Ctx>> + use<'_, Ctx> {
+        self.module.get_tests()
+    }
+
     #[allow(clippy::result_unit_err)]
     pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
         self.module.run_tests(ctx)

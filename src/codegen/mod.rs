@@ -50,8 +50,10 @@ use cranelift::{
 };
 use cranelift_codegen::ir::SigRef;
 use log::info;
+pub use testcase::TestCase;
 
 pub mod check;
+mod testcase;
 #[cfg(test)]
 mod tests;
 
@@ -1145,10 +1147,9 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
-    pub fn run_tests<Ctx: 'static>(
+    pub fn get_tests<Ctx: 'static>(
         &mut self,
-        mut ctx: Ctx,
-    ) -> Result<(), ()> {
+    ) -> impl Iterator<Item = TestCase<Ctx>> + use<'_, Ctx> {
         let tests: Vec<_> = self
             .functions
             .keys()
@@ -1160,6 +1161,23 @@ impl Module {
             .map(Clone::clone)
             .collect();
 
+        tests.into_iter().map(|name| {
+            TestCase::new(
+                name.replace("test#", ""),
+                self.get_function::<Ctx, fn() -> Verdict<(), ()>>(
+                    name.strip_prefix("pkg.").unwrap(),
+                )
+                .unwrap(),
+            )
+        })
+    }
+
+    pub fn run_tests<Ctx: 'static>(
+        &mut self,
+        mut ctx: Ctx,
+    ) -> Result<(), ()> {
+        let tests: Vec<_> = self.get_tests::<Ctx>().collect();
+
         let total = tests.len();
         let total_width = total.to_string().len();
         let mut successes = 0;
@@ -1167,23 +1185,15 @@ impl Module {
 
         for (n, test) in tests.into_iter().enumerate() {
             let n = n + 1;
-            let test_display = test.replace("test#", "");
+            let test_display = test.name();
             print!("Test {n:>total_width$} / {total}: {test_display}... ");
-            let test_fn = self
-                .get_function::<Ctx, fn() -> Verdict<(), ()>>(
-                    test.strip_prefix("pkg.").unwrap(),
-                )
-                .unwrap();
 
-            match test_fn.call(&mut ctx) {
-                Verdict::Accept(()) => {
-                    successes += 1;
-                    println!("\x1B[92mok\x1B[m");
-                }
-                Verdict::Reject(()) => {
-                    failures += 1;
-                    println!("\x1B[91mfail\x1B[m");
-                }
+            if test.run(&mut ctx) == Ok(()) {
+                successes += 1;
+                println!("\x1B[92mok\x1B[m");
+            } else {
+                failures += 1;
+                println!("\x1B[91mfail\x1B[m");
             }
         }
         println!(

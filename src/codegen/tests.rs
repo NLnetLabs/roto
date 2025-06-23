@@ -1199,6 +1199,39 @@ fn use_a_test() {
 }
 
 #[test]
+fn get_tests() {
+    let s = src!(
+        "
+        test check_output {
+            accept
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let tests: Vec<_> = p.get_tests::<()>().collect();
+
+    assert!(!tests.is_empty());
+    assert_eq!(tests[0].name(), "pkg.check_output");
+    tests[0].run(&mut ()).unwrap();
+}
+
+#[test]
+fn get_no_tests() {
+    let s = src!(
+        "
+        function double(x: i32) -> i32 {
+          2 * x
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let tests = p.get_tests::<()>();
+    assert_eq!(tests.count(), 0);
+}
+
+#[test]
 fn string() {
     let s = src!(
         r#"
