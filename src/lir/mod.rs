@@ -1104,7 +1104,6 @@ impl<'r> Lowerer<'r> {
             to: to.clone(),
             from: tmp.into(),
             size: layout.size() as u32,
-            clone: None,
         })
     }
 
@@ -1593,13 +1592,10 @@ impl<'r> Lowerer<'r> {
         {
             let from = self.offset(from.clone(), offset as u32);
             let to = self.offset(to.clone(), offset as u32);
-            let size =
-                self.type_info.layout_of(&ty, self.runtime).size() as u32;
-            self.add(Instruction::Copy {
+            self.add(Instruction::Clone {
                 to,
                 from,
-                size,
-                clone: Some(clone),
+                clone_fn: clone,
             });
             return;
         }
@@ -1641,7 +1637,6 @@ impl<'r> Lowerer<'r> {
             to,
             from,
             size: size as u32,
-            clone: None,
         })
     }
 

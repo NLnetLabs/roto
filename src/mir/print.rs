@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use crate::{
     ast::{BinOp, Literal},
     ir_printer::{IrPrinter, Printable},
@@ -69,12 +67,7 @@ impl Printable for Instruction {
         use Instruction::*;
         match self {
             Jump(to) => format!("jump {}", to.print(printer)),
-            Assign {
-                to,
-                root_ty: _,
-                ty,
-                value,
-            } => {
+            Assign { to, ty, value } => {
                 let to = to.print(printer);
                 let ty = ty.display(&printer.type_info);
                 let value = value.print(printer);
@@ -161,10 +154,16 @@ impl Printable for Value {
                 let var = var.print(printer);
                 format!("move({var})")
             }
-            Value::BinOp { left, binop, right } => {
+            Value::BinOp {
+                left,
+                binop,
+                ty,
+                right,
+            } => {
                 let left = left.print(printer);
+                let ty = ty.display(&printer.type_info);
                 let right = right.print(printer);
-                format!("{left} {binop} {right}")
+                format!("{left} {binop}({ty}) {right}")
             }
             Value::Call { func, args } => {
                 let func = func.print(printer);

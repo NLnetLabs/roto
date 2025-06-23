@@ -51,11 +51,7 @@ impl Lowerer<'_> {
         {
             let from = self.offset(from.clone(), offset as u32);
             let to = self.offset(to.clone(), offset as u32);
-            self.emit(Instruction::Clone {
-                to,
-                from,
-                clone_fn: clone,
-            });
+            self.emit_clone(to, from, clone);
             return;
         }
 
@@ -92,11 +88,10 @@ impl Lowerer<'_> {
 
         let from = self.offset(from.clone(), offset as u32);
         let to = self.offset(to.clone(), offset as u32);
-        self.add(Instruction::Copy {
+        self.emit(Instruction::Copy {
             to,
             from,
             size: size as u32,
-            clone: None,
         })
     }
 

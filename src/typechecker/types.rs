@@ -4,7 +4,7 @@ use crate::{
     ast::Identifier,
     parser::meta::Meta,
     runtime::{layout::Layout, RuntimeFunctionRef},
-    typechecker::scope::{ScopeGraph, ScopeRef},
+    typechecker::scope::ScopeRef,
 };
 use core::fmt;
 use std::{

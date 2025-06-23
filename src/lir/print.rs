@@ -313,26 +313,20 @@ impl Printable for Instruction {
                     val.print(printer),
                 )
             }
-            Copy {
-                to,
-                from,
-                size,
-                clone: None,
-            } => {
+            Copy { to, from, size } => {
                 format!(
                     "mem::copy({}, {}, {size})",
                     to.print(printer),
                     from.print(printer),
                 )
             }
-            Copy {
+            Clone {
                 to,
                 from,
-                size,
-                clone: Some(clone),
+                clone_fn: clone,
             } => {
                 format!(
-                    "mem::copy({}, {}, {size}, with={clone:?})",
+                    "mem::clone({}, {}, with={clone:?})",
                     to.print(printer),
                     from.print(printer),
                 )

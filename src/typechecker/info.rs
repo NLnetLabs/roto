@@ -13,7 +13,9 @@ use crate::{
 use super::{
     expr::ResolvedPath,
     scope::{DeclarationKind, ResolvedName, ScopeGraph, ScopeRef},
-    types::{Function, Primitive, Type, TypeDefinition, TypeName},
+    types::{
+        Function, IntKind, IntSize, Primitive, Type, TypeDefinition, TypeName,
+    },
     unionfind::UnionFind,
 };
 
@@ -142,14 +144,24 @@ impl TypeInfo {
     }
 
     pub fn is_int_type(&mut self, ty: &Type) -> bool {
+        self.get_int_type(ty).is_some()
+    }
+
+    pub fn get_int_type(&mut self, ty: &Type) -> Option<(IntKind, IntSize)> {
         let ty = self.resolve(ty);
         match ty {
-            Type::IntVar(_) => true,
+            Type::IntVar(_) => Some((IntKind::Signed, IntSize::I32)),
             Type::Name(name) => {
                 let type_def = self.resolve_type_name(&name);
-                type_def.is_int()
+                if let TypeDefinition::Primitive(Primitive::Int(kind, size)) =
+                    type_def
+                {
+                    Some((kind, size))
+                } else {
+                    None
+                }
             }
-            _ => false,
+            _ => None,
         }
     }
 

@@ -91,6 +91,7 @@ pub enum Value {
     BinOp {
         left: Var,
         binop: BinOp,
+        ty: Type,
         right: Var,
     },
     Call {

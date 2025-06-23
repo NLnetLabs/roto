@@ -1,7 +1,7 @@
 mod clone_drop;
 
 use crate::{
-    ast::Literal,
+    ast::{self, Literal},
     ice,
     label::{LabelRef, LabelStore},
     mir,
@@ -9,13 +9,17 @@ use crate::{
     typechecker::{
         info::TypeInfo,
         scope::ScopeRef,
-        types::{EnumVariant, FloatSize, Primitive, Type, TypeDefinition},
+        types::{
+            EnumVariant, FloatSize, IntKind, IntSize, Primitive, Type,
+            TypeDefinition,
+        },
     },
     IrValue, Runtime,
 };
 
 use super::{
-    value::IrType, Block, Function, Instruction, Lir, Operand, Var, VarKind,
+    ir::Signature, value::IrType, Block, FloatCmp, Function, Instruction,
+    IntCmp, Lir, Operand, Var, VarKind,
 };
 
 pub fn lower_to_lir(
@@ -70,13 +74,14 @@ impl Lowerer<'_> {
         label_store: &mut LabelStore,
         function: mir::Function,
     ) -> Function {
+        let return_type = function.signature.return_type.clone();
         let mut lowerer = Lowerer {
             runtime,
             type_info,
             label_store,
             tmp_idx: function.tmp_idx,
             function_scope: function.scope,
-            return_type: function.signature.return_type.clone(),
+            return_type: return_type.clone(),
             blocks: Vec::new(),
         };
         let name = function.name;
@@ -86,14 +91,38 @@ impl Lowerer<'_> {
             lowerer.block(block);
         }
 
+        let entry_block = lowerer.blocks[0].label;
+
+        let (return_ir_type, return_ptr) = match return_type {
+            x if lowerer.is_reference_type(&x) => (None, true),
+            x => (lowerer.lower_type(&x), false),
+        };
+
+        let ir_signature = Signature {
+            parameters: function
+                .parameters
+                .iter()
+                .zip(&signature.parameter_types)
+                .filter_map(|(def, ty)| {
+                    let ty = lowerer.lower_type(ty)?;
+                    let mir::VarKind::Explicit(x) = def.kind else {
+                        ice!()
+                    };
+                    Some((x, ty))
+                })
+                .collect(),
+            return_ptr,
+            return_type: return_ir_type,
+        };
+
         Function {
             name,
             blocks: lowerer.blocks,
             signature,
-            scope: todo!(),
-            ir_signature: todo!(),
-            entry_block: todo!(),
-            public: todo!(),
+            scope: function.scope,
+            ir_signature,
+            entry_block,
+            public: true,
         }
     }
 
@@ -131,22 +160,9 @@ impl Lowerer<'_> {
     }
 
     fn assign(&mut self, to: mir::Place, ty: Type, value: mir::Value) {
-        // A call value is the only value that can have a side effect.
-        // We can ignore the others if the return type is zero-sized.
-        if self.type_info.layout_of(&ty, self.runtime).size() == 0 {
-            match value {
-                mir::Value::Call { func, args } => {
-                    todo!()
-                }
-                _ => {} // no nothing!
-            }
-            return;
-        }
-
-        let location = self.location(to, ty.clone());
+        let to = self.location(to, ty.clone());
         let op = match value {
             mir::Value::Const(lit, ty) => self.literal(&lit, &ty),
-            mir::Value::Move(var) => self.var(var).into(),
             mir::Value::Discriminant(v) => self.get_discriminant(v),
             mir::Value::Not(var) => {
                 let val = self.var(var);
@@ -154,27 +170,68 @@ impl Lowerer<'_> {
                 self.emit_not(tmp.clone(), val.into());
                 tmp.into()
             }
+            mir::Value::Move(var) => self.var(var).into(),
             mir::Value::Clone(place) => {
-                let from_location = self.location(place, ty.clone());
-                self.clone_place(location, from_location, &ty);
+                let from = self.location(place, ty.clone());
+                self.clone_place(to, from, &ty);
                 return;
             }
-            mir::Value::BinOp { .. } => todo!(),
+            mir::Value::BinOp {
+                left,
+                binop,
+                ty,
+                right,
+            } => self.binop(left, binop, ty, right),
             mir::Value::Call { .. } => todo!(),
             mir::Value::CallRuntime { .. } => todo!(),
         };
+
+        self.move_val(to, op, &ty);
+    }
+
+    fn move_val(&mut self, to: Location, val: Operand, ty: &Type) {
+        let Some(ty) = self.lower_type(ty) else {
+            return;
+        };
+
+        match to {
+            Location::Var(to) => self.emit_assign(to, val, ty),
+            Location::Pointer { base, offset } => {
+                let to = self.offset(base.into(), offset as u32);
+                self.emit_write(to, val);
+            }
+        }
     }
 
     fn clone_place(&mut self, to: Location, from: Location, ty: &Type) {
         match (to, from) {
             // This is a not-by-reference type so we'll just assign it.
             (Location::Var(to), Location::Var(from)) => {
-                todo!()
+                let Some(ty) = self.lower_type(ty) else {
+                    return;
+                };
+                self.emit(Instruction::Assign {
+                    to,
+                    val: from.into(),
+                    ty,
+                })
             }
             // We read a not-by-reference type from a field
-            (Location::Var(x), Location::Pointer { base, offset }) => todo!(),
+            (Location::Var(to), Location::Pointer { base, offset }) => {
+                let Some(ty) = self.lower_type(ty) else {
+                    return;
+                };
+                let from = self.offset(base.into(), offset as u32);
+                self.emit_read(to, from, ty)
+            }
             // We write a not-by-reference type to a field
-            (Location::Pointer { base, offset }, Location::Var(x)) => todo!(),
+            (Location::Pointer { base, offset }, Location::Var(from)) => {
+                let Some(_ty) = self.lower_type(ty) else {
+                    return;
+                };
+                let to = self.offset(base.into(), offset as u32);
+                self.emit_write(to, from.into());
+            }
             (
                 Location::Pointer {
                     base: base_to,
@@ -431,6 +488,48 @@ impl Lowerer<'_> {
             Literal::Unit => todo!(),
         }
     }
+
+    fn binop(
+        &mut self,
+        left: mir::Var,
+        binop: ast::BinOp,
+        ty: Type,
+        right: mir::Var,
+    ) -> Operand {
+        let left = self.var(left).into();
+        let right = self.var(right).into();
+
+        let to = self.new_tmp();
+        if let Some((kind, _size)) = self.type_info.get_int_type(&ty) {
+            if let Some(cmp) = binop_to_int_cmp(&binop, kind) {
+                self.emit(Instruction::IntCmp {
+                    to: to.clone(),
+                    cmp,
+                    left,
+                    right,
+                });
+                return to.into();
+            }
+
+            todo!("other int operators (+, -, *, /)")
+        }
+
+        if self.type_info.is_float_type(&ty) {
+            if let Some(cmp) = binop_to_float_cmp(&binop) {
+                self.emit(Instruction::FloatCmp {
+                    to: to.clone(),
+                    cmp,
+                    left,
+                    right,
+                });
+                return to.into();
+            }
+
+            todo!("other float operators (+, -, *, /)")
+        }
+
+        ice!("Could not lower binop")
+    }
 }
 
 /// # Emit instructions
@@ -441,6 +540,10 @@ impl Lowerer<'_> {
             .unwrap()
             .instructions
             .push(instruction)
+    }
+
+    fn emit_assign(&mut self, to: Var, val: Operand, ty: IrType) {
+        self.emit(Instruction::Assign { to, val, ty })
     }
 
     fn emit_not(&mut self, to: Var, val: Operand) {
@@ -532,4 +635,81 @@ impl Lowerer<'_> {
             instructions: Vec::new(),
         })
     }
+
+    fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
+        let ty = self.type_info.resolve(ty);
+        if self.type_info.layout_of(&ty, self.runtime).size() == 0 {
+            return None;
+        }
+
+        if let Type::Name(type_name) = &ty {
+            let type_def = self.type_info.resolve_type_name(type_name);
+            if let TypeDefinition::Primitive(p) = type_def {
+                use FloatSize::*;
+                use IntKind::*;
+                use IntSize::*;
+                'prim: {
+                    return Some(match p {
+                        Primitive::Int(Unsigned, I8) => IrType::U8,
+                        Primitive::Int(Unsigned, I16) => IrType::U16,
+                        Primitive::Int(Unsigned, I32) => IrType::U32,
+                        Primitive::Int(Unsigned, I64) => IrType::U64,
+                        Primitive::Int(Signed, I8) => IrType::I8,
+                        Primitive::Int(Signed, I16) => IrType::I16,
+                        Primitive::Int(Signed, I32) => IrType::I32,
+                        Primitive::Int(Signed, I64) => IrType::I64,
+                        Primitive::Float(F32) => IrType::F32,
+                        Primitive::Float(F64) => IrType::F64,
+                        Primitive::Asn => IrType::U32,
+                        Primitive::Bool => IrType::Bool,
+                        _ => break 'prim,
+                    });
+                }
+            }
+            if let TypeDefinition::Runtime(_, _) = type_def {
+                return Some(IrType::Pointer);
+            }
+        }
+
+        Some(match ty {
+            Type::IntVar(_) => IrType::I32,
+            Type::FloatVar(_) => IrType::F64,
+            x if self.is_reference_type(&x) => IrType::Pointer,
+            _ => ice!("could not lower: {ty:?}"),
+        })
+    }
+
+    fn is_reference_type(&mut self, ty: &Type) -> bool {
+        self.type_info.is_reference_type(ty, self.runtime)
+    }
+}
+
+fn binop_to_int_cmp(op: &ast::BinOp, kind: IntKind) -> Option<IntCmp> {
+    let signed = kind == IntKind::Signed;
+
+    Some(match op {
+        ast::BinOp::Eq => IntCmp::Eq,
+        ast::BinOp::Ne => IntCmp::Ne,
+        ast::BinOp::Lt if signed => IntCmp::SLt,
+        ast::BinOp::Le if signed => IntCmp::SLe,
+        ast::BinOp::Gt if signed => IntCmp::SGt,
+        ast::BinOp::Ge if signed => IntCmp::SGe,
+        ast::BinOp::Lt => IntCmp::ULt,
+        ast::BinOp::Le => IntCmp::ULe,
+        ast::BinOp::Gt => IntCmp::UGt,
+        ast::BinOp::Ge => IntCmp::UGe,
+        _ => return None,
+    })
+}
+
+fn binop_to_float_cmp(op: &ast::BinOp) -> Option<FloatCmp> {
+    Some(match op {
+        ast::BinOp::Eq => FloatCmp::Eq,
+        ast::BinOp::Ne => FloatCmp::Ne,
+        ast::BinOp::Lt => FloatCmp::Lt,
+        ast::BinOp::Le => FloatCmp::Le,
+        ast::BinOp::Gt => FloatCmp::Gt,
+        ast::BinOp::Ge => FloatCmp::Ge,
+        _ => return None,
+    })
 }

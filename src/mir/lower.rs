@@ -321,16 +321,6 @@ impl<'r> Lowerer<'r> {
         Value::Move(final_var)
     }
 
-    fn move_var(&mut self, to: Var, var: Var) {
-        let ty = self.remove_live_variable(var.clone());
-        self.emit_assign(
-            Place::new(to.clone(), ty.clone()),
-            ty.clone(),
-            Value::Move(var),
-        );
-        self.add_live_variable(to, ty);
-    }
-
     fn drop_var(&mut self, var: Var) {
         let ty = self.remove_live_variable(var.clone());
         self.emit_drop(var, ty);
@@ -679,7 +669,7 @@ impl<'r> Lowerer<'r> {
         }
 
         let l = self.expr(l);
-        let l = self.assign_to_var(l, l_ty);
+        let l = self.assign_to_var(l, l_ty.clone());
 
         let r = self.expr(r);
         let r = self.assign_to_var(r, r_ty);
@@ -687,6 +677,7 @@ impl<'r> Lowerer<'r> {
         Value::BinOp {
             left: l,
             binop: binop.clone(),
+            ty: l_ty.clone(),
             right: r,
         }
     }
@@ -856,7 +847,7 @@ impl<'r> Lowerer<'r> {
     fn path_value(&mut self, path_value: &PathValue) -> Value {
         let PathValue {
             name,
-            kind,
+            kind: _,
             root_ty,
             fields,
         } = path_value;
