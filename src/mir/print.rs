@@ -174,18 +174,13 @@ impl Printable for Value {
                     .join(", ");
                 format!("{func}({args})")
             }
-            Value::CallRuntime {
-                func,
-                func_ref: _,
-                args,
-            } => {
-                let func = func.print(printer);
+            Value::CallRuntime { func_ref, args } => {
                 let args = args
                     .iter()
                     .map(|a| a.print(printer))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{func}({args})")
+                format!("runtime_func_{func_ref}({args})")
             }
         }
     }

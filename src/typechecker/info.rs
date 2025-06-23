@@ -5,7 +5,10 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{
     ast::Identifier,
     parser::meta::MetaId,
-    runtime::layout::{Layout, LayoutBuilder},
+    runtime::{
+        layout::{Layout, LayoutBuilder},
+        RuntimeFunctionRef,
+    },
     typechecker::scoped_display::TypeDisplay,
     Runtime,
 };
@@ -14,7 +17,8 @@ use super::{
     expr::ResolvedPath,
     scope::{DeclarationKind, ResolvedName, ScopeGraph, ScopeRef},
     types::{
-        Function, IntKind, IntSize, Primitive, Type, TypeDefinition, TypeName,
+        Function, IntKind, IntSize, Primitive, Signature, Type,
+        TypeDefinition, TypeName,
     },
     unionfind::UnionFind,
 };
@@ -45,6 +49,9 @@ pub struct TypeInfo {
     /// The function that is called on each function call
     pub(super) function_calls: HashMap<MetaId, Function>,
 
+    pub(super) runtime_function_signatures:
+        HashMap<RuntimeFunctionRef, Signature>,
+
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
     pub(super) path_kinds: HashMap<MetaId, ResolvedPath>,
@@ -74,6 +81,7 @@ impl TypeInfo {
             return_types: HashMap::new(),
             function_calls: HashMap::new(),
             function_scopes: HashMap::new(),
+            runtime_function_signatures: HashMap::new(),
         }
     }
 }
@@ -117,6 +125,16 @@ impl TypeInfo {
         s.push('.');
         s.push_str(name.ident.as_str());
         s.into()
+    }
+
+    pub fn runtime_function_signature(
+        &self,
+        func_ref: RuntimeFunctionRef,
+    ) -> Signature {
+        self.runtime_function_signatures
+            .get(&func_ref)
+            .unwrap()
+            .clone()
     }
 
     pub fn is_numeric_type(&mut self, ty: &Type) -> bool {

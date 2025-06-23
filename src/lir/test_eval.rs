@@ -11,7 +11,12 @@ fn compile(s: FileTree) -> LoweredToLir {
         .try_init();
 
     let runtime = routecore_runtime().unwrap();
-    s.parse().unwrap().typecheck(runtime).unwrap().lower_to_lir()
+    s.parse()
+        .unwrap()
+        .typecheck(runtime)
+        .unwrap()
+        .lower_to_mir()
+        .lower_to_lir()
 }
 
 /// Helper for constructing complex values for Roto

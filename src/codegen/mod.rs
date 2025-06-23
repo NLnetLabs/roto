@@ -18,7 +18,6 @@ use crate::{
     lir::{
         ir::{self, FloatCmp, IntCmp, Operand, Var, VarKind},
         value::IrType,
-        IrFunction,
     },
     runtime::{
         context::ContextDescription, ty::Reflect, RuntimeConstant,
@@ -250,7 +249,7 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 pub fn codegen(
     runtime: &Runtime,
     ir: &[ir::Function],
-    runtime_functions: &HashMap<RuntimeFunctionRef, IrFunction>,
+    runtime_functions: &HashMap<RuntimeFunctionRef, ir::Signature>,
     constants: &[RuntimeConstant],
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -270,9 +269,12 @@ pub fn codegen(
         cranelift::module::default_libcall_names(),
     );
 
-    for (func_ref, func) in runtime_functions {
+    for (func_ref, _) in runtime_functions {
         let f = runtime.get_function(*func_ref);
-        builder.symbol(format!("runtime_function_{}", f.id), func.ptr);
+        builder.symbol(
+            format!("runtime_function_{}", f.id),
+            f.description.pointer(),
+        );
     }
 
     let jit = JITModule::new(builder);
@@ -319,12 +321,12 @@ pub fn codegen(
         module.declare_constant(constant);
     }
 
-    for (func_ref, func) in runtime_functions {
+    for (func_ref, ir_sig) in runtime_functions {
         let mut sig = module.inner.make_signature();
-        for ty in &func.params {
+        for (_, ty) in &ir_sig.parameters {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
         }
-        if let Some(ty) = &func.ret {
+        if let Some(ty) = &ir_sig.return_type {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
         let f = runtime.get_function(*func_ref);

@@ -520,25 +520,16 @@ pub enum FunctionKind {
 }
 
 impl Function {
-    pub fn new<T: Into<Type>>(
-        kind: FunctionKind,
+    pub fn new(
         name: ResolvedName,
         vars: &[Identifier],
-        parameter_types: impl IntoIterator<Item = T>,
-        return_type: impl Into<Type>,
+        signature: Signature,
         definition: FunctionDefinition,
     ) -> Self {
         Self {
             name,
             vars: vars.to_vec(),
-            signature: Signature {
-                kind,
-                parameter_types: parameter_types
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-                return_type: return_type.into(),
-            },
+            signature,
             definition,
         }
     }

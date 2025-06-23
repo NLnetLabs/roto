@@ -16,8 +16,8 @@ use crate::{
     lir::{
         self,
         eval::{self, Memory},
+        ir,
         value::IrValue,
-        IrFunction,
     },
     mir,
     module::{ModuleTree, Parsed},
@@ -75,7 +75,7 @@ pub struct LoweredToMir {
 pub struct LoweredToLir {
     runtime: Runtime,
     pub ir: lir::ir::Lir,
-    runtime_functions: HashMap<RuntimeFunctionRef, IrFunction>,
+    runtime_functions: HashMap<RuntimeFunctionRef, ir::Signature>,
     runtime_constants: Vec<RuntimeConstant>,
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -230,6 +230,7 @@ pub fn interpret(
     let lowered = FileTree::read(path)
         .parse()?
         .typecheck(runtime)?
+        .lower_to_mir()
         .lower_to_lir();
 
     let res = lowered.eval(mem, ctx, args);
@@ -308,48 +309,6 @@ impl TypeChecked {
             type_info,
         }
     }
-
-    pub fn lower_to_lir(self) -> LoweredToLir {
-        let TypeChecked {
-            module_tree,
-            mut type_info,
-            runtime,
-            context_type,
-        } = self;
-
-        let mut runtime_functions = HashMap::new();
-        let mut label_store = LabelStore::default();
-        let ir = lir::lower(
-            &module_tree,
-            &mut type_info,
-            &mut runtime_functions,
-            &mut label_store,
-            &runtime,
-        );
-
-        let _ = env_logger::try_init();
-        if log::log_enabled!(log::Level::Info) {
-            let printer = IrPrinter {
-                type_info: &type_info,
-                label_store: &label_store,
-                scope: None,
-            };
-            let s = ir.print(&printer);
-            info!("{s}");
-        }
-
-        let runtime_constants = runtime.constants.values().cloned().collect();
-
-        LoweredToLir {
-            ir,
-            runtime,
-            runtime_functions,
-            runtime_constants,
-            label_store,
-            context_type,
-            type_info,
-        }
-    }
 }
 
 impl LoweredToMir {
@@ -362,8 +321,14 @@ impl LoweredToMir {
             context_type,
         } = self;
 
-        let ir =
-            lir::lower_to_lir(&runtime, &mut type_info, &mut label_store, ir);
+        let mut runtime_functions = HashMap::new();
+        let mut ctx = lir::lower::LowerCtx {
+            runtime: &runtime,
+            type_info: &mut type_info,
+            label_store: &mut label_store,
+            runtime_functions: &mut runtime_functions,
+        };
+        let ir = lir::lower_to_lir(&mut ctx, ir);
 
         LoweredToLir {
             runtime,
@@ -371,8 +336,9 @@ impl LoweredToMir {
             label_store,
             type_info,
             context_type,
-            runtime_functions: todo!(),
-            runtime_constants: todo!(),
+            runtime_functions,
+            // TODO: runtime constants
+            runtime_constants: Vec::new(),
         }
     }
 }

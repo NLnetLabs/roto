@@ -24,7 +24,7 @@ fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
     let _ = env_logger::try_init();
 
     let res = f.parse().and_then(|x| x.typecheck(runtime)).map(|x| {
-        let x = x.lower_to_lir();
+        let x = x.lower_to_mir().lower_to_lir();
         x.codegen()
     });
 

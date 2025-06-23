@@ -332,14 +332,22 @@ impl TypeChecker {
                     .unwrap();
             }
 
-            self.functions.push(Function::new(
+            let signature = Signature {
                 kind,
-                name,
-                &[],
                 parameter_types,
                 return_type,
+            };
+
+            self.functions.push(Function::new(
+                name,
+                &[],
+                signature.clone(),
                 FunctionDefinition::Runtime(func.get_ref()),
             ));
+
+            self.type_info
+                .runtime_function_signatures
+                .insert(func.get_ref(), signature);
         }
 
         Ok(())

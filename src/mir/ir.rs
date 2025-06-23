@@ -99,7 +99,6 @@ pub enum Value {
         args: Vec<Var>,
     },
     CallRuntime {
-        func: Identifier,
         func_ref: runtime::RuntimeFunctionRef,
         args: Vec<Var>,
     },

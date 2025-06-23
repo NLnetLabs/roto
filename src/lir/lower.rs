@@ -1,16 +1,21 @@
 mod clone_drop;
 
+use std::collections::HashMap;
+
 use crate::{
     ast::{self, Literal},
     ice,
     label::{LabelRef, LabelStore},
     mir,
-    runtime::layout::{Layout, LayoutBuilder},
+    runtime::{
+        layout::{Layout, LayoutBuilder},
+        RuntimeFunctionRef,
+    },
     typechecker::{
         info::TypeInfo,
-        scope::ScopeRef,
+        scope::{ResolvedName, ScopeRef},
         types::{
-            EnumVariant, FloatSize, IntKind, IntSize, Primitive, Type,
+            self, EnumVariant, FloatSize, IntKind, IntSize, Primitive, Type,
             TypeDefinition,
         },
     },
@@ -22,22 +27,22 @@ use super::{
     IntCmp, Lir, Operand, Var, VarKind,
 };
 
-pub fn lower_to_lir(
-    runtime: &Runtime,
-    type_info: &mut TypeInfo,
-    label_store: &mut LabelStore,
-    mir: mir::Mir,
-) -> Lir {
-    Lowerer::program(runtime, type_info, label_store, mir)
+pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
+    Lowerer::program(ctx, mir)
 }
 
-struct Lowerer<'r> {
+pub struct LowerCtx<'c> {
+    pub runtime: &'c Runtime,
+    pub type_info: &'c mut TypeInfo,
+    pub label_store: &'c mut LabelStore,
+    pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,
+}
+
+struct Lowerer<'c, 'r> {
+    ctx: &'c mut LowerCtx<'r>,
     blocks: Vec<Block>,
     function_scope: ScopeRef,
-    type_info: &'r mut TypeInfo,
-    label_store: &'r mut LabelStore,
     tmp_idx: usize,
-    runtime: &'r Runtime,
     return_type: Type,
 }
 
@@ -47,38 +52,21 @@ enum Location {
 }
 
 /// # Lower MIR constructs
-impl Lowerer<'_> {
-    fn program(
-        runtime: &Runtime,
-        type_info: &mut TypeInfo,
-        label_store: &mut LabelStore,
-        mir: mir::Mir,
-    ) -> Lir {
+impl Lowerer<'_, '_> {
+    fn program(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
         let mut functions = Vec::new();
 
         for function in mir.functions {
-            functions.push(Self::function(
-                runtime,
-                type_info,
-                label_store,
-                function,
-            ));
+            functions.push(Self::function(ctx, function));
         }
 
         Lir { functions }
     }
 
-    fn function(
-        runtime: &Runtime,
-        type_info: &mut TypeInfo,
-        label_store: &mut LabelStore,
-        function: mir::Function,
-    ) -> Function {
+    fn function(ctx: &mut LowerCtx<'_>, function: mir::Function) -> Function {
         let return_type = function.signature.return_type.clone();
         let mut lowerer = Lowerer {
-            runtime,
-            type_info,
-            label_store,
+            ctx,
             tmp_idx: function.tmp_idx,
             function_scope: function.scope,
             return_type: return_type.clone(),
@@ -162,7 +150,12 @@ impl Lowerer<'_> {
     fn assign(&mut self, to: mir::Place, ty: Type, value: mir::Value) {
         let to = self.location(to, ty.clone());
         let op = match value {
-            mir::Value::Const(lit, ty) => self.literal(&lit, &ty),
+            mir::Value::Const(lit, ty) => {
+                let Some(op) = self.literal(&lit, &ty) else {
+                    return;
+                };
+                op
+            }
             mir::Value::Discriminant(v) => self.get_discriminant(v),
             mir::Value::Not(var) => {
                 let val = self.var(var);
@@ -182,11 +175,110 @@ impl Lowerer<'_> {
                 ty,
                 right,
             } => self.binop(left, binop, ty, right),
-            mir::Value::Call { .. } => todo!(),
-            mir::Value::CallRuntime { .. } => todo!(),
+            mir::Value::Call { func, args } => {
+                let Some(op) = self.call(func, args, &ty) else {
+                    return;
+                };
+                op
+            }
+            mir::Value::CallRuntime { func_ref, args } => {
+                let Some(op) = self.call_runtime(func_ref, args, &ty) else {
+                    return;
+                };
+                op
+            }
         };
 
         self.move_val(to, op, &ty);
+    }
+
+    fn call(
+        &mut self,
+        func: ResolvedName,
+        args: Vec<mir::Var>,
+        return_type: &Type,
+    ) -> Option<Operand> {
+        let reference_return = self.is_reference_type(&return_type);
+        let (to, out_ptr) = if reference_return {
+            let out_ptr = self.new_tmp();
+            let layout =
+                self.ctx.type_info.layout_of(return_type, self.ctx.runtime);
+            self.emit_alloc(out_ptr.clone(), layout);
+            (None, Some(out_ptr))
+        } else {
+            let to =
+                self.lower_type(&return_type).map(|ty| (self.new_tmp(), ty));
+            (to, None)
+        };
+
+        let ctx = Var {
+            scope: self.function_scope,
+            kind: VarKind::Context,
+        };
+
+        let func = self.ctx.type_info.full_name(&func);
+
+        let args = args.into_iter().map(|v| self.var(v).into()).collect();
+
+        self.emit(Instruction::Call {
+            to: to.clone(),
+            ctx: ctx.into(),
+            func,
+            args,
+            return_ptr: out_ptr.clone(),
+        });
+
+        if let Some(out_ptr) = out_ptr {
+            Some(out_ptr.into())
+        } else {
+            to.map(|(to, _ty)| to.into())
+        }
+    }
+
+    fn call_runtime(
+        &mut self,
+        func_ref: RuntimeFunctionRef,
+        args: Vec<mir::Var>,
+        return_type: &Type,
+    ) -> Option<Operand> {
+        let out_ptr = self.new_tmp();
+        let layout =
+            self.ctx.type_info.layout_of(return_type, self.ctx.runtime);
+        self.emit_alloc(out_ptr.clone(), layout);
+
+        let mut parameters = Vec::new();
+        parameters.push(("ret".into(), IrType::Pointer));
+
+        let sig = self.ctx.type_info.runtime_function_signature(func_ref);
+        parameters.extend(sig.parameter_types.iter().enumerate().filter_map(
+            |(i, ty)| Some((i.to_string().into(), self.lower_type(ty)?)),
+        ));
+
+        let ir_signature = Signature {
+            parameters,
+            return_ptr: true,
+            return_type: None,
+        };
+
+        let args = std::iter::once(Operand::Place(out_ptr.clone()))
+            .chain(args.iter().map(|a| self.var(a.clone()).into()))
+            .collect();
+
+        self.ctx.runtime_functions.insert(func_ref, ir_signature);
+
+        self.emit(Instruction::CallRuntime {
+            func: func_ref,
+            args,
+        });
+
+        if self.is_reference_type(return_type) {
+            Some(out_ptr.into())
+        } else {
+            let ty = self.lower_type(return_type)?;
+            let tmp = self.new_tmp();
+            self.emit_read(tmp.clone(), out_ptr.into(), ty);
+            Some(tmp.into())
+        }
     }
 
     fn move_val(&mut self, to: Location, val: Operand, ty: &Type) {
@@ -252,7 +344,7 @@ impl Lowerer<'_> {
     fn location(&mut self, place: mir::Place, ty: Type) -> Location {
         let root_ty = place.root_ty;
         if place.projection.is_empty() {
-            if self.type_info.is_reference_type(&ty, self.runtime) {
+            if self.ctx.type_info.is_reference_type(&ty, self.ctx.runtime) {
                 Location::Pointer {
                     base: self.var(place.var),
                     offset: 0,
@@ -270,7 +362,7 @@ impl Lowerer<'_> {
                     mir::Projection::Field(ident) => {
                         let Type::Name(name) = &ty else { ice!() };
                         let TypeDefinition::Record(_, fields) =
-                            self.type_info.resolve_type_name(&name)
+                            self.ctx.type_info.resolve_type_name(&name)
                         else {
                             ice!()
                         };
@@ -279,7 +371,10 @@ impl Lowerer<'_> {
                         let mut builder = LayoutBuilder::new();
                         for (field, new_ty) in fields {
                             new_offset = builder.add(
-                                &self.type_info.layout_of(&ty, self.runtime),
+                                &self
+                                    .ctx
+                                    .type_info
+                                    .layout_of(&ty, self.ctx.runtime),
                             );
                             if *field == ident {
                                 ty = new_ty;
@@ -293,14 +388,18 @@ impl Lowerer<'_> {
                         let mut builder = LayoutBuilder::new();
                         builder.add(
                             &self
+                                .ctx
                                 .type_info
-                                .layout_of(&Type::u8(), self.runtime),
+                                .layout_of(&Type::u8(), self.ctx.runtime),
                         );
 
                         let mut new_offset = 0;
                         for ty in variant.fields.iter().take(n) {
                             new_offset = builder.add(
-                                &self.type_info.layout_of(&ty, self.runtime),
+                                &self
+                                    .ctx
+                                    .type_info
+                                    .layout_of(&ty, self.ctx.runtime),
                             );
                         }
 
@@ -325,7 +424,7 @@ impl Lowerer<'_> {
     }
 
     fn alloc(&mut self, to: mir::Var, ty: &Type) {
-        let layout = self.type_info.layout_of(&ty, self.runtime);
+        let layout = self.ctx.type_info.layout_of(&ty, self.ctx.runtime);
         let to = self.var(to);
         self.emit_alloc(to, layout);
     }
@@ -346,7 +445,7 @@ impl Lowerer<'_> {
         let to = self.var(to);
         let Type::Name(type_name) = ty else { ice!() };
         let TypeDefinition::Enum(_, variants) =
-            self.type_info.resolve_type_name(type_name)
+            self.ctx.type_info.resolve_type_name(type_name)
         else {
             ice!()
         };
@@ -360,8 +459,10 @@ impl Lowerer<'_> {
     fn r#return(&mut self, var: mir::Var) {
         let var = self.var(var);
 
-        let layout =
-            self.type_info.layout_of(&self.return_type, self.runtime);
+        let layout = self
+            .ctx
+            .type_info
+            .layout_of(&self.return_type, self.ctx.runtime);
 
         if layout.size() == 0 {
             self.emit_return(None);
@@ -369,8 +470,9 @@ impl Lowerer<'_> {
         }
 
         if self
+            .ctx
             .type_info
-            .is_reference_type(&self.return_type, self.runtime)
+            .is_reference_type(&self.return_type, self.ctx.runtime)
         {
             self.emit_memcpy(
                 Var {
@@ -408,17 +510,19 @@ impl Lowerer<'_> {
     }
 
     /// Lower a literal
-    fn literal(&mut self, lit: &Literal, ty: &Type) -> Operand {
-        match &lit {
+    fn literal(&mut self, lit: &Literal, ty: &Type) -> Option<Operand> {
+        Some(match &lit {
             Literal::String(s) => {
                 let to = self.new_tmp();
-                let layout =
-                    self.type_info.layout_of(&Type::string(), self.runtime);
+                let layout = self
+                    .ctx
+                    .type_info
+                    .layout_of(&Type::string(), self.ctx.runtime);
                 self.emit_alloc(to.clone(), layout);
                 self.emit(Instruction::InitString {
                     to: to.clone(),
                     string: s.clone(),
-                    init_func: self.runtime.string_init_function,
+                    init_func: self.ctx.runtime.string_init_function,
                 });
 
                 to.into()
@@ -439,26 +543,31 @@ impl Lowerer<'_> {
             }
             Literal::Integer(x) => {
                 match ty {
-                    Type::IntVar(_) => return IrValue::I32(*x as i32).into(),
+                    Type::IntVar(_) => {
+                        return Some(IrValue::I32(*x as i32).into())
+                    }
                     Type::Name(type_name) => {
                         if let TypeDefinition::Primitive(Primitive::Int(
                             k,
                             s,
-                        )) = self.type_info.resolve_type_name(&type_name)
+                        )) =
+                            self.ctx.type_info.resolve_type_name(&type_name)
                         {
-                            use super::IntKind::*;
-                            use super::IntSize::*;
-                            return match (k, s) {
-                                (Unsigned, I8) => IrValue::U8(*x as _),
-                                (Unsigned, I16) => IrValue::U16(*x as _),
-                                (Unsigned, I32) => IrValue::U32(*x as _),
-                                (Unsigned, I64) => IrValue::U64(*x as _),
-                                (Signed, I8) => IrValue::I8(*x as _),
-                                (Signed, I16) => IrValue::I16(*x as _),
-                                (Signed, I32) => IrValue::I32(*x as _),
-                                (Signed, I64) => IrValue::I64(*x as _),
-                            }
-                            .into();
+                            use types::IntKind::*;
+                            use types::IntSize::*;
+                            return Some(
+                                match (k, s) {
+                                    (Unsigned, I8) => IrValue::U8(*x as _),
+                                    (Unsigned, I16) => IrValue::U16(*x as _),
+                                    (Unsigned, I32) => IrValue::U32(*x as _),
+                                    (Unsigned, I64) => IrValue::U64(*x as _),
+                                    (Signed, I8) => IrValue::I8(*x as _),
+                                    (Signed, I16) => IrValue::I16(*x as _),
+                                    (Signed, I32) => IrValue::I32(*x as _),
+                                    (Signed, I64) => IrValue::I64(*x as _),
+                                }
+                                .into(),
+                            );
                         }
                     }
                     _ => {}
@@ -467,17 +576,22 @@ impl Lowerer<'_> {
             }
             Literal::Float(x) => {
                 match ty {
-                    Type::FloatVar(_) => return IrValue::F64(*x).into(),
+                    Type::FloatVar(_) => {
+                        return Some(IrValue::F64(*x).into())
+                    }
                     Type::Name(type_name) => {
                         if let TypeDefinition::Primitive(Primitive::Float(
                             s,
-                        )) = self.type_info.resolve_type_name(&type_name)
+                        )) =
+                            self.ctx.type_info.resolve_type_name(&type_name)
                         {
-                            return match s {
-                                FloatSize::F32 => IrValue::F32(*x as f32),
-                                FloatSize::F64 => IrValue::F64(*x),
-                            }
-                            .into();
+                            return Some(
+                                match s {
+                                    FloatSize::F32 => IrValue::F32(*x as f32),
+                                    FloatSize::F64 => IrValue::F64(*x),
+                                }
+                                .into(),
+                            );
                         }
                     }
                     _ => {}
@@ -485,8 +599,8 @@ impl Lowerer<'_> {
                 ice!("should be a type error");
             }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
-            Literal::Unit => todo!(),
-        }
+            Literal::Unit => return None,
+        })
     }
 
     fn binop(
@@ -500,7 +614,7 @@ impl Lowerer<'_> {
         let right = self.var(right).into();
 
         let to = self.new_tmp();
-        if let Some((kind, _size)) = self.type_info.get_int_type(&ty) {
+        if let Some((kind, _size)) = self.ctx.type_info.get_int_type(&ty) {
             if let Some(cmp) = binop_to_int_cmp(&binop, kind) {
                 self.emit(Instruction::IntCmp {
                     to: to.clone(),
@@ -511,10 +625,35 @@ impl Lowerer<'_> {
                 return to.into();
             }
 
-            todo!("other int operators (+, -, *, /)")
+            match binop {
+                ast::BinOp::Add => self.emit(Instruction::Add {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                ast::BinOp::Sub => self.emit(Instruction::Sub {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                ast::BinOp::Mul => self.emit(Instruction::Mul {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                ast::BinOp::Div => self.emit(Instruction::Div {
+                    to: to.clone(),
+                    left,
+                    right,
+                    signed: kind == IntKind::Signed,
+                }),
+                _ => ice!(),
+            }
+
+            return to.into();
         }
 
-        if self.type_info.is_float_type(&ty) {
+        if self.ctx.type_info.is_float_type(&ty) {
             if let Some(cmp) = binop_to_float_cmp(&binop) {
                 self.emit(Instruction::FloatCmp {
                     to: to.clone(),
@@ -525,15 +664,41 @@ impl Lowerer<'_> {
                 return to.into();
             }
 
-            todo!("other float operators (+, -, *, /)")
+            match binop {
+                ast::BinOp::Add => self.emit(Instruction::Add {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                ast::BinOp::Sub => self.emit(Instruction::Sub {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                ast::BinOp::Mul => self.emit(Instruction::Mul {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                ast::BinOp::Div => self.emit(Instruction::FDiv {
+                    to: to.clone(),
+                    left,
+                    right,
+                }),
+                _ => ice!(),
+            }
+
+            return to.into();
         }
+
+        todo!("bool & ASN operators");
 
         ice!("Could not lower binop")
     }
 }
 
 /// # Emit instructions
-impl Lowerer<'_> {
+impl Lowerer<'_, '_> {
     fn emit(&mut self, instruction: Instruction) {
         self.blocks
             .last_mut()
@@ -601,7 +766,7 @@ impl Lowerer<'_> {
 }
 
 /// # Helper methods
-impl Lowerer<'_> {
+impl Lowerer<'_, '_> {
     fn current_label(&self) -> LabelRef {
         self.blocks.last().unwrap().label
     }
@@ -637,13 +802,13 @@ impl Lowerer<'_> {
     }
 
     fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
-        let ty = self.type_info.resolve(ty);
-        if self.type_info.layout_of(&ty, self.runtime).size() == 0 {
+        let ty = self.ctx.type_info.resolve(ty);
+        if self.ctx.type_info.layout_of(&ty, self.ctx.runtime).size() == 0 {
             return None;
         }
 
         if let Type::Name(type_name) = &ty {
-            let type_def = self.type_info.resolve_type_name(type_name);
+            let type_def = self.ctx.type_info.resolve_type_name(type_name);
             if let TypeDefinition::Primitive(p) = type_def {
                 use FloatSize::*;
                 use IntKind::*;
@@ -680,7 +845,7 @@ impl Lowerer<'_> {
     }
 
     fn is_reference_type(&mut self, ty: &Type) -> bool {
-        self.type_info.is_reference_type(ty, self.runtime)
+        self.ctx.type_info.is_reference_type(ty, self.ctx.runtime)
     }
 }
 

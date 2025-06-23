@@ -784,7 +784,6 @@ impl<'r> Lowerer<'r> {
             Place::new(tmp.clone(), return_type.clone()),
             return_type,
             Value::CallRuntime {
-                func: "IpAddr.eq".into(),
                 func_ref,
                 args: vec![l, r],
             },

@@ -12,7 +12,7 @@ use crate::{
 
 use super::Lowerer;
 
-impl Lowerer<'_> {
+impl Lowerer<'_, '_> {
     pub fn drop_with_type(&mut self, var: Operand, ty: Type) {
         let new_var = var.clone();
         let f = move |lowerer: &mut Self, offset, ty| {
@@ -66,7 +66,8 @@ impl Lowerer<'_> {
             | Type::RecordVar(_, _)
             | Type::Function(_, _) => return,
             Type::Name(type_name) => {
-                let type_def = self.type_info.resolve_type_name(&type_name);
+                let type_def =
+                    self.ctx.type_info.resolve_type_name(&type_name);
 
                 match type_def {
                     // For enums we will do most of the work in the traversal
@@ -74,6 +75,7 @@ impl Lowerer<'_> {
                     TypeDefinition::Enum(_, _) => 1,
                     TypeDefinition::Primitive(p) => p.layout().size(),
                     TypeDefinition::Runtime(_, id) => self
+                        .ctx
                         .runtime
                         .get_runtime_type(id)
                         .unwrap()
@@ -98,7 +100,8 @@ impl Lowerer<'_> {
     fn get_leaf_clone_drop(&mut self, ty: &Type) -> Option<&CloneDrop> {
         let id = match ty {
             Type::Name(type_name) => {
-                let type_def = self.type_info.resolve_type_name(type_name);
+                let type_def =
+                    self.ctx.type_info.resolve_type_name(type_name);
                 match type_def {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
@@ -112,7 +115,7 @@ impl Lowerer<'_> {
 
         let id = id?;
 
-        let ty = self.runtime.get_runtime_type(id).unwrap();
+        let ty = self.ctx.runtime.get_runtime_type(id).unwrap();
 
         if let Movability::CloneDrop(clone_drop) = ty.movability() {
             Some(clone_drop)
@@ -129,14 +132,15 @@ impl Lowerer<'_> {
         label: Identifier,
         f: &impl Fn(&mut Self, usize, Type),
     ) {
-        let ty = self.type_info.resolve(&ty);
+        let ty = self.ctx.type_info.resolve(&ty);
         f(self, offset, ty.clone());
         match ty {
             Type::RecordVar(_, fields) | Type::Record(fields) => {
                 let mut builder = LayoutBuilder::new();
                 for (_, ty) in fields {
-                    let new_offset = builder
-                        .add(&self.type_info.layout_of(&ty, self.runtime));
+                    let new_offset = builder.add(
+                        &self.ctx.type_info.layout_of(&ty, self.ctx.runtime),
+                    );
                     self.traverse_type(
                         var,
                         offset + new_offset,
@@ -147,7 +151,8 @@ impl Lowerer<'_> {
                 }
             }
             Type::Name(type_name) => {
-                let type_def = self.type_info.resolve_type_name(&type_name);
+                let type_def =
+                    self.ctx.type_info.resolve_type_name(&type_name);
                 match type_def {
                     TypeDefinition::Runtime(_, _) => {}
                     TypeDefinition::Primitive(_) => {}
@@ -160,16 +165,18 @@ impl Lowerer<'_> {
 
                         let current_label = self.current_label();
                         let lbl_prefix = self
+                            .ctx
                             .label_store
                             .wrap_internal(current_label, label);
                         let continue_lbl =
-                            self.label_store.next(current_label);
+                            self.ctx.label_store.next(current_label);
 
                         let branches: Vec<_> = (0..variants.len())
                             .map(|i| {
                                 let ident =
                                     Identifier::from(&format!("variant_{i}"));
                                 let lbl = self
+                                    .ctx
                                     .label_store
                                     .wrap_internal(lbl_prefix, ident);
                                 (i, lbl)
@@ -201,8 +208,9 @@ impl Lowerer<'_> {
                                 let ty = ty.substitute_many(&subs);
                                 let new_offset = builder.add(
                                     &self
+                                        .ctx
                                         .type_info
-                                        .layout_of(&ty, self.runtime),
+                                        .layout_of(&ty, self.ctx.runtime),
                                 );
                                 self.traverse_type(
                                     var,
@@ -228,7 +236,10 @@ impl Lowerer<'_> {
                         for (_, ty) in &fields {
                             let ty = ty.substitute_many(&subs);
                             let new_offset = builder.add(
-                                &self.type_info.layout_of(&ty, self.runtime),
+                                &self
+                                    .ctx
+                                    .type_info
+                                    .layout_of(&ty, self.ctx.runtime),
                             );
                             self.traverse_type(
                                 var,
