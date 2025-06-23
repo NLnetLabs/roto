@@ -337,13 +337,14 @@ impl Lowered {
 impl Compiled {
     pub fn get_tests<Ctx: 'static>(
         &mut self,
-    ) -> impl Iterator<Item = codegen::TestCase<Ctx>> + use<'_, Ctx> {
-        self.module.get_tests()
+    ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
+    {
+        codegen::testing::get_tests(&mut self.module)
     }
 
     #[allow(clippy::result_unit_err)]
     pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
-        self.module.run_tests(ctx)
+        codegen::testing::run_tests(&mut self.module, ctx)
     }
 
     pub fn get_function<Ctx: 'static, F: RotoFunc>(
