@@ -330,6 +330,16 @@ impl LoweredToMir {
         };
         let ir = lir::lower_to_lir(&mut ctx, ir);
 
+        if log::log_enabled!(log::Level::Info) {
+            let printer = IrPrinter {
+                type_info: &type_info,
+                label_store: &label_store,
+                scope: None,
+            };
+            let s = ir.print(&printer);
+            info!("\n{s}");
+        }
+
         LoweredToLir {
             runtime,
             ir,

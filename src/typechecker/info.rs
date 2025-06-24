@@ -183,6 +183,17 @@ impl TypeInfo {
         }
     }
 
+    pub fn is_asn_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                matches!(type_def, TypeDefinition::Primitive(Primitive::Asn))
+            }
+            _ => false,
+        }
+    }
+
     pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
         let ty = self.resolve(ty);
         if self.layout_of(&ty, rt).size() == 0 {

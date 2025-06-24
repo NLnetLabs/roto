@@ -282,7 +282,7 @@ impl Lowerer<'_> {
                             var: examinee.clone(),
                             root_ty: examinee_ty.clone(),
                             projection: vec![Projection::VariantField(
-                                variant.clone(),
+                                variant.name,
                                 i,
                             )],
                         }),

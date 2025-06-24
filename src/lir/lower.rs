@@ -384,30 +384,46 @@ impl Lowerer<'_, '_> {
 
                         offset += new_offset;
                     }
-                    mir::Projection::VariantField(variant, n) => {
-                        let mut builder = LayoutBuilder::new();
-                        builder.add(
-                            &self
-                                .ctx
-                                .type_info
-                                .layout_of(&Type::u8(), self.ctx.runtime),
-                        );
+                    mir::Projection::VariantField(variant_name, n) => {
+                        let Type::Name(type_name) = &ty else { ice!() };
+                        let TypeDefinition::Enum(type_constructor, variants) =
+                            self.ctx.type_info.resolve_type_name(&type_name)
+                        else {
+                            ice!()
+                        };
 
+                        let subs: Vec<_> = type_constructor
+                            .arguments
+                            .iter()
+                            .zip(&type_name.arguments)
+                            .collect();
+
+                        let mut builder = LayoutBuilder::new();
+                        builder.add(&Layout::of::<u8>());
+
+                        let variant = variants
+                            .iter()
+                            .find(|v| v.name == variant_name)
+                            .unwrap();
+
+                        let mut last_ty = None;
                         let mut new_offset = 0;
-                        for ty in variant.fields.iter().take(n) {
+                        for field_ty in variant.fields.iter().take(n + 1) {
+                            let field_ty = field_ty.substitute_many(&subs);
                             new_offset = builder.add(
                                 &self
                                     .ctx
                                     .type_info
-                                    .layout_of(&ty, self.ctx.runtime),
+                                    .layout_of(&field_ty, self.ctx.runtime),
                             );
+                            last_ty = Some(field_ty);
                         }
 
-                        offset = new_offset;
+                        ty = last_ty.unwrap();
+                        offset += new_offset;
                     }
                 }
             }
-
             Location::Pointer { base, offset }
         }
     }
@@ -688,6 +704,20 @@ impl Lowerer<'_, '_> {
                 _ => ice!(),
             }
 
+            return to.into();
+        }
+
+        if self.ctx.type_info.is_asn_type(&ty) {
+            let Some(cmp) = binop_to_int_cmp(&binop, IntKind::Unsigned)
+            else {
+                ice!();
+            };
+            self.emit(Instruction::IntCmp {
+                to: to.clone(),
+                cmp,
+                left,
+                right,
+            });
             return to.into();
         }
 

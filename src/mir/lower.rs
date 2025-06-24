@@ -382,34 +382,22 @@ impl<'r> Lowerer<'r> {
         expr: &Option<Box<Meta<ast::Expr>>>,
     ) -> Value {
         let val = match expr {
-            Some(expr) => self.expr(expr),
-            None => Value::Const(ast::Literal::Unit, Type::unit()),
+            Some(expr) => (self.expr(expr), self.type_info.type_of(&**expr)),
+            None => {
+                (Value::Const(ast::Literal::Unit, Type::unit()), Type::unit())
+            }
         };
 
-        let ty = self.type_info.return_type_of(id);
+        let ty = self.type_info.type_of(id);
 
         match return_kind {
-            ast::ReturnKind::Return => self.return_value(val),
+            ast::ReturnKind::Return => self.return_value(val.0),
             ast::ReturnKind::Accept => {
-                let val = self.make_enum(
-                    ty,
-                    EnumVariant {
-                        name: "Accept".into(),
-                        fields: Vec::new(),
-                    },
-                    &[val],
-                );
+                let val = self.make_enum(ty, "Accept".into(), &[val]);
                 self.return_value(val)
             }
             ast::ReturnKind::Reject => {
-                let val = self.make_enum(
-                    ty,
-                    EnumVariant {
-                        name: "Reject".into(),
-                        fields: Vec::new(),
-                    },
-                    &[val],
-                );
+                let val = self.make_enum(ty, "Reject".into(), &[val]);
                 self.return_value(val)
             }
         }
@@ -460,7 +448,7 @@ impl<'r> Lowerer<'r> {
                         self.normalized_function_call(&func, None, arguments)
                     }
                     ResolvedPath::EnumConstructor { ty, variant } => {
-                        self.enum_constructor(&ty, &variant, arguments)
+                        self.enum_constructor(&ty, variant.name, arguments)
                     }
                     ResolvedPath::Value { .. } => ice!(),
                 }
@@ -516,37 +504,53 @@ impl<'r> Lowerer<'r> {
     fn enum_constructor(
         &mut self,
         ty: &TypeDefinition,
-        variant: &EnumVariant,
+        variant: Identifier,
         arguments: &[Meta<ast::Expr>],
     ) -> Value {
         let ty = ty.clone().type_name();
-        let arguments: Vec<_> =
-            arguments.iter().map(|a| self.expr(a)).collect();
-        self.make_enum(Type::Name(ty), variant.clone(), &arguments)
+        let arguments: Vec<_> = arguments
+            .iter()
+            .map(|a| (self.expr(a), self.type_info.type_of(a)))
+            .collect();
+        self.make_enum(Type::Name(ty), variant, &arguments)
     }
 
     fn make_enum(
         &mut self,
         ty: Type,
-        variant: EnumVariant,
-        arguments: &[Value],
+        variant: Identifier,
+        arguments: &[(Value, Type)],
     ) -> Value {
         let to = self.tmp(ty.clone());
+
+        let Type::Name(name) = self.type_info.resolve(&ty) else {
+            ice!()
+        };
+
+        let TypeDefinition::Enum(_, variants) =
+            self.type_info.resolve_type_name(&name)
+        else {
+            ice!()
+        };
+
+        let Some(variant) = variants.iter().find(|v| v.name == variant)
+        else {
+            ice!()
+        };
+
         self.emit_alloc(to.clone(), ty.clone());
         self.emit_set_discriminant(to.clone(), ty.clone(), variant.clone());
-        for (i, (value, field_ty)) in
-            arguments.iter().zip(variant.fields.clone()).enumerate()
-        {
+        for (i, (value, field_ty)) in arguments.iter().enumerate() {
             self.emit_assign(
                 Place {
                     var: to.clone(),
                     root_ty: ty.clone(),
                     projection: vec![Projection::VariantField(
-                        variant.clone(),
+                        variant.name,
                         i,
                     )],
                 },
-                field_ty,
+                field_ty.clone(),
                 value.clone(),
             );
         }

@@ -76,7 +76,7 @@ impl Place {
 
 #[derive(Clone, Debug)]
 pub enum Projection {
-    VariantField(EnumVariant, usize),
+    VariantField(Identifier, usize),
     Field(Identifier),
 }
 
