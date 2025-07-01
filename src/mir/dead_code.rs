@@ -20,7 +20,7 @@ impl State {
     }
 
     fn contains(&self, lbl: &LabelRef) -> bool {
-        self.0.contains(&lbl)
+        self.0.contains(lbl)
     }
 
     fn get(&self, i: usize) -> LabelRef {
@@ -79,7 +79,9 @@ fn process_block(state: &mut State, block: &mut Block) {
                 for (_, lbl) in branches {
                     state.add(*lbl);
                 }
-                state.add(*default);
+                if let Some(default) = default {
+                    state.add(*default);
+                }
             }
             Instruction::Return { var: _ } => {}
             _ => continue,
@@ -92,6 +94,6 @@ fn process_block(state: &mut State, block: &mut Block) {
     if let Some(i) = final_instruction {
         block.instructions.truncate(i + 1);
     } else {
-        ice!()
+        ice!("Malformed MIR: block ends without a terminating instruction")
     }
 }

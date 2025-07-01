@@ -36,6 +36,8 @@ pub struct Function {
     /// Scope that belongs to this function
     pub scope: ScopeRef,
 
+    pub variables: Vec<(Var, Type)>,
+
     /// Parameters to this function
     pub parameters: Vec<Var>,
 
@@ -84,6 +86,8 @@ pub enum Projection {
 #[must_use]
 pub enum Value {
     Const(Literal, Type),
+    Constant(Identifier, Type),
+    Context(usize),
     Clone(Place),
     Discriminant(Var),
     Not(Var),
@@ -113,12 +117,7 @@ pub enum Instruction {
     Switch {
         examinee: Var,
         branches: Vec<(usize, LabelRef)>,
-        default: LabelRef,
-    },
-
-    Alloc {
-        to: Var,
-        ty: Type,
+        default: Option<LabelRef>,
     },
 
     Assign {

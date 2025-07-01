@@ -918,6 +918,8 @@ impl Runtime {
         /// ```
         #[roto_static_method(rt, Prefix, new)]
         fn prefix_new(ip: IpAddr, len: u8) -> Prefix {
+            dbg!();
+            dbg!(ip, len);
             Prefix::new(ip, len).unwrap()
         }
 

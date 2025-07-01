@@ -158,7 +158,7 @@ impl FileTree {
                 continue;
             }
 
-            if path.extension().map_or(true, |ext| ext != "roto") {
+            if path.extension().is_none_or(|ext| ext != "roto") {
                 continue;
             }
 

@@ -13,6 +13,7 @@ use crate::{
             FloatCmp, Function, Instruction, IntCmp, Operand, Var, VarKind,
         },
         value::IrValue,
+        ValueOrSlot,
     },
     runtime::{RuntimeConstant, RuntimeFunctionRef},
     Runtime,
@@ -322,6 +323,13 @@ pub fn eval(
         );
     }
 
+    for (var, val_or_slot) in &f.variables {
+        if let ValueOrSlot::StackSlot(layout) = val_or_slot {
+            let ptr = mem.allocate(layout.size());
+            vars.insert(var.clone(), IrValue::Pointer(ptr));
+        }
+    }
+
     let mut program_counter = block_map[&f.entry_block];
 
     loop {
@@ -366,6 +374,13 @@ pub fn eval(
                 let f = p.iter().find(|f| f.name == *func).unwrap();
 
                 mem.push_frame(program_counter, to.clone().map(|to| to.0));
+
+                for (var, val_or_slot) in &f.variables {
+                    if let ValueOrSlot::StackSlot(layout) = val_or_slot {
+                        let ptr = mem.allocate(layout.size());
+                        vars.insert(var.clone(), IrValue::Pointer(ptr));
+                    }
+                }
 
                 if let Some(return_ptr) = return_ptr {
                     vars.insert(
@@ -577,10 +592,6 @@ pub fn eval(
                 };
                 let new = mem.offset_by(from, *offset as usize);
                 vars.insert(to.clone(), IrValue::Pointer(new));
-            }
-            Instruction::Alloc { to, layout } => {
-                let pointer = mem.allocate(layout.size());
-                vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
             Instruction::Initialize { to, bytes, layout } => {
                 // There are many cases where we only want to initialize the

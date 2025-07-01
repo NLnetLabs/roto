@@ -15,12 +15,16 @@ use crate::{
     label::{LabelRef, LabelStore},
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
-    runtime::{self, RuntimeFunction},
+    runtime::{self, RuntimeFunction, RuntimeFunctionRef},
     typechecker::{
         self,
         info::TypeInfo,
-        scope::{DeclarationKind, ScopeRef},
-        types::{EnumVariant, FunctionKind, Signature, Type, TypeDefinition},
+        scope::{DeclarationKind, ScopeRef, ValueKind},
+        scoped_display::TypeDisplay,
+        types::{
+            EnumVariant, FunctionDefinition, FunctionKind, Signature, Type,
+            TypeDefinition,
+        },
         PathValue, ResolvedPath,
     },
     Runtime,
@@ -42,6 +46,7 @@ pub struct Lowerer<'r> {
     /// scopes. At the end of a block we drop all variables in the last element
     /// and then pop that element.
     stack_slots: Vec<Vec<(Var, Type)>>,
+    vars: Vec<(Var, Type)>,
 }
 
 pub fn lower_to_mir(
@@ -71,10 +76,11 @@ impl<'r> Lowerer<'r> {
             tmp_idx: 0,
             type_info,
             runtime,
-            return_type: (&*return_type).clone(),
+            return_type: (*return_type).clone(),
             function_scope,
             blocks: Vec::new(),
             stack_slots: Vec::new(),
+            vars: Vec::new(),
             label_store,
         }
     }
@@ -118,7 +124,7 @@ impl<'r> Lowerer<'r> {
             return x;
         }
         let to = self.tmp(ty.clone());
-        self.emit_assign(Place::new(to.clone(), ty.clone()), ty, value);
+        self.do_assign(Place::new(to.clone(), ty.clone()), ty, value);
         to
     }
 
@@ -253,7 +259,7 @@ impl<'r> Lowerer<'r> {
                 kind: VarKind::Explicit(name.ident),
             };
             parameters.push(var.clone());
-            self.stack_slots.last_mut().unwrap().push((var, ty.clone()));
+            self.add_live_variable(var, ty.clone());
         }
 
         let signature = Signature {
@@ -270,7 +276,7 @@ impl<'r> Lowerer<'r> {
 
         let to_drop = self.stack_slots.pop().unwrap();
         for (var, ty) in to_drop.into_iter().rev() {
-            self.emit_drop(var.into(), ty);
+            self.emit_drop(var, ty);
         }
 
         let tmp = self.assign_to_var(last, return_type.clone());
@@ -282,6 +288,7 @@ impl<'r> Lowerer<'r> {
         Function {
             name,
             scope,
+            variables: self.vars,
             parameters,
             tmp_idx: self.tmp_idx,
             blocks: self.blocks,
@@ -304,7 +311,7 @@ impl<'r> Lowerer<'r> {
 
         let ty = self.type_info.type_of(block);
         let final_var = self.assign_to_var(op.clone(), ty);
-        self.remove_live_variable(final_var.clone());
+        self.remove_live_variable(&final_var);
 
         let to_drop = self.stack_slots.pop().unwrap();
 
@@ -314,7 +321,7 @@ impl<'r> Lowerer<'r> {
         if !self.type_info.diverges(block) {
             // Drop order is reversed
             for (var, ty) in to_drop.into_iter().rev() {
-                self.emit_drop(var.into(), ty);
+                self.emit_drop(var, ty);
             }
         }
 
@@ -322,7 +329,7 @@ impl<'r> Lowerer<'r> {
     }
 
     fn drop_var(&mut self, var: Var) {
-        let ty = self.remove_live_variable(var.clone());
+        let ty = self.remove_live_variable(&var);
         self.emit_drop(var, ty);
     }
 
@@ -338,7 +345,8 @@ impl<'r> Lowerer<'r> {
                     kind: VarKind::Explicit(**ident),
                 };
 
-                self.emit_assign(Place::new(to, ty.clone()), ty, val);
+                self.add_live_variable(to.clone(), ty.clone());
+                self.do_assign(Place::new(to, ty.clone()), ty, val);
             }
             ast::Stmt::Expr(expr) => {
                 let value = self.expr(expr);
@@ -353,15 +361,15 @@ impl<'r> Lowerer<'r> {
         let id = expr.id;
         match &**expr {
             ast::Expr::Return(return_kind, expr) => {
-                self.r#return(id, return_kind, expr)
+                self.r#return(return_kind, expr)
             }
             ast::Expr::Literal(literal) => self.literal(literal),
-            ast::Expr::Match(r#match) => self.r#match(r#match),
+            ast::Expr::Match(r#match) => self.r#match(id, r#match),
             ast::Expr::FunctionCall(function, arguments) => {
                 self.function_call(id, function, arguments)
             }
-            ast::Expr::Access(expr, field) => self.access(id, expr, field),
-            ast::Expr::Path(path) => self.path(path),
+            ast::Expr::Access(expr, field) => self.access(expr, field),
+            ast::Expr::Path(path) => self.path(id, path),
             ast::Expr::Record(record) | ast::Expr::TypedRecord(_, record) => {
                 self.record(id, record)
             }
@@ -377,7 +385,6 @@ impl<'r> Lowerer<'r> {
 
     fn r#return(
         &mut self,
-        id: MetaId,
         return_kind: &ast::ReturnKind,
         expr: &Option<Box<Meta<ast::Expr>>>,
     ) -> Value {
@@ -388,15 +395,15 @@ impl<'r> Lowerer<'r> {
             }
         };
 
-        let ty = self.type_info.type_of(id);
-
         match return_kind {
             ast::ReturnKind::Return => self.return_value(val.0),
             ast::ReturnKind::Accept => {
+                let ty = self.return_type.clone();
                 let val = self.make_enum(ty, "Accept".into(), &[val]);
                 self.return_value(val)
             }
             ast::ReturnKind::Reject => {
+                let ty = self.return_type.clone();
                 let val = self.make_enum(ty, "Reject".into(), &[val]);
                 self.return_value(val)
             }
@@ -405,12 +412,12 @@ impl<'r> Lowerer<'r> {
 
     fn literal(&mut self, literal: &Meta<ast::Literal>) -> Value {
         let ty = self.type_info.type_of(literal);
-        Value::Const((&**literal).clone(), ty)
+        Value::Const((**literal).clone(), ty)
     }
 
     fn return_value(&mut self, val: Value) -> Value {
         let var = self.assign_to_var(val, self.return_type.clone());
-        let _ty = self.remove_live_variable(var.clone());
+        let _ty = self.remove_live_variable(&var);
         for frame in self.stack_slots.clone().iter().rev() {
             for (var, ty) in frame.iter().rev() {
                 self.emit_drop(var.clone(), ty.clone());
@@ -447,7 +454,8 @@ impl<'r> Lowerer<'r> {
                         let func = self.type_info.function(id).clone();
                         self.normalized_function_call(&func, None, arguments)
                     }
-                    ResolvedPath::EnumConstructor { ty, variant } => {
+                    ResolvedPath::EnumConstructor { ty: _, variant } => {
+                        let ty = self.type_info.type_of(id);
                         self.enum_constructor(&ty, variant.name, arguments)
                     }
                     ResolvedPath::Value { .. } => ice!(),
@@ -479,12 +487,9 @@ impl<'r> Lowerer<'r> {
         if let Some((receiver, ty)) = receiver {
             // This values will be dropped by the callee
             let tmp = self.undropped_tmp();
+            self.vars.push((tmp.clone(), ty.clone()));
 
-            self.emit_assign(
-                Place::new(tmp.clone(), ty.clone()),
-                ty,
-                receiver,
-            );
+            self.do_assign(Place::new(tmp.clone(), ty.clone()), ty, receiver);
             args.push(tmp);
         }
         args.extend(arguments.iter().map(|a| {
@@ -493,26 +498,32 @@ impl<'r> Lowerer<'r> {
 
             // These values will be dropped by the callee
             let tmp = self.undropped_tmp();
+            self.vars.push((tmp.clone(), ty.clone()));
 
-            self.emit_assign(Place::new(tmp.clone(), ty.clone()), ty, op);
+            self.do_assign(Place::new(tmp.clone(), ty.clone()), ty, op);
             tmp
         }));
 
-        Value::Call { func: name, args }
+        match func.definition {
+            FunctionDefinition::Runtime(func_ref) => {
+                Value::CallRuntime { func_ref, args }
+            }
+            FunctionDefinition::Roto => Value::Call { func: name, args },
+        }
     }
 
     fn enum_constructor(
         &mut self,
-        ty: &TypeDefinition,
+        ty: &Type,
         variant: Identifier,
         arguments: &[Meta<ast::Expr>],
     ) -> Value {
-        let ty = ty.clone().type_name();
+        let ty = ty.clone();
         let arguments: Vec<_> = arguments
             .iter()
             .map(|a| (self.expr(a), self.type_info.type_of(a)))
             .collect();
-        self.make_enum(Type::Name(ty), variant, &arguments)
+        self.make_enum(ty, variant, &arguments)
     }
 
     fn make_enum(
@@ -530,7 +541,7 @@ impl<'r> Lowerer<'r> {
         let TypeDefinition::Enum(_, variants) =
             self.type_info.resolve_type_name(&name)
         else {
-            ice!()
+            ice!("Not an enum: {}", ty.display(self.type_info))
         };
 
         let Some(variant) = variants.iter().find(|v| v.name == variant)
@@ -538,10 +549,9 @@ impl<'r> Lowerer<'r> {
             ice!()
         };
 
-        self.emit_alloc(to.clone(), ty.clone());
         self.emit_set_discriminant(to.clone(), ty.clone(), variant.clone());
         for (i, (value, field_ty)) in arguments.iter().enumerate() {
-            self.emit_assign(
+            self.do_assign(
                 Place {
                     var: to.clone(),
                     root_ty: ty.clone(),
@@ -552,36 +562,34 @@ impl<'r> Lowerer<'r> {
                 },
                 field_ty.clone(),
                 value.clone(),
-            );
+            )
         }
         Value::Move(to)
     }
 
     fn access(
         &mut self,
-        id: MetaId,
         expr: &Meta<ast::Expr>,
         field: &Meta<Identifier>,
     ) -> Value {
         let op = self.expr(expr);
-        let ty = self.type_info.type_of(id);
+        let ty = self.type_info.type_of(expr);
         let var = self.assign_to_var(op, ty.clone());
         Value::Clone(Place {
             var,
             root_ty: ty,
-            projection: vec![Projection::Field((&**field).clone())],
+            projection: vec![Projection::Field(**field)],
         })
     }
 
-    fn path(&mut self, path: &Meta<ast::Path>) -> Value {
+    fn path(&mut self, id: MetaId, path: &Meta<ast::Path>) -> Value {
         let path_kind = self.type_info.path_kind(path).clone();
 
         match path_kind {
             ResolvedPath::Value(value) => self.path_value(&value),
-            ResolvedPath::EnumConstructor { ty, variant } => {
-                let ty = Type::Name(ty.type_name());
+            ResolvedPath::EnumConstructor { ty: _, variant } => {
+                let ty = self.type_info.type_of(id);
                 let to = self.tmp(ty.clone());
-                self.emit_alloc(to.clone(), ty.clone());
                 self.emit_set_discriminant(to.clone(), ty, variant);
                 Value::Move(to)
             }
@@ -593,12 +601,11 @@ impl<'r> Lowerer<'r> {
         let ty = self.type_info.type_of(id);
 
         let to = self.tmp(ty.clone());
-        self.emit_alloc(to.clone(), ty.clone());
 
         for (s, expr) in &record.fields {
             let op = self.expr(expr);
             let field_ty = self.type_info.type_of(expr);
-            self.emit_assign(
+            self.do_assign(
                 Place {
                     var: to.clone(),
                     root_ty: ty.clone(),
@@ -650,7 +657,8 @@ impl<'r> Lowerer<'r> {
 
         let val = self.expr(expr);
         let ty = self.type_info.type_of(expr);
-        self.emit_assign(place, ty, val);
+
+        self.do_assign(place, ty, val);
 
         Value::Const(ast::Literal::Unit, Type::unit())
     }
@@ -672,6 +680,14 @@ impl<'r> Lowerer<'r> {
             return self.binop_ip_addr(l, binop, r);
         }
 
+        if *binop == ast::BinOp::And {
+            return self.binop_and(l, r);
+        }
+
+        if *binop == ast::BinOp::Or {
+            return self.binop_or(l, r);
+        }
+
         let l = self.expr(l);
         let l = self.assign_to_var(l, l_ty.clone());
 
@@ -680,7 +696,7 @@ impl<'r> Lowerer<'r> {
 
         Value::BinOp {
             left: l,
-            binop: binop.clone(),
+            binop: *binop,
             ty: l_ty.clone(),
             right: r,
         }
@@ -696,7 +712,7 @@ impl<'r> Lowerer<'r> {
         match binop {
             ast::BinOp::Eq => self.desugared_binop(
                 runtime::FunctionKind::Method(type_id),
-                "eq".into(),
+                "eq",
                 Type::bool(),
                 (l, Type::string()),
                 (r, Type::string()),
@@ -704,7 +720,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Ne => {
                 let val = self.desugared_binop(
                     runtime::FunctionKind::Method(type_id),
-                    "eq".into(),
+                    "eq",
                     Type::bool(),
                     (l, Type::string()),
                     (r, Type::string()),
@@ -714,7 +730,7 @@ impl<'r> Lowerer<'r> {
             }
             ast::BinOp::Add => self.desugared_binop(
                 runtime::FunctionKind::Method(type_id),
-                "append".into(),
+                "append",
                 Type::string(),
                 (l, Type::string()),
                 (r, Type::string()),
@@ -735,7 +751,7 @@ impl<'r> Lowerer<'r> {
         match binop {
             ast::BinOp::Eq => self.desugared_binop(
                 runtime::FunctionKind::Method(type_id),
-                "eq".into(),
+                "eq",
                 Type::bool(),
                 (l, Type::ip_addr()),
                 (r, Type::ip_addr()),
@@ -743,7 +759,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Ne => {
                 let val = self.desugared_binop(
                     runtime::FunctionKind::Method(type_id),
-                    "eq".into(),
+                    "eq",
                     Type::bool(),
                     (l, Type::ip_addr()),
                     (r, Type::ip_addr()),
@@ -755,7 +771,7 @@ impl<'r> Lowerer<'r> {
                 let type_id = TypeId::of::<Prefix>();
                 self.desugared_binop(
                     runtime::FunctionKind::StaticMethod(type_id),
-                    "new".into(),
+                    "new",
                     Type::prefix(),
                     (l, Type::ip_addr()),
                     (r, Type::u8()),
@@ -765,6 +781,62 @@ impl<'r> Lowerer<'r> {
                 ice!("Operator {binop} is not implemented for IpAddr")
             }
         }
+    }
+
+    fn binop_and(
+        &mut self,
+        l: &Meta<ast::Expr>,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        let current_label = self.current_label();
+        let lbl_cont = self.label_store.next(current_label);
+        let lbl_other = self
+            .label_store
+            .wrap_internal(current_label, Identifier::from("and_other"));
+
+        let val = self.expr(l);
+        let tmp = self.assign_to_var(val, Type::bool());
+        self.emit_switch(tmp.clone(), vec![(1, lbl_other)], Some(lbl_cont));
+
+        self.new_block(lbl_other);
+        let val = self.expr(r);
+        self.do_assign(
+            Place::new(tmp.clone(), Type::bool()),
+            Type::bool(),
+            val,
+        );
+        self.emit_jump(lbl_cont);
+
+        self.new_block(lbl_cont);
+        Value::Move(tmp)
+    }
+
+    fn binop_or(
+        &mut self,
+        l: &Meta<ast::Expr>,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        let current_label = self.current_label();
+        let lbl_cont = self.label_store.next(current_label);
+        let lbl_other = self
+            .label_store
+            .wrap_internal(current_label, Identifier::from("and_other"));
+
+        let val = self.expr(l);
+        let tmp = self.assign_to_var(val, Type::bool());
+        self.emit_switch(tmp.clone(), vec![(0, lbl_other)], Some(lbl_cont));
+
+        self.new_block(lbl_other);
+        let val = self.expr(r);
+        self.do_assign(
+            Place::new(tmp.clone(), Type::bool()),
+            Type::bool(),
+            val,
+        );
+        self.emit_jump(lbl_cont);
+
+        self.new_block(lbl_cont);
+        Value::Move(tmp)
     }
 
     fn desugared_binop(
@@ -783,17 +855,26 @@ impl<'r> Lowerer<'r> {
         let r = self.expr(r);
         let r = self.assign_to_var(r, r_ty);
 
-        let tmp = self.tmp(Type::bool());
-        self.emit_assign(
+        let tmp = self.tmp(return_type.clone());
+        let val = self.call_runtime(func_ref, vec![l, r]);
+        self.do_assign(
             Place::new(tmp.clone(), return_type.clone()),
             return_type,
-            Value::CallRuntime {
-                func_ref,
-                args: vec![l, r],
-            },
+            val,
         );
 
         Value::Move(tmp)
+    }
+
+    fn call_runtime(
+        &mut self,
+        func_ref: RuntimeFunctionRef,
+        args: Vec<Var>,
+    ) -> Value {
+        for var in &args {
+            self.remove_live_variable(var);
+        }
+        Value::CallRuntime { func_ref, args }
     }
 
     fn if_else(
@@ -820,13 +901,14 @@ impl<'r> Lowerer<'r> {
         self.emit_switch(
             examinee,
             branches,
-            if r#else.is_some() { lbl_else } else { lbl_cont },
+            Some(if r#else.is_some() { lbl_else } else { lbl_cont }),
         );
 
         self.new_block(lbl_then);
         let op = self.block(then);
 
         let ty = self.type_info.type_of(id);
+
         let res = self.undropped_tmp();
         self.emit_assign(Place::new(res.clone(), ty.clone()), ty.clone(), op);
 
@@ -850,42 +932,54 @@ impl<'r> Lowerer<'r> {
     fn path_value(&mut self, path_value: &PathValue) -> Value {
         let PathValue {
             name,
-            kind: _,
+            kind,
             root_ty,
             fields,
         } = path_value;
 
-        let var = Var {
-            scope: name.scope,
-            kind: VarKind::Explicit(name.ident),
-        };
+        match kind {
+            ValueKind::Local => {
+                let var = Var {
+                    scope: name.scope,
+                    kind: VarKind::Explicit(name.ident),
+                };
 
-        let projection =
-            fields.iter().map(|f| Projection::Field(f.0)).collect();
+                let projection =
+                    fields.iter().map(|f| Projection::Field(f.0)).collect();
 
-        Value::Clone(Place {
-            var,
-            root_ty: root_ty.clone(),
-            projection,
-        })
+                Value::Clone(Place {
+                    var,
+                    root_ty: root_ty.clone(),
+                    projection,
+                })
+            }
+            ValueKind::Constant => {
+                if !fields.is_empty() {
+                    panic!("Getting fields of constants not supported yet")
+                }
+                Value::Constant(name.ident, root_ty.clone())
+            }
+            ValueKind::Context(x) => Value::Context(*x),
+        }
     }
 
     fn add_live_variable(&mut self, var: Var, ty: Type) {
+        self.vars.push((var.clone(), ty.clone()));
         self.stack_slots.last_mut().unwrap().push((var, ty));
     }
 
-    fn remove_live_variable(&mut self, var: Var) -> Type {
+    fn remove_live_variable(&mut self, var: &Var) -> Type {
         let slot = self.stack_slots.last_mut().unwrap();
-        if let Some(i) = slot.iter().position(|v| &v.0 == &var) {
+        if let Some(i) = slot.iter().position(|v| &v.0 == var) {
             slot.remove(i).1
         } else {
             let printer = IrPrinter {
-                type_info: &self.type_info,
-                label_store: &self.label_store,
+                type_info: self.type_info,
+                label_store: self.label_store,
                 scope: None,
             };
             let var = var.print(&printer);
-            panic!("Variable wasn't live: {var:?}")
+            ice!("Variable wasn't live: {var:?}")
         }
     }
 
@@ -899,6 +993,13 @@ impl<'r> Lowerer<'r> {
             .iter()
             .find(|f| f.kind == kind && f.name == name)
             .unwrap()
+    }
+
+    fn do_assign(&mut self, to: Place, ty: Type, val: Value) {
+        if let Value::Move(var) = &val {
+            self.remove_live_variable(var);
+        }
+        self.emit_assign(to, ty, val);
     }
 }
 
@@ -928,10 +1029,6 @@ impl Lowerer<'_> {
         self.emit(Instruction::Return { var: value });
     }
 
-    fn emit_alloc(&mut self, to: Var, ty: Type) {
-        self.emit(Instruction::Alloc { to, ty })
-    }
-
     fn emit_jump(&mut self, label_ref: LabelRef) {
         self.emit(Instruction::Jump(label_ref))
     }
@@ -940,7 +1037,7 @@ impl Lowerer<'_> {
         &mut self,
         examinee: Var,
         branches: Vec<(usize, LabelRef)>,
-        default: LabelRef,
+        default: Option<LabelRef>,
     ) {
         self.emit(Instruction::Switch {
             examinee,

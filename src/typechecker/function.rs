@@ -110,7 +110,10 @@ impl TypeChecker {
             scope,
             name.clone(),
             super::types::FunctionDefinition::Roto,
-            Type::Function(Vec::new(), Box::new(Type::unit())),
+            Type::Function(
+                Vec::new(),
+                Box::new(Type::verdict(Type::unit(), Type::unit())),
+            ),
         )?;
 
         let scope = self

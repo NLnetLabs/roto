@@ -99,13 +99,13 @@ fn check_roto_type(
     let Some(rust_ty) = registry.get(rust_ty) else {
         return Err(TypeMismatch {
             rust_ty: "unknown".into(),
-            roto_ty: roto_ty.display(&type_info).to_string(),
+            roto_ty: roto_ty.display(type_info).to_string(),
         });
     };
 
     let error_message = TypeMismatch {
         rust_ty: rust_ty.rust_name.to_string(),
-        roto_ty: roto_ty.display(&type_info).to_string(),
+        roto_ty: roto_ty.display(type_info).to_string(),
     };
 
     let mut roto_ty = type_info.resolve(roto_ty);

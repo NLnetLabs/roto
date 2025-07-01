@@ -244,7 +244,7 @@ pub enum Literal {
     Unit,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BinOp {
     /// Logical and (`&&`)
     And,

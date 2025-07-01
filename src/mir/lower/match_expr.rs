@@ -7,7 +7,7 @@ use crate::{
     ice,
     label::LabelRef,
     mir::{Place, Projection, Value},
-    parser::meta::Meta,
+    parser::meta::{Meta, MetaId},
     typechecker::types::{EnumVariant, Type},
 };
 
@@ -106,7 +106,7 @@ impl Lowerer<'_> {
     /// We do this by checking which variants occur in patterns and then
     /// making those chains for all branches that match that discriminant or
     /// are `_`.
-    pub fn r#match(&mut self, m: &Meta<Match>) -> Value {
+    pub fn r#match(&mut self, id: MetaId, m: &Meta<Match>) -> Value {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
@@ -174,10 +174,10 @@ impl Lowerer<'_> {
             Type::u8(),
             Value::Discriminant(examinee.clone()),
         );
-        let default_branch = if default_branches.is_empty() {
-            continue_lbl
+        let default_branch = if !default_branches.is_empty() {
+            Some(default_lbl)
         } else {
-            default_lbl
+            None
         };
         self.emit_switch(discriminant, switch_branches, default_branch);
 
@@ -220,7 +220,7 @@ impl Lowerer<'_> {
 
         // Here we finally create all the blocks for the expression of each
         // arm.
-        let ty = self.type_info.type_of(m);
+        let ty = self.type_info.type_of(id);
         let out = self.undropped_tmp();
         for (_, arm, arm_index) in branches {
             self.new_block(arm_labels[&arm_index]);
@@ -266,7 +266,7 @@ impl Lowerer<'_> {
             } = &arm.pattern.node
             {
                 let variant = variant.unwrap();
-                for (i, field_binding) in (&**fields).into_iter().enumerate()
+                for (i, field_binding) in fields.iter().enumerate()
                 {
                     let name = self.type_info.resolved_name(field_binding);
                     let ty = self.type_info.type_of(field_binding);
@@ -297,7 +297,7 @@ impl Lowerer<'_> {
             if let Some(guard) = &arm.guard {
                 let op = self.expr(guard);
                 let op = self.assign_to_var(op, Type::bool());
-                self.emit_switch(op, vec![(1, arm_lbl)], next_lbl);
+                self.emit_switch(op, vec![(1, arm_lbl)], Some(next_lbl));
             } else {
                 self.emit_jump(arm_lbl);
             }

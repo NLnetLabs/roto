@@ -47,7 +47,7 @@ use cranelift::{
     module::{DataDescription, FuncId, FuncOrDataId, Linkage, Module as _},
     prelude::{FloatCC, Signature},
 };
-use cranelift_codegen::ir::SigRef;
+use cranelift_codegen::ir::{SigRef, StackSlot};
 use log::info;
 
 pub mod check;
@@ -250,7 +250,6 @@ pub fn codegen(
     runtime: &Runtime,
     ir: &[ir::Function],
     runtime_functions: &HashMap<RuntimeFunctionRef, ir::Signature>,
-    constants: &[RuntimeConstant],
     label_store: LabelStore,
     type_info: TypeInfo,
     context_description: ContextDescription,
@@ -269,7 +268,7 @@ pub fn codegen(
         cranelift::module::default_libcall_names(),
     );
 
-    for (func_ref, _) in runtime_functions {
+    for func_ref in runtime_functions.keys() {
         let f = runtime.get_function(*func_ref);
         builder.symbol(
             format!("runtime_function_{}", f.id),
@@ -317,7 +316,7 @@ pub fn codegen(
         context_description,
     };
 
-    for constant in constants {
+    for constant in runtime.constants.values() {
         module.declare_constant(constant);
     }
 
@@ -435,6 +434,7 @@ impl ModuleBuilder {
             blocks,
             ir_signature,
             scope,
+            variables,
             ..
         } = func;
         let func_id = self.functions[name.as_str()].id;
@@ -465,6 +465,31 @@ impl ModuleBuilder {
         let mut builder =
             FunctionBuilder::new(&mut ctx.func, builder_context);
 
+        let mut stack_slots = Vec::new();
+        for (v, t) in variables {
+            let idx = self.variable_map.len();
+            let var = Variable::new(idx);
+
+            let ir_ty = match t {
+                ir::ValueOrSlot::Val(ir_ty) => *ir_ty,
+                ir::ValueOrSlot::StackSlot(layout) => {
+                    let slot =
+                        builder.create_sized_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            layout.size() as u32,
+                            layout.align_shift() as u8,
+                        ));
+
+                    stack_slots.push((v.clone(), slot));
+                    IrType::Pointer
+                }
+            };
+
+            let ty = self.cranelift_type(&ir_ty);
+            self.variable_map.insert(v.clone(), (var, ty));
+            builder.declare_var(var, ty);
+        }
+
         let mut func_gen = FuncGen {
             drop_signature: builder
                 .import_signature(self.drop_signature.clone()),
@@ -481,10 +506,11 @@ impl ModuleBuilder {
         func_gen.entry_block(
             &blocks[0],
             &ir_signature.parameters,
+            stack_slots,
             ir_signature.return_ptr,
         );
 
-        for block in blocks {
+        for block in &blocks[1..] {
             func_gen.block(block);
         }
 
@@ -537,10 +563,12 @@ impl<'c> FuncGen<'c> {
         &mut self,
         block: &ir::Block,
         parameters: &[(Identifier, IrType)],
+        stack_slots: Vec<(Var, StackSlot)>,
         return_ptr: bool,
     ) {
         let entry_block = self.get_block(block.label);
         self.builder.switch_to_block(entry_block);
+        self.builder.seal_block(entry_block);
 
         let ty = self.module.cranelift_type(&IrType::Pointer);
         self.variable(
@@ -608,6 +636,16 @@ impl<'c> FuncGen<'c> {
                     .0,
                 val,
             );
+        }
+
+        for (v, slot) in stack_slots {
+            let pointer_ty = self.module.isa.pointer_type();
+            let p = self.ins().stack_addr(pointer_ty, slot, 0);
+            self.def(self.module.variable_map[&v].0, p);
+        }
+
+        for instruction in &block.instructions {
+            self.instruction(instruction);
         }
     }
 
@@ -826,19 +864,6 @@ impl<'c> FuncGen<'c> {
                 self.def(var, val)
             }
             ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::Alloc { to, layout } => {
-                let slot =
-                    self.builder.create_sized_stack_slot(StackSlotData::new(
-                        StackSlotKind::ExplicitSlot,
-                        layout.size() as u32,
-                        layout.align_shift() as u8,
-                    ));
-
-                let pointer_ty = self.module.isa.pointer_type();
-                let var = self.variable(to, pointer_ty);
-                let p = self.ins().stack_addr(pointer_ty, slot, 0);
-                self.def(var, p);
-            }
             ir::Instruction::Initialize { to, bytes, layout } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =

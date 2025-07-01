@@ -37,6 +37,13 @@ impl Printable for Function {
                 .join(", ")
         ));
 
+        s.push('\n');
+        for (var, ty) in &self.variables {
+            let var = var.print(&printer);
+            let ty = ty.display(printer.type_info);
+            s.push_str(&format!("  {var}: {ty}\n"));
+        }
+
         let blocks = self.blocks.iter();
         for b in blocks {
             s.push('\n');
@@ -69,7 +76,7 @@ impl Printable for Instruction {
             Jump(to) => format!("jump {}", to.print(printer)),
             Assign { to, ty, value } => {
                 let to = to.print(printer);
-                let ty = ty.display(&printer.type_info);
+                let ty = ty.display(printer.type_info);
                 let value = value.print(printer);
                 format!("{to}: {ty} = {value}")
             }
@@ -79,28 +86,25 @@ impl Printable for Instruction {
                 default,
             } => {
                 format!(
-                    "switch {} [{}] else {}",
+                    "switch {} [{}]{}",
                     examinee.print(printer),
                     branches
                         .iter()
                         .map(|(i, b)| format!("{i} => {}", b.print(printer)))
                         .collect::<Vec<_>>()
                         .join(", "),
-                    default.print(printer),
-                )
-            }
-            Alloc { to, ty } => {
-                format!(
-                    "{} = alloc[{}]()",
-                    to.print(printer),
-                    ty.display(&printer.type_info),
+                    if let Some(default) = default {
+                        format!(" else {}", default.print(printer))
+                    } else {
+                        "".into()
+                    },
                 )
             }
             SetDiscriminant { to, ty, variant } => {
                 format!(
                     "{}.$discriminant = {}.{}",
                     to.print(printer),
-                    ty.display(&printer.type_info),
+                    ty.display(printer.type_info),
                     variant.name
                 )
             }
@@ -134,9 +138,16 @@ impl Printable for Value {
     fn print(&self, printer: &IrPrinter) -> String {
         match self {
             Value::Const(x, ty) => {
-                let ty = ty.display(&printer.type_info);
+                let ty = ty.display(printer.type_info);
                 let x = x.print(printer);
                 format!("{ty}({x})")
+            }
+            Value::Constant(x, ty) => {
+                let ty = ty.display(printer.type_info);
+                format!("load_constant({x}: {ty})")
+            }
+            Value::Context(x) => {
+                format!("load_context({x})")
             }
             Value::Clone(place) => {
                 let place = place.print(printer);
@@ -161,7 +172,7 @@ impl Printable for Value {
                 right,
             } => {
                 let left = left.print(printer);
-                let ty = ty.display(&printer.type_info);
+                let ty = ty.display(printer.type_info);
                 let right = right.print(printer);
                 format!("{left} {binop}({ty}) {right}")
             }

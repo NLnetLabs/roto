@@ -1,5 +1,9 @@
 use super::ir::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
-use crate::ir_printer::{IrPrinter, Printable};
+use crate::{
+    ir_printer::{IrPrinter, Printable},
+    lir::ValueOrSlot,
+    typechecker::scoped_display::TypeDisplay,
+};
 
 impl Printable for Lir {
     fn print(&self, printer: &IrPrinter) -> String {
@@ -12,21 +16,60 @@ impl Printable for Lir {
 impl Printable for Function {
     fn print(&self, printer: &IrPrinter) -> String {
         use std::fmt::Write;
-        let mut blocks = self.blocks.iter();
-
         let mut s = String::new();
 
-        let Some(b) = blocks.next() else {
-            write!(s, "<empty function>").unwrap();
-            return s;
+        let printer = IrPrinter {
+            scope: Some(self.scope),
+            type_info: printer.type_info,
+            label_store: printer.label_store,
         };
 
-        s.push_str(&b.print(printer));
+        s.push_str(&format!(
+            "fn {}({}) {}{{",
+            self.name,
+            self.ir_signature
+                .parameters
+                .iter()
+                .map(|(a, t)| {
+                    let a = a.print(&printer);
+                    let t = t.display(printer.type_info);
+                    format!("{a}: {t}")
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.ir_signature
+                .return_type
+                .map(|t| {
+                    let t = t.display(printer.type_info);
+                    format!("-> {t} ")
+                })
+                .unwrap_or_default(),
+        ));
 
-        for b in blocks {
-            writeln!(s).unwrap();
-            s.push_str(&b.print(printer));
+        s.push('\n');
+        for (var, ty) in &self.variables {
+            let var = var.print(&printer);
+            let ty = match ty {
+                ValueOrSlot::Val(ir_type) => ir_type.to_string(),
+                ValueOrSlot::StackSlot(layout) => {
+                    format!(
+                        "Pointer = Slot(size={}, align={})",
+                        layout.size(),
+                        layout.align()
+                    )
+                }
+            };
+            s.push_str(&format!("  {var}: {ty}\n"));
         }
+
+        for b in &self.blocks {
+            writeln!(s).unwrap();
+            for line in b.print(&printer).lines() {
+                s.push_str(&format!("  {line}\n"));
+            }
+        }
+
+        s.push_str("}\n\n");
 
         s
     }
@@ -46,19 +89,21 @@ impl Printable for Block {
 
 impl Printable for Var {
     fn print(&self, printer: &IrPrinter) -> String {
-        let f = self.scope.print(printer);
-        format!(
-            "{}.{}",
-            f,
-            match &self.kind {
-                VarKind::Explicit(name) => name.print(printer).to_string(),
-                VarKind::Tmp(idx) => format!("$tmp-{idx}"),
-                VarKind::NamedTmp(name, idx) =>
-                    format!("${}-{idx}", name.print(printer)),
-                VarKind::Return => "$return".to_string(),
-                VarKind::Context => "$context".to_string(),
+        let name = match &self.kind {
+            VarKind::Explicit(name) => name.print(printer).to_string(),
+            VarKind::Tmp(idx) => format!("${idx}"),
+            VarKind::NamedTmp(name, idx) => {
+                format!("${}-{idx}", name.print(printer))
             }
-        )
+            VarKind::Return => "$return".to_string(),
+            VarKind::Context => "$context".to_string(),
+        };
+        if Some(self.scope) != printer.scope {
+            let f = self.scope.print(printer);
+            format!("{}.{name}", f,)
+        } else {
+            name
+        }
     }
 }
 
@@ -269,14 +314,6 @@ impl Printable for Instruction {
                         .collect::<Vec<_>>()
                         .join(", "),
                     default.print(printer),
-                )
-            }
-            Alloc { to, layout } => {
-                format!(
-                    "{} = mem::alloc(size={}, align={})",
-                    to.print(printer),
-                    layout.size(),
-                    layout.align(),
                 )
             }
             Initialize { to, bytes, layout } => {

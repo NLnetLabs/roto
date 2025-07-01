@@ -1045,7 +1045,7 @@ fn arc_type() {
     "
     );
 
-    let mut p = s.compile(rt).unwrap();
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(
             bool,
@@ -2146,9 +2146,8 @@ fn str_equals() {
         }
         "#
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled
         .get_function::<(), fn(Arc<str>) -> bool>("is_slash")
         .unwrap();
@@ -2166,9 +2165,8 @@ fn str_not_equals() {
         }
         "#
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled
         .get_function::<(), fn(Arc<str>) -> bool>("is_not_slash")
         .unwrap();
@@ -2188,9 +2186,8 @@ fn assignment() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 7);
@@ -2207,9 +2204,8 @@ fn assignment_record_field() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 7);
@@ -2226,9 +2222,8 @@ fn assignment_record() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 7);
@@ -2247,9 +2242,8 @@ fn assignment_record_is_by_value() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 5);
@@ -2266,9 +2260,8 @@ fn assignment_nested_record_1() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 6);
@@ -2285,9 +2278,8 @@ fn assignment_nested_record_2() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 6);
@@ -2305,9 +2297,8 @@ fn assignment_string() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled
         .get_function::<(), fn() -> Arc<str>>("foo")
         .unwrap();
@@ -2327,9 +2318,8 @@ fn let_declaration_is_by_value() {
             }
         "
     );
-    let runtime = Runtime::new();
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile(s);
     let func = compiled.get_function::<(), fn() -> i32>("foo").unwrap();
 
     assert_eq!(func.call(&mut ()), 5);
@@ -2381,7 +2371,7 @@ fn sigill() {
     "
     );
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile_with_runtime(s, runtime);
     let func = compiled
         .get_function::<(), fn() -> Val<Arcane>>("foo")
         .unwrap();
@@ -2422,10 +2412,7 @@ fn rust_string_string() {
         "
     );
 
-    let mut compiled = s
-        .compile(runtime)
-        .inspect_err(|e| eprintln!("{e}"))
-        .unwrap();
+    let mut compiled = compile_with_runtime(s, runtime);
     let func = compiled
         .get_function::<(), fn() -> Val<String>>("foo")
         .unwrap();
@@ -2454,7 +2441,7 @@ fn return_verdict_from_runtime_function() {
     "
     );
 
-    let mut compiled = s.compile(runtime).unwrap();
+    let mut compiled = compile_with_runtime(s, runtime);
     let func = compiled
         .get_function::<(), fn() -> Verdict<(), ()>>("bar")
         .unwrap();

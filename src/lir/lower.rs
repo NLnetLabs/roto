@@ -3,7 +3,7 @@ mod clone_drop;
 use std::collections::HashMap;
 
 use crate::{
-    ast::{self, Literal},
+    ast::{self, Identifier, Literal},
     ice,
     label::{LabelRef, LabelStore},
     mir,
@@ -14,6 +14,7 @@ use crate::{
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
+        scoped_display::TypeDisplay,
         types::{
             self, EnumVariant, FloatSize, IntKind, IntSize, Primitive, Type,
             TypeDefinition,
@@ -24,7 +25,7 @@ use crate::{
 
 use super::{
     ir::Signature, value::IrType, Block, FloatCmp, Function, Instruction,
-    IntCmp, Lir, Operand, Var, VarKind,
+    IntCmp, Lir, Operand, ValueOrSlot, Var, VarKind,
 };
 
 pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
@@ -44,6 +45,7 @@ struct Lowerer<'c, 'r> {
     function_scope: ScopeRef,
     tmp_idx: usize,
     return_type: Type,
+    variables: Vec<(Var, ValueOrSlot)>,
 }
 
 enum Location {
@@ -71,9 +73,42 @@ impl Lowerer<'_, '_> {
             function_scope: function.scope,
             return_type: return_type.clone(),
             blocks: Vec::new(),
+            variables: Vec::new(),
         };
         let name = function.name;
         let signature = function.signature;
+
+        lowerer.variables = function
+            .variables
+            .iter()
+            .filter_map(|(v, ty)| {
+                // The MIR can emit unresolved types in places where the never
+                // type is used. The instructions for those are eliminated by
+                // dead code elimination.
+                let ty = lowerer.ctx.type_info.resolve(ty);
+                if matches!(&ty, Type::Var(_)) {
+                    return None;
+                }
+
+                let lir_v = lowerer.var(v.clone());
+                let var_type = if lowerer.is_reference_type(&ty) {
+                    // Parameters don't need a slot because they already
+                    // live somewhere.
+                    if function.parameters.contains(v) {
+                        ValueOrSlot::Val(IrType::Pointer)
+                    } else {
+                        let layout = lowerer
+                            .ctx
+                            .type_info
+                            .layout_of(&ty, lowerer.ctx.runtime);
+                        ValueOrSlot::StackSlot(layout)
+                    }
+                } else {
+                    ValueOrSlot::Val(lowerer.lower_type(&ty)?)
+                };
+                Some((lir_v, var_type))
+            })
+            .collect::<Vec<_>>();
 
         for block in function.blocks {
             lowerer.block(block);
@@ -106,6 +141,7 @@ impl Lowerer<'_, '_> {
         Function {
             name,
             blocks: lowerer.blocks,
+            variables: lowerer.variables,
             signature,
             scope: function.scope,
             ir_signature,
@@ -141,7 +177,6 @@ impl Lowerer<'_, '_> {
             mir::Instruction::SetDiscriminant { to, ty, variant } => {
                 self.set_discriminant(to, &ty, &variant)
             }
-            mir::Instruction::Alloc { to, ty } => self.alloc(to, &ty),
             mir::Instruction::Return { var } => self.r#return(var),
             mir::Instruction::Drop { var, ty } => self.drop(var, ty),
         }
@@ -156,10 +191,27 @@ impl Lowerer<'_, '_> {
                 };
                 op
             }
+            mir::Value::Constant(name, ty) => {
+                let Some(var) = self.new_var(&ty) else { return };
+                let ir_ty = self.lower_type(&ty).unwrap();
+                self.emit_load_constant(var.clone(), name, ir_ty);
+                var.into()
+            }
+            mir::Value::Context(x) => {
+                let from = Location::Pointer {
+                    base: Var {
+                        scope: self.function_scope,
+                        kind: VarKind::Context,
+                    },
+                    offset: x,
+                };
+                self.clone_place(to, from, &ty);
+                return;
+            }
             mir::Value::Discriminant(v) => self.get_discriminant(v),
             mir::Value::Not(var) => {
                 let val = self.var(var);
-                let tmp = self.new_tmp();
+                let tmp = self.new_tmp(IrType::Bool);
                 self.emit_not(tmp.clone(), val.into());
                 tmp.into()
             }
@@ -198,16 +250,16 @@ impl Lowerer<'_, '_> {
         args: Vec<mir::Var>,
         return_type: &Type,
     ) -> Option<Operand> {
-        let reference_return = self.is_reference_type(&return_type);
+        let reference_return = self.is_reference_type(return_type);
         let (to, out_ptr) = if reference_return {
-            let out_ptr = self.new_tmp();
             let layout =
                 self.ctx.type_info.layout_of(return_type, self.ctx.runtime);
-            self.emit_alloc(out_ptr.clone(), layout);
+            let out_ptr = self.new_stack_slot(layout);
             (None, Some(out_ptr))
         } else {
-            let to =
-                self.lower_type(&return_type).map(|ty| (self.new_tmp(), ty));
+            let to = self
+                .lower_type(return_type)
+                .map(|ty| (self.new_tmp(ty), ty));
             (to, None)
         };
 
@@ -241,10 +293,9 @@ impl Lowerer<'_, '_> {
         args: Vec<mir::Var>,
         return_type: &Type,
     ) -> Option<Operand> {
-        let out_ptr = self.new_tmp();
         let layout =
             self.ctx.type_info.layout_of(return_type, self.ctx.runtime);
-        self.emit_alloc(out_ptr.clone(), layout);
+        let out_ptr = self.new_stack_slot(layout);
 
         let mut parameters = Vec::new();
         parameters.push(("ret".into(), IrType::Pointer));
@@ -275,22 +326,31 @@ impl Lowerer<'_, '_> {
             Some(out_ptr.into())
         } else {
             let ty = self.lower_type(return_type)?;
-            let tmp = self.new_tmp();
+            let tmp = self.new_tmp(ty);
             self.emit_read(tmp.clone(), out_ptr.into(), ty);
             Some(tmp.into())
         }
     }
 
     fn move_val(&mut self, to: Location, val: Operand, ty: &Type) {
-        let Some(ty) = self.lower_type(ty) else {
+        let Some(ir_ty) = self.lower_type(ty) else {
             return;
         };
 
         match to {
-            Location::Var(to) => self.emit_assign(to, val, ty),
+            Location::Var(to) => {
+                self.emit_assign(to, val, ir_ty);
+            }
             Location::Pointer { base, offset } => {
                 let to = self.offset(base.into(), offset as u32);
-                self.emit_write(to, val);
+                let size =
+                    self.ctx.type_info.layout_of(ty, self.ctx.runtime).size();
+
+                if self.is_reference_type(ty) {
+                    self.emit_memcpy(to, val, size as u32);
+                } else {
+                    self.emit_write(to, val);
+                }
             }
         }
     }
@@ -360,34 +420,14 @@ impl Lowerer<'_, '_> {
             for p in place.projection {
                 match p {
                     mir::Projection::Field(ident) => {
-                        let Type::Name(name) = &ty else { ice!() };
-                        let TypeDefinition::Record(_, fields) =
-                            self.ctx.type_info.resolve_type_name(&name)
-                        else {
-                            ice!()
-                        };
-
-                        let mut new_offset = 0;
-                        let mut builder = LayoutBuilder::new();
-                        for (field, new_ty) in fields {
-                            new_offset = builder.add(
-                                &self
-                                    .ctx
-                                    .type_info
-                                    .layout_of(&ty, self.ctx.runtime),
-                            );
-                            if *field == ident {
-                                ty = new_ty;
-                                break;
-                            }
-                        }
-
+                        let (new_offset, new_ty) = self.get_field(&ty, ident);
+                        ty = new_ty;
                         offset += new_offset;
                     }
                     mir::Projection::VariantField(variant_name, n) => {
                         let Type::Name(type_name) = &ty else { ice!() };
                         let TypeDefinition::Enum(type_constructor, variants) =
-                            self.ctx.type_info.resolve_type_name(&type_name)
+                            self.ctx.type_info.resolve_type_name(type_name)
                         else {
                             ice!()
                         };
@@ -428,26 +468,59 @@ impl Lowerer<'_, '_> {
         }
     }
 
+    fn get_field(&mut self, ty: &Type, ident: Identifier) -> (usize, Type) {
+        let res_ty = self.ctx.type_info.resolve(ty);
+
+        let fields = match res_ty {
+            Type::Name(name) => {
+                let TypeDefinition::Record(_, fields) =
+                    self.ctx.type_info.resolve_type_name(&name)
+                else {
+                    ice!()
+                };
+                fields
+            }
+            Type::Record(fields) | Type::RecordVar(_, fields) => fields,
+            _ => {
+                ice!(
+                    "Cannot get field {ident} of type {}",
+                    ty.display(self.ctx.type_info)
+                )
+            }
+        };
+
+        let mut builder = LayoutBuilder::new();
+        for (field, new_ty) in fields {
+            let offset = builder.add(
+                &self.ctx.type_info.layout_of(&new_ty, self.ctx.runtime),
+            );
+            if *field == ident {
+                return (offset, new_ty);
+            }
+        }
+
+        ice!("Field not found: {ident}!")
+    }
+
     fn switch(
         &mut self,
         examinee: mir::Var,
-        branches: Vec<(usize, LabelRef)>,
-        default: LabelRef,
+        mut branches: Vec<(usize, LabelRef)>,
+        default: Option<LabelRef>,
     ) {
         let examinee = self.var(examinee);
         // TODO: Switch should probably have a var as argument
-        self.emit_switch(examinee.into(), branches, default);
-    }
-
-    fn alloc(&mut self, to: mir::Var, ty: &Type) {
-        let layout = self.ctx.type_info.layout_of(&ty, self.ctx.runtime);
-        let to = self.var(to);
-        self.emit_alloc(to, layout);
+        if let Some(default) = default {
+            self.emit_switch(examinee.into(), branches, default);
+        } else {
+            let (_, last) = branches.pop().unwrap();
+            self.emit_switch(examinee.into(), branches, last);
+        }
     }
 
     fn get_discriminant(&mut self, from: mir::Var) -> Operand {
         let from = self.var(from);
-        let tmp = self.new_tmp();
+        let tmp = self.new_tmp(IrType::U8);
         self.emit_read(tmp.clone(), from.into(), IrType::U8);
         tmp.into()
     }
@@ -507,7 +580,7 @@ impl Lowerer<'_, '_> {
 
     fn drop(&mut self, var: mir::Var, ty: Type) {
         let var = self.var(var);
-        self.drop_with_type(var.into(), ty)
+        self.drop_type(var.into(), ty)
     }
 
     fn var(&self, to: mir::Var) -> Var {
@@ -529,12 +602,8 @@ impl Lowerer<'_, '_> {
     fn literal(&mut self, lit: &Literal, ty: &Type) -> Option<Operand> {
         Some(match &lit {
             Literal::String(s) => {
-                let to = self.new_tmp();
-                let layout = self
-                    .ctx
-                    .type_info
-                    .layout_of(&Type::string(), self.ctx.runtime);
-                self.emit_alloc(to.clone(), layout);
+                let layout = Primitive::String.layout();
+                let to = self.new_stack_slot(layout);
                 self.emit(Instruction::InitString {
                     to: to.clone(),
                     string: s.clone(),
@@ -545,9 +614,10 @@ impl Lowerer<'_, '_> {
             }
             Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => {
-                let to = self.new_tmp();
+                const LAYOUT: Layout = Primitive::IpAddr.layout();
+                let to = self.new_stack_slot(LAYOUT);
 
-                const SIZE: usize = Primitive::IpAddr.layout().size();
+                const SIZE: usize = LAYOUT.size();
                 let x: [u8; SIZE] = unsafe { std::mem::transmute_copy(addr) };
 
                 self.emit(Instruction::Initialize {
@@ -567,7 +637,7 @@ impl Lowerer<'_, '_> {
                             k,
                             s,
                         )) =
-                            self.ctx.type_info.resolve_type_name(&type_name)
+                            self.ctx.type_info.resolve_type_name(type_name)
                         {
                             use types::IntKind::*;
                             use types::IntSize::*;
@@ -599,7 +669,7 @@ impl Lowerer<'_, '_> {
                         if let TypeDefinition::Primitive(Primitive::Float(
                             s,
                         )) =
-                            self.ctx.type_info.resolve_type_name(&type_name)
+                            self.ctx.type_info.resolve_type_name(type_name)
                         {
                             return Some(
                                 match s {
@@ -629,9 +699,9 @@ impl Lowerer<'_, '_> {
         let left = self.var(left).into();
         let right = self.var(right).into();
 
-        let to = self.new_tmp();
         if let Some((kind, _size)) = self.ctx.type_info.get_int_type(&ty) {
             if let Some(cmp) = binop_to_int_cmp(&binop, kind) {
+                let to = self.new_tmp(IrType::Bool);
                 self.emit(Instruction::IntCmp {
                     to: to.clone(),
                     cmp,
@@ -641,6 +711,8 @@ impl Lowerer<'_, '_> {
                 return to.into();
             }
 
+            let ty = self.lower_type(&ty).unwrap();
+            let to = self.new_tmp(ty);
             match binop {
                 ast::BinOp::Add => self.emit(Instruction::Add {
                     to: to.clone(),
@@ -671,6 +743,7 @@ impl Lowerer<'_, '_> {
 
         if self.ctx.type_info.is_float_type(&ty) {
             if let Some(cmp) = binop_to_float_cmp(&binop) {
+                let to = self.new_tmp(IrType::Bool);
                 self.emit(Instruction::FloatCmp {
                     to: to.clone(),
                     cmp,
@@ -680,6 +753,8 @@ impl Lowerer<'_, '_> {
                 return to.into();
             }
 
+            let ty = self.lower_type(&ty).unwrap();
+            let to = self.new_tmp(ty);
             match binop {
                 ast::BinOp::Add => self.emit(Instruction::Add {
                     to: to.clone(),
@@ -712,6 +787,7 @@ impl Lowerer<'_, '_> {
             else {
                 ice!();
             };
+            let to = self.new_tmp(IrType::Bool);
             self.emit(Instruction::IntCmp {
                 to: to.clone(),
                 cmp,
@@ -721,7 +797,29 @@ impl Lowerer<'_, '_> {
             return to.into();
         }
 
-        todo!("bool & ASN operators");
+        if binop == ast::BinOp::Eq {
+            let size =
+                self.ctx.type_info.layout_of(&ty, self.ctx.runtime).size();
+            if size == 0 {
+                return Operand::Value(IrValue::Bool(true));
+            }
+
+            let tmp = self.new_tmp(IrType::Pointer);
+            let out = self.new_tmp(IrType::Bool);
+            self.emit(Instruction::MemCmp {
+                to: tmp.clone(),
+                size: IrValue::Pointer(size).into(),
+                left: left.clone(),
+                right: right.clone(),
+            });
+            self.emit(Instruction::IntCmp {
+                to: out.clone(),
+                cmp: IntCmp::Eq,
+                left: tmp.into(),
+                right: IrValue::Pointer(0).into(),
+            });
+            return out.into();
+        }
 
         ice!("Could not lower binop")
     }
@@ -783,15 +881,12 @@ impl Lowerer<'_, '_> {
         })
     }
 
-    fn emit_alloc(&mut self, to: Var, layout: Layout) {
-        self.emit(Instruction::Alloc {
-            to: to.clone(),
-            layout,
-        });
-    }
-
     fn emit_return(&mut self, var: Option<Operand>) {
         self.emit(Instruction::Return(var))
+    }
+
+    fn emit_load_constant(&mut self, to: Var, name: Identifier, ty: IrType) {
+        self.emit(Instruction::LoadConstant { to, name, ty })
     }
 }
 
@@ -805,7 +900,7 @@ impl Lowerer<'_, '_> {
         if offset == 0 {
             var
         } else {
-            let new = self.new_tmp();
+            let new = self.new_tmp(IrType::Pointer);
             self.emit(Instruction::Offset {
                 to: new.clone(),
                 from: var,
@@ -815,12 +910,34 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    fn new_tmp(&mut self) -> Var {
+    fn new_var(&mut self, ty: &Type) -> Option<Var> {
+        let ir_ty = self.lower_type(ty)?;
+        if self.is_reference_type(ty) {
+            let layout = self.ctx.type_info.layout_of(ty, self.ctx.runtime);
+            Some(self.new_stack_slot(layout))
+        } else {
+            Some(self.new_tmp(ir_ty))
+        }
+    }
+
+    fn new_tmp(&mut self, ty: IrType) -> Var {
         let var = Var {
             scope: self.function_scope,
             kind: VarKind::Tmp(self.tmp_idx),
         };
         self.tmp_idx += 1;
+        self.variables.push((var.clone(), ValueOrSlot::Val(ty)));
+        var
+    }
+
+    fn new_stack_slot(&mut self, layout: Layout) -> Var {
+        let var = Var {
+            scope: self.function_scope,
+            kind: VarKind::Tmp(self.tmp_idx),
+        };
+        self.tmp_idx += 1;
+        self.variables
+            .push((var.clone(), ValueOrSlot::StackSlot(layout)));
         var
     }
 

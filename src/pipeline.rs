@@ -285,8 +285,8 @@ impl TypeChecked {
         let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
         let ir = mir::lower_to_mir(
-            &module_tree,
-            &runtime,
+            module_tree,
+            runtime,
             &mut type_info,
             &mut label_store,
         );
@@ -376,7 +376,6 @@ impl LoweredToLir {
             &self.runtime,
             &self.ir.functions,
             &self.runtime_functions,
-            &self.runtime_constants,
             self.label_store,
             self.type_info,
             self.context_type,

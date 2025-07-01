@@ -196,12 +196,6 @@ pub enum Instruction {
         offset: u32,
     },
 
-    /// Allocate a stack slot
-    Alloc {
-        to: Var,
-        layout: Layout,
-    },
-
     /// Write literal bytes to a variable
     Initialize {
         to: Var,
@@ -312,6 +306,12 @@ impl Display for FloatCmp {
 }
 
 #[derive(Debug)]
+pub enum ValueOrSlot {
+    Val(IrType),
+    StackSlot(Layout),
+}
+
+#[derive(Debug)]
 pub struct Function {
     /// Identifier of the function
     pub name: Identifier,
@@ -326,6 +326,9 @@ pub struct Function {
 
     /// Entry block of the function
     pub entry_block: LabelRef,
+
+    /// Variables used by this function
+    pub variables: Vec<(Var, ValueOrSlot)>,
 
     /// Blocks belonging to this function
     pub blocks: Vec<Block>,

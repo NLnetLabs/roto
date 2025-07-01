@@ -445,7 +445,7 @@ impl TypeChecker {
             Bool(_) => Type::bool(),
             Integer(_) => self.fresh_int(),
             Float(_) => self.fresh_float(),
-            Unit { .. } => Type::unit(),
+            Unit => Type::unit(),
         };
 
         self.unify(&ctx.expected_type, &t, span, None)?;

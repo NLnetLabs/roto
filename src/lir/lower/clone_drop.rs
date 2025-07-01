@@ -13,7 +13,7 @@ use crate::{
 use super::Lowerer;
 
 impl Lowerer<'_, '_> {
-    pub fn drop_with_type(&mut self, var: Operand, ty: Type) {
+    pub fn drop_type(&mut self, var: Operand, ty: Type) {
         let new_var = var.clone();
         let f = move |lowerer: &mut Self, offset, ty| {
             lowerer.drop_leaf_type(&new_var, offset, ty)
@@ -186,7 +186,7 @@ impl Lowerer<'_, '_> {
                         let offset_var =
                             self.offset(var.clone(), offset as u32);
 
-                        let discriminant = self.new_tmp();
+                        let discriminant = self.new_tmp(IrType::U8);
                         self.emit(Instruction::Read {
                             to: discriminant.clone(),
                             from: offset_var,
