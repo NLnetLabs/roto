@@ -49,9 +49,9 @@ cargo run --example <example name>
 
 ## Limitations
 
-These are the limitations that are fundamental to the design of Roto. They
-stem from the fact that Roto is a scripting language and that Rust's reflection
-system is limited.
+These limitations are fundamental to the design of Roto. They stem from the
+fact that Roto is a scripting language and that Rust's reflection system is
+limited.
 
 - All registered Rust types must implement `Clone` or `Copy`. Rust types that
   don't implement these traits should be wrapped in an `Rc` or `Arc`. The reason
@@ -71,9 +71,13 @@ we've summarized the most important missing features here.
 
 - Roto does not feature any looping constructs yet. If you need loops,
   you can use recursion instead as a workaround.
+  (https://github.com/NLnetLabs/roto/issues/187)
 - Lists are not supported yet. (https://github.com/NLnetLabs/roto/issues/102)
 - It's not yet possible to declare your own `enum` types.
-- It's not yet possible to declare types with generics and write generic functions.
+  (https://github.com/NLnetLabs/roto/issues/188)
+- It's not yet possible to declare types with generics and write
+  generic functions. (https://github.com/NLnetLabs/roto/issues/189 and
+  https://github.com/NLnetLabs/roto/issues/190)
 
 ## Learn more
 
