@@ -774,20 +774,6 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
-            ir::Instruction::And { to, left, right } => {
-                let (l, _) = self.operand(left);
-                let (r, _) = self.operand(right);
-                let var = self.variable(to, I8);
-                let val = self.ins().band(l, r);
-                self.def(var, val);
-            }
-            ir::Instruction::Or { to, left, right } => {
-                let (l, _) = self.operand(left);
-                let (r, _) = self.operand(right);
-                let var = self.variable(to, I8);
-                let val = self.ins().bor(l, r);
-                self.def(var, val);
-            }
             ir::Instruction::Add { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
@@ -856,15 +842,6 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().fdiv(l, r);
                 self.def(var, val)
             }
-            ir::Instruction::Extend { to, ty, from } => {
-                let ty = self.module.cranelift_type(ty);
-                let (from, _) = self.operand(from);
-                let val = self.ins().uextend(ty, from);
-
-                let var = self.variable(to, ty);
-                self.def(var, val)
-            }
-            ir::Instruction::Eq { .. } => todo!(),
             ir::Instruction::Initialize { to, bytes, layout } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =

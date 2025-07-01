@@ -217,32 +217,8 @@ impl Printable for Instruction {
                     right.print(printer),
                 )
             }
-            Eq { to, left, right } => {
-                format!(
-                    "{} = {} == {}",
-                    to.print(printer),
-                    left.print(printer),
-                    right.print(printer),
-                )
-            }
             Not { to, val } => {
                 format!("{} = not({})", to.print(printer), val.print(printer))
-            }
-            And { to, left, right } => {
-                format!(
-                    "{} = {} & {}",
-                    to.print(printer),
-                    left.print(printer),
-                    right.print(printer),
-                )
-            }
-            Or { to, left, right } => {
-                format!(
-                    "{} = {} | {}",
-                    to.print(printer),
-                    left.print(printer),
-                    right.print(printer),
-                )
             }
             Add { to, left, right } => {
                 format!(
@@ -288,13 +264,6 @@ impl Printable for Instruction {
                     to.print(printer),
                     left.print(printer),
                     right.print(printer),
-                )
-            }
-            Extend { to, ty, from } => {
-                format!(
-                    "{}: extend({ty}, {})",
-                    to.print(printer),
-                    from.print(printer),
                 )
             }
             Jump(to) => {

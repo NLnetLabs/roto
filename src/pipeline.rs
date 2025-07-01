@@ -24,7 +24,7 @@ use crate::{
     },
     runtime::{
         context::{Context, ContextDescription},
-        Runtime, RuntimeConstant, RuntimeFunctionRef,
+        Runtime, RuntimeFunctionRef,
     },
     typechecker::{
         error::{Level, TypeError},
@@ -79,7 +79,6 @@ pub struct LoweredToLir {
     runtime: Runtime,
     pub ir: lir::ir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, ir::Signature>,
-    runtime_constants: Vec<RuntimeConstant>,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_type: ContextDescription,
@@ -356,8 +355,6 @@ impl LoweredToMir {
             type_info,
             context_type,
             runtime_functions,
-            // TODO: runtime constants
-            runtime_constants: Vec::new(),
         }
     }
 }
@@ -369,15 +366,7 @@ impl LoweredToLir {
         ctx: IrValue,
         args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(
-            &self.runtime,
-            &self.ir.functions,
-            "main",
-            mem,
-            &self.runtime_constants,
-            ctx,
-            args,
-        )
+        eval::eval(&self.runtime, &self.ir.functions, "main", mem, ctx, args)
     }
 
     pub fn codegen(self) -> Compiled {

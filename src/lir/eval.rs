@@ -15,7 +15,7 @@ use crate::{
         value::IrValue,
         ValueOrSlot,
     },
-    runtime::{RuntimeConstant, RuntimeFunctionRef},
+    runtime::RuntimeFunctionRef,
     Runtime,
 };
 use std::collections::HashMap;
@@ -251,7 +251,6 @@ pub fn eval(
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
-    constants: &[RuntimeConstant],
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Option<IrValue> {
@@ -273,8 +272,9 @@ pub fn eval(
         instructions.extend(block.instructions.clone());
     }
 
-    let constants: HashMap<Identifier, &[u8]> = constants
-        .iter()
+    let constants: HashMap<Identifier, &[u8]> = rt
+        .constants
+        .values()
         .map(|g| (g.name, g.bytes.as_ref()))
         .collect();
 
@@ -482,24 +482,9 @@ pub fn eval(
                 };
                 vars.insert(to.clone(), IrValue::Bool(res));
             }
-            Instruction::Eq { to, left, right } => {
-                let left = eval_operand(&vars, left);
-                let right = eval_operand(&vars, right);
-                vars.insert(to.clone(), IrValue::Bool(left.eq(right)));
-            }
             Instruction::Not { to, val } => {
                 let val = eval_operand(&vars, val).as_bool();
                 vars.insert(to.clone(), IrValue::Bool(val));
-            }
-            Instruction::And { to, left, right } => {
-                let left = eval_operand(&vars, left).as_bool();
-                let right = eval_operand(&vars, right).as_bool();
-                vars.insert(to.clone(), IrValue::Bool(left && right));
-            }
-            Instruction::Or { to, left, right } => {
-                let left = eval_operand(&vars, left).as_bool();
-                let right = eval_operand(&vars, right).as_bool();
-                vars.insert(to.clone(), IrValue::Bool(left || right));
             }
             Instruction::Add { to, left, right } => {
                 let left = eval_operand(&vars, left);
@@ -579,11 +564,6 @@ pub fn eval(
                     _ => panic!(),
                 };
                 vars.insert(to.clone(), res);
-            }
-            Instruction::Extend { to, ty, from } => {
-                let val = eval_operand(&vars, from);
-                let val = val.as_vec();
-                vars.insert(to.clone(), IrValue::from_slice(ty, &val));
             }
             Instruction::Offset { to, from, offset } => {
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)

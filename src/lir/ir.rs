@@ -72,11 +72,7 @@ pub enum Instruction {
     },
 
     /// Assign the value `val` to `to`.
-    Assign {
-        to: Var,
-        val: Operand,
-        ty: IrType,
-    },
+    Assign { to: Var, val: Operand, ty: IrType },
 
     /// Load a constant
     LoadConstant {
@@ -126,24 +122,28 @@ pub enum Instruction {
         right: Operand,
     },
 
+    /// Integer addition
     Add {
         to: Var,
         left: Operand,
         right: Operand,
     },
 
+    /// Integer subtraction
     Sub {
         to: Var,
         left: Operand,
         right: Operand,
     },
 
+    /// Integer multiplication
     Mul {
         to: Var,
         left: Operand,
         right: Operand,
     },
 
+    /// Integer division
     Div {
         to: Var,
         signed: bool,
@@ -158,43 +158,11 @@ pub enum Instruction {
         right: Operand,
     },
 
-    /// More of a placeholder instruction until we got proper equality on
-    /// more complicated types.
-    Eq {
-        to: Var,
-        left: Operand,
-        right: Operand,
-    },
-
-    Not {
-        to: Var,
-        val: Operand,
-    },
-
-    And {
-        to: Var,
-        left: Operand,
-        right: Operand,
-    },
-
-    Or {
-        to: Var,
-        left: Operand,
-        right: Operand,
-    },
-
-    Extend {
-        to: Var,
-        ty: IrType,
-        from: Operand,
-    },
+    /// Boolean not
+    Not { to: Var, val: Operand },
 
     /// Add offset to a pointer
-    Offset {
-        to: Var,
-        from: Operand,
-        offset: u32,
-    },
+    Offset { to: Var, from: Operand, offset: u32 },
 
     /// Write literal bytes to a variable
     Initialize {
@@ -204,17 +172,10 @@ pub enum Instruction {
     },
 
     /// Write to a stack slot
-    Write {
-        to: Operand,
-        val: Operand,
-    },
+    Write { to: Operand, val: Operand },
 
     /// Read from a stack slot
-    Read {
-        to: Var,
-        from: Operand,
-        ty: IrType,
-    },
+    Read { to: Var, from: Operand, ty: IrType },
 
     /// Copy a stack slot
     Copy {
@@ -223,6 +184,7 @@ pub enum Instruction {
         size: u32,
     },
 
+    /// Clone a value with a Rust clone function
     Clone {
         to: Operand,
         from: Operand,
