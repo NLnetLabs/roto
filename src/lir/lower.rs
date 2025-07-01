@@ -24,8 +24,8 @@ use crate::{
 };
 
 use super::{
-    ir::Signature, value::IrType, Block, FloatCmp, Function, Instruction,
-    IntCmp, Lir, Operand, ValueOrSlot, Var, VarKind,
+    value::IrType, Block, FloatCmp, Function, Instruction, IntCmp, Lir,
+    Operand, Signature, ValueOrSlot, Var, VarKind,
 };
 
 pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {

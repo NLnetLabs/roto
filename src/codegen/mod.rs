@@ -15,10 +15,7 @@ use crate::{
     ast::Identifier,
     ice,
     label::{LabelRef, LabelStore},
-    lir::{
-        ir::{self, FloatCmp, IntCmp, Operand, Var, VarKind},
-        value::IrType,
-    },
+    lir::{self, value::IrType, FloatCmp, IntCmp, Operand, Var, VarKind},
     runtime::{
         context::ContextDescription, ty::Reflect, RuntimeConstant,
         RuntimeFunctionRef,
@@ -249,8 +246,8 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen(
     runtime: &Runtime,
-    ir: &[ir::Function],
-    runtime_functions: &HashMap<RuntimeFunctionRef, ir::Signature>,
+    ir: &[lir::Function],
+    runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_description: ContextDescription,
@@ -370,8 +367,8 @@ impl ModuleBuilder {
     }
 
     /// Declare a function and its signature (without the body)
-    fn declare_function(&mut self, func: &ir::Function) {
-        let ir::Function {
+    fn declare_function(&mut self, func: &lir::Function) {
+        let lir::Function {
             name,
             ir_signature,
             signature,
@@ -427,10 +424,10 @@ impl ModuleBuilder {
     /// The function must be declared first.
     fn define_function(
         &mut self,
-        func: &ir::Function,
+        func: &lir::Function,
         builder_context: &mut FunctionBuilderContext,
     ) {
-        let ir::Function {
+        let lir::Function {
             name,
             blocks,
             ir_signature,
@@ -472,8 +469,8 @@ impl ModuleBuilder {
             let var = Variable::new(idx);
 
             let ir_ty = match t {
-                ir::ValueOrSlot::Val(ir_ty) => *ir_ty,
-                ir::ValueOrSlot::StackSlot(layout) => {
+                lir::ValueOrSlot::Val(ir_ty) => *ir_ty,
+                lir::ValueOrSlot::StackSlot(layout) => {
                     let slot =
                         builder.create_sized_stack_slot(StackSlotData::new(
                             StackSlotKind::ExplicitSlot,
@@ -562,7 +559,7 @@ impl<'c> FuncGen<'c> {
     /// Set up the entry block for the function
     fn entry_block(
         &mut self,
-        block: &ir::Block,
+        block: &lir::Block,
         parameters: &[(Identifier, IrType)],
         stack_slots: Vec<(Var, StackSlot)>,
         return_ptr: bool,
@@ -651,7 +648,7 @@ impl<'c> FuncGen<'c> {
     }
 
     /// Translate an IR block to a Cranelift block
-    fn block(&mut self, block: &ir::Block) {
+    fn block(&mut self, block: &lir::Block) {
         let b = self.get_block(block.label);
         self.builder.switch_to_block(b);
         self.builder.seal_block(b);
@@ -663,13 +660,13 @@ impl<'c> FuncGen<'c> {
 
     /// Translate an IR instruction to cranelift instructions which are
     /// added to the current block
-    fn instruction(&mut self, instruction: &ir::Instruction) {
+    fn instruction(&mut self, instruction: &lir::Instruction) {
         match instruction {
-            ir::Instruction::Jump(label) => {
+            lir::Instruction::Jump(label) => {
                 let block = self.get_block(*label);
                 self.ins().jump(block, &[]);
             }
-            ir::Instruction::Switch {
+            lir::Instruction::Switch {
                 examinee,
                 branches,
                 default,
@@ -686,13 +683,13 @@ impl<'c> FuncGen<'c> {
                 let (val, _) = self.operand(examinee);
                 switch.emit(&mut self.builder, val, otherwise);
             }
-            ir::Instruction::Assign { to, val, ty } => {
+            lir::Instruction::Assign { to, val, ty } => {
                 let ty = self.module.cranelift_type(ty);
                 let var = self.variable(to, ty);
                 let (val, _) = self.operand(val);
                 self.def(var, val)
             }
-            ir::Instruction::Call {
+            lir::Instruction::Call {
                 to,
                 ctx,
                 func,
@@ -726,7 +723,7 @@ impl<'c> FuncGen<'c> {
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
-            ir::Instruction::CallRuntime { func, args } => {
+            lir::Instruction::CallRuntime { func, args } => {
                 let func_id = self.module.runtime_functions[func];
                 let func_ref = self
                     .module
@@ -737,14 +734,14 @@ impl<'c> FuncGen<'c> {
                     args.iter().map(|op| self.operand(op).0).collect();
                 self.ins().call(func_ref, &args);
             }
-            ir::Instruction::Return(Some(v)) => {
+            lir::Instruction::Return(Some(v)) => {
                 let (val, _) = self.operand(v);
                 self.ins().return_(&[val]);
             }
-            ir::Instruction::Return(None) => {
+            lir::Instruction::Return(None) => {
                 self.ins().return_(&[]);
             }
-            ir::Instruction::IntCmp {
+            lir::Instruction::IntCmp {
                 to,
                 cmp,
                 left,
@@ -756,7 +753,7 @@ impl<'c> FuncGen<'c> {
                 let val = self.int_cmp(l, r, cmp);
                 self.def(var, val);
             }
-            ir::Instruction::FloatCmp {
+            lir::Instruction::FloatCmp {
                 to,
                 cmp,
                 left,
@@ -768,13 +765,13 @@ impl<'c> FuncGen<'c> {
                 let val = self.float_cmp(l, r, cmp);
                 self.def(var, val);
             }
-            ir::Instruction::Not { to, val } => {
+            lir::Instruction::Not { to, val } => {
                 let (val, _) = self.operand(val);
                 let var = self.variable(to, I8);
                 let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
-            ir::Instruction::Add { to, left, right } => {
+            lir::Instruction::Add { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -788,7 +785,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::Sub { to, left, right } => {
+            lir::Instruction::Sub { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -802,7 +799,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::Mul { to, left, right } => {
+            lir::Instruction::Mul { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -816,7 +813,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::Div {
+            lir::Instruction::Div {
                 to,
                 signed,
                 left,
@@ -833,7 +830,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::FDiv { to, left, right } => {
+            lir::Instruction::FDiv { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -842,7 +839,7 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().fdiv(l, r);
                 self.def(var, val)
             }
-            ir::Instruction::Initialize { to, bytes, layout } => {
+            lir::Instruction::Initialize { to, bytes, layout } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(
@@ -882,25 +879,25 @@ impl<'c> FuncGen<'c> {
                 );
                 self.def(var, p);
             }
-            ir::Instruction::Write { to, val } => {
+            lir::Instruction::Write { to, val } => {
                 let (x, _) = self.operand(val);
                 let (to, _) = self.operand(to);
                 self.ins().store(MEMFLAGS, x, to, 0);
             }
-            ir::Instruction::Read { to, from, ty } => {
+            lir::Instruction::Read { to, from, ty } => {
                 let c_ty = self.module.cranelift_type(ty);
                 let (from, _) = self.operand(from);
                 let res = self.ins().load(c_ty, MEMFLAGS, from, 0);
                 let to = self.variable(to, c_ty);
                 self.def(to, res);
             }
-            ir::Instruction::Offset { to, from, offset } => {
+            lir::Instruction::Offset { to, from, offset } => {
                 let (from, _) = self.operand(from);
                 let tmp = self.ins().iadd_imm(from, *offset as i64);
                 let to = self.variable(to, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
-            ir::Instruction::Copy { to, from, size } => {
+            lir::Instruction::Copy { to, from, size } => {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
 
@@ -915,7 +912,7 @@ impl<'c> FuncGen<'c> {
                     MEMFLAGS,
                 )
             }
-            ir::Instruction::Clone { to, from, clone_fn } => {
+            lir::Instruction::Clone { to, from, clone_fn } => {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
                 let pointer_ty = self.module.isa.pointer_type();
@@ -928,7 +925,7 @@ impl<'c> FuncGen<'c> {
                     &[src, dest],
                 );
             }
-            ir::Instruction::Drop { var, drop } => {
+            lir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
                     let (var, _) = self.operand(var);
                     let pointer_ty = self.module.isa.pointer_type();
@@ -942,7 +939,7 @@ impl<'c> FuncGen<'c> {
                     );
                 }
             }
-            ir::Instruction::MemCmp {
+            lir::Instruction::MemCmp {
                 to,
                 size,
                 left,
@@ -964,7 +961,7 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, I32);
                 self.def(var, val);
             }
-            ir::Instruction::LoadConstant { to, name, ty } => {
+            lir::Instruction::LoadConstant { to, name, ty } => {
                 let Some(FuncOrDataId::Data(data_id)) =
                     self.module.inner.get_name(&format!(".{name}"))
                 else {
@@ -979,7 +976,7 @@ impl<'c> FuncGen<'c> {
                 let to = self.variable(to, ty);
                 self.def(to, val);
             }
-            ir::Instruction::InitString {
+            lir::Instruction::InitString {
                 to,
                 string,
                 init_func,
@@ -1040,7 +1037,7 @@ impl<'c> FuncGen<'c> {
 
     fn operand(&mut self, val: &Operand) -> (Value, Type) {
         match val {
-            ir::Operand::Place(p) => {
+            lir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
                     || {
                         ice!(
@@ -1053,7 +1050,7 @@ impl<'c> FuncGen<'c> {
                 );
                 (self.builder.use_var(*var), *ty)
             }
-            ir::Operand::Value(v) => {
+            lir::Operand::Value(v) => {
                 if let Some((ty, val)) = self.integer_operand(v) {
                     (self.ins().iconst(ty, val), ty)
                 } else if let Some((ty, val)) = self.float_operand(v) {

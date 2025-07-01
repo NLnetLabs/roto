@@ -5,7 +5,7 @@ use std::fmt::{Debug, Display};
 
 use inetnum::asn::Asn;
 
-use super::ir::Operand;
+use super::Operand;
 
 /// A Roto value with type information at runtime
 ///

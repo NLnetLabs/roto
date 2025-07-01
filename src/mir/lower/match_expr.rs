@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    super::ir::{Var, VarKind},
+    super::{Var, VarKind},
     Lowerer,
 };
 
@@ -266,8 +266,7 @@ impl Lowerer<'_> {
             } = &arm.pattern.node
             {
                 let variant = variant.unwrap();
-                for (i, field_binding) in fields.iter().enumerate()
-                {
+                for (i, field_binding) in fields.iter().enumerate() {
                     let name = self.type_info.resolved_name(field_binding);
                     let ty = self.type_info.type_of(field_binding);
                     let var = Var {

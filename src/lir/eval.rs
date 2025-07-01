@@ -9,11 +9,8 @@ use log::trace;
 use crate::{
     ast::Identifier,
     lir::{
-        ir::{
-            FloatCmp, Function, Instruction, IntCmp, Operand, Var, VarKind,
-        },
-        value::IrValue,
-        ValueOrSlot,
+        value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
+        ValueOrSlot, Var, VarKind,
     },
     runtime::RuntimeFunctionRef,
     Runtime,

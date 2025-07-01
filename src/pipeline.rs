@@ -13,7 +13,6 @@ use crate::{
     lir::{
         self,
         eval::{self, Memory},
-        ir,
         value::IrValue,
     },
     mir,
@@ -68,7 +67,7 @@ pub struct TypeChecked {
 #[allow(dead_code)]
 pub struct LoweredToMir {
     runtime: Runtime,
-    pub ir: mir::ir::Mir,
+    pub ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_type: ContextDescription,
@@ -77,8 +76,8 @@ pub struct LoweredToMir {
 /// Compiler stage: LIR
 pub struct LoweredToLir {
     runtime: Runtime,
-    pub ir: lir::ir::Lir,
-    runtime_functions: HashMap<RuntimeFunctionRef, ir::Signature>,
+    pub ir: lir::Lir,
+    runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_type: ContextDescription,

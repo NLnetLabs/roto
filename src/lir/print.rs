@@ -1,4 +1,4 @@
-use super::ir::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
+use super::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
 use crate::{
     ir_printer::{IrPrinter, Printable},
     lir::ValueOrSlot,

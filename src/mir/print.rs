@@ -5,8 +5,7 @@ use crate::{
 };
 
 use super::{
-    ir::{Block, Function, Instruction, Mir, Var, VarKind},
-    Place, Projection, Value,
+    Block, Function, Instruction, Mir, Place, Projection, Value, Var, VarKind,
 };
 
 impl Printable for Mir {
