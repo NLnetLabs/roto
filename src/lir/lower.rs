@@ -178,7 +178,7 @@ impl Lowerer<'_, '_> {
                 self.set_discriminant(to, &ty, &variant)
             }
             mir::Instruction::Return { var } => self.r#return(var),
-            mir::Instruction::Drop { var, ty } => self.drop(var, ty),
+            mir::Instruction::Drop { val, ty } => self.drop(val, ty),
         }
     }
 
@@ -578,9 +578,18 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    fn drop(&mut self, var: mir::Var, ty: Type) {
-        let var = self.var(var);
-        self.drop_type(var.into(), ty)
+    fn drop(&mut self, val: mir::Place, ty: Type) {
+        let var = self.location(val, ty.clone());
+
+        // Any reference type (and therefore any type that needs drop)
+        // has a pointer location, we can ignore the rest.
+        match var {
+            Location::Var(_var) => {}
+            Location::Pointer { base, offset } => {
+                let op = self.offset(base.into(), offset as u32);
+                self.drop_type(op, ty);
+            }
+        };
     }
 
     fn var(&self, to: mir::Var) -> Var {

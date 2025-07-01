@@ -276,7 +276,7 @@ impl<'r> Lowerer<'r> {
 
         let to_drop = self.stack_slots.pop().unwrap();
         for (var, ty) in to_drop.into_iter().rev() {
-            self.emit_drop(var, ty);
+            self.emit_drop(Place::new(var, ty.clone()), ty);
         }
 
         let tmp = self.assign_to_var(last, return_type.clone());
@@ -321,7 +321,7 @@ impl<'r> Lowerer<'r> {
         if !self.type_info.diverges(block) {
             // Drop order is reversed
             for (var, ty) in to_drop.into_iter().rev() {
-                self.emit_drop(var, ty);
+                self.emit_drop(Place::new(var, ty.clone()), ty);
             }
         }
 
@@ -330,7 +330,7 @@ impl<'r> Lowerer<'r> {
 
     fn drop_var(&mut self, var: Var) {
         let ty = self.remove_live_variable(&var);
-        self.emit_drop(var, ty);
+        self.emit_drop(Place::new(var, ty.clone()), ty);
     }
 
     fn stmt(&mut self, stmt: &Meta<ast::Stmt>) {
@@ -420,7 +420,10 @@ impl<'r> Lowerer<'r> {
         let _ty = self.remove_live_variable(&var);
         for frame in self.stack_slots.clone().iter().rev() {
             for (var, ty) in frame.iter().rev() {
-                self.emit_drop(var.clone(), ty.clone());
+                self.emit_drop(
+                    Place::new(var.clone(), ty.clone()),
+                    ty.clone(),
+                );
             }
         }
         self.emit_return(var);
@@ -641,6 +644,9 @@ impl<'r> Lowerer<'r> {
             ice!("should be rejected by type checker");
         };
 
+        let ty = self.type_info.type_of(expr);
+        let tmp = self.tmp(ty.clone());
+
         let to = Var {
             scope: name.scope,
             kind: VarKind::Explicit(name.ident),
@@ -656,9 +662,11 @@ impl<'r> Lowerer<'r> {
         };
 
         let val = self.expr(expr);
-        let ty = self.type_info.type_of(expr);
+        self.do_assign(Place::new(tmp.clone(), ty.clone()), ty.clone(), val);
 
-        self.do_assign(place, ty, val);
+        self.emit_drop(place.clone(), ty.clone());
+
+        self.do_assign(place, ty, Value::Move(tmp));
 
         Value::Const(ast::Literal::Unit, Type::unit())
     }
@@ -1046,7 +1054,7 @@ impl Lowerer<'_> {
         })
     }
 
-    fn emit_drop(&mut self, var: Var, ty: Type) {
-        self.emit(Instruction::Drop { var, ty })
+    fn emit_drop(&mut self, val: Place, ty: Type) {
+        self.emit(Instruction::Drop { val, ty })
     }
 }

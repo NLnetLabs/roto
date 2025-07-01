@@ -41,7 +41,7 @@ impl<F: RotoFunc> Func<F> {
     }
 
     pub(crate) fn to_function_description(
-        self,
+        &self,
         type_registry: &mut TypeRegistry,
     ) -> FunctionDescription {
         let parameter_types = F::parameter_types(type_registry);

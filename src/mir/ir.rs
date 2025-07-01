@@ -138,7 +138,7 @@ pub enum Instruction {
     },
 
     Drop {
-        var: Var,
+        val: Place,
         ty: Type,
     },
 }

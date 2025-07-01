@@ -296,7 +296,6 @@ impl TypeChecked {
 
         #[cfg(feature = "logger")]
         {
-            use ir::IrPrinter;
             if log::log_enabled!(log::Level::Info) {
                 let printer = IrPrinter {
                     type_info: &type_info,
@@ -339,7 +338,6 @@ impl LoweredToMir {
 
         #[cfg(feature = "logger")]
         {
-            use ir::IrPrinter;
             if log::log_enabled!(log::Level::Info) {
                 let printer = IrPrinter {
                     type_info: &type_info,
