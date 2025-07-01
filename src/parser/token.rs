@@ -3,7 +3,7 @@
 use core::{ops::Range, str};
 use std::{fmt::Display, ops::ControlFlow};
 
-use icu::properties::sets::CodePointSetDataBorrowed;
+use unicode_ident::{is_xid_continue, is_xid_start};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token<'s> {
@@ -76,11 +76,6 @@ pub enum Keyword {
     Test,
     Type,
 }
-
-const XID_START: CodePointSetDataBorrowed<'static> =
-    icu::properties::sets::xid_start();
-const XID_CONTINUE: CodePointSetDataBorrowed<'static> =
-    icu::properties::sets::xid_continue();
 
 pub struct Lexer<'a> {
     input: &'a str,
@@ -311,7 +306,7 @@ impl<'s> Lexer<'s> {
 
             // If we have `10..` or `10._hello` or `10.hello` we should treat this as an integer
             if let Some(c) = rest.chars().next() {
-                if XID_START.contains(c) || c == '.' || c == '_' {
+                if is_xid_start(c) || c == '.' || c == '_' {
                     return ControlFlow::Continue(());
                 }
             }
@@ -399,13 +394,13 @@ impl<'s> Lexer<'s> {
             return ControlFlow::Continue(());
         };
 
-        if !(XID_START.contains(c) || c == '_') {
+        if !(is_xid_start(c) || c == '_') {
             return ControlFlow::Continue(());
         }
 
         let non_ident_idx = self
             .input
-            .find(|c: char| !XID_CONTINUE.contains(c))
+            .find(|c: char| !is_xid_continue(c))
             .unwrap_or(self.input.len());
 
         let (ident, span) = self.bump(non_ident_idx);

@@ -504,10 +504,12 @@ impl TypeChecker {
         for &(scope, module) in modules {
             let mut paths = Vec::new();
             for expr in &module.ast.declarations {
-                let ast::Declaration::Import(path) = expr else {
+                let ast::Declaration::Import(new_paths) = expr else {
                     continue;
                 };
-                paths.push(path);
+                for path in new_paths {
+                    paths.push(path);
+                }
             }
             self.imports(scope, &paths)?;
         }

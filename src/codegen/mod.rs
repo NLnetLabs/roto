@@ -24,7 +24,7 @@ use crate::{
         RuntimeFunctionRef,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue, Runtime, Verdict,
+    IrValue, Runtime,
 };
 use check::{
     check_roto_type_reflect, FunctionRetrievalError, RotoFunc, TypeMismatch,
@@ -51,6 +51,7 @@ use cranelift_codegen::ir::{SigRef, StackSlot};
 use log::info;
 
 pub mod check;
+pub mod testing;
 #[cfg(test)]
 mod tests;
 
@@ -1167,58 +1168,6 @@ impl<'c> FuncGen<'c> {
 }
 
 impl Module {
-    pub fn run_tests<Ctx: 'static>(
-        &mut self,
-        mut ctx: Ctx,
-    ) -> Result<(), ()> {
-        let tests: Vec<_> = self
-            .functions
-            .keys()
-            .filter(|x| {
-                x.rsplit_once(".")
-                    .map_or(x.as_ref(), |x| x.1)
-                    .starts_with("test#")
-            })
-            .map(Clone::clone)
-            .collect();
-
-        let total = tests.len();
-        let total_width = total.to_string().len();
-        let mut successes = 0;
-        let mut failures = 0;
-
-        for (n, test) in tests.into_iter().enumerate() {
-            let n = n + 1;
-            let test_display = test.replace("test#", "");
-            print!("Test {n:>total_width$} / {total}: {test_display}... ");
-            let test_fn = self
-                .get_function::<Ctx, fn() -> Verdict<(), ()>>(
-                    test.strip_prefix("pkg.").unwrap(),
-                )
-                .unwrap();
-
-            match test_fn.call(&mut ctx) {
-                Verdict::Accept(()) => {
-                    successes += 1;
-                    println!("\x1B[92mok\x1B[m");
-                }
-                Verdict::Reject(()) => {
-                    failures += 1;
-                    println!("\x1B[91mfail\x1B[m");
-                }
-            }
-        }
-        println!(
-            "Ran {total} tests, {successes} succeeded, {failures} failed"
-        );
-
-        if failures == 0 {
-            Result::Ok(())
-        } else {
-            Result::Err(())
-        }
-    }
-
     pub fn get_function<Ctx: 'static, F: RotoFunc>(
         &mut self,
         name: &str,

@@ -3,6 +3,7 @@ use std::{env::args, net::IpAddr};
 use roto::{FileTree, Runtime, Verdict};
 
 fn main() -> Result<(), roto::RotoReport> {
+    #[cfg(feature = "logger")]
     env_logger::init();
 
     let runtime = Runtime::new();

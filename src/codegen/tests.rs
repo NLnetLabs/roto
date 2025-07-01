@@ -21,6 +21,7 @@ fn compile(f: FileTree) -> Compiled {
 
 #[track_caller]
 fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
+    #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
     let res = f.parse().and_then(|x| x.typecheck(runtime)).map(|x| {
@@ -1198,6 +1199,39 @@ fn use_a_test() {
 }
 
 #[test]
+fn get_tests() {
+    let s = src!(
+        "
+        test check_output {
+            accept
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let tests: Vec<_> = p.get_tests::<()>().collect();
+
+    assert!(!tests.is_empty());
+    assert_eq!(tests[0].name(), "pkg.check_output");
+    tests[0].run(&mut ()).unwrap();
+}
+
+#[test]
+fn get_no_tests() {
+    let s = src!(
+        "
+        function double(x: i32) -> i32 {
+          2 * x
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let tests = p.get_tests::<()>();
+    assert_eq!(tests.count(), 0);
+}
+
+#[test]
 fn string() {
     let s = src!(
         r#"
@@ -1876,6 +1910,40 @@ fn use_type_in_function_argument() {
     let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
     let res = main.call(&mut (), 4);
     assert_eq!(res, 4);
+}
+
+#[test]
+fn import_list() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.{double, triple};
+            function main(x: i32) -> i32 {
+                triple(double(x))
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            function double(x: i32) -> i32 {
+                2 * x
+            }
+
+            function triple(x: i32) -> i32 {
+                3 * x
+            }
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut p = compile(tree);
+    let main = p.get_function::<(), fn(i32) -> i32>("main").unwrap();
+    let res = main.call(&mut (), 1);
+    assert_eq!(res, 6);
 }
 
 #[test]

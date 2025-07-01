@@ -2,8 +2,6 @@
 
 use std::{collections::HashMap, fmt, path::Path};
 
-use log::info;
-
 use crate::{
     codegen::{
         self,
@@ -11,7 +9,6 @@ use crate::{
         Module, TypedFunc,
     },
     file_tree::SourceFile,
-    ir_printer::{IrPrinter, Printable},
     label::LabelStore,
     lir::{
         self,
@@ -35,6 +32,12 @@ use crate::{
     },
     FileTree,
 };
+
+#[cfg(feature = "logger")]
+use crate::ir_printer::{IrPrinter, Printable};
+
+#[cfg(feature = "logger")]
+use log::info;
 
 #[derive(Debug)]
 pub enum RotoError {
@@ -291,14 +294,18 @@ impl TypeChecked {
             &mut label_store,
         );
 
-        if log::log_enabled!(log::Level::Info) {
-            let printer = IrPrinter {
-                type_info: &type_info,
-                label_store: &label_store,
-                scope: None,
-            };
-            let s = ir.print(&printer);
-            info!("\n{s}");
+        #[cfg(feature = "logger")]
+        {
+            use ir::IrPrinter;
+            if log::log_enabled!(log::Level::Info) {
+                let printer = IrPrinter {
+                    type_info: &type_info,
+                    label_store: &label_store,
+                    scope: None,
+                };
+                let s = ir.print(&printer);
+                info!("\n{s}");
+            }
         }
 
         LoweredToMir {
@@ -330,14 +337,18 @@ impl LoweredToMir {
         };
         let ir = lir::lower_to_lir(&mut ctx, ir);
 
-        if log::log_enabled!(log::Level::Info) {
-            let printer = IrPrinter {
-                type_info: &type_info,
-                label_store: &label_store,
-                scope: None,
-            };
-            let s = ir.print(&printer);
-            info!("\n{s}");
+        #[cfg(feature = "logger")]
+        {
+            use ir::IrPrinter;
+            if log::log_enabled!(log::Level::Info) {
+                let printer = IrPrinter {
+                    type_info: &type_info,
+                    label_store: &label_store,
+                    scope: None,
+                };
+                let s = ir.print(&printer);
+                info!("\n{s}");
+            }
         }
 
         LoweredToLir {
@@ -385,9 +396,16 @@ impl LoweredToLir {
 }
 
 impl Compiled {
+    pub fn get_tests<Ctx: 'static>(
+        &mut self,
+    ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
+    {
+        codegen::testing::get_tests(&mut self.module)
+    }
+
     #[allow(clippy::result_unit_err)]
     pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
-        self.module.run_tests(ctx)
+        codegen::testing::run_tests(&mut self.module, ctx)
     }
 
     pub fn get_function<Ctx: 'static, F: RotoFunc>(

@@ -5,6 +5,7 @@ use crate::{runtime::tests::routecore_runtime, src, FileTree, LoweredToLir};
 fn compile(s: FileTree) -> LoweredToLir {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
+    #[cfg(feature = "logger")]
     let _ = env_logger::builder()
         .format_timestamp(None)
         .format_target(false)
