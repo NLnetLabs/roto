@@ -58,8 +58,8 @@ limited.
   for this limitation is that Roto does not have references and freely clones
   values.
 - It is not possible to register types that are not concrete. For example,
-  `Vec<u32>` is possible, but `Vec<T>` not. We plan to support some generics
-  via some form of type erasure.
+  `Vec<u32>` is possible, but `Vec<T>` is not. We plan to support registering
+  generic via some form of type erasure.
 - The parameter and return types of functions exported to the host application
   must have a `'static` lifetime.
 
@@ -67,7 +67,7 @@ limited.
 
 Some limitations are only present because we haven't come around to
 implementing them yet. Most limitations can be found in the issue tracker, but
-we've summarized the most important missing features here.
+we've summarized some important missing features here.
 
 - Roto does not feature any looping constructs yet. If you need loops,
   you can use recursion instead as a workaround.
