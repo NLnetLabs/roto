@@ -79,7 +79,7 @@ We can now pass this type to Roto and return it from Roto:
 
 .. code-block:: roto
 
-    function passthrough(x: Range) -> Range {
+    fn passthrough(x: Range) -> Range {
         x
     }
 
@@ -126,7 +126,7 @@ And then in Roto:
 
 .. code-block:: roto
 
-    function in_range(r: Range, x: i64) -> bool {
+    fn in_range(r: Range, x: i64) -> bool {
         r.contains(x)
     }
 

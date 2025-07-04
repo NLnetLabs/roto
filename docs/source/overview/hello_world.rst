@@ -5,7 +5,7 @@ This is the all-important "Hello, world!" program in Roto:
 
 .. code-block:: roto
 
-  function main() {
+  fn main() {
       print("Hello, world!");
   }
 
@@ -23,7 +23,7 @@ Which should show you the following output:
   Hello, world!
 
 There are a couple things we can learn from this program. First, a function is
-defined with the ``function`` keyword and we use curly braces to delimit the
+defined with the ``fn`` keyword and we use curly braces to delimit the
 function body. Second, functions (in this case ``print``) are called with
 parentheses and string literals are enclosed in double quotes. Finally, a
 statement in Roto ends with a semicolon.

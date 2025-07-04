@@ -52,7 +52,7 @@ a function that doubles its input.
 
 .. code-block:: roto
 
-    function main(x: i32) -> i32 {
+    fn main(x: i32) -> i32 {
         2 * x
     }
 

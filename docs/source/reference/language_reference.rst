@@ -231,14 +231,14 @@ construct is an expression and therefore evaluates to a value.
 Functions
 ---------
 
-Functions can be defined with the ``function`` keyword, followed by the name
+Functions can be defined with the ``fn`` keyword, followed by the name
 and parameters of the function. It is required to specify the types of the
 parameters. The return type is specified with ``->``. A function without a
 return type does not return anything.
 
 .. code-block:: roto
 
-    function add_one(x: u64) -> u64 {
+    fn add_one(x: u64) -> u64 {
         x + 1
     }
 
@@ -254,7 +254,7 @@ it is not terminated by a ``;``. The return can also be made explicit with the
 
 .. code-block:: roto
 
-    function add_one(x: u64) -> u64 {
+    fn add_one(x: u64) -> u64 {
         return x + 1;
     }
 
@@ -263,7 +263,7 @@ and subtract ``1`` otherwise.
 
 .. code-block:: roto
 
-    function subtract_one(x: u64) -> u64 {
+    fn subtract_one(x: u64) -> u64 {
         if x == 0 {
             return 0;
         }
@@ -274,7 +274,7 @@ This function does not return anything:
 
 .. code-block:: roto
 
-    function returns_nothing(x: u64) {
+    fn returns_nothing(x: u64) {
         x + 1;
     }
 
@@ -286,7 +286,7 @@ variables with ``let``.
 
 .. code-block:: roto
 
-    function greater_than_square(x: i32, y: i32) {
+    fn greater_than_square(x: i32, y: i32) {
         let y_squared = y * y;
         x > y_squared
     }
@@ -402,7 +402,7 @@ There is an automatic coercion from anonymous records to named records:
 
 .. code-block:: roto
 
-    function foo(int: i32) -> SomeRecord {
+    fn foo(int: i32) -> SomeRecord {
         { foo: int, bar: false }  # implicitly coerced to SomeRecord
     }
 
@@ -456,7 +456,7 @@ function can be referenced in any of the other files with the absolute path
 
 .. code-block:: roto
 
-    function add_and_square(x: i32, y: i32) -> i32 {
+    fn add_and_square(x: i32, y: i32) -> i32 {
         pkg.foo.square(x + y)
     }
 
@@ -497,7 +497,7 @@ item the path references will be available by name in the current scope.
     
     import foo.square;
 
-    function fourth_power(x: i32) -> i32 {
+    fn fourth_power(x: i32) -> i32 {
         square(square(x))
     }
 
@@ -509,7 +509,7 @@ We can rewrite the previous example as follows.
 
 .. code-block:: roto
  
-    function fourth_power(x: i32) -> i32 {
+    fn fourth_power(x: i32) -> i32 {
         import foo.square;
         square(square(x))
     }
@@ -521,7 +521,7 @@ either module ``A`` or ``B``, depending on a boolean flag.
 
 .. code-block:: roto
 
-    function use_foo(x: i32, choice: bool) -> i32 {
+    fn use_foo(x: i32, choice: bool) -> i32 {
         if choice {
             import A.foo;
             foo(x)
