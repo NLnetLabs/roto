@@ -9,7 +9,7 @@ fn parse_errors() {
 
         let relative_path = path.strip_prefix(&root).unwrap();
         let file_tree = FileTree::read(relative_path);
-        let res = file_tree.compile(runtime);
+        let res = file_tree.compile(&runtime);
         let Err(e) = res else {
             panic!("should not succeed");
         };
@@ -27,7 +27,7 @@ fn type_errors() {
 
         let relative_path = path.strip_prefix(&root).unwrap();
         let file_tree = FileTree::read(relative_path);
-        let res = file_tree.compile(runtime);
+        let res = file_tree.compile(&runtime);
         let Err(e) = res else {
             panic!("should not succeed");
         };

@@ -314,7 +314,7 @@ pub fn codegen(
         context_description,
     };
 
-    for constant in runtime.constants.values() {
+    for constant in runtime.constants().values() {
         module.declare_constant(constant);
     }
 

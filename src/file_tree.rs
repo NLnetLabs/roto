@@ -49,9 +49,8 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    pub fn compile(self, rt: Runtime) -> Result<Compiled, RotoReport> {
+    pub fn compile(self, rt: &Runtime) -> Result<Compiled, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
-        checked.lower_to_mir();
         let compiled = checked.lower_to_mir().lower_to_lir().codegen();
         Ok(compiled)
     }
@@ -70,7 +69,8 @@ pub enum FileSpec {
 }
 
 impl FileTree {
-    pub fn read(path: &Path) -> Self {
+    pub fn read(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref();
         if path.metadata().unwrap().file_type().is_dir() {
             Self::directory(path)
         } else {

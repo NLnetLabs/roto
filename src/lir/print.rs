@@ -60,13 +60,13 @@ impl Printable for Function {
                     )
                 }
             };
-            let _ = write!(&mut s, "  {var}: {ty}\n");
+            let _ = writeln!(&mut s, "  {var}: {ty}");
         }
 
         for b in &self.blocks {
             writeln!(s).unwrap();
             for line in b.print(&printer).lines() {
-                let _ = write!(&mut s, "  {line}\n");
+                let _ = writeln!(&mut s, "  {line}");
             }
         }
 
@@ -93,9 +93,6 @@ impl Printable for Var {
         let name = match &self.kind {
             VarKind::Explicit(name) => name.print(printer).to_string(),
             VarKind::Tmp(idx) => format!("${idx}"),
-            VarKind::NamedTmp(name, idx) => {
-                format!("${}-{idx}", name.print(printer))
-            }
             VarKind::Return => "$return".to_string(),
             VarKind::Context => "$context".to_string(),
         };

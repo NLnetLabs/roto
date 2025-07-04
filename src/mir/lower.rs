@@ -997,7 +997,7 @@ impl<'r> Lowerer<'r> {
         name: &str,
     ) -> &RuntimeFunction {
         self.runtime
-            .functions
+            .functions()
             .iter()
             .find(|f| f.kind == kind && f.name == name)
             .unwrap()
