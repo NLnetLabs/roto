@@ -57,16 +57,20 @@ Here is another example which returns a value:
         (1..=n).fold(1, |a, i| a * i)
     }
 
+.. note::
+    Note that it is only possible to register functions using types you've already
+    registered. You should probably register all your types before registering
+    functions.
+
 Add types
 ---------
 
 We can also add our own types to Roto. As an example, we'll add a ``Range``
-type. All types we add must implement ``Clone`` (or ``Copy`` for a bit more
-performance).
+type. All registered types must implement ``Clone``.
 
 .. code-block:: rust
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Debug)]
     struct Range {
         low: i64,
         high: i64,
@@ -75,7 +79,8 @@ performance).
     // Or register_clone_type if the type doesn't implement Copy.
     runtime.register_copy_type::<Range>("A range of i64").unwrap();
 
-We can now pass this type to Roto and return it from Roto:
+The argument to that method is the docstring for this type. We can now pass this
+type to Roto and return it from Roto:
 
 .. code-block:: roto
 
@@ -83,7 +88,7 @@ We can now pass this type to Roto and return it from Roto:
         x
     }
 
-Not very useful yet, of course, but let's see it in action:
+Not very useful yet, of course, but let's see it in action anyway:
 
 .. code-block:: rust
 
@@ -100,11 +105,23 @@ Not very useful yet, of course, but let's see it in action:
 Note that every custom type has to be wrapped in ``Val`` when it's passed to
 Roto, but otherwise it works exactly like before.
 
+There are 4 methods you can choose from to register a type:
+
+- ``Runtime::register_copy_type``
+- ``Runtime::register_clone_type``
+- ``Runtime::register_copy_type_with_name``
+- ``Runtime::register_clone_type_with_name``
+
+The first two will attempt to guess the name of the type from the type name in
+Rust. If you want a custom name, you can use one of the bottom two methods. If
+your type implements ``Copy`` you should use `register_copy_type`, because that
+will allow Roto to generate slightly more performant code.
+
 Add methods
 -----------
 
-To make the ``Range`` type we registered previously useful, we can expose
-methods on it to Roto.
+To make the ``Range`` type we registered previously actually useful, we can
+expose methods on it to Roto.
 
 .. code-block:: rust
 
@@ -150,4 +167,73 @@ Which can be used in Roto like this:
 Add constants
 -------------
 
-TODO
+Finally, we can register constants into the runtime. Like functions, we can
+only add constants of types we've already registered. Along with a constant
+we have to provide a docstring.
+
+.. code-block:: rust
+
+    runtime.register_constant(
+        "ONE_HUNDRED",
+        "A range from 0 to 100",
+        Range { low: 0, high: 100 },
+    ).unwrap();
+
+The name ``ONE_HUNDRED`` will then be available in Roto scripts.
+
+Add context
+-----------
+
+In the previous section, we added constants to the ``Runtime``, but sometimes
+constants are too restrictive. One such case is when we have a value that we
+want to keep constant *throughout a single invocation* of a function. Or, to
+phrase it another way, we might want to pass in some implicit arguments that
+the script has access to.
+
+Adding context is a bit more difficult because we need a single way to pass
+all those implicit arguments. So, instead of registering each context variable
+one by one, you have to create a context type by deriving the ``Context``
+trait. You can then register that type as the context you want to use.
+
+.. note::
+    You can only register one context type per runtime.
+
+Imagine that we same some script that operates on the data of some user. We
+might then expose the name of that user to all scripts implicitly. We would
+then create and register the following type.
+
+.. code-block:: rust
+
+    #[derive(Context)]
+    struct Ctx {
+        pub first_name: Arc<str>,
+        pub last_name: Arc<str>,
+    }
+
+    runtime.register_context_type::<Ctx>().unwrap();
+
+    let pkg = runtime.compile("script.roto").unwrap();
+
+    //                         We need to use the correct context type here
+    //                         |
+    //                         v
+    let f = pkg.get_function::<Ctx, fn() -> Arc<str>>("greeting").unwrap();
+
+    let ctx = Ctx {
+        username: "John".into(),  
+    };
+    f.call(&mut ctx);
+
+All the fields of ``Ctx`` have to be public, to acknowledge the fact that
+they are exposed to Roto. The first argument of ``f.call`` is the context we
+give to this invocation. The script can then use the names of the fields of
+``Ctx`` as if they were constants.
+
+.. code-block:: roto
+
+    fn greeting() -> String {
+        "Hello, " + first_name + " " + last_name + "!"
+    }
+
+Other use-cases of context are log files, unique ids per invocation or just to
+provide easy access to some common data.

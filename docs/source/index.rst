@@ -71,8 +71,7 @@ LICENSE for details.
 
    embedding/setup
    embedding/call_a_function
-   embedding/build_a_runtime
-   embedding/add_context
+   embedding/expand_the_runtime
    embedding/generate_a_cli
 
 .. toctree::
