@@ -427,6 +427,23 @@ impl TypeChecker {
                     Ok(false)
                 }
             }
+            While(c, b) => {
+                let mut diverges =
+                    self.expr(scope, &ctx.with_type(Type::bool()), c)?;
+
+                let idx = self.while_counter;
+                self.while_counter += 1;
+
+                let body_scope = self
+                    .type_info
+                    .scope_graph
+                    .wrap(scope, ScopeType::WhileBody(idx));
+
+                diverges |= self.block(body_scope, ctx, b)?;
+                self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
+
+                Ok(diverges)
+            }
         }
     }
 

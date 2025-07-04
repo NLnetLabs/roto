@@ -9,7 +9,7 @@ use super::{
 };
 
 use crate::{
-    ast::{self, Identifier},
+    ast::{self, Identifier, Literal},
     ice,
     ir_printer::{IrPrinter, Printable},
     label::{LabelRef, LabelStore},
@@ -379,6 +379,9 @@ impl<'r> Lowerer<'r> {
             ast::Expr::BinOp(left, op, right) => self.binop(left, op, right),
             ast::Expr::IfElse(condition, then, r#else) => {
                 self.if_else(id, condition, then, r#else)
+            }
+            ast::Expr::While(condition, block) => {
+                self.r#while(condition, block)
             }
         }
     }
@@ -935,6 +938,39 @@ impl<'r> Lowerer<'r> {
         self.new_block(lbl_cont);
         self.add_live_variable(res.clone(), ty);
         Value::Move(res)
+    }
+
+    fn r#while(
+        &mut self,
+        condition: &Meta<ast::Expr>,
+        block: &Meta<ast::Block>,
+    ) -> Value {
+        let current_label = self.current_label();
+        let lbl_cont = self.label_store.next(current_label);
+        let lbl_condition = self.label_store.wrap_internal(
+            current_label,
+            Identifier::from("while-condition"),
+        );
+        let lbl_body = self
+            .label_store
+            .wrap_internal(current_label, Identifier::from("while-body"));
+
+        self.emit_jump(lbl_condition);
+
+        self.new_block(lbl_condition);
+
+        let examinee = self.expr(condition);
+        let examinee = self.assign_to_var(examinee, Type::bool());
+
+        self.emit_switch(examinee, vec![(1, lbl_body)], Some(lbl_cont));
+
+        self.new_block(lbl_body);
+        let val = self.block(block);
+        let _ = self.assign_to_var(val, Type::unit());
+        self.emit_jump(lbl_condition);
+
+        self.new_block(lbl_cont);
+        Value::Const(Literal::Unit, Type::unit())
     }
 
     fn path_value(&mut self, path_value: &PathValue) -> Value {

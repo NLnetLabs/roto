@@ -145,6 +145,9 @@ pub enum Expr {
 
     /// An if or if-else expression
     IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
+
+    /// A while expression
+    While(Box<Meta<Expr>>, Meta<Block>),
 }
 
 #[derive(Clone, Debug)]

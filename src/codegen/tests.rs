@@ -637,6 +637,31 @@ fn multiply() {
 }
 
 #[test]
+fn factorial() {
+    let s = src!(
+        "
+        fn factorial(x: u64) -> u64 {
+            let i = 1;
+            let n = 1;
+            while i <= x {
+                n = n * i;
+                i = i + 1;
+            }
+            n
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(u64) -> u64>("factorial")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 5);
+    assert_eq!(res, 120);
+}
+
+#[test]
 fn float_mul() {
     let s = src!(
         "
