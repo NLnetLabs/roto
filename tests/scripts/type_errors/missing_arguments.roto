@@ -1,7 +1,7 @@
-function bar(a: u32) -> u32 {
+fn bar(a: u32) -> u32 {
 	a
 }
 
-function foo() {
+fn foo() {
 	bar()
 }

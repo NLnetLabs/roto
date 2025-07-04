@@ -1,4 +1,4 @@
-function foo() {
+fn foo() {
     return true;
     return false;
 }
