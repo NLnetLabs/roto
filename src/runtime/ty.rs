@@ -159,13 +159,13 @@ pub trait Param<T>: Sized {
     ) -> Result<Self, IrValueDoesNotMatchType>;
 }
 
-impl<T: Clone> Param<T> for *mut T {
+impl<T> Param<T> for *mut T {
     fn as_param(transformed: &mut T) -> Self {
         transformed as *mut T
     }
 
     fn to_value(self) -> T {
-        unsafe { &*self }.clone()
+        unsafe { std::ptr::read(self) }
     }
 
     fn from_ir_value(
@@ -210,10 +210,7 @@ where
     }
 }
 
-impl<T: Reflect> Reflect for Option<T>
-where
-    T::Transformed: Clone,
-{
+impl<T: Reflect> Reflect for Option<T> {
     type Transformed = Optional<T::Transformed>;
     type AsParam = *mut Self::Transformed;
 
@@ -239,13 +236,13 @@ where
     }
 }
 
-impl<T: Clone> Param<Val<T>> for *mut T {
+impl<T> Param<Val<T>> for *mut T {
     fn as_param(value: &mut Val<T>) -> Self {
         &mut value.0 as *mut _
     }
 
     fn to_value(self) -> Val<T> {
-        Val(unsafe { &*self }.clone())
+        Val(unsafe { std::ptr::read(self) })
     }
 
     fn from_ir_value(

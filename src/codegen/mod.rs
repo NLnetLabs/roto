@@ -14,12 +14,8 @@ use std::{
 use crate::{
     ast::Identifier,
     ice,
-    lower::{
-        ir::{self, FloatCmp, IntCmp, Operand, Var, VarKind},
-        label::{LabelRef, LabelStore},
-        value::IrType,
-        IrFunction,
-    },
+    label::{LabelRef, LabelStore},
+    lir::{self, value::IrType, FloatCmp, IntCmp, Operand, Var, VarKind},
     runtime::{
         context::ContextDescription, ty::Reflect, RuntimeConstant,
         RuntimeFunctionRef,
@@ -48,7 +44,7 @@ use cranelift::{
     module::{DataDescription, FuncId, FuncOrDataId, Linkage, Module as _},
     prelude::{FloatCC, Signature},
 };
-use cranelift_codegen::ir::SigRef;
+use cranelift_codegen::ir::{SigRef, StackSlot};
 use log::info;
 
 pub mod check;
@@ -250,9 +246,8 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen(
     runtime: &Runtime,
-    ir: &[ir::Function],
-    runtime_functions: &HashMap<RuntimeFunctionRef, IrFunction>,
-    constants: &[RuntimeConstant],
+    ir: &[lir::Function],
+    runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_description: ContextDescription,
@@ -271,9 +266,12 @@ pub fn codegen(
         cranelift::module::default_libcall_names(),
     );
 
-    for (func_ref, func) in runtime_functions {
+    for func_ref in runtime_functions.keys() {
         let f = runtime.get_function(*func_ref);
-        builder.symbol(format!("runtime_function_{}", f.id), func.ptr);
+        builder.symbol(
+            format!("runtime_function_{}", f.id),
+            f.description.pointer(),
+        );
     }
 
     let jit = JITModule::new(builder);
@@ -316,16 +314,16 @@ pub fn codegen(
         context_description,
     };
 
-    for constant in constants {
+    for constant in runtime.constants.values() {
         module.declare_constant(constant);
     }
 
-    for (func_ref, func) in runtime_functions {
+    for (func_ref, ir_sig) in runtime_functions {
         let mut sig = module.inner.make_signature();
-        for ty in &func.params {
+        for (_, ty) in &ir_sig.parameters {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
         }
-        if let Some(ty) = &func.ret {
+        if let Some(ty) = &ir_sig.return_type {
             sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
         }
         let f = runtime.get_function(*func_ref);
@@ -369,8 +367,8 @@ impl ModuleBuilder {
     }
 
     /// Declare a function and its signature (without the body)
-    fn declare_function(&mut self, func: &ir::Function) {
-        let ir::Function {
+    fn declare_function(&mut self, func: &lir::Function) {
+        let lir::Function {
             name,
             ir_signature,
             signature,
@@ -426,14 +424,15 @@ impl ModuleBuilder {
     /// The function must be declared first.
     fn define_function(
         &mut self,
-        func: &ir::Function,
+        func: &lir::Function,
         builder_context: &mut FunctionBuilderContext,
     ) {
-        let ir::Function {
+        let lir::Function {
             name,
             blocks,
             ir_signature,
             scope,
+            variables,
             ..
         } = func;
         let func_id = self.functions[name.as_str()].id;
@@ -464,6 +463,31 @@ impl ModuleBuilder {
         let mut builder =
             FunctionBuilder::new(&mut ctx.func, builder_context);
 
+        let mut stack_slots = Vec::new();
+        for (v, t) in variables {
+            let idx = self.variable_map.len();
+            let var = Variable::new(idx);
+
+            let ir_ty = match t {
+                lir::ValueOrSlot::Val(ir_ty) => *ir_ty,
+                lir::ValueOrSlot::StackSlot(layout) => {
+                    let slot =
+                        builder.create_sized_stack_slot(StackSlotData::new(
+                            StackSlotKind::ExplicitSlot,
+                            layout.size() as u32,
+                            layout.align_shift() as u8,
+                        ));
+
+                    stack_slots.push((v.clone(), slot));
+                    IrType::Pointer
+                }
+            };
+
+            let ty = self.cranelift_type(&ir_ty);
+            self.variable_map.insert(v.clone(), (var, ty));
+            builder.declare_var(var, ty);
+        }
+
         let mut func_gen = FuncGen {
             drop_signature: builder
                 .import_signature(self.drop_signature.clone()),
@@ -480,10 +504,11 @@ impl ModuleBuilder {
         func_gen.entry_block(
             &blocks[0],
             &ir_signature.parameters,
+            stack_slots,
             ir_signature.return_ptr,
         );
 
-        for block in blocks {
+        for block in &blocks[1..] {
             func_gen.block(block);
         }
 
@@ -534,12 +559,14 @@ impl<'c> FuncGen<'c> {
     /// Set up the entry block for the function
     fn entry_block(
         &mut self,
-        block: &ir::Block,
+        block: &lir::Block,
         parameters: &[(Identifier, IrType)],
+        stack_slots: Vec<(Var, StackSlot)>,
         return_ptr: bool,
     ) {
         let entry_block = self.get_block(block.label);
         self.builder.switch_to_block(entry_block);
+        self.builder.seal_block(entry_block);
 
         let ty = self.module.cranelift_type(&IrType::Pointer);
         self.variable(
@@ -608,10 +635,20 @@ impl<'c> FuncGen<'c> {
                 val,
             );
         }
+
+        for (v, slot) in stack_slots {
+            let pointer_ty = self.module.isa.pointer_type();
+            let p = self.ins().stack_addr(pointer_ty, slot, 0);
+            self.def(self.module.variable_map[&v].0, p);
+        }
+
+        for instruction in &block.instructions {
+            self.instruction(instruction);
+        }
     }
 
     /// Translate an IR block to a Cranelift block
-    fn block(&mut self, block: &ir::Block) {
+    fn block(&mut self, block: &lir::Block) {
         let b = self.get_block(block.label);
         self.builder.switch_to_block(b);
         self.builder.seal_block(b);
@@ -623,13 +660,13 @@ impl<'c> FuncGen<'c> {
 
     /// Translate an IR instruction to cranelift instructions which are
     /// added to the current block
-    fn instruction(&mut self, instruction: &ir::Instruction) {
+    fn instruction(&mut self, instruction: &lir::Instruction) {
         match instruction {
-            ir::Instruction::Jump(label) => {
+            lir::Instruction::Jump(label) => {
                 let block = self.get_block(*label);
                 self.ins().jump(block, &[]);
             }
-            ir::Instruction::Switch {
+            lir::Instruction::Switch {
                 examinee,
                 branches,
                 default,
@@ -646,13 +683,13 @@ impl<'c> FuncGen<'c> {
                 let (val, _) = self.operand(examinee);
                 switch.emit(&mut self.builder, val, otherwise);
             }
-            ir::Instruction::Assign { to, val, ty } => {
+            lir::Instruction::Assign { to, val, ty } => {
                 let ty = self.module.cranelift_type(ty);
                 let var = self.variable(to, ty);
                 let (val, _) = self.operand(val);
                 self.def(var, val)
             }
-            ir::Instruction::Call {
+            lir::Instruction::Call {
                 to,
                 ctx,
                 func,
@@ -686,7 +723,7 @@ impl<'c> FuncGen<'c> {
                     self.def(var, self.builder.inst_results(inst)[0]);
                 }
             }
-            ir::Instruction::CallRuntime { func, args } => {
+            lir::Instruction::CallRuntime { func, args } => {
                 let func_id = self.module.runtime_functions[func];
                 let func_ref = self
                     .module
@@ -697,14 +734,14 @@ impl<'c> FuncGen<'c> {
                     args.iter().map(|op| self.operand(op).0).collect();
                 self.ins().call(func_ref, &args);
             }
-            ir::Instruction::Return(Some(v)) => {
+            lir::Instruction::Return(Some(v)) => {
                 let (val, _) = self.operand(v);
                 self.ins().return_(&[val]);
             }
-            ir::Instruction::Return(None) => {
+            lir::Instruction::Return(None) => {
                 self.ins().return_(&[]);
             }
-            ir::Instruction::IntCmp {
+            lir::Instruction::IntCmp {
                 to,
                 cmp,
                 left,
@@ -716,7 +753,7 @@ impl<'c> FuncGen<'c> {
                 let val = self.int_cmp(l, r, cmp);
                 self.def(var, val);
             }
-            ir::Instruction::FloatCmp {
+            lir::Instruction::FloatCmp {
                 to,
                 cmp,
                 left,
@@ -728,27 +765,13 @@ impl<'c> FuncGen<'c> {
                 let val = self.float_cmp(l, r, cmp);
                 self.def(var, val);
             }
-            ir::Instruction::Not { to, val } => {
+            lir::Instruction::Not { to, val } => {
                 let (val, _) = self.operand(val);
                 let var = self.variable(to, I8);
                 let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
-            ir::Instruction::And { to, left, right } => {
-                let (l, _) = self.operand(left);
-                let (r, _) = self.operand(right);
-                let var = self.variable(to, I8);
-                let val = self.ins().band(l, r);
-                self.def(var, val);
-            }
-            ir::Instruction::Or { to, left, right } => {
-                let (l, _) = self.operand(left);
-                let (r, _) = self.operand(right);
-                let var = self.variable(to, I8);
-                let val = self.ins().bor(l, r);
-                self.def(var, val);
-            }
-            ir::Instruction::Add { to, left, right } => {
+            lir::Instruction::Add { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -762,7 +785,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::Sub { to, left, right } => {
+            lir::Instruction::Sub { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -776,7 +799,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::Mul { to, left, right } => {
+            lir::Instruction::Mul { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -790,7 +813,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::Div {
+            lir::Instruction::Div {
                 to,
                 signed,
                 left,
@@ -807,7 +830,7 @@ impl<'c> FuncGen<'c> {
                 };
                 self.def(var, val)
             }
-            ir::Instruction::FDiv { to, left, right } => {
+            lir::Instruction::FDiv { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
 
@@ -816,29 +839,7 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().fdiv(l, r);
                 self.def(var, val)
             }
-            ir::Instruction::Extend { to, ty, from } => {
-                let ty = self.module.cranelift_type(ty);
-                let (from, _) = self.operand(from);
-                let val = self.ins().uextend(ty, from);
-
-                let var = self.variable(to, ty);
-                self.def(var, val)
-            }
-            ir::Instruction::Eq { .. } => todo!(),
-            ir::Instruction::Alloc { to, layout } => {
-                let slot =
-                    self.builder.create_sized_stack_slot(StackSlotData::new(
-                        StackSlotKind::ExplicitSlot,
-                        layout.size() as u32,
-                        layout.align_shift() as u8,
-                    ));
-
-                let pointer_ty = self.module.isa.pointer_type();
-                let var = self.variable(to, pointer_ty);
-                let p = self.ins().stack_addr(pointer_ty, slot, 0);
-                self.def(var, p);
-            }
-            ir::Instruction::Initialize { to, bytes, layout } => {
+            lir::Instruction::Initialize { to, bytes, layout } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(
@@ -878,58 +879,53 @@ impl<'c> FuncGen<'c> {
                 );
                 self.def(var, p);
             }
-            ir::Instruction::Write { to, val } => {
+            lir::Instruction::Write { to, val } => {
                 let (x, _) = self.operand(val);
                 let (to, _) = self.operand(to);
                 self.ins().store(MEMFLAGS, x, to, 0);
             }
-            ir::Instruction::Read { to, from, ty } => {
+            lir::Instruction::Read { to, from, ty } => {
                 let c_ty = self.module.cranelift_type(ty);
                 let (from, _) = self.operand(from);
                 let res = self.ins().load(c_ty, MEMFLAGS, from, 0);
                 let to = self.variable(to, c_ty);
                 self.def(to, res);
             }
-            ir::Instruction::Offset { to, from, offset } => {
+            lir::Instruction::Offset { to, from, offset } => {
                 let (from, _) = self.operand(from);
                 let tmp = self.ins().iadd_imm(from, *offset as i64);
                 let to = self.variable(to, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
-            ir::Instruction::Copy {
-                to,
-                from,
-                size,
-                clone,
-            } => {
+            lir::Instruction::Copy { to, from, size } => {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
 
-                if let Some(clone) = clone {
-                    let pointer_ty = self.module.isa.pointer_type();
-                    let clone = self.ins().iconst(
-                        pointer_ty,
-                        *clone as *mut u8 as usize as i64,
-                    );
-                    self.builder.ins().call_indirect(
-                        self.clone_signature,
-                        clone,
-                        &[src, dest],
-                    );
-                } else {
-                    self.builder.emit_small_memory_copy(
-                        self.module.isa.frontend_config(),
-                        dest,
-                        src,
-                        *size as u64,
-                        0,
-                        0,
-                        true,
-                        MEMFLAGS,
-                    )
-                }
+                self.builder.emit_small_memory_copy(
+                    self.module.isa.frontend_config(),
+                    dest,
+                    src,
+                    *size as u64,
+                    0,
+                    0,
+                    true,
+                    MEMFLAGS,
+                )
             }
-            ir::Instruction::Drop { var, drop } => {
+            lir::Instruction::Clone { to, from, clone_fn } => {
+                let (dest, _) = self.operand(to);
+                let (src, _) = self.operand(from);
+                let pointer_ty = self.module.isa.pointer_type();
+                let clone = self
+                    .ins()
+                    .iconst(pointer_ty, *clone_fn as *mut u8 as usize as i64);
+                self.builder.ins().call_indirect(
+                    self.clone_signature,
+                    clone,
+                    &[src, dest],
+                );
+            }
+            lir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
                     let (var, _) = self.operand(var);
                     let pointer_ty = self.module.isa.pointer_type();
@@ -943,7 +939,7 @@ impl<'c> FuncGen<'c> {
                     );
                 }
             }
-            ir::Instruction::MemCmp {
+            lir::Instruction::MemCmp {
                 to,
                 size,
                 left,
@@ -965,7 +961,7 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, I32);
                 self.def(var, val);
             }
-            ir::Instruction::LoadConstant { to, name, ty } => {
+            lir::Instruction::LoadConstant { to, name, ty } => {
                 let Some(FuncOrDataId::Data(data_id)) =
                     self.module.inner.get_name(&format!(".{name}"))
                 else {
@@ -980,7 +976,7 @@ impl<'c> FuncGen<'c> {
                 let to = self.variable(to, ty);
                 self.def(to, val);
             }
-            ir::Instruction::InitString {
+            lir::Instruction::InitString {
                 to,
                 string,
                 init_func,
@@ -1041,7 +1037,7 @@ impl<'c> FuncGen<'c> {
 
     fn operand(&mut self, val: &Operand) -> (Value, Type) {
         match val {
-            ir::Operand::Place(p) => {
+            lir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
                     || {
                         ice!(
@@ -1054,7 +1050,7 @@ impl<'c> FuncGen<'c> {
                 );
                 (self.builder.use_var(*var), *ty)
             }
-            ir::Operand::Value(v) => {
+            lir::Operand::Value(v) => {
                 if let Some((ty, val)) = self.integer_operand(v) {
                     (self.ins().iconst(ty, val), ty)
                 } else if let Some((ty, val)) = self.float_operand(v) {

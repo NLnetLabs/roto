@@ -1,39 +1,42 @@
 use core::fmt;
 
-use super::scope::ScopeGraph;
+use super::info::TypeInfo;
 
-pub trait ScopedDisplay: Sized {
+pub trait TypeDisplay: Sized {
     fn fmt(
         &self,
-        graph: &ScopeGraph,
+        type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result;
 
     fn display<'a>(
         &'a self,
-        graph: &'a ScopeGraph,
+        type_info: &'a TypeInfo,
     ) -> impl fmt::Display + 'a {
-        ScopedPrinter { graph, inner: self }
+        TypePrinter {
+            type_info,
+            inner: self,
+        }
     }
 }
 
-impl<T: fmt::Display> ScopedDisplay for T {
+impl<T: fmt::Display> TypeDisplay for T {
     fn fmt(
         &self,
-        _graph: &ScopeGraph,
+        _type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
 }
 
-struct ScopedPrinter<'a, T: ScopedDisplay> {
-    graph: &'a ScopeGraph,
+struct TypePrinter<'a, T: TypeDisplay> {
+    type_info: &'a TypeInfo,
     inner: &'a T,
 }
 
-impl<T: ScopedDisplay> fmt::Display for ScopedPrinter<'_, T> {
+impl<T: TypeDisplay> fmt::Display for TypePrinter<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        self.inner.fmt(self.graph, f)
+        self.inner.fmt(self.type_info, f)
     }
 }

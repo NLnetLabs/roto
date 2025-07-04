@@ -5,19 +5,26 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{
     ast::Identifier,
     parser::meta::MetaId,
-    runtime::layout::{Layout, LayoutBuilder},
-    typechecker::scoped_display::ScopedDisplay,
+    runtime::{
+        layout::{Layout, LayoutBuilder},
+        RuntimeFunctionRef,
+    },
+    typechecker::scoped_display::TypeDisplay,
     Runtime,
 };
 
 use super::{
     expr::ResolvedPath,
     scope::{DeclarationKind, ResolvedName, ScopeGraph, ScopeRef},
-    types::{Function, Primitive, Type, TypeDefinition, TypeName},
+    types::{
+        Function, IntKind, IntSize, Primitive, Signature, Type,
+        TypeDefinition, TypeName,
+    },
     unionfind::UnionFind,
 };
 
 /// The output of the type checker that is used for lowering
+#[derive(Clone)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
@@ -41,6 +48,9 @@ pub struct TypeInfo {
 
     /// The function that is called on each function call
     pub(super) function_calls: HashMap<MetaId, Function>,
+
+    pub(super) runtime_function_signatures:
+        HashMap<RuntimeFunctionRef, Signature>,
 
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
@@ -71,6 +81,7 @@ impl TypeInfo {
             return_types: HashMap::new(),
             function_calls: HashMap::new(),
             function_scopes: HashMap::new(),
+            runtime_function_signatures: HashMap::new(),
         }
     }
 }
@@ -116,6 +127,16 @@ impl TypeInfo {
         s.into()
     }
 
+    pub fn runtime_function_signature(
+        &self,
+        func_ref: RuntimeFunctionRef,
+    ) -> Signature {
+        self.runtime_function_signatures
+            .get(&func_ref)
+            .unwrap()
+            .clone()
+    }
+
     pub fn is_numeric_type(&mut self, ty: &Type) -> bool {
         let ty = self.resolve(ty);
         match ty {
@@ -141,12 +162,33 @@ impl TypeInfo {
     }
 
     pub fn is_int_type(&mut self, ty: &Type) -> bool {
+        self.get_int_type(ty).is_some()
+    }
+
+    pub fn get_int_type(&mut self, ty: &Type) -> Option<(IntKind, IntSize)> {
         let ty = self.resolve(ty);
         match ty {
-            Type::IntVar(_) => true,
+            Type::IntVar(_) => Some((IntKind::Signed, IntSize::I32)),
             Type::Name(name) => {
                 let type_def = self.resolve_type_name(&name);
-                type_def.is_int()
+                if let TypeDefinition::Primitive(Primitive::Int(kind, size)) =
+                    type_def
+                {
+                    Some((kind, size))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn is_asn_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                matches!(type_def, TypeDefinition::Primitive(Primitive::Asn))
             }
             _ => false,
         }
@@ -200,14 +242,14 @@ impl TypeInfo {
             Type::Name(type_name) => {
                 type_def = self.resolve_type_name(type_name);
                 let TypeDefinition::Record(_, fields) = &type_def else {
-                    panic!("Can't get offsets in a type that's not a record, but {}", record.display(&self.scope_graph))
+                    panic!("Can't get offsets in a type that's not a record, but {}", record.display(self))
                 };
                 fields
             }
             _ => {
                 panic!(
                     "Can't get offsets in a type that's not a record, but {}",
-                    record.display(&self.scope_graph)
+                    record.display(self)
                 )
             }
         };
@@ -309,6 +351,14 @@ impl TypeInfo {
                 }
             }
         }
+    }
+
+    pub fn resolve_ref<'a>(&'a self, mut t: &'a Type) -> &'a Type {
+        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+            t = self.unionfind.find_ref(*x);
+        }
+
+        t
     }
 
     pub fn resolve(&mut self, t: &Type) -> Type {

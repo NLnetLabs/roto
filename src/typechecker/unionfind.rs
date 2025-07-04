@@ -47,4 +47,18 @@ impl UnionFind {
     pub fn set(&mut self, index: usize, t: Type) {
         self.inner[index] = t;
     }
+
+    pub fn find_ref(&self, index: usize) -> &Type {
+        match &self.inner[index] {
+            Type::Var(i)
+            | Type::IntVar(i)
+            | Type::FloatVar(i)
+            | Type::RecordVar(i, _)
+                if *i != index =>
+            {
+                self.find_ref(*i)
+            }
+            t => t,
+        }
+    }
 }

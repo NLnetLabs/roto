@@ -4,15 +4,15 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     ast::{self, Identifier, Match, Pattern},
-    parser::meta::Meta,
-    runtime::layout::{Layout, LayoutBuilder},
-    typechecker::types::Type,
+    ice,
+    label::LabelRef,
+    mir::{Place, Projection, Value},
+    parser::meta::{Meta, MetaId},
+    typechecker::types::{EnumVariant, Type},
 };
 
 use super::{
-    ir::{Instruction, Operand, Var, VarKind},
-    label::LabelRef,
-    value::IrType,
+    super::{Var, VarKind},
     Lowerer,
 };
 
@@ -106,12 +106,14 @@ impl Lowerer<'_> {
     /// We do this by checking which variants occur in patterns and then
     /// making those chains for all branches that match that discriminant or
     /// are `_`.
-    pub fn match_expr(&mut self, m: &Meta<Match>) -> Option<Operand> {
+    pub fn r#match(&mut self, id: MetaId, m: &Meta<Match>) -> Value {
         let ast::Match { expr, arms } = &m.node;
 
         let ty = self.type_info.type_of(expr);
 
-        let Type::Name(type_name) = ty else { panic!() };
+        let Type::Name(type_name) = ty else {
+            ice!("can only match on enums")
+        };
         let type_def = self.type_info.resolve_type_name(&type_name);
         let variants = type_def.match_patterns(&type_name.arguments).unwrap();
 
@@ -163,25 +165,21 @@ impl Lowerer<'_> {
         let default_branches: Vec<_> =
             branches.iter().filter(|(d, _, _)| d.is_none()).collect();
 
-        // We need some expression, otherwise typechecking would have failed.
-        let Some(Operand::Place(op)) = self.expr(expr) else {
-            panic!();
+        let examinee = self.expr(expr);
+        let examinee_ty = self.type_info.type_of(expr);
+        let examinee = self.assign_to_var(examinee, examinee_ty.clone());
+        let discriminant = self.undropped_tmp();
+        self.emit_assign(
+            Place::new(discriminant.clone(), Type::u8()),
+            Type::u8(),
+            Value::Discriminant(examinee.clone()),
+        );
+        let default_branch = if !default_branches.is_empty() {
+            Some(default_lbl)
+        } else {
+            None
         };
-        let discriminant = self.new_tmp();
-        self.add(Instruction::Read {
-            to: discriminant.clone(),
-            from: op.clone().into(),
-            ty: IrType::U8,
-        });
-        self.add(Instruction::Switch {
-            examinee: discriminant.into(),
-            branches: switch_branches,
-            default: if default_branches.is_empty() {
-                continue_lbl
-            } else {
-                default_lbl
-            },
-        });
+        self.emit_switch(discriminant, switch_branches, default_branch);
 
         let arm_labels: HashMap<_, _> = branches
             .iter()
@@ -199,47 +197,53 @@ impl Lowerer<'_> {
                 .iter()
                 .filter(|(d, _, _)| *d == Some(discriminant) || d.is_none())
                 .collect();
-            self.match_case(op.clone(), lbl, &branches, &arm_labels);
+            self.match_case(
+                examinee.clone(),
+                &examinee_ty,
+                Some(&variants[discriminant]),
+                lbl,
+                &branches,
+                &arm_labels,
+            );
         }
 
         if !default_branches.is_empty() {
-            self.match_case(op, default_lbl, &default_branches, &arm_labels);
+            self.match_case(
+                examinee,
+                &examinee_ty,
+                None,
+                default_lbl,
+                &default_branches,
+                &arm_labels,
+            );
         }
 
         // Here we finally create all the blocks for the expression of each
         // arm.
-        let out = self.new_tmp();
-        let mut any_assigned = false;
+        let ty = self.type_info.type_of(id);
+        let out = self.undropped_tmp();
         for (_, arm, arm_index) in branches {
             self.new_block(arm_labels[&arm_index]);
-            let ty = self.type_info.type_of(&arm.body);
-            let (val, to_drop) = self.block(&arm.body);
-            if let Some(val) = val {
-                if let Some(ty) = self.lower_type(&ty) {
-                    self.add(Instruction::Assign {
-                        to: out.clone(),
-                        val,
-                        ty,
-                    });
-                }
-                any_assigned = true;
-            }
-            self.drop(to_drop);
-            self.add(Instruction::Jump(continue_lbl));
+            let val = self.block(&arm.body);
+            self.emit_assign(
+                Place::new(out.clone(), ty.clone()),
+                ty.clone(),
+                val,
+            );
+            self.emit_jump(continue_lbl);
         }
 
         self.new_block(continue_lbl);
+        self.add_live_variable(out.clone(), ty);
 
-        if any_assigned {
-            Some(out.into())
-        } else {
-            None
-        }
+        Value::Move(out)
     }
 
     fn match_case(
         &mut self,
         examinee: Var,
+        examinee_ty: &Type,
+        variant: Option<&EnumVariant>,
         lbl: LabelRef,
         branches: &[&(Option<usize>, &ast::MatchArm, usize)],
         arm_labels: &HashMap<usize, LabelRef>,
@@ -248,7 +252,7 @@ impl Lowerer<'_> {
 
         let ident = Identifier::from("guard_0");
         let guard_lbl = self.label_store.wrap_internal(lbl, ident);
-        self.add(Instruction::Jump(guard_lbl));
+        self.emit_jump(guard_lbl);
 
         let mut next_lbl = guard_lbl;
 
@@ -261,51 +265,40 @@ impl Lowerer<'_> {
                 variant: _,
             } = &arm.pattern.node
             {
-                let mut b = LayoutBuilder::new();
-                b.add(&Layout::of::<u8>());
-                for var in &**fields {
-                    let ty = self.type_info.type_of(var);
-                    let name = self.type_info.resolved_name(var);
+                let variant = variant.unwrap();
+                for (i, field_binding) in fields.iter().enumerate() {
+                    let name = self.type_info.resolved_name(field_binding);
+                    let ty = self.type_info.type_of(field_binding);
+                    let var = Var {
+                        scope: name.scope,
+                        kind: VarKind::Explicit(name.ident),
+                    };
 
-                    // The offset of the field is (at least) 1 because of the
-                    // discriminant.
-                    let offset =
-                        b.add(&self.type_info.layout_of(&ty, self.runtime));
-
-                    let val = self.read_field(
-                        examinee.clone().into(),
-                        offset as u32,
-                        &ty,
+                    self.emit_assign(
+                        Place::new(var, ty.clone()),
+                        ty,
+                        Value::Clone(Place {
+                            var: examinee.clone(),
+                            root_ty: examinee_ty.clone(),
+                            projection: vec![Projection::VariantField(
+                                variant.name,
+                                i,
+                            )],
+                        }),
                     );
-
-                    if let Some(val) = val {
-                        let ty = self.lower_type(&ty).unwrap();
-                        self.add(Instruction::Assign {
-                            to: Var {
-                                scope: name.scope,
-                                kind: VarKind::Explicit(name.ident),
-                            },
-                            val,
-                            ty,
-                        });
-                    }
                 }
             }
 
             let ident = Identifier::from(format!("guard_{}", i + 1));
             next_lbl = self.label_store.wrap_internal(lbl, ident);
 
-            let arm_label = arm_labels[arm_index];
+            let arm_lbl = arm_labels[arm_index];
             if let Some(guard) = &arm.guard {
-                let op = self.expr(guard).unwrap();
-
-                self.add(Instruction::Switch {
-                    examinee: op,
-                    branches: vec![(1, arm_label)],
-                    default: next_lbl,
-                });
+                let op = self.expr(guard);
+                let op = self.assign_to_var(op, Type::bool());
+                self.emit_switch(op, vec![(1, arm_lbl)], Some(next_lbl));
             } else {
-                self.add(Instruction::Jump(arm_label));
+                self.emit_jump(arm_lbl);
             }
         }
     }

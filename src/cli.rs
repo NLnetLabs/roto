@@ -79,7 +79,8 @@ fn cli_inner(rt: Runtime) -> Result<(), String> {
                 .map_err(|r| r.to_string())?
                 .typecheck(rt)
                 .map_err(|r| r.to_string())?
-                .lower()
+                .lower_to_mir()
+                .lower_to_lir()
                 .codegen();
 
             if let Err(()) = p.run_tests(()) {
@@ -92,7 +93,8 @@ fn cli_inner(rt: Runtime) -> Result<(), String> {
                 .map_err(|r| r.to_string())?
                 .typecheck(rt)
                 .map_err(|r| r.to_string())?
-                .lower()
+                .lower_to_mir()
+                .lower_to_lir()
                 .codegen();
 
             let f = p

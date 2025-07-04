@@ -6,14 +6,13 @@
 
 use log::trace;
 
-use super::ir::{Function, Operand, Var};
 use crate::{
     ast::Identifier,
-    lower::{
-        ir::{FloatCmp, Instruction, IntCmp, VarKind},
-        value::IrValue,
+    lir::{
+        value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
+        ValueOrSlot, Var, VarKind,
     },
-    runtime::{RuntimeConstant, RuntimeFunctionRef},
+    runtime::RuntimeFunctionRef,
     Runtime,
 };
 use std::collections::HashMap;
@@ -249,7 +248,6 @@ pub fn eval(
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
-    constants: &[RuntimeConstant],
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Option<IrValue> {
@@ -271,8 +269,9 @@ pub fn eval(
         instructions.extend(block.instructions.clone());
     }
 
-    let constants: HashMap<Identifier, &[u8]> = constants
-        .iter()
+    let constants: HashMap<Identifier, &[u8]> = rt
+        .constants
+        .values()
         .map(|g| (g.name, g.bytes.as_ref()))
         .collect();
 
@@ -321,6 +320,13 @@ pub fn eval(
         );
     }
 
+    for (var, val_or_slot) in &f.variables {
+        if let ValueOrSlot::StackSlot(layout) = val_or_slot {
+            let ptr = mem.allocate(layout.size());
+            vars.insert(var.clone(), IrValue::Pointer(ptr));
+        }
+    }
+
     let mut program_counter = block_map[&f.entry_block];
 
     loop {
@@ -365,6 +371,13 @@ pub fn eval(
                 let f = p.iter().find(|f| f.name == *func).unwrap();
 
                 mem.push_frame(program_counter, to.clone().map(|to| to.0));
+
+                for (var, val_or_slot) in &f.variables {
+                    if let ValueOrSlot::StackSlot(layout) = val_or_slot {
+                        let ptr = mem.allocate(layout.size());
+                        vars.insert(var.clone(), IrValue::Pointer(ptr));
+                    }
+                }
 
                 if let Some(return_ptr) = return_ptr {
                     vars.insert(
@@ -466,24 +479,9 @@ pub fn eval(
                 };
                 vars.insert(to.clone(), IrValue::Bool(res));
             }
-            Instruction::Eq { to, left, right } => {
-                let left = eval_operand(&vars, left);
-                let right = eval_operand(&vars, right);
-                vars.insert(to.clone(), IrValue::Bool(left.eq(right)));
-            }
             Instruction::Not { to, val } => {
                 let val = eval_operand(&vars, val).as_bool();
                 vars.insert(to.clone(), IrValue::Bool(val));
-            }
-            Instruction::And { to, left, right } => {
-                let left = eval_operand(&vars, left).as_bool();
-                let right = eval_operand(&vars, right).as_bool();
-                vars.insert(to.clone(), IrValue::Bool(left && right));
-            }
-            Instruction::Or { to, left, right } => {
-                let left = eval_operand(&vars, left).as_bool();
-                let right = eval_operand(&vars, right).as_bool();
-                vars.insert(to.clone(), IrValue::Bool(left || right));
             }
             Instruction::Add { to, left, right } => {
                 let left = eval_operand(&vars, left);
@@ -564,11 +562,6 @@ pub fn eval(
                 };
                 vars.insert(to.clone(), res);
             }
-            Instruction::Extend { to, ty, from } => {
-                let val = eval_operand(&vars, from);
-                let val = val.as_vec();
-                vars.insert(to.clone(), IrValue::from_slice(ty, &val));
-            }
             Instruction::Offset { to, from, offset } => {
                 let &IrValue::Pointer(from) = eval_operand(&vars, from)
                 else {
@@ -576,10 +569,6 @@ pub fn eval(
                 };
                 let new = mem.offset_by(from, *offset as usize);
                 vars.insert(to.clone(), IrValue::Pointer(new));
-            }
-            Instruction::Alloc { to, layout } => {
-                let pointer = mem.allocate(layout.size());
-                vars.insert(to.clone(), IrValue::Pointer(pointer));
             }
             Instruction::Initialize { to, bytes, layout } => {
                 // There are many cases where we only want to initialize the
@@ -608,12 +597,7 @@ pub fn eval(
                 let val = IrValue::from_slice(ty, res);
                 vars.insert(to.clone(), val);
             }
-            Instruction::Copy {
-                to,
-                from,
-                size,
-                clone,
-            } => {
+            Instruction::Copy { to, from, size } => {
                 let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
                     panic!()
                 };
@@ -623,14 +607,21 @@ pub fn eval(
                     panic!()
                 };
 
-                match clone {
-                    Some(clone) => {
-                        let to = mem.get(to);
-                        let from = mem.get(from);
-                        unsafe { (clone)(to, from) }
-                    }
-                    None => mem.copy(to, from, *size as usize),
-                }
+                mem.copy(to, from, *size as usize)
+            }
+            Instruction::Clone { to, from, clone_fn } => {
+                let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
+                    panic!()
+                };
+
+                let &IrValue::Pointer(from) = eval_operand(&vars, from)
+                else {
+                    panic!()
+                };
+
+                let to = mem.get(to);
+                let from = mem.get(from);
+                unsafe { (clone_fn)(to, from) }
             }
             Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {

@@ -9,7 +9,10 @@ mod ast;
 mod cli;
 mod codegen;
 mod file_tree;
-mod lower;
+mod ir_printer;
+mod label;
+mod lir;
+mod mir;
 mod module;
 pub(crate) mod parser;
 mod pipeline;
@@ -22,9 +25,11 @@ pub use cli::cli;
 
 pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
-pub use lower::eval::Memory;
-pub use lower::value::IrValue;
-pub use pipeline::{interpret, Compiled, Lowered, RotoError, RotoReport};
+pub use lir::eval::Memory;
+pub use lir::value::IrValue;
+pub use pipeline::{
+    interpret, Compiled, LoweredToLir, RotoError, RotoReport,
+};
 pub use roto_macros::{
     roto_function, roto_method, roto_static_method, Context,
 };

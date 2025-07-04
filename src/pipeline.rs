@@ -9,14 +9,13 @@ use crate::{
         Module, TypedFunc,
     },
     file_tree::SourceFile,
-    lower::{
+    label::LabelStore,
+    lir::{
         self,
         eval::{self, Memory},
-        ir,
-        label::LabelStore,
         value::IrValue,
-        IrFunction,
     },
+    mir,
     module::{ModuleTree, Parsed},
     parser::{
         meta::{Span, Spans},
@@ -24,7 +23,7 @@ use crate::{
     },
     runtime::{
         context::{Context, ContextDescription},
-        Runtime, RuntimeConstant, RuntimeFunctionRef,
+        Runtime, RuntimeFunctionRef,
     },
     typechecker::{
         error::{Level, TypeError},
@@ -32,6 +31,12 @@ use crate::{
     },
     FileTree,
 };
+
+#[cfg(feature = "logger")]
+use crate::ir_printer::{IrPrinter, Printable};
+
+#[cfg(feature = "logger")]
+use log::info;
 
 #[derive(Debug)]
 pub enum RotoError {
@@ -58,12 +63,21 @@ pub struct TypeChecked {
     context_type: ContextDescription,
 }
 
-/// Compiler stage: IR
-pub struct Lowered {
+/// Compiler stage: MIR
+#[allow(dead_code)]
+pub struct LoweredToMir {
     runtime: Runtime,
-    pub ir: Vec<ir::Function>,
-    runtime_functions: HashMap<RuntimeFunctionRef, IrFunction>,
-    runtime_constants: Vec<RuntimeConstant>,
+    pub ir: mir::Mir,
+    label_store: LabelStore,
+    type_info: TypeInfo,
+    context_type: ContextDescription,
+}
+
+/// Compiler stage: LIR
+pub struct LoweredToLir {
+    runtime: Runtime,
+    pub ir: lir::Lir,
+    runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_type: ContextDescription,
@@ -214,7 +228,11 @@ pub fn interpret(
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Result<Option<IrValue>, RotoReport> {
-    let lowered = FileTree::read(path).parse()?.typecheck(runtime)?.lower();
+    let lowered = FileTree::read(path)
+        .parse()?
+        .typecheck(runtime)?
+        .lower_to_mir()
+        .lower_to_lir();
 
     let res = lowered.eval(mem, ctx, args);
     Ok(res)
@@ -257,75 +275,104 @@ impl Parsed {
 }
 
 impl TypeChecked {
-    pub fn lower(self) -> Lowered {
+    pub fn lower_to_mir(&self) -> LoweredToMir {
         let TypeChecked {
             module_tree,
-            mut type_info,
+            type_info,
             runtime,
             context_type,
         } = self;
-        let mut runtime_functions = HashMap::new();
+
+        let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
-        let ir = lower::lower(
-            &module_tree,
+        let ir = mir::lower_to_mir(
+            module_tree,
+            runtime,
             &mut type_info,
-            &mut runtime_functions,
             &mut label_store,
-            &runtime,
         );
 
         #[cfg(feature = "logger")]
         {
-            use ir::IrPrinter;
-            let _ = env_logger::try_init();
             if log::log_enabled!(log::Level::Info) {
-                let s = IrPrinter {
-                    scope_graph: &type_info.scope_graph,
+                let printer = IrPrinter {
+                    type_info: &type_info,
                     label_store: &label_store,
-                }
-                .program(&ir);
-                println!("{s}");
+                    scope: None,
+                };
+                let s = ir.print(&printer);
+                info!("\n{s}");
             }
         }
 
-        let runtime_constants = runtime.constants.values().cloned().collect();
-
-        Lowered {
+        LoweredToMir {
             ir,
-            runtime,
-            runtime_functions,
-            runtime_constants,
+            runtime: runtime.clone(),
             label_store,
-            context_type,
+            context_type: context_type.clone(),
             type_info,
         }
     }
 }
 
-impl Lowered {
+impl LoweredToMir {
+    pub fn lower_to_lir(self) -> LoweredToLir {
+        let LoweredToMir {
+            runtime,
+            ir,
+            mut label_store,
+            mut type_info,
+            context_type,
+        } = self;
+
+        let mut runtime_functions = HashMap::new();
+        let mut ctx = lir::lower::LowerCtx {
+            runtime: &runtime,
+            type_info: &mut type_info,
+            label_store: &mut label_store,
+            runtime_functions: &mut runtime_functions,
+        };
+        let ir = lir::lower_to_lir(&mut ctx, ir);
+
+        #[cfg(feature = "logger")]
+        {
+            if log::log_enabled!(log::Level::Info) {
+                let printer = IrPrinter {
+                    type_info: &type_info,
+                    label_store: &label_store,
+                    scope: None,
+                };
+                let s = ir.print(&printer);
+                info!("\n{s}");
+            }
+        }
+
+        LoweredToLir {
+            runtime,
+            ir,
+            label_store,
+            type_info,
+            context_type,
+            runtime_functions,
+        }
+    }
+}
+
+impl LoweredToLir {
     pub fn eval(
         &self,
         mem: &mut Memory,
         ctx: IrValue,
         args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(
-            &self.runtime,
-            &self.ir,
-            "main",
-            mem,
-            &self.runtime_constants,
-            ctx,
-            args,
-        )
+        eval::eval(&self.runtime, &self.ir.functions, "main", mem, ctx, args)
     }
 
     pub fn codegen(self) -> Compiled {
         let module = codegen::codegen(
             &self.runtime,
-            &self.ir,
+            &self.ir.functions,
             &self.runtime_functions,
-            &self.runtime_constants,
             self.label_store,
             self.type_info,
             self.context_type,

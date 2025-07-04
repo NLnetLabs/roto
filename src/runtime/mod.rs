@@ -42,6 +42,7 @@ use core::{slice, str};
 use std::{
     any::{type_name, TypeId},
     collections::HashMap,
+    fmt::Display,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr,
     sync::Arc,
@@ -184,6 +185,12 @@ pub struct RuntimeFunction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RuntimeFunctionRef(usize);
+
+impl Display for RuntimeFunctionRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl RuntimeFunction {
     pub fn get_ref(&self) -> RuntimeFunctionRef {
@@ -911,6 +918,8 @@ impl Runtime {
         /// ```
         #[roto_static_method(rt, Prefix, new)]
         fn prefix_new(ip: IpAddr, len: u8) -> Prefix {
+            dbg!();
+            dbg!(ip, len);
             Prefix::new(ip, len).unwrap()
         }
 

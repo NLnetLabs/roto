@@ -4,7 +4,7 @@ use crate::{
     ast::Identifier,
     parser::meta::Meta,
     runtime::{layout::Layout, RuntimeFunctionRef},
-    typechecker::scope::{ScopeGraph, ScopeRef},
+    typechecker::scope::ScopeRef,
 };
 use core::fmt;
 use std::{
@@ -14,7 +14,9 @@ use std::{
     sync::Arc,
 };
 
-use super::{scope::ResolvedName, scoped_display::ScopedDisplay};
+use super::{
+    info::TypeInfo, scope::ResolvedName, scoped_display::TypeDisplay,
+};
 
 impl Type {
     pub fn unit() -> Type {
@@ -285,10 +287,10 @@ impl Display for Primitive {
     }
 }
 
-impl ScopedDisplay for Type {
+impl TypeDisplay for Type {
     fn fmt(
         &self,
-        graph: &ScopeGraph,
+        type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         let fmt_args = |args: &[Type]| {
@@ -296,15 +298,16 @@ impl ScopedDisplay for Type {
             let mut iter = args.iter();
             let mut s = String::new();
             if let Some(i) = iter.next() {
-                write!(s, "{}", i.display(graph))?;
+                write!(s, "{}", i.display(type_info))?;
             }
             for i in iter {
-                write!(s, ", {}", i.display(graph))?;
+                write!(s, ", {}", i.display(type_info))?;
             }
             Ok(s)
         };
 
-        match self {
+        let ty = type_info.resolve_ref(self);
+        match ty {
             Type::Var(_) => write!(f, "_"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
             Type::IntVar(_) => write!(f, "{{integer}}"),
@@ -316,7 +319,7 @@ impl ScopedDisplay for Type {
                     fields
                         .iter()
                         .map(|(s, t)| {
-                            format!("{s}: {}", t.display(graph))
+                            format!("{s}: {}", t.display(type_info))
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -328,29 +331,29 @@ impl ScopedDisplay for Type {
                     f,
                     "function({}) -> {}",
                     fmt_args(args)?,
-                    ret.display(graph)
+                    ret.display(type_info)
                 )
             }
-            Type::Name(x) => write!(f, "{}", x.display(graph)),
+            Type::Name(x) => write!(f, "{}", x.display(type_info)),
         }
     }
 }
 
-impl ScopedDisplay for TypeDefinition {
+impl TypeDisplay for TypeDefinition {
     fn fmt(
         &self,
-        graph: &ScopeGraph,
+        type_info: &TypeInfo,
         f: &mut std::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
         match self {
             TypeDefinition::Enum(type_name, _) => {
-                Display::fmt(&type_name.display(graph), f)
+                Display::fmt(&type_name.display(type_info), f)
             }
             TypeDefinition::Record(type_name, _) => {
-                Display::fmt(&type_name.display(graph), f)
+                Display::fmt(&type_name.display(type_info), f)
             }
             TypeDefinition::Runtime(resolved_name, _) => {
-                Display::fmt(&resolved_name.display(graph), f)
+                Display::fmt(&resolved_name.display(type_info), f)
             }
             TypeDefinition::Primitive(primitive) => {
                 Display::fmt(primitive, f)
@@ -378,21 +381,21 @@ impl TypeName {
     }
 }
 
-impl ScopedDisplay for TypeName {
+impl TypeDisplay for TypeName {
     fn fmt(
         &self,
-        graph: &ScopeGraph,
+        type_info: &TypeInfo,
         f: &mut std::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
-        Display::fmt(&self.name.display(graph), f)?;
+        Display::fmt(&self.name.display(type_info), f)?;
         let mut args = self.arguments.iter();
         if let Some(arg) = args.next() {
             f.write_char('[')?;
-            Display::fmt(&arg.display(graph), f)?;
+            Display::fmt(&arg.display(type_info), f)?;
             for arg in args {
                 f.write_char(',')?;
                 f.write_char(' ')?;
-                Display::fmt(&arg.display(graph), f)?;
+                Display::fmt(&arg.display(type_info), f)?;
             }
             f.write_char(']')?;
         }
@@ -517,25 +520,16 @@ pub enum FunctionKind {
 }
 
 impl Function {
-    pub fn new<T: Into<Type>>(
-        kind: FunctionKind,
+    pub fn new(
         name: ResolvedName,
         vars: &[Identifier],
-        parameter_types: impl IntoIterator<Item = T>,
-        return_type: impl Into<Type>,
+        signature: Signature,
         definition: FunctionDefinition,
     ) -> Self {
         Self {
             name,
             vars: vars.to_vec(),
-            signature: Signature {
-                kind,
-                parameter_types: parameter_types
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
-                return_type: return_type.into(),
-            },
+            signature,
             definition,
         }
     }

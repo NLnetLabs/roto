@@ -9,7 +9,8 @@ use crate::{
 };
 
 use super::{
-    scoped_display::ScopedDisplay,
+    info::TypeInfo,
+    scoped_display::TypeDisplay,
     types::{FunctionDefinition, TypeDefinition},
     Type,
 };
@@ -32,13 +33,13 @@ pub struct ResolvedName {
     pub ident: Identifier,
 }
 
-impl ScopedDisplay for ResolvedName {
+impl TypeDisplay for ResolvedName {
     fn fmt(
         &self,
-        graph: &ScopeGraph,
+        type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        let scope = graph.print_scope(self.scope);
+        let scope = type_info.scope_graph.print_scope(self.scope);
         if scope.is_empty() {
             write!(f, "{}", self.ident)
         } else {
@@ -92,6 +93,7 @@ pub enum StubDeclarationKind {
     Module,
 }
 
+#[derive(Clone)]
 pub struct ScopeGraph {
     stub_declarations: BTreeMap<ResolvedName, StubDeclaration>,
     pub declarations: BTreeMap<ResolvedName, Declaration>,
@@ -99,6 +101,7 @@ pub struct ScopeGraph {
 }
 
 /// A type checking scope
+#[derive(Clone)]
 struct Scope {
     scope_type: ScopeType,
     parent: Option<ScopeRef>,
@@ -108,6 +111,7 @@ struct Scope {
 /// The syntactic structure that a scope represents
 ///
 /// This is used primarily for printing a roughly human-readable name.
+#[derive(Clone)]
 pub enum ScopeType {
     Root,
     Then(usize),
@@ -117,6 +121,7 @@ pub enum ScopeType {
     MatchArm(usize, Option<usize>),
 }
 
+#[derive(Clone)]
 pub struct ModuleScope {
     pub name: ResolvedName,
     pub parent_module: Option<ScopeRef>,

@@ -77,13 +77,13 @@ pub enum ResolvedPath {
 pub struct PathValue {
     pub name: ResolvedName,
     pub kind: ValueKind,
-    pub ty: Type,
+    pub root_ty: Type,
     pub fields: Vec<(Identifier, Type)>,
 }
 
 impl PathValue {
     pub fn final_type(&self) -> &Type {
-        self.fields.last().map_or(&self.ty, |(_, ty)| ty)
+        self.fields.last().map_or(&self.root_ty, |(_, ty)| ty)
     }
 }
 
@@ -272,7 +272,7 @@ impl TypeChecker {
                     ResolvedPath::Value(PathValue {
                         name: _,
                         kind: _,
-                        ty,
+                        root_ty: ty,
                         fields,
                     }) => {
                         if let Some(f) = fields.last() {
@@ -445,6 +445,7 @@ impl TypeChecker {
             Bool(_) => Type::bool(),
             Integer(_) => self.fresh_int(),
             Float(_) => self.fresh_float(),
+            Unit => Type::unit(),
         };
 
         self.unify(&ctx.expected_type, &t, span, None)?;
@@ -1092,7 +1093,7 @@ impl TypeChecker {
                                 value: PathValue {
                                     name: dec.name,
                                     kind: kind.clone(),
-                                    ty: root_ty.clone(),
+                                    root_ty: root_ty.clone(),
                                     fields,
                                 },
                                 name: function.name,
@@ -1117,7 +1118,7 @@ impl TypeChecker {
                 Ok(ResolvedPath::Value(PathValue {
                     name: dec.name,
                     kind: kind.clone(),
-                    ty: root_ty.clone(),
+                    root_ty: root_ty.clone(),
                     fields,
                 }))
             }
