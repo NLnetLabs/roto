@@ -29,12 +29,17 @@ Literals
 Roto supports literals for primitive types:
 
 - ``0``, ``1``, ``34``, ``-10``, ``0xFF`` etc. for integers
+- ``0.0``, ``10.``, ``10e5``, ``5E-5`` etc. for floating point numbers
 - ``true`` and ``false`` for booleans
 - ``0.0.0.0``, ``2345:0425:2CA1:0000:0000:0567:5673:23b5``, ``0::``, etc.
   for IP addresses
 - ``0.0.0.0/10`` for prefixes
 - ``AS1234`` for AS numbers
 - ``"Hello"`` for strings
+
+.. note::
+    Floating point literals need either a ``.``, ``e`` or ``E`` to distinguish
+    them from integer literals.
 
 Primitive types
 ---------------
@@ -44,14 +49,15 @@ There are several types at Roto's core, which can be expressed as literals.
 - :roto:ref:`bool`: booleans
 - :roto:ref:`u8`, :roto:ref:`u16`, :roto:ref:`u32`, :roto:ref:`u64`: unsigned integers of 8, 16, 32 and 64 bits, respectively
 - :roto:ref:`i8`, :roto:ref:`i16`, :roto:ref:`i32`, :roto:ref:`i64`: signed integers of 8, 16, 32 and 64 bits, respectively
+- :roto:ref:`f32`, :roto:ref:`f64`: floating point numbers of 32 and 64 bits, respectively
+- :roto:ref:`String`: Strings
 - :roto:ref:`IpAddr`: IP address
 - :roto:ref:`Prefix`: prefixes
 - :roto:ref:`Asn`: AS number
-- :roto:ref:`String`: Strings
 
 There are many more types available that have more to do with BGP. These are
-described elsewhere. Note that Roto is case sensitive; writing the ``Asn`` type as
-``ASN`` or ``asn`` won't work.
+described elsewhere. Note that Roto is case sensitive; writing the ``String`` type as
+``STRING`` or ``string`` won't work.
 
 Integers
 --------
