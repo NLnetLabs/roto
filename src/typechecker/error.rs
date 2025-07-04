@@ -186,14 +186,28 @@ impl TypeChecker {
         new_declaration: &Meta<Identifier>,
         old_declaration: MetaId,
     ) -> TypeError {
+        let (item_type, name) = if let Some(rest) =
+            new_declaration.as_str().strip_prefix("test#")
+        {
+            ("test", rest)
+        } else {
+            ("item", new_declaration.as_str())
+        };
+
         TypeError {
             description: format!(
-                "type `{new_declaration}` is declared multiple times"
+                "{item_type} `{name}` is declared multiple times"
             ),
             location: new_declaration.id,
             labels: vec![
-                Label::error("cannot overwrite type", new_declaration.id),
-                Label::info("previously declared here", old_declaration),
+                Label::error(
+                    format!("`{name}` redefined here"),
+                    new_declaration.id,
+                ),
+                Label::info(
+                    format!("`{name}` previously declared here"),
+                    old_declaration,
+                ),
             ],
         }
     }
