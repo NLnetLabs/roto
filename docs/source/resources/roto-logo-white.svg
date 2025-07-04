@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   id="Layer_1"
+   viewBox="0 0 1417.32 256.17"
+   width="1417.32px"
+   height="256.17px"
+   version="1.1"
+   sodipodi:docname="roto-logo-white.svg"
+   inkscape:version="1.4.2 (ebf0e940d0, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview8"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="true"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.36289857"
+     inkscape:cx="938.27871"
+     inkscape:cy="582.80748"
+     inkscape:window-width="1962"
+     inkscape:window-height="1276"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="Layer_1" />
+  <defs
+     id="defs1">
+    <style
+       id="style1">
+      .cls-1 {
+        fill: #fff;
+      }
+    </style>
+  </defs>
+  <g
+     id="g8"
+     transform="matrix(1.651649,0,0,1.651649,-461.79755,-83.463593)">
+    <path
+       class="cls-1"
+       d="m 502.99497,184.48 -26.2,-37.26 h -31.81 v 37.26 h -32.33 V 71.68 h 78.26 c 30.62,0 45.93,10.21 45.93,36.41 v 2.38 c 0,19.74 -8.17,30.28 -24.67,34.54 l 29.26,39.47 h -38.45 z m -58.01,-85.92 v 24.33 h 44.57 c 10.21,0 13.95,-4.08 13.95,-11.23 v -2.21 c 0,-6.98 -3.91,-10.89 -13.95,-10.89 z"
+       id="path2" />
+    <path
+       class="cls-1"
+       d="m 554.57497,133.78 v -11.74 c 0,-35.05 23.31,-52.57 75.88,-52.74 52.57,0 75.88,17.69 75.88,52.74 v 11.74 c 0,35.39 -23.31,53.08 -75.88,53.08 -52.57,0.17 -75.88,-17.69 -75.88,-53.08 z m 118.07,-1.7 v -8.34 c 0,-19.39 -12.42,-26.2 -42.19,-26.2 -29.77,0 -42.19,6.81 -42.19,26.2 v 8.34 c 0,19.57 12.59,26.54 42.19,26.54 29.6,0 42.19,-6.98 42.19,-26.54 z"
+       id="path3" />
+    <path
+       class="cls-1"
+       d="m 839.88497,71.69 v 28.07 h -44.06 v 84.72 h -32.32 V 99.76 h -44.06 V 71.69 h 120.45 z"
+       id="path4" />
+    <path
+       class="cls-1"
+       d="m 852.90497,133.78 v -11.74 c 0,-35.05 23.31,-52.57 75.88,-52.74 52.57,0 75.88003,17.69 75.88003,52.74 v 11.74 c 0,35.39 -23.31003,53.08 -75.88003,53.08 -52.57,0.17 -75.88,-17.69 -75.88,-53.08 z m 118.07,-1.7 v -8.34 c 0,-19.39 -12.42,-26.2 -42.19,-26.2 -29.77,0 -42.19,6.81 -42.19,26.2 v 8.34 c 0,19.57 12.59,26.54 42.19,26.54 29.6,0 42.19,-6.98 42.19,-26.54 z"
+       id="path5" />
+  </g>
+</svg>
