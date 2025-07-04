@@ -118,6 +118,28 @@ impl Parser<'_, '_> {
 
                 // Semicolon is allowed but not mandatory after match
                 self.next_is(Token::SemiColon);
+            } else if self.peek_is(Token::Keyword(Keyword::While)) {
+                let expr = self.while_expr()?;
+                if self.peek_is(Token::CurlyRight) {
+                    let end = self.take(Token::CurlyRight)?;
+                    let span = start.merge(end);
+                    return Ok(self.spans.add(
+                        span,
+                        Block {
+                            imports,
+                            stmts,
+                            last: Some(Box::new(expr)),
+                        },
+                    ));
+                }
+                let stmt = Meta {
+                    id: expr.id,
+                    node: Stmt::Expr(expr),
+                };
+                stmts.push(stmt);
+
+                // Semicolon is allowed but not mandatory after while
+                self.next_is(Token::SemiColon);
             } else {
                 let expr = self.expr()?;
                 if self.next_is(Token::SemiColon) {
@@ -477,6 +499,10 @@ impl Parser<'_, '_> {
             return self.match_expr();
         }
 
+        if self.peek_is(Token::Keyword(Keyword::While)) {
+            return self.while_expr();
+        }
+
         if matches!(
             self.peek(),
             Some(
@@ -566,6 +592,16 @@ impl Parser<'_, '_> {
                 .spans
                 .add(span, Expr::IfElse(Box::new(cond), then_block, None)))
         }
+    }
+
+    /// Parse a while expression
+    fn while_expr(&mut self) -> ParseResult<Meta<Expr>> {
+        let start = self.take(Token::Keyword(Keyword::While))?;
+        let cond = self.expr_no_records()?;
+        let block = self.block()?;
+
+        let span = start.merge(self.spans.get(&block));
+        Ok(self.spans.add(span, Expr::While(Box::new(cond), block)))
     }
 
     /// Parse a match expression

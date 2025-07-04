@@ -116,6 +116,7 @@ pub enum ScopeType {
     Root,
     Then(usize),
     Else(usize),
+    WhileBody(usize),
     Module(ModuleScope),
     Function(Identifier),
     MatchArm(usize, Option<usize>),
@@ -469,6 +470,9 @@ impl ScopeGraph {
                 }
                 ScopeType::MatchArm(idx, None) => {
                     format!("$match_{idx}_arm_default")
+                }
+                ScopeType::WhileBody(idx) => {
+                    format!("$while_body_{idx}")
                 }
             };
             idents.push(ident);
