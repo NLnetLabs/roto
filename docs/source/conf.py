@@ -264,7 +264,7 @@ class RotoLexer(RegexLexer):
             (r'#.*?$', token.Comment.Singleline),
             (
                 words(
-                    ('type', 'function', 'filtermap', 'filter', 'match', 'let', 'if', 'else', 'accept', 'reject', 'return', 'super', 'pkg', 'std', 'dep', 'import'),
+                    ('type', 'fn', 'filtermap', 'filter', 'match', 'let', 'if', 'else', 'accept', 'reject', 'return', 'super', 'pkg', 'std', 'dep', 'import'),
                     suffix=r'\b'
                 ),
                 token.Keyword
