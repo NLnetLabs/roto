@@ -13,7 +13,7 @@ expect and the name of the function (step 3).
 
 Finally, we call the extracted Roto function with the `call` method (step 4). We
 pass it a context of ``&mut ()`` (explained in :doc:`add_context`) and the
-parameter `4`.
+parameter ``4``.
 
 .. code-block:: rust
 
