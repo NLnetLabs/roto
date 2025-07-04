@@ -18,6 +18,7 @@ impl Printable for Mir {
 
 impl Printable for Function {
     fn print(&self, printer: &IrPrinter) -> String {
+        use std::fmt::Write;
         let mut s = String::new();
 
         let printer = IrPrinter {
@@ -26,7 +27,8 @@ impl Printable for Function {
             label_store: printer.label_store,
         };
 
-        s.push_str(&format!(
+        let _ = write!(
+            &mut s,
             "fn {}({}) {{",
             self.name,
             self.parameters
@@ -34,20 +36,20 @@ impl Printable for Function {
                 .map(|a| a.print(&printer))
                 .collect::<Vec<_>>()
                 .join(", ")
-        ));
+        );
 
         s.push('\n');
         for (var, ty) in &self.variables {
             let var = var.print(&printer);
             let ty = ty.display(printer.type_info);
-            s.push_str(&format!("  {var}: {ty}\n"));
+            let _ = write!(&mut s, "  {var}: {ty}\n");
         }
 
         let blocks = self.blocks.iter();
         for b in blocks {
             s.push('\n');
             for line in b.print(&printer).lines() {
-                s.push_str(&format!("  {line}\n"));
+                let _ = write!(&mut s, "  {line}\n");
             }
         }
 

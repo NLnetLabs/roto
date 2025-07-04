@@ -1,6 +1,6 @@
 //! Mid-level intermediate representation (MIR)
 //!
-//! This is the first intermediate representation. It is baed on basic blocks
+//! This is the first intermediate representation. It is based on basic blocks
 //! and simple expressions. We do not distinguish between types that are stored
 //! in stack slots and types that are cranelift values; all types are treated
 //! equally in this representation.

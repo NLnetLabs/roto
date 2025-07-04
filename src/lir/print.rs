@@ -24,7 +24,8 @@ impl Printable for Function {
             label_store: printer.label_store,
         };
 
-        s.push_str(&format!(
+        let _ = write!(
+            &mut s,
             "fn {}({}) {}{{",
             self.name,
             self.ir_signature
@@ -44,7 +45,7 @@ impl Printable for Function {
                     format!("-> {t} ")
                 })
                 .unwrap_or_default(),
-        ));
+        );
 
         s.push('\n');
         for (var, ty) in &self.variables {
@@ -59,13 +60,13 @@ impl Printable for Function {
                     )
                 }
             };
-            s.push_str(&format!("  {var}: {ty}\n"));
+            let _ = write!(&mut s, "  {var}: {ty}\n");
         }
 
         for b in &self.blocks {
             writeln!(s).unwrap();
             for line in b.print(&printer).lines() {
-                s.push_str(&format!("  {line}\n"));
+                let _ = write!(&mut s, "  {line}\n");
             }
         }
 
