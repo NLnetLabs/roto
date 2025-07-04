@@ -48,6 +48,18 @@ struct Lowerer<'c, 'r> {
     variables: Vec<(Var, ValueOrSlot)>,
 }
 
+/// A location is a lot like a [`mir::Place`], but it makes the distinction
+/// that a reference type (which is placed in a stack slot) always gets the
+/// `Pointer` variant. If the `mir::Place` has any projections, the location
+/// is also a `Pointer`, because it then represents some offset in a stack
+/// slot.
+///
+/// So we get the following mapping:
+///
+/// - a variable of a value type becomes `Location::Var`.
+/// - a variable of a reference type becomes `Location::Pointer` with offset 0
+/// - a variable of any type with some projection becomes a `Location::Pointer`
+///   with some offset.
 enum Location {
     Var(Var),
     Pointer { base: Var, offset: usize },
