@@ -48,8 +48,8 @@ enum Command {
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
 ///  - `run`: run the main function of a script
-pub fn cli(rt: Runtime) {
-    match cli_inner(rt) {
+pub fn cli(rt: &Runtime) {
+    match cli_inner(&rt) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
             eprintln!("{err}");
@@ -58,7 +58,7 @@ pub fn cli(rt: Runtime) {
     }
 }
 
-fn cli_inner(rt: Runtime) -> Result<(), String> {
+fn cli_inner(rt: &Runtime) -> Result<(), String> {
     let cli = Cli::parse();
 
     match &cli.command {

@@ -66,34 +66,45 @@ impl Ty {
     }
 }
 
-pub static GLOBAL_TYPE_REGISTRY: LazyLock<Mutex<TypeRegistry>> =
+static GLOBAL_TYPE_REGISTRY: LazyLock<Mutex<TypeRegistry>> =
     LazyLock::new(|| Mutex::new(TypeRegistry::default()));
 
 /// A map from [`TypeId`] to a [`Ty`], which is a description of the type
 #[derive(Clone, Default)]
 pub struct TypeRegistry {
-    map: HashMap<TypeId, Ty>,
+    map: HashMap<TypeId, &'static Ty>,
 }
 
 impl TypeRegistry {
-    pub fn store<T: 'static>(&mut self, description: TypeDescription) -> Ty {
+    pub fn store<T: 'static>(description: TypeDescription) -> Ty {
         let ty = Ty::new::<T>(description);
-        self.map.entry(ty.type_id).or_insert(ty).clone()
+        GLOBAL_TYPE_REGISTRY
+            .lock()
+            .unwrap()
+            .map
+            .entry(ty.type_id)
+            .or_insert_with(|| {
+                // Leaking is fine because we only store each type once in the
+                // global TypeRegistry.
+                Box::leak(Box::new(ty))
+            })
+            .clone()
     }
 
-    pub fn get(&self, id: TypeId) -> Option<&Ty> {
-        self.map.get(&id)
+    pub fn get(id: TypeId) -> Option<&'static Ty> {
+        let registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
+        registry.map.get(&id).map(|v| &**v)
     }
 
     /// Register a type implementing [`Reflect`]
-    pub fn resolve<T: Reflect>(&mut self) -> Ty {
-        T::resolve(self)
+    pub fn resolve<T: Reflect>() -> Ty {
+        T::resolve()
     }
 }
 
-/// A type that can register itself into a [`TypeRegistry`].
+/// A type that can register itself into the global type registry.
 ///
-/// Via the [`TypeRegistry`], it is then possible to query for information
+/// Via the type registry, it is then possible to query for information
 /// about this type. Reflection is recursive for types such as [`Verdict`],
 /// [`Result`] and [`Option`].
 ///
@@ -130,10 +141,10 @@ pub trait Reflect: Sized + 'static {
         Self::AsParam::from_ir_value(mem, value)
     }
 
-    /// Put information about this type into the [`TypeRegistry`]
+    /// Put information about this type into the global type registry
     ///
     /// The information is also returned for direct use.
-    fn resolve(registry: &mut TypeRegistry) -> Ty;
+    fn resolve() -> Ty;
 
     /// Turn this value into bytes
     ///
@@ -201,12 +212,12 @@ where
         }
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        let t = A::resolve(registry).type_id;
-        let e = R::resolve(registry).type_id;
+    fn resolve() -> Ty {
+        let t = A::resolve().type_id;
+        let e = R::resolve().type_id;
 
         let desc = TypeDescription::Verdict(t, e);
-        registry.store::<Self>(desc)
+        TypeRegistry::store::<Self>(desc)
     }
 }
 
@@ -228,11 +239,11 @@ impl<T: Reflect> Reflect for Option<T> {
         }
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        let t = T::resolve(registry).type_id;
+    fn resolve() -> Ty {
+        let t = T::resolve().type_id;
 
         let desc = TypeDescription::Option(t);
-        registry.store::<Self>(desc)
+        TypeRegistry::store::<Self>(desc)
     }
 }
 
@@ -268,11 +279,11 @@ impl<T: 'static + Clone> Reflect for Val<T> {
         transformed
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        let t = registry.store::<T>(TypeDescription::Leaf).type_id;
+    fn resolve() -> Ty {
+        let t = TypeRegistry::store::<T>(TypeDescription::Leaf).type_id;
 
         let desc = TypeDescription::Val(t);
-        registry.store::<Self>(desc)
+        TypeRegistry::store::<Self>(desc)
     }
 }
 
@@ -288,8 +299,8 @@ impl Reflect for IpAddr {
         transformed
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        registry.store::<Self>(TypeDescription::Leaf)
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
 }
 
@@ -305,8 +316,8 @@ impl Reflect for Prefix {
         transformed
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        registry.store::<Self>(TypeDescription::Leaf)
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
 }
 
@@ -322,8 +333,8 @@ impl Reflect for Arc<str> {
         transformed
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        registry.store::<Self>(TypeDescription::Leaf)
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
 }
 
@@ -360,8 +371,8 @@ impl Reflect for () {
         transformed
     }
 
-    fn resolve(registry: &mut TypeRegistry) -> Ty {
-        registry.store::<Self>(TypeDescription::Leaf)
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
 }
 
@@ -416,8 +427,8 @@ macro_rules! simple_reflect {
                 transformed
             }
 
-            fn resolve(registry: &mut TypeRegistry) -> Ty {
-                registry.store::<Self>(TypeDescription::Leaf)
+            fn resolve() -> Ty {
+                TypeRegistry::store::<Self>(TypeDescription::Leaf)
             }
         }
     };

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use roto::{roto_static_method, FileTree, Runtime, Val};
+use roto::{roto_static_method, Runtime, Val};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -29,8 +29,8 @@ fn main() -> Result<(), roto::RotoReport> {
         Some(Val(NonEmptyString { s }))
     }
 
-    let mut compiled = FileTree::single_file("examples/optional.roto")
-        .compile(runtime)
+    let mut compiled = runtime
+        .compile("examples/optional.roto")
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
