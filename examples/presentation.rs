@@ -115,10 +115,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         stream.push(Output::Custom(id, local));
     }
 
-    let mut compiled =
-        roto::FileTree::single_file("examples/presentation.roto")
-            .compile(rt)
-            .inspect_err(|e| eprintln!("{e}"))?;
+    let mut compiled = rt
+        .compile("examples/presentation.roto")
+        .inspect_err(|e| eprintln!("{e}"))?;
 
     let function = compiled.get_function("rib_in_pre").unwrap();
 

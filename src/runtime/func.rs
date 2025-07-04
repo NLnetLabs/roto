@@ -2,8 +2,6 @@ use std::any::TypeId;
 
 use crate::codegen::check::{RotoFunc, RustIrFunction};
 
-use super::ty::TypeRegistry;
-
 pub struct Func<F: RotoFunc> {
     wrapper: <F as RotoFunc>::RustWrapper,
     docstring: &'static str,
@@ -20,6 +18,10 @@ impl<F: RotoFunc> Func<F> {
     ///
     /// Use the [`roto_function`], [`roto_method`] and [`roto_static_method`]
     /// macros to be sure of that.
+    ///
+    /// [`roto_function`]: crate::roto_function
+    /// [`roto_method`]: crate::roto_method
+    /// [`roto_static_method`]: crate::roto_static_method
     pub unsafe fn new(
         wrapper: <F as RotoFunc>::RustWrapper,
         docstring: &'static str,
@@ -40,12 +42,9 @@ impl<F: RotoFunc> Func<F> {
         self.argument_names
     }
 
-    pub(crate) fn to_function_description(
-        &self,
-        type_registry: &mut TypeRegistry,
-    ) -> FunctionDescription {
-        let parameter_types = F::parameter_types(type_registry);
-        let return_type = F::return_type(type_registry);
+    pub(crate) fn to_function_description(&self) -> FunctionDescription {
+        let parameter_types = F::parameter_types();
+        let return_type = F::return_type();
         let pointer = F::ptr(&self.wrapper);
         let ir_function = F::ir_function(&self.wrapper);
 

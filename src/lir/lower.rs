@@ -8,6 +8,7 @@ use crate::{
     label::{LabelRef, LabelStore},
     mir,
     runtime::{
+        init_string,
         layout::{Layout, LayoutBuilder},
         RuntimeFunctionRef,
     },
@@ -612,9 +613,6 @@ impl Lowerer<'_, '_> {
                     VarKind::Explicit(identifier)
                 }
                 mir::VarKind::Tmp(x) => VarKind::Tmp(x),
-                mir::VarKind::NamedTmp(identifier, x) => {
-                    VarKind::NamedTmp(identifier, x)
-                }
             },
         }
     }
@@ -628,7 +626,7 @@ impl Lowerer<'_, '_> {
                 self.emit(Instruction::InitString {
                     to: to.clone(),
                     string: s.clone(),
-                    init_func: self.ctx.runtime.string_init_function,
+                    init_func: init_string,
                 });
 
                 to.into()

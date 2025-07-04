@@ -1,8 +1,10 @@
 use super::{eval::Memory, value::IrValue};
-use crate::{runtime::tests::routecore_runtime, src, FileTree, LoweredToLir};
+use crate::{
+    runtime::tests::routecore_runtime, src, FileTree, LoweredToLir, Runtime,
+};
 
 #[track_caller]
-fn compile(s: FileTree) -> LoweredToLir {
+fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     #[cfg(feature = "logger")]
@@ -11,10 +13,9 @@ fn compile(s: FileTree) -> LoweredToLir {
         .format_target(false)
         .try_init();
 
-    let runtime = routecore_runtime().unwrap();
     s.parse()
         .unwrap()
-        .typecheck(runtime)
+        .typecheck(rt)
         .unwrap()
         .lower_to_mir()
         .lower_to_lir()
@@ -104,7 +105,8 @@ fn accept() {
     );
 
     let mut mem = Memory::new();
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(
@@ -127,7 +129,8 @@ fn reject() {
     );
 
     let mut mem = Memory::new();
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
@@ -149,7 +152,8 @@ fn if_else() {
     "
     );
     let mut mem = Memory::new();
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
@@ -171,7 +175,8 @@ fn react_to_rx() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for i in 0..6 {
         let mut mem = Memory::new();
@@ -203,7 +208,8 @@ fn variable() {
     );
 
     let mut mem = Memory::new();
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
@@ -230,7 +236,8 @@ fn calling_function() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for x in 0..30 {
         let mut mem = Memory::new();
@@ -262,7 +269,8 @@ fn anonymous_record() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for x in 0..30 {
         let mut mem = Memory::new();
@@ -301,7 +309,8 @@ fn typed_record() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for x in 0..1 {
         let mut mem = Memory::new();
@@ -336,7 +345,8 @@ fn nested_record() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for x in 20..21 {
         let mut mem = Memory::new();
@@ -366,7 +376,8 @@ fn enum_values() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for (variant, expected) in [
         // IpV4 -> accepted
@@ -406,7 +417,8 @@ fn call_runtime_function() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for (value, expected) in [(5, 1), (11, 0)] {
         let mut mem = Memory::new();
@@ -436,7 +448,8 @@ fn ip_addr_method() {
     "
     );
 
-    let program = compile(s);
+    let rt = routecore_runtime().unwrap();
+    let program = compile(s, &rt);
 
     for (value, expected) in [(5, 1), (6, 0)] {
         let mut mem = Memory::new();

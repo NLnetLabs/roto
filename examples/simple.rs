@@ -1,29 +1,24 @@
-use std::{env::args, net::IpAddr};
+use std::{net::IpAddr, process::ExitCode};
 
-use roto::{FileTree, Runtime, Verdict};
+use roto::{Runtime, Verdict};
 
-fn main() -> Result<(), roto::RotoReport> {
+fn main() -> ExitCode {
     #[cfg(feature = "logger")]
     env_logger::init();
 
     let runtime = Runtime::new();
 
-    let mut arguments = args();
-    let _program_name = arguments.next().unwrap();
-
-    let subcommand = arguments.next();
-    if Some("doc") == subcommand.as_deref() {
-        runtime.print_documentation();
-        return Ok(());
-    }
-
-    let mut compiled = FileTree::single_file("examples/simple.roto")
-        .compile(runtime)
-        .inspect_err(|e| eprintln!("{e}"))?;
+    let result = runtime.compile("example/simple.roto");
+    let mut compiled = match result {
+        Ok(compiled) => compiled,
+        Err(e) => {
+            eprint!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     let func = compiled
         .get_function::<(), fn(IpAddr) -> Verdict<(), ()>>("main")
-        .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
     let res = func.call(&mut (), "0.0.0.0".parse().unwrap());
@@ -42,5 +37,5 @@ fn main() -> Result<(), roto::RotoReport> {
     println!();
     let _ = compiled.run_tests(());
 
-    Ok(())
+    ExitCode::SUCCESS
 }

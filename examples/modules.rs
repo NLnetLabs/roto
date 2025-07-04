@@ -1,14 +1,12 @@
-use std::path::Path;
-
-use roto::{FileTree, Runtime};
+use roto::Runtime;
 
 fn main() -> Result<(), roto::RotoReport> {
     #[cfg(feature = "logger")]
     env_logger::init();
 
     let runtime = Runtime::new();
-    let mut compiled = FileTree::directory(Path::new("examples/modules"))
-        .compile(runtime)
+    let mut compiled = runtime
+        .compile("examples/modules")
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let f = compiled.get_function::<(), fn(i32) -> i32>("main").unwrap();

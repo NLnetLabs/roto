@@ -39,7 +39,7 @@ pub fn routecore_runtime() -> Result<Runtime, String> {
 pub fn default_runtime() {
     let rt = routecore_runtime().unwrap();
 
-    let names: Vec<_> = rt.runtime_types.iter().map(|ty| &ty.name).collect();
+    let names: Vec<_> = rt.types.iter().map(|ty| &ty.name).collect();
     assert_eq!(
         names,
         &[

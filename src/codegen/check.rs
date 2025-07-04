@@ -1,9 +1,7 @@
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
-    runtime::ty::{
-        Reflect, TypeDescription, TypeRegistry, GLOBAL_TYPE_REGISTRY,
-    },
+    runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
@@ -66,14 +64,12 @@ pub fn check_roto_type_reflect<T: Reflect>(
     type_info: &mut TypeInfo,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
-    let mut registry = GLOBAL_TYPE_REGISTRY.lock().unwrap();
-    let rust_ty = registry.resolve::<T>().type_id;
-    check_roto_type(&registry, type_info, rust_ty, roto_ty)
+    let rust_ty = TypeRegistry::resolve::<T>().type_id;
+    check_roto_type(type_info, rust_ty, roto_ty)
 }
 
 #[allow(non_snake_case)]
 fn check_roto_type(
-    registry: &TypeRegistry,
     type_info: &mut TypeInfo,
     rust_ty: TypeId,
     roto_ty: &Type,
@@ -96,7 +92,7 @@ fn check_roto_type(
     let PREFIX: TypeId = TypeId::of::<Prefix>();
     let STRING: TypeId = TypeId::of::<Arc<str>>();
 
-    let Some(rust_ty) = registry.get(rust_ty) else {
+    let Some(rust_ty) = TypeRegistry::get(rust_ty) else {
         return Err(TypeMismatch {
             rust_ty: "unknown".into(),
             roto_ty: roto_ty.display(type_info).to_string(),
@@ -181,8 +177,8 @@ fn check_roto_type(
                 return Err(error_message);
             };
 
-            check_roto_type(registry, type_info, rust_accept, roto_accept)?;
-            check_roto_type(registry, type_info, rust_reject, roto_reject)?;
+            check_roto_type(type_info, rust_accept, roto_accept)?;
+            check_roto_type(type_info, rust_reject, roto_reject)?;
             Ok(())
         }
         TypeDescription::Option(rust_ty) => {
@@ -202,7 +198,7 @@ fn check_roto_type(
             let [roto_ty] = &type_name.arguments[..] else {
                 return Err(error_message);
             };
-            check_roto_type(registry, type_info, rust_ty, roto_ty)
+            check_roto_type(type_info, rust_ty, roto_ty)
         }
     }
 }
@@ -254,8 +250,8 @@ pub trait RotoFunc {
     ) -> Self::Return;
 
     fn ptr(w: &Self::RustWrapper) -> *const u8;
-    fn parameter_types(type_registry: &mut TypeRegistry) -> Vec<TypeId>;
-    fn return_type(type_registry: &mut TypeRegistry) -> TypeId;
+    fn parameter_types() -> Vec<TypeId>;
+    fn return_type() -> TypeId;
 
     fn ir_function(f: &Self::RustWrapper) -> RustIrFunction;
 }
@@ -349,12 +345,12 @@ macro_rules! func {
                 }
             }
 
-            fn parameter_types(type_registry: &mut TypeRegistry) -> Vec<TypeId> {
-                vec![$($a::resolve(type_registry).type_id,)*]
+            fn parameter_types() -> Vec<TypeId> {
+                vec![$($a::resolve().type_id,)*]
             }
 
-            fn return_type(type_registry: &mut TypeRegistry) -> TypeId {
-                $r::resolve(type_registry).type_id
+            fn return_type() -> TypeId {
+                $r::resolve().type_id
             }
 
             fn ir_function(f: &Self::RustWrapper) -> RustIrFunction {

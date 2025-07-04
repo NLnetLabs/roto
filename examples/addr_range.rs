@@ -1,6 +1,6 @@
-use std::{net::IpAddr, path::Path};
+use std::net::IpAddr;
 
-use roto::{roto_method, FileTree, Runtime, Val, Verdict};
+use roto::{roto_method, Runtime, Val, Verdict};
 
 #[derive(Clone)]
 struct AddrRange {
@@ -9,8 +9,6 @@ struct AddrRange {
 }
 
 fn main() {
-    let path = Path::new("./examples/addr_range.roto");
-
     // Create a runtime
     let mut runtime = Runtime::new();
 
@@ -26,7 +24,7 @@ fn main() {
     }
 
     // Compile the program with our runtime
-    let mut program = FileTree::read(path).compile(runtime).unwrap();
+    let mut program = runtime.compile("examples/addr_range.roto").unwrap();
 
     // Extract the function
     let function = program
