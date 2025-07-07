@@ -637,6 +637,28 @@ fn multiply() {
 }
 
 #[test]
+fn remainder() {
+    let s = src!(
+        "
+        fn remainder(x: u64, y: u64) -> u64 {
+            while x > y {
+                x = x - y;
+            }
+            x
+        }     
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(u64, u64) -> u64>("remainder")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), 55, 10);
+    assert_eq!(res, 5);
+}
+
+#[test]
 fn factorial() {
     let s = src!(
         "
@@ -659,6 +681,59 @@ fn factorial() {
 
     let res = f.call(&mut (), 5);
     assert_eq!(res, 120);
+}
+
+#[test]
+fn nested_while_loop() {
+    let s = src!(
+        "
+        fn nested_while_loop() -> u64 {
+            let res = 0;
+            let x = 0;
+            while x < 10 {
+                let y = 0;
+                while y < 10 {
+                    res = res + 1;
+                    y = y + 1;
+                }
+                x = x + 1;
+            }
+            res
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn() -> u64>("nested_while_loop")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert_eq!(res, 100);
+}
+
+#[test]
+fn repeat_string_manually() {
+    let s = src!(
+        "
+        fn repeat(s: String, n: u64) -> String {
+            let res = \"\";
+            while n > 0 {
+                res = res + s;
+                n = n - 1;
+            }
+            res
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(Arc<str>, u64) -> Arc<str>>("repeat")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), "foo".into(), 6);
+    assert_eq!(res, "foofoofoofoofoofoo".into());
 }
 
 #[test]
