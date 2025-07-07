@@ -140,6 +140,7 @@ pub struct TypeChecker {
     type_info: TypeInfo,
     match_counter: usize,
     if_else_counter: usize,
+    while_counter: usize,
 }
 
 /// Result of type checking
@@ -163,6 +164,7 @@ impl TypeChecker {
             type_info: TypeInfo::new(),
             match_counter: 0,
             if_else_counter: 0,
+            while_counter: 0,
         };
 
         // Add all the stuff that's gonna be included in any script
