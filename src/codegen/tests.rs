@@ -1252,6 +1252,24 @@ fn string() {
 }
 
 #[test]
+fn escape_string() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "\t\tfoo" 
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p.get_function::<(), fn() -> Arc<str>>("main").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "\t\tfoo".into());
+}
+
+#[test]
 fn string_append() {
     let s = src!(
         r#"

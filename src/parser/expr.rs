@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::{net::IpAddr, ops::Range};
 
 use inetnum::asn::Asn;
 
@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    meta::Meta,
+    meta::{Meta, Span},
     token::{Keyword, Token},
     ParseResult, Parser,
 };
@@ -696,7 +696,31 @@ impl Parser<'_, '_> {
             Token::String(s) => {
                 // Trim the quotes from the string literal
                 let trimmed = &s[1..s.len() - 1];
-                Literal::String(trimmed.into())
+                let mut unescaped = String::new();
+                let mut errors = Vec::new();
+                rustc_literal_escaper::unescape_str(
+                    trimmed,
+                    |range: Range<usize>, res| match res {
+                        Ok(ch) => unescaped.push(ch),
+                        Err(e) => errors.push((range, e)),
+                    },
+                );
+
+                // We don't care about these because they are not errors but
+                // warnings.
+                // TODO: Print these warnings
+                errors.retain(|(_, e)| e.is_fatal());
+
+                if let Some((range, e)) = errors.first() {
+                    // The span starts at the quote so we add one to get to the
+                    // string content.
+                    let start = span.start + 1 + range.start;
+                    let end = span.start + 1 + range.end;
+                    let span = Span::new(span.file, start..end);
+                    return Err(ParseError::escape(e, span));
+                } else {
+                    Literal::String(unescaped)
+                }
             }
             Token::Integer(s) => {
                 Literal::Integer(s.parse::<i64>().map_err(|e| {
