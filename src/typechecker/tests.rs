@@ -224,6 +224,45 @@ fn using_records() {
 }
 
 #[test]
+fn let_type_annotation() {
+    let s = src!(
+        "
+        fn foo() {
+            let foo: u32 = 5;
+        }
+    "
+    );
+    typecheck(s).unwrap();
+
+    let s = src!(
+        "
+        fn foo() {
+            let foo: u32 = true;
+        }
+    "
+    );
+    typecheck(s).unwrap_err();
+
+    let s = src!(
+        "
+        fn foo() {
+            let foo: String = \"abc\";
+        }
+    "
+    );
+    typecheck(s).unwrap();
+
+    let s = src!(
+        "
+        fn foo() {
+            let foo: String = 5;
+        }
+    "
+    );
+    typecheck(s).unwrap_err();
+}
+
+#[test]
 fn integer_inference() {
     let s = src!(
         "
