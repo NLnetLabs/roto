@@ -335,7 +335,7 @@ impl<'r> Lowerer<'r> {
 
     fn stmt(&mut self, stmt: &Meta<ast::Stmt>) {
         match &**stmt {
-            ast::Stmt::Let(ident, expr) => {
+            ast::Stmt::Let(ident, _, expr) => {
                 let val = self.expr(expr);
                 let name = self.type_info.resolved_name(ident);
                 let ty = self.type_info.type_of(ident);

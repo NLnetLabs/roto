@@ -74,7 +74,7 @@ pub struct Block {
 /// A statement in a block
 #[derive(Clone, Debug)]
 pub enum Stmt {
-    Let(Meta<Identifier>, Meta<Expr>),
+    Let(Meta<Identifier>, Option<Meta<TypeExpr>>, Meta<Expr>),
     Expr(Meta<Expr>),
 }
 

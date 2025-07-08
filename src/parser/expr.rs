@@ -61,12 +61,20 @@ impl Parser<'_, '_> {
             } else if self.peek_is(Token::Keyword(Keyword::Let)) {
                 let start = self.take(Token::Keyword(Keyword::Let))?;
                 let identifier = self.identifier()?;
+                let ty = if self.peek_is(Token::Colon) {
+                    self.take(Token::Colon)?;
+                    Some(self.type_expr()?)
+                } else {
+                    None
+                };
                 self.take(Token::Eq)?;
                 let expr = self.expr()?;
                 let end = self.take(Token::SemiColon)?;
                 stmts.push(
-                    self.spans
-                        .add(start.merge(end), Stmt::Let(identifier, expr)),
+                    self.spans.add(
+                        start.merge(end),
+                        Stmt::Let(identifier, ty, expr),
+                    ),
                 )
             }
             // Edge case: if and match don't have to end in a semicolon
