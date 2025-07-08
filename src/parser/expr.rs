@@ -412,15 +412,19 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// Parse a question mark expression
+    ///
+    /// ```ebnf
+    /// QuestionMark ::= Access '?'*
+    /// ```
     fn question_mark(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let expr = self.access(r)?;
-        if self.peek_is(Token::QuestionMark) {
+        let mut expr = self.access(r)?;
+        while self.peek_is(Token::QuestionMark) {
             let span = self.take(Token::QuestionMark)?;
             let span = span.merge(self.get_span(&expr));
-            Ok(self.spans.add(span, Expr::QuestionMark(Box::new(expr))))
-        } else {
-            Ok(expr)
+            expr = self.spans.add(span, Expr::QuestionMark(Box::new(expr)));
         }
+        Ok(expr)
     }
 
     /// Parse an access expression
