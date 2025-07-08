@@ -227,6 +227,13 @@ impl Lowerer<'_, '_> {
                 self.emit_not(tmp.clone(), val.into());
                 tmp.into()
             }
+            mir::Value::Negate(var, ty) => {
+                let val = self.var(var);
+                let ty = self.lower_type(&ty).unwrap();
+                let tmp = self.new_tmp(ty);
+                self.emit_negate(tmp.clone(), val.into());
+                tmp.into()
+            }
             mir::Value::Move(var) => self.var(var).into(),
             mir::Value::Clone(place) => {
                 let from = self.location(place, ty.clone());
@@ -650,7 +657,7 @@ impl Lowerer<'_, '_> {
             }
             Literal::Integer(x) => {
                 match ty {
-                    Type::IntVar(_) => {
+                    Type::IntVar(_, _) => {
                         return Some(IrValue::I32(*x as i32).into())
                     }
                     Type::Name(type_name) => {
@@ -864,6 +871,10 @@ impl Lowerer<'_, '_> {
         self.emit(Instruction::Not { to, val })
     }
 
+    fn emit_negate(&mut self, to: Var, val: Operand) {
+        self.emit(Instruction::Negate { to, val })
+    }
+
     fn emit_jump(&mut self, lbl: LabelRef) {
         self.emit(Instruction::Jump(lbl))
     }
@@ -1005,7 +1016,7 @@ impl Lowerer<'_, '_> {
         }
 
         Some(match ty {
-            Type::IntVar(_) => IrType::I32,
+            Type::IntVar(_, _) => IrType::I32,
             Type::FloatVar(_) => IrType::F64,
             x if self.is_reference_type(&x) => IrType::Pointer,
             _ => ice!("could not lower: {ty:?}"),

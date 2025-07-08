@@ -187,7 +187,43 @@ fn equal_to_10_with_two_functions() {
 }
 
 #[test]
+fn negated_literal() {
+    let s = src!(
+        "
+        fn negate() -> i32 {
+            -5
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn() -> i32>("negate")
+        .expect("No function found (or mismatched types)");
+    let res = f.call(&mut ());
+    assert_eq!(res, -5)
+}
+
+#[test]
 fn negation() {
+    let s = src!(
+        "
+        fn negate(x: i32) -> i32 {
+            -x
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(i32) -> i32>("negate")
+        .expect("No function found (or mismatched types)");
+    let res = f.call(&mut (), 5);
+    assert_eq!(res, -5)
+}
+
+#[test]
+fn inversion() {
     let s = src!(
         "
         filtermap main(x: i32) {

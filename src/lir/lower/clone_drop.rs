@@ -84,7 +84,7 @@ impl Lowerer<'_, '_> {
                     _ => return,
                 }
             }
-            Type::IntVar(_) => Primitive::i32().layout().size(),
+            Type::IntVar(_, _) => Primitive::i32().layout().size(),
             Type::FloatVar(_) => Primitive::f64().layout().size(),
         };
 
@@ -252,7 +252,7 @@ impl Lowerer<'_, '_> {
                     }
                 }
             }
-            Type::Never | Type::IntVar(_) | Type::FloatVar(_) => {}
+            Type::Never | Type::IntVar(_, _) | Type::FloatVar(_) => {}
             Type::Var(_) | Type::Function(_, _) | Type::ExplicitVar(_) => {
                 panic!("Can't traverse: {ty:?}")
             }
