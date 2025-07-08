@@ -12,7 +12,7 @@ use super::types::Type;
 /// traversal in a subsequent query.
 ///
 /// A mapping from a type var to itself means that it is not set.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct UnionFind {
     inner: Vec<Type>,
 }

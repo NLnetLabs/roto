@@ -384,6 +384,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::While(condition, block) => {
                 self.r#while(condition, block)
             }
+            ast::Expr::QuestionMark(expr) => self.question_mark(expr),
         }
     }
 
@@ -412,6 +413,42 @@ impl<'r> Lowerer<'r> {
                 self.return_value(val)
             }
         }
+    }
+
+    fn question_mark(&mut self, expr: &Meta<ast::Expr>) -> Value {
+        let current_label = self.current_label();
+        let lbl_return_none = self
+            .label_store
+            .wrap_internal(current_label, Identifier::from("return-none"));
+        let continue_lbl = self.label_store.next(current_label);
+
+        let examinee = self.expr(expr);
+        let examinee_ty = self.type_info.type_of(expr);
+        let examinee = self.assign_to_var(examinee, examinee_ty.clone());
+        let discriminant = self.undropped_tmp();
+        self.emit_assign(
+            Place::new(discriminant.clone(), Type::u8()),
+            Type::u8(),
+            Value::Discriminant(examinee.clone()),
+        );
+        self.emit_switch(
+            discriminant,
+            vec![(0, continue_lbl)],
+            Some(lbl_return_none),
+        );
+
+        self.new_block(lbl_return_none);
+        let ty = self.return_type.clone();
+        let val = self.make_enum(ty, "None".into(), &[]);
+        let _ = self.return_value(val);
+
+        self.new_block(continue_lbl);
+        let ty = self.type_info.type_of(expr);
+        Value::Clone(Place {
+            var: examinee,
+            root_ty: ty,
+            projection: vec![Projection::VariantField("Some".into(), 0)],
+        })
     }
 
     fn literal(&mut self, literal: &Meta<ast::Literal>) -> Value {

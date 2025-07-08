@@ -194,7 +194,6 @@ impl TypeChecker {
         checker.declare_functions(&modules)?;
         checker.tree(&modules)?;
         checker.force_filtermap_types(&modules);
-
         Ok(checker.type_info)
     }
 

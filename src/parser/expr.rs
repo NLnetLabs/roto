@@ -399,7 +399,7 @@ impl Parser<'_, '_> {
         // have much lower precedence.
         if self.peek_is(Token::Keyword(Keyword::Not)) {
             let span = self.take(Token::Keyword(Keyword::Not))?;
-            let expr = self.access(r)?;
+            let expr = self.question_mark(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
         } else if self.peek_is(Token::Hyphen) {
@@ -408,7 +408,18 @@ impl Parser<'_, '_> {
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Negate(Box::new(expr))))
         } else {
-            self.access(r)
+            self.question_mark(r)
+        }
+    }
+
+    fn question_mark(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
+        let expr = self.access(r)?;
+        if self.peek_is(Token::QuestionMark) {
+            let span = self.take(Token::QuestionMark)?;
+            let span = span.merge(self.get_span(&expr));
+            Ok(self.spans.add(span, Expr::QuestionMark(Box::new(expr))))
+        } else {
+            Ok(expr)
         }
     }
 

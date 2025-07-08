@@ -4,6 +4,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::{
     ast::Identifier,
+    ice,
     parser::meta::MetaId,
     runtime::{
         layout::{Layout, LayoutBuilder},
@@ -194,16 +195,21 @@ impl TypeInfo {
         }
     }
 
-    pub fn is_reference_type(&mut self, ty: &Type, rt: &Runtime) -> bool {
+    /// Returns None if the type is uninhabited
+    pub fn is_reference_type(
+        &mut self,
+        ty: &Type,
+        rt: &Runtime,
+    ) -> Option<bool> {
         let ty = self.resolve(ty);
-        if self.layout_of(&ty, rt).size() == 0 {
-            return false;
+        if self.layout_of(&ty, rt)?.size() == 0 {
+            return Some(false);
         }
         match ty {
-            Type::Record(..) | Type::RecordVar(..) => true,
+            Type::Record(..) | Type::RecordVar(..) => Some(true),
             Type::Name(name) => {
                 let type_def = self.resolve_type_name(&name);
-                matches!(
+                let is_ref = matches!(
                     type_def,
                     TypeDefinition::Enum(..)
                         | TypeDefinition::Record(..)
@@ -213,9 +219,10 @@ impl TypeInfo {
                                 | Primitive::Prefix
                                 | Primitive::String,
                         )
-                )
+                );
+                Some(is_ref)
             }
-            _ => false,
+            _ => Some(false),
         }
     }
 
@@ -256,7 +263,7 @@ impl TypeInfo {
 
         let mut builder = LayoutBuilder::new();
         for (name, ty) in fields {
-            let offset = builder.add(&self.layout_of(ty, rt));
+            let offset = builder.add(&self.layout_of(ty, rt).unwrap());
             if name.node == field {
                 return (ty.clone(), offset as u32);
             }
@@ -288,23 +295,27 @@ impl TypeInfo {
     /// standard library. This also allows to get the layout of some Rust types
     /// we rely on.
     ///
+    /// This function returns `None` if the type is uninhabited.
+    ///
     /// [Rust reference]: https://doc.rust-lang.org/reference/type-layout.html
-    pub fn layout_of(&mut self, ty: &Type, rt: &Runtime) -> Layout {
+    pub fn layout_of(&mut self, ty: &Type, rt: &Runtime) -> Option<Layout> {
         let ty = self.resolve(ty);
-        match ty {
-            Type::Var(_) | Type::ExplicitVar(_) => {
-                panic!("Can't get the layout of an unconcrete type: {:?}", ty)
+        let layout = match ty {
+            Type::ExplicitVar(_) => {
+                ice!("Can't get the layout of an unconcrete type: {:?}", ty)
             }
             Type::Function(_, _) => {
-                panic!("Can't get the layout of a function type")
+                ice!("Can't get the layout of a function type")
             }
-            Type::Never => panic!("Can't get the layout of the never type"),
+            Type::Var(_) | Type::Never => return None,
             Type::IntVar(_, _) => Primitive::i32().layout(),
             Type::FloatVar(_) => Primitive::f64().layout(),
             Type::RecordVar(_, fields) | Type::Record(fields) => {
-                Layout::concat(
-                    fields.iter().map(|(_, f)| self.layout_of(f, rt)),
-                )
+                let layouts = fields
+                    .iter()
+                    .map(|(_, f)| self.layout_of(f, rt))
+                    .collect::<Option<Vec<_>>>()?;
+                Layout::concat(layouts)
             }
             Type::Name(type_name) => {
                 let type_def = self.resolve_type_name(&type_name);
@@ -316,20 +327,30 @@ impl TypeInfo {
                             .zip(&type_name.arguments)
                             .collect();
 
-                        let mut layout = Layout::new(0, 1);
-                        for variant in &variants {
+                        let mut layout = None;
+                        'outer: for variant in &variants {
                             let mut builder = LayoutBuilder::new();
                             builder.add(&Layout::of::<u8>());
                             for field in &variant.fields {
-                                builder.add(&self.layout_of(
+                                let field_layout = self.layout_of(
                                     &field.substitute_many(&subs),
                                     rt,
-                                ));
+                                );
+                                let Some(field_layout) = field_layout else {
+                                    continue 'outer;
+                                };
+                                builder.add(&field_layout);
                             }
-                            layout = layout.union(&builder.finish());
+
+                            let variant_layout = builder.finish();
+
+                            layout = Some(layout.map_or(
+                                variant_layout.clone(),
+                                |l: Layout| l.union(&variant_layout),
+                            ));
                         }
 
-                        layout
+                        layout?
                     }
                     TypeDefinition::Record(type_constructor, fields) => {
                         let subs: Vec<_> = type_constructor
@@ -338,9 +359,14 @@ impl TypeInfo {
                             .zip(&type_name.arguments)
                             .collect();
 
-                        Layout::concat(fields.iter().map(|(_, f)| {
-                            self.layout_of(&f.substitute_many(&subs), rt)
-                        }))
+                        let layouts = fields
+                            .iter()
+                            .map(|(_, t)| {
+                                let t = t.substitute_many(&subs);
+                                self.layout_of(&t, rt)
+                            })
+                            .collect::<Option<Vec<_>>>()?;
+                        Layout::concat(layouts)
                     }
                     TypeDefinition::Runtime(_, type_id) => {
                         rt.get_runtime_type(type_id).unwrap().layout()
@@ -350,7 +376,8 @@ impl TypeInfo {
                     }
                 }
             }
-        }
+        };
+        Some(layout)
     }
 
     pub fn resolve_ref<'a>(&'a self, mut t: &'a Type) -> &'a Type {

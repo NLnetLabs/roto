@@ -1724,6 +1724,46 @@ fn non_sugar_optional() {
 }
 
 #[test]
+fn question_mark() {
+    let s = src!(
+        "
+        fn bar() -> Optional[u32] {
+            Optional.None
+        }
+
+        fn foo() -> Optional[u32] {
+            bar()?;
+            Optional.Some(3)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Option<u32>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, None);
+}
+
+#[test]
+fn question_mark_none() {
+    let s = src!(
+        "
+        fn foo() -> Optional[u32] {
+            Optional.None?;
+            Optional.Some(3)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Option<u32>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, None);
+}
+
+#[test]
 fn top_level_import() {
     let pkg = source_file!(
         "pkg",

@@ -150,6 +150,9 @@ pub enum Expr {
 
     /// A while expression
     While(Box<Meta<Expr>>, Meta<Block>),
+
+    /// Question mark operator
+    QuestionMark(Box<Meta<Expr>>),
 }
 
 #[derive(Clone, Debug)]
