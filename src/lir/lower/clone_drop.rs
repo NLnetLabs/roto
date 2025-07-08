@@ -2,6 +2,7 @@ use std::{any::TypeId, sync::Arc};
 
 use crate::{
     ast::Identifier,
+    ice,
     lir::{value::IrType, Instruction, Operand},
     runtime::{
         layout::{Layout, LayoutBuilder},
@@ -138,9 +139,12 @@ impl Lowerer<'_, '_> {
             Type::RecordVar(_, fields) | Type::Record(fields) => {
                 let mut builder = LayoutBuilder::new();
                 for (_, ty) in fields {
-                    let new_offset = builder.add(
-                        &self.ctx.type_info.layout_of(&ty, self.ctx.runtime),
-                    );
+                    let Some(layout) =
+                        &self.ctx.type_info.layout_of(&ty, self.ctx.runtime)
+                    else {
+                        ice!("Need an inhabited type");
+                    };
+                    let new_offset = builder.add(layout);
                     self.traverse_type(
                         var,
                         offset + new_offset,
@@ -198,20 +202,30 @@ impl Lowerer<'_, '_> {
                             default: continue_lbl,
                         });
 
-                        for (idx, lbl) in branches {
+                        'outer: for (idx, lbl) in branches {
                             self.new_block(lbl);
                             let variant = &variants[idx];
 
-                            let mut builder = LayoutBuilder::new();
-                            builder.add(&Layout::of::<u8>());
+                            let mut layouts = Vec::new();
                             for ty in &variant.fields {
                                 let ty = ty.substitute_many(&subs);
-                                let new_offset = builder.add(
-                                    &self
-                                        .ctx
-                                        .type_info
-                                        .layout_of(&ty, self.ctx.runtime),
-                                );
+                                let Some(layout) = self
+                                    .ctx
+                                    .type_info
+                                    .layout_of(&ty, self.ctx.runtime)
+                                else {
+                                    self.emit(Instruction::Jump(
+                                        continue_lbl,
+                                    ));
+                                    continue 'outer;
+                                };
+                                layouts.push((ty, layout));
+                            }
+
+                            let mut builder = LayoutBuilder::new();
+                            builder.add(&Layout::of::<u8>());
+                            for (ty, layout) in layouts {
+                                let new_offset = builder.add(&layout);
                                 self.traverse_type(
                                     var,
                                     offset + new_offset,
@@ -220,7 +234,7 @@ impl Lowerer<'_, '_> {
                                     f,
                                 );
                             }
-                            self.emit(Instruction::Jump(continue_lbl))
+                            self.emit(Instruction::Jump(continue_lbl));
                         }
 
                         self.new_block(continue_lbl);
@@ -239,7 +253,8 @@ impl Lowerer<'_, '_> {
                                 &self
                                     .ctx
                                     .type_info
-                                    .layout_of(&ty, self.ctx.runtime),
+                                    .layout_of(&ty, self.ctx.runtime)
+                                    .unwrap(),
                             );
                             self.traverse_type(
                                 var,

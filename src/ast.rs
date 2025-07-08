@@ -145,6 +145,9 @@ pub enum Expr {
 
     /// An if or if-else expression
     IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
+
+    /// Question mark operator
+    QuestionMark(Box<Meta<Expr>>),
 }
 
 #[derive(Clone, Debug)]
