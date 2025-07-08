@@ -3,10 +3,10 @@ source: tests/snapshot.rs
 expression: string
 input_file: tests/scripts/type_errors/invalid_field_access.roto
 ---
-Error: Type error: expected enum, but found type `String`
-   ╭─[ tests/scripts/type_errors/invalid_field_access.roto:2:10 ]
+Error: Type error: no static method `foo` on type `String`
+   ╭─[ tests/scripts/type_errors/invalid_field_access.roto:2:17 ]
    │
  2 │     let b = String.foo;
-   │             ───┬──  
-   │                ╰──── expected type
+   │                    ─┬─  
+   │                     ╰─── unknown static method `foo`
 ───╯

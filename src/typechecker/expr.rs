@@ -1033,17 +1033,21 @@ impl TypeChecker {
                 }
 
                 let TypeDefinition::Enum(_, variants) = ty else {
-                    return Err(self.error_expected_enum(ident, ty));
+                    return Err(
+                        self.error_no_static_method_on_type(ty, next_ident)
+                    );
                 };
 
                 let Some(variant) =
                     variants.iter().find(|v| v.name == **next_ident)
                 else {
-                    return Err(self.error_no_field_on_type(ty, next_ident));
+                    return Err(self.error_no_variant_on_type(ty, next_ident));
                 };
 
                 if let Some(field) = idents.next() {
-                    return Err(self.error_no_field_on_type(ty, field));
+                    return Err(
+                        self.error_no_field_or_method_on_type(ty, field)
+                    );
                 }
 
                 Ok(ResolvedPath::EnumConstructor {
@@ -1110,8 +1114,14 @@ impl TypeChecker {
                             }
                         }
                     }
+
                     // The field is not a method, so we try a field access.
-                    ty = self.access_field(&ty, field)?;
+                    let Ok(new_ty) = self.access_field(&ty, field) else {
+                        return Err(
+                            self.error_no_field_or_method_on_type(&ty, field)
+                        );
+                    };
+                    ty = new_ty;
                     fields.push((field.node, ty.clone()));
                 }
 
@@ -1318,7 +1328,7 @@ impl TypeChecker {
             Ok((function, signature)) => (function, signature),
             Err(candidates) => {
                 return Err(if candidates.is_empty() {
-                    self.error_no_field_on_type(&ty, field)
+                    self.error_no_method_on_type(&ty, field)
                 } else {
                     self.error_multiple_methods(field, &candidates)
                 });

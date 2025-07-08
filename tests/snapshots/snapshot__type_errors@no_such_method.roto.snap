@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/no_such_method.roto
+---
+Error: Type error: no method `foofoo` on type `bool`
+   ╭─[ tests/scripts/type_errors/no_such_method.roto:2:7 ]
+   │
+ 2 │     true.foofoo();
+   │          ───┬──  
+   │             ╰──── unknown method `foofoo`
+───╯

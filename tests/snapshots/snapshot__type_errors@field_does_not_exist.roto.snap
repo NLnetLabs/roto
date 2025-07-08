@@ -3,10 +3,10 @@ source: tests/snapshot.rs
 expression: string
 input_file: tests/scripts/type_errors/field_does_not_exist.roto
 ---
-Error: Type error: no field `b` on type `pkg.Foo`
+Error: Type error: no field or method `b` on type `pkg.Foo`
    ╭─[ tests/scripts/type_errors/field_does_not_exist.roto:5:17 ]
    │
  5 │     let a = foo.b;
    │                 ┬  
-   │                 ╰── unknown field `b`
+   │                 ╰── unknown field or method `b`
 ───╯
