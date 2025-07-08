@@ -253,6 +253,27 @@ fn inversion() {
 }
 
 #[test]
+fn not_not() {
+    let s = src!(
+        "
+        fn main(x: i32) -> bool {
+            not not (x == 10)
+        } 
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(i32) -> bool>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..20 {
+        let res = f.call(&mut (), x);
+        assert_eq!(res, x == 10, "{x}");
+    }
+}
+
+#[test]
 fn a_bunch_of_comparisons() {
     let s = src!(
         "

@@ -399,7 +399,7 @@ impl Parser<'_, '_> {
         // have much lower precedence.
         if self.peek_is(Token::Keyword(Keyword::Not)) {
             let span = self.take(Token::Keyword(Keyword::Not))?;
-            let expr = self.question_mark(r)?;
+            let expr = self.negation(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
         } else if self.peek_is(Token::Hyphen) {
