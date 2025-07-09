@@ -59,10 +59,24 @@ There are many more types available that have more to do with BGP. These are
 described elsewhere. Note that Roto is case sensitive; writing the ``String`` type as
 ``STRING`` or ``string`` won't work.
 
+Unit type
+---------
+
+The unit type is a special type written as ``()`` with only one value: ``()``.
+It is the type of expressions that do not have meaningful value to evaluate to.
+For functions, returning ``()`` is equivalent to returning nothing.
+
+Never type
+----------
+
+The never type ``!`` is an *uninhabited* type, meaning that it cannot be
+constructed. It appears in code paths that are unreachable. For example, it
+is the type of a ``return`` expression. It can be unified with any other type.
+
 Integers
 --------
 
-As the previous section indicates, there are several types for integers in Roto.
+There are several types for integers in Roto.
 This might be familiar to users of languages such as C and Rust, but not for
 users of Python and similar languages which only have one integer type.
 
@@ -92,10 +106,28 @@ Below is a table of all available integer types.
 | :roto:ref:`i64` |   64 |    Yes | -9,223,372,036,854,775,808 |  9,223,372,036,854,775,807 |
 +-----------------+------+--------+----------------------------+----------------------------+
 
+Floating point numbers
+----------------------
+
+There are two floating point types: ``f32`` and ``f64``, of 32 and 64 bits,
+respectively.
+
++-----------------+------+
+| Type            | Bits |
++=================+======+
+| :roto:ref:`f32` |   32 |
++-----------------+------+
+| :roto:ref:`f64` |   64 |
++-----------------+------+
+
 Arithmetic operators
 --------------------
 
-There are mathematical operators for common operations:
+The unary ``-`` operator will negate a number. It requires that its operand is
+a signed integer or a floating point number (i.e. not an unsigned integer).
+
+There are binary operators for common arithmetic operations, which are
+implemented for all numeric types (integers and floating point numbers):
 
 +-------+----------------+
 | ``+`` | addition       |
@@ -170,13 +202,13 @@ Operators to combine boolean values are called logical operators. They have a
 lower precedence than comparison operators. These are the logical operators in
 Roto:
 
-+---------+-------------+
-| ``&&``  | Logical and |
-+---------+-------------+
-| ``||``  | Logical or  |
-+---------+-------------+
-| ``not`` | Negation    |
-+---------+-------------+
++---------+--------------------------------+
+| ``&&``  | Logical and (short-circuiting) |
++---------+--------------------------------+
+| ``||``  | Logical or (short-circuiting)  |
++---------+--------------------------------+
+| ``not`` | Negation                       |
++---------+--------------------------------+
 
 Now that we have all the rules for precendence, here is an example using all types of
 operators (arithmetic, comparison and logical):
@@ -190,6 +222,10 @@ This is equivalent to:
 .. code-block:: roto
 
     ((1 + (x * 3)) == 5) && (y < 10)
+
+The ``&&`` and ``||`` are short-circuiting, meaning that if the left-hand operand
+of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
+``true``, the right hand side won't be evaluated.
 
 Strings
 -------
@@ -209,6 +245,35 @@ Strings can be concatenated with ``+``:
 It also has some methods such as :roto:ref:`String.contains` that can be very
 useful. See the documentation for the :roto:ref:`String` type for more
 information.
+
+Escape sequences
+----------------
+
+Strings can contain the following escape sequences:
+
++-----------------+--------------------------+-----------------+
+| Escape sequence |      Escaped value       |   Common name   |
++=================+==========================+=================+
+| ``\0``          | U+0000 (NUL)             | Nul             |
++-----------------+--------------------------+-----------------+
+| ``\t``          | U+0009 (HT)              | Tab             |
++-----------------+--------------------------+-----------------+
+| ``\n``          | U+000A (LF)              | Newline         |
++-----------------+--------------------------+-----------------+
+| ``\r``          | U+000D (CR)              | Carriage return |
++-----------------+--------------------------+-----------------+
+| ``\"``          | U+0022 (QUOTATION MARK)  | Double quote    |
++-----------------+--------------------------+-----------------+
+| ``\'``          | U+0027 (APOSTROPHE)      | Single quote    |
++-----------------+--------------------------+-----------------+
+| ``\\``          | U+005C (REVERSE SOLIDUS) | Backslash       |
++-----------------+--------------------------+-----------------+
+
+In addition, any unicode character can be represented by its scalar value. This
+can be done with `\x` followed by 2 hexadecimal digits or with `\u{...}` where
+the `...` is a hexadecimal number.
+
+Finally, Roto will ignore any whitespace after a ``\`` followed by a newline.
 
 If-else
 -------
@@ -233,6 +298,34 @@ construct is an expression and therefore evaluates to a value.
     } else {
         # if the condition is false
     }
+
+The if-else is an expression, not a statement, which means that it evaluates to
+a value. This means that it can be used in the place of a ternary operator.
+
+.. code-block:: roto
+
+    let x = if y { 1 } else { 0 };
+
+Match
+-----
+
+TODO
+
+While loops
+-----------
+
+A while loop takes a condition and a block. It will keep executing the block
+until the condition evaluates to ``false``.
+
+.. code-block:: roto
+
+    let i = 0
+    while i < 10 {
+        i = i + 1;
+    }
+
+A while loop is an expression of the type ``()``. Like with ``if``, ``while``
+does not require parentheses around the condition.
 
 Functions
 ---------
@@ -298,15 +391,21 @@ variables with ``let``.
     }
 
 Any local variable can be overwritten with an assignment, which is expressed as ``=``
-without `let`:
+without ``let``:
 
 .. code-block:: roto
 
     let x = 0;
     x = x + 1;
 
-Filter-map
-----------
+A let-binding can take an optional type annotation for clarity.
+
+.. code-block:: roto
+
+    let x: u32 = 0;
+
+Filtermap
+---------
 
 A ``filtermap`` is a function that filters and transforms some incoming value.
 
@@ -535,6 +634,38 @@ either module ``A`` or ``B``, depending on a boolean flag.
             import B.foo;
             foo(x)
         }
+    }
+
+Optional values
+---------------
+
+Roto does not feature a value like ``None``, ``null`` or ``nil``. Instead, it
+has optional values. The type of an optional value is written ``T?``, which is
+shorthand for ``Optional[T]``. For example, an optional ``u32`` is ``u32?``, or
+equivalently, ``Optional[u32]``.
+
+The ``Optional`` type is an enum with 2 variants: ``None`` and ``Some``. A value
+of ``T?`` is constructed with either ``Optional.None`` or ``Optional.Some(t)``
+where ``t`` is a value of type ``T``.
+
+Like any enum it is possible to match on a value of type ``T?``
+
+.. code-block:: roto
+
+    match x {
+        Some(x) -> x,
+        None -> 0,
+    }
+
+In addition, there is a ``?`` operator, which will evaluate to the value of 
+``Some`` or return ``Optional.None``. That is, if ``x`` is of type ``T?``, then
+``x?`` is equivalent to the following match expression:
+
+.. code-block:: roto
+
+    match x {
+        Some(x) -> x,
+        None -> return Optional.None,
     }
 
 Next steps
