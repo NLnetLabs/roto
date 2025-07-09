@@ -195,7 +195,16 @@ impl TypeInfo {
         }
     }
 
-    /// Returns None if the type is uninhabited
+    /// Whether or not the type is passed around by reference or by value
+    ///
+    /// Roto always has by-value semantics, but we still have types that we
+    /// store in stack slots and then operate on by pointer. That is what
+    /// we mean here with a reference type.
+    ///
+    /// Registered types, enums, records, ip addrs, prefixes and strings are all
+    /// reference types. Integers, floats, booleans and AS numbers are not.
+    ///
+    /// This returns `None` if the type is uninhabited (e.g. `!`)
     pub fn is_reference_type(
         &mut self,
         ty: &Type,
@@ -328,19 +337,26 @@ impl TypeInfo {
                             .collect();
 
                         let mut layout = None;
-                        'outer: for variant in &variants {
+                        for variant in &variants {
                             let mut builder = LayoutBuilder::new();
                             builder.add(&Layout::of::<u8>());
-                            for field in &variant.fields {
-                                let field_layout = self.layout_of(
-                                    &field.substitute_many(&subs),
-                                    rt,
-                                );
-                                let Some(field_layout) = field_layout else {
-                                    continue 'outer;
-                                };
-                                builder.add(&field_layout);
-                            }
+
+                            let builder = variant.fields.iter().try_fold(
+                                builder,
+                                |mut b, t| {
+                                    let t = t.substitute_many(&subs);
+                                    let layout = self.layout_of(&t, rt)?;
+                                    b.add(&layout);
+                                    Some(b)
+                                },
+                            );
+
+                            // If the variant contains uninhabited fields, the
+                            // entire variant is uninhabited, so we don't need
+                            // to consider it.
+                            let Some(builder) = builder else {
+                                continue;
+                            };
 
                             let variant_layout = builder.finish();
 
@@ -359,14 +375,14 @@ impl TypeInfo {
                             .zip(&type_name.arguments)
                             .collect();
 
-                        let layouts = fields
-                            .iter()
-                            .map(|(_, t)| {
-                                let t = t.substitute_many(&subs);
-                                self.layout_of(&t, rt)
-                            })
-                            .collect::<Option<Vec<_>>>()?;
-                        Layout::concat(layouts)
+                        // If any of the fields of the record are uninhabited
+                        // the entire record is uninhabited.
+                        let mut builder = LayoutBuilder::new();
+                        for (_, t) in fields {
+                            let t = t.substitute_many(&subs);
+                            builder.add(&self.layout_of(&t, rt)?);
+                        }
+                        builder.finish()
                     }
                     TypeDefinition::Runtime(_, type_id) => {
                         rt.get_runtime_type(type_id).unwrap().layout()
