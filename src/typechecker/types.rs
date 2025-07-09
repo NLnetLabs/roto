@@ -87,7 +87,13 @@ pub enum Type {
     Name(TypeName),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// Whether an integer type must be signed
+///
+/// We have to track this because the unary minus operator only allows signed
+/// integers. So, if we find a unary minus with an `IntVar` as argument, we
+/// set `MustBySigned` to `Yes`. If `MustBeSigned` is set to `Yes`, it will
+/// only unify with signed integer types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MustBeSigned {
     Yes,
     No,

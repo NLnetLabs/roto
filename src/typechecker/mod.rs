@@ -953,23 +953,8 @@ impl TypeChecker {
             }
             // The never type is special and unifies with anything
             (Never, x) | (x, Never) => x,
-            (
-                IntVar(a, MustBeSigned::No),
-                b @ IntVar(_, MustBeSigned::Yes),
-            ) => {
-                self.type_info.unionfind.set(a, b.clone());
-                b.clone()
-            }
-            (
-                a @ IntVar(_, MustBeSigned::Yes),
-                IntVar(b, MustBeSigned::No),
-            ) => {
-                self.type_info.unionfind.set(b, a.clone());
-                a.clone()
-            }
-            (IntVar(a, _), b @ IntVar(_, _)) => {
-                self.type_info.unionfind.set(a, b.clone());
-                b.clone()
+            (IntVar(a, a_signed), IntVar(b, b_signed)) => {
+                self.unify_intvars(a, a_signed, b, b_signed)
             }
             (IntVar(b, s), Name(name)) | (Name(name), IntVar(b, s)) => {
                 if !name.arguments.is_empty() {
@@ -1062,6 +1047,25 @@ impl TypeChecker {
                 return None;
             }
         })
+    }
+
+    fn unify_intvars(
+        &mut self,
+        a: usize,
+        a_signed: MustBeSigned,
+        b: usize,
+        b_signed: MustBeSigned,
+    ) -> Type {
+        // We have to ensure that `Yes` has priority over `No`. We map `a` to
+        // `b` by default, so if `a` has `Yes` and `b` has `No` we need to map
+        // `b` to `a` instead.
+        if a_signed == MustBeSigned::Yes && b_signed == MustBeSigned::No {
+            self.type_info.unionfind.set(b, Type::IntVar(a, a_signed));
+            Type::IntVar(a, a_signed)
+        } else {
+            self.type_info.unionfind.set(a, Type::IntVar(b, b_signed));
+            Type::IntVar(b, b_signed)
+        }
     }
 
     fn unify_fields(
