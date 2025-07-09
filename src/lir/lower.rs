@@ -273,6 +273,10 @@ impl Lowerer<'_, '_> {
             }
         };
 
+        // There are valid assignments in MIR that have the never type. For
+        // example, a function call that returns the never type. So we cannot
+        // unwrap `to` here, but we will simply only assign the value if it is
+        // inhabited.
         if let Some(to) = to {
             self.move_val(to, op, &ty);
         }
