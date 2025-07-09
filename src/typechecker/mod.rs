@@ -109,7 +109,9 @@ use scope::{
 };
 use scoped_display::TypeDisplay;
 use std::{any::TypeId, borrow::Borrow, collections::HashMap};
-use types::{FunctionDefinition, Type, TypeDefinition, TypeName};
+use types::{
+    FunctionDefinition, MustBeSigned, Type, TypeDefinition, TypeName,
+};
 
 use self::{
     error::TypeError,
@@ -708,7 +710,9 @@ impl TypeChecker {
 
     /// Create a fresh integer variable in the unionfind structure
     fn fresh_int(&mut self) -> Type {
-        self.type_info.unionfind.fresh(Type::IntVar)
+        self.type_info
+            .unionfind
+            .fresh(|n| Type::IntVar(n, types::MustBeSigned::No))
     }
 
     /// Create a fresh integer variable in the unionfind structure
@@ -949,16 +953,22 @@ impl TypeChecker {
             }
             // The never type is special and unifies with anything
             (Never, x) | (x, Never) => x,
-            (IntVar(a), b @ IntVar(_)) => {
-                self.type_info.unionfind.set(a, b.clone());
-                b.clone()
+            (IntVar(a, a_signed), IntVar(b, b_signed)) => {
+                self.unify_intvars(a, a_signed, b, b_signed)
             }
-            (IntVar(b), Name(name)) | (Name(name), IntVar(b)) => {
+            (IntVar(b, s), Name(name)) | (Name(name), IntVar(b, s)) => {
                 if !name.arguments.is_empty() {
                     return None;
                 }
                 let type_def = self.type_info.resolve_type_name(&name);
-                if !type_def.is_int() {
+
+                let correct = if s == MustBeSigned::Yes {
+                    type_def.is_signed_int()
+                } else {
+                    type_def.is_int()
+                };
+
+                if !correct {
                     return None;
                 }
                 self.type_info.unionfind.set(b, Name(name.clone()));
@@ -1039,6 +1049,25 @@ impl TypeChecker {
         })
     }
 
+    fn unify_intvars(
+        &mut self,
+        a: usize,
+        a_signed: MustBeSigned,
+        b: usize,
+        b_signed: MustBeSigned,
+    ) -> Type {
+        // We have to ensure that `Yes` has priority over `No`. We map `a` to
+        // `b` by default, so if `a` has `Yes` and `b` has `No` we need to map
+        // `b` to `a` instead.
+        if a_signed == MustBeSigned::Yes && b_signed == MustBeSigned::No {
+            self.type_info.unionfind.set(b, Type::IntVar(a, a_signed));
+            Type::IntVar(a, a_signed)
+        } else {
+            self.type_info.unionfind.set(a, Type::IntVar(b, b_signed));
+            Type::IntVar(b, b_signed)
+        }
+    }
+
     fn unify_fields(
         &mut self,
         a_fields: &[(Meta<Identifier>, Type)],
@@ -1063,7 +1092,7 @@ impl TypeChecker {
     /// Resolve a type variable to a type.
     fn resolve_type(&mut self, t: &Type) -> Type {
         if let Type::Var(x)
-        | Type::IntVar(x)
+        | Type::IntVar(x, _)
         | Type::FloatVar(x)
         | Type::RecordVar(x, _) = t
         {

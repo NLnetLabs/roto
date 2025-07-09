@@ -5,7 +5,10 @@ use std::{borrow::Borrow, collections::HashSet};
 use crate::{
     ast::{self, Identifier, Pattern, TypeExpr},
     parser::meta::{Meta, MetaId},
-    typechecker::scope::DeclarationKind,
+    typechecker::{
+        scope::DeclarationKind,
+        types::{MustBeSigned, Primitive},
+    },
 };
 
 use super::{
@@ -383,6 +386,47 @@ impl TypeChecker {
                 self.unify(&ctx.expected_type, &Type::bool(), id, None)?;
                 self.expr(scope, &ctx.with_type(Type::bool()), e)
             }
+            Negate(e) => {
+                let operand_ty = self.fresh_var();
+                let new_ctx = ctx.with_type(operand_ty.clone());
+
+                let mut diverges = false;
+                diverges |= self.expr(scope, &new_ctx, e)?;
+
+                let operand_ty = self.type_info.resolve(&operand_ty);
+                if let Type::Name(name) = &operand_ty {
+                    let def = self.type_info.resolve_type_name(&name);
+                    let is_unsigned = matches!(
+                        def,
+                        TypeDefinition::Primitive(Primitive::Int(
+                            crate::typechecker::types::IntKind::Unsigned,
+                            _
+                        ))
+                    );
+                    if is_unsigned {
+                        return Err(self.error_simple(
+                            "cannot apply `-` to unsigned integer type",
+                            "cannot apply `-`",
+                            id,
+                        ));
+                    }
+                }
+
+                if self.type_info.is_numeric_type(&operand_ty) {
+                    // If we get a int var, we need to store the fact that this
+                    // var must be signed so that we can give an error if this
+                    // is later unified with an unsigned integer.
+                    if let Type::IntVar(i, MustBeSigned::No) = &operand_ty {
+                        self.type_info
+                            .unionfind
+                            .set(*i, Type::IntVar(*i, MustBeSigned::Yes));
+                    }
+                    self.unify(&ctx.expected_type, &operand_ty, id, None)?;
+                    Ok(diverges)
+                } else {
+                    Err(self.error_expected_numeric_value(e, &operand_ty))
+                }
+            }
             BinOp(left, op, right) => {
                 self.binop(scope, ctx, op, id, left, right)
             }
@@ -720,7 +764,7 @@ impl TypeChecker {
 
                 let ty = self.resolve_type(&ctx.expected_type);
                 let comparable = match ty {
-                    Type::IntVar(_)
+                    Type::IntVar(_, _)
                     | Type::Never
                     | Type::Record(..)
                     | Type::RecordVar(..) => true,

@@ -375,6 +375,7 @@ impl<'r> Lowerer<'r> {
             }
             ast::Expr::List(_list) => todo!(),
             ast::Expr::Not(expr) => self.not(expr),
+            ast::Expr::Negate(expr) => self.negate(expr),
             ast::Expr::Assign(expr, field) => self.assign(expr, field),
             ast::Expr::BinOp(left, op, right) => self.binop(left, op, right),
             ast::Expr::IfElse(condition, then, r#else) => {
@@ -626,6 +627,13 @@ impl<'r> Lowerer<'r> {
         let val = self.expr(expr);
         let var = self.assign_to_var(val, Type::bool());
         Value::Not(var)
+    }
+
+    fn negate(&mut self, expr: &Meta<ast::Expr>) -> Value {
+        let ty = self.type_info.type_of(expr);
+        let val = self.expr(expr);
+        let var = self.assign_to_var(val, ty.clone());
+        Value::Negate(var, ty)
     }
 
     fn assign(

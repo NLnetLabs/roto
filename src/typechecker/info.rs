@@ -140,7 +140,7 @@ impl TypeInfo {
     pub fn is_numeric_type(&mut self, ty: &Type) -> bool {
         let ty = self.resolve(ty);
         match ty {
-            Type::FloatVar(_) | Type::IntVar(_) => true,
+            Type::FloatVar(_) | Type::IntVar(_, _) => true,
             Type::Name(name) => {
                 let type_def = self.resolve_type_name(&name);
                 type_def.is_float() || type_def.is_int()
@@ -168,7 +168,7 @@ impl TypeInfo {
     pub fn get_int_type(&mut self, ty: &Type) -> Option<(IntKind, IntSize)> {
         let ty = self.resolve(ty);
         match ty {
-            Type::IntVar(_) => Some((IntKind::Signed, IntSize::I32)),
+            Type::IntVar(_, _) => Some((IntKind::Signed, IntSize::I32)),
             Type::Name(name) => {
                 let type_def = self.resolve_type_name(&name);
                 if let TypeDefinition::Primitive(Primitive::Int(kind, size)) =
@@ -299,7 +299,7 @@ impl TypeInfo {
                 panic!("Can't get the layout of a function type")
             }
             Type::Never => panic!("Can't get the layout of the never type"),
-            Type::IntVar(_) => Primitive::i32().layout(),
+            Type::IntVar(_, _) => Primitive::i32().layout(),
             Type::FloatVar(_) => Primitive::f64().layout(),
             Type::RecordVar(_, fields) | Type::Record(fields) => {
                 Layout::concat(
@@ -354,7 +354,7 @@ impl TypeInfo {
     }
 
     pub fn resolve_ref<'a>(&'a self, mut t: &'a Type) -> &'a Type {
-        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+        if let Type::Var(x) | Type::IntVar(x, _) | Type::RecordVar(x, _) = t {
             t = self.unionfind.find_ref(*x);
         }
 
@@ -364,7 +364,7 @@ impl TypeInfo {
     pub fn resolve(&mut self, t: &Type) -> Type {
         let mut t = t.clone();
 
-        if let Type::Var(x) | Type::IntVar(x) | Type::RecordVar(x, _) = t {
+        if let Type::Var(x) | Type::IntVar(x, _) | Type::RecordVar(x, _) = t {
             t = self.unionfind.find(x).clone();
         }
 

@@ -153,6 +153,59 @@ fn record_diamond() {
 }
 
 #[test]
+fn negation_on_unsigned_int_literal() {
+    let s = src!(
+        "
+        fn negate() -> u32 {
+            -5
+        }
+        "
+    );
+
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
+fn negation_unify_with_unsigned() {
+    let s = src!(
+        "
+        fn negate(x: u32) -> u32 {
+            let y = -5;
+            x + y
+        }
+        "
+    );
+
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
+fn negation_on_unsigned_int() {
+    let s = src!(
+        "
+        fn negate(x: u32) -> u32 {
+            -x
+        }
+        "
+    );
+
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
+fn negation_on_string() {
+    let s = src!(
+        "
+        fn negate(x: String) -> String {
+            -x
+        }
+        "
+    );
+
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
 #[ignore = "prefixes not supported yet"]
 fn filter_map() {
     let s = src!(

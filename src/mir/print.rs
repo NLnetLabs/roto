@@ -162,6 +162,11 @@ impl Printable for Value {
                 let var = var.print(printer);
                 format!("not({var})")
             }
+            Value::Negate(var, ty) => {
+                let var = var.print(printer);
+                let ty = ty.display(printer.type_info);
+                format!("negate({var}: {ty})")
+            }
             Value::Move(var) => {
                 let var = var.print(printer);
                 format!("move({var})")

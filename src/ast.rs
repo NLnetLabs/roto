@@ -143,6 +143,8 @@ pub enum Expr {
     /// Takes a left operand, the operator and the right operand
     BinOp(Box<Meta<Expr>>, BinOp, Box<Meta<Expr>>),
 
+    Negate(Box<Meta<Expr>>),
+
     /// An if or if-else expression
     IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
 }

@@ -221,6 +221,13 @@ impl Printable for Instruction {
             Not { to, val } => {
                 format!("{} = not({})", to.print(printer), val.print(printer))
             }
+            Negate { to, val } => {
+                format!(
+                    "{} = negate({})",
+                    to.print(printer),
+                    val.print(printer)
+                )
+            }
             Add { to, left, right } => {
                 format!(
                     "{} = {} + {}",

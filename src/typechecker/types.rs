@@ -78,13 +78,25 @@ impl Type {
 pub enum Type {
     Var(usize),
     ExplicitVar(Identifier),
-    IntVar(usize),
+    IntVar(usize, MustBeSigned),
     FloatVar(usize),
     RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
     Never,
     Record(Vec<(Meta<Identifier>, Type)>),
     Function(Vec<Type>, Box<Type>),
     Name(TypeName),
+}
+
+/// Whether an integer type must be signed
+///
+/// We have to track this because the unary minus operator only allows signed
+/// integers. So, if we find a unary minus with an `IntVar` as argument, we
+/// set `MustBySigned` to `Yes`. If `MustBeSigned` is set to `Yes`, it will
+/// only unify with signed integer types.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MustBeSigned {
+    Yes,
+    No,
 }
 
 /// A definition of a named type
@@ -310,7 +322,10 @@ impl TypeDisplay for Type {
         match ty {
             Type::Var(_) => write!(f, "_"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
-            Type::IntVar(_) => write!(f, "{{integer}}"),
+            Type::IntVar(_, MustBeSigned::Yes) => {
+                write!(f, "{{signed integer}}")
+            }
+            Type::IntVar(_, MustBeSigned::No) => write!(f, "{{integer}}"),
             Type::FloatVar(_) => write!(f, "{{float}}"),
             Type::RecordVar(_, fields) | Type::Record(fields) => {
                 write!(
@@ -404,6 +419,10 @@ impl TypeDisplay for TypeName {
 }
 
 impl TypeDefinition {
+    pub fn is_signed_int(&self) -> bool {
+        matches!(self, Self::Primitive(Primitive::Int(IntKind::Signed, _)))
+    }
+
     pub fn is_int(&self) -> bool {
         matches!(self, Self::Primitive(Primitive::Int(_, _)))
     }
