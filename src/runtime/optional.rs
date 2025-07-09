@@ -1,7 +1,7 @@
 /// Option-like type for with a C-representation
 ///
 /// This type cannot make use of niches because it uses the C-representation.
-#[repr(C, u8)]
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Optional<T> {
     // WARNING: Roto relies on the order of these variants.
