@@ -1447,6 +1447,48 @@ fn string_append() {
 }
 
 #[test]
+fn string_append_as_function_call() {
+    let s = src!(
+        r#"
+        fn main(name: String) -> String {
+            String.append("Hello ", name)
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), fn(Arc<str>) -> Arc<str>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "Martin".into());
+    assert_eq!(res, "Hello Martin".into());
+}
+
+#[test]
+fn string_append_as_imported_function() {
+    let s = src!(
+        r#"
+        import String.append;
+
+        fn main(name: String) -> String {
+            append("Hello ", name)
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), fn(Arc<str>) -> Arc<str>>("main")
+        .unwrap();
+
+    let res = f.call(&mut (), "Martin".into());
+    assert_eq!(res, "Hello Martin".into());
+}
+
+#[test]
 fn string_plus_operator() {
     let s = src!(
         r#"
@@ -1676,6 +1718,34 @@ fn construct_optional_value() {
                 Optional.None
             } else {
                 Optional.Some(x - 1)
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), fn(u32) -> Option<u32>>("sub_one")
+        .unwrap();
+
+    let res = f.call(&mut (), 0);
+    assert_eq!(res, None);
+    let res = f.call(&mut (), 2);
+    assert_eq!(res, Some(1));
+}
+
+#[test]
+fn construct_imported_optional() {
+    let s = src!(
+        "
+        import Optional.{Some, None};
+
+        fn sub_one(x: u32) -> u32? {
+            if x == 0 {
+                None
+            } else {
+                Some(x - 1)
             }
         }
         "

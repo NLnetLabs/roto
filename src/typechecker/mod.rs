@@ -108,10 +108,11 @@ use crate::{
 };
 use cycle::detect_type_cycles;
 use scope::{
-    ModuleScope, ResolvedName, ScopeRef, ScopeType, StubDeclarationKind,
+    Declaration, DeclarationKind, ModuleScope, ResolvedName, ScopeRef,
+    ScopeType, StubDeclarationKind,
 };
 use scoped_display::TypeDisplay;
-use std::{any::TypeId, borrow::Borrow, collections::HashMap};
+use std::{any::TypeId, borrow::Borrow};
 use types::{
     FunctionDefinition, MustBeSigned, Type, TypeDefinition, TypeName,
 };
@@ -214,6 +215,39 @@ impl TypeChecker {
                 .scope_graph
                 .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
                 .map_err(|id| self.error_declared_twice(&ident, id))?;
+
+            if let TypeDefinition::Enum(_, variants) = &ty {
+                let dec = self.type_info.scope_graph.get_declaration(name);
+                let DeclarationKind::Type(type_def) = dec.kind else {
+                    ice!();
+                };
+                let scope = dec.scope.unwrap();
+                for variant in variants {
+                    self.type_info
+                        .scope_graph
+                        .insert_declaration(
+                            scope,
+                            &Meta {
+                                node: variant.name,
+                                id: MetaId(0),
+                            },
+                            Declaration {
+                                name: ResolvedName {
+                                    ident: variant.name,
+                                    scope,
+                                },
+                                kind: DeclarationKind::Variant(
+                                    type_def.clone(),
+                                    variant.clone(),
+                                ),
+                                id: MetaId(0),
+                                scope: None,
+                            },
+                        )
+                        .unwrap()
+                }
+            }
+
             self.type_info.types.insert(name, ty);
         }
         Ok(())
@@ -275,11 +309,6 @@ impl TypeChecker {
                 argument_names: _,
             } = func;
 
-            let name = ResolvedName {
-                scope: ScopeRef::GLOBAL,
-                ident: name.into(),
-            };
-
             let parameter_types: Vec<_> = description
                 .parameter_types()
                 .iter()
@@ -291,10 +320,56 @@ impl TypeChecker {
                 description.return_type(),
             )?;
 
+            // Free functions are put in the global namespace, methods and
+            // static methods are put under their type.
+            let scope = match kind {
+                FunctionKind::Free => ScopeRef::GLOBAL,
+                FunctionKind::StaticMethod(id) | FunctionKind::Method(id) => {
+                    let type_ident =
+                        runtime.get_runtime_type(*id).unwrap().name();
+                    let stub = self
+                        .type_info
+                        .scope_graph
+                        .resolve_name(
+                            ScopeRef::GLOBAL,
+                            &Meta {
+                                node: type_ident.into(),
+                                id: MetaId(0),
+                            },
+                            false,
+                        )
+                        .unwrap();
+                    stub.scope.unwrap()
+                }
+            };
+
+            let ident = Meta {
+                node: name.into(),
+                id: MetaId(0),
+            };
+            let def = FunctionDefinition::Runtime(func.get_ref());
+            let ty = &Type::Function(
+                parameter_types.clone(),
+                Box::new(return_type.clone()),
+            );
+
+            let name = if let FunctionKind::Method(_) = kind {
+                self.type_info
+                    .scope_graph
+                    .insert_method(scope, &ident, def, ty)
+                    .unwrap()
+            } else {
+                self.type_info
+                    .scope_graph
+                    .insert_function(scope, &ident, def, ty)
+                    .unwrap()
+            };
+
             let kind = match kind {
                 FunctionKind::Free => types::FunctionKind::Free,
-                FunctionKind::Method(id) => {
-                    let ident = runtime.get_runtime_type(*id).unwrap().name();
+                FunctionKind::Method(type_id) => {
+                    let ident =
+                        runtime.get_runtime_type(*type_id).unwrap().name();
                     let name = ResolvedName {
                         scope: ScopeRef::GLOBAL,
                         ident: ident.into(),
@@ -304,39 +379,19 @@ impl TypeChecker {
                         arguments: Vec::new(),
                     }))
                 }
-                FunctionKind::StaticMethod(id) => {
-                    let ident = runtime.get_runtime_type(*id).unwrap().name();
+                FunctionKind::StaticMethod(type_id) => {
+                    let ident =
+                        runtime.get_runtime_type(*type_id).unwrap().name();
                     let name = ResolvedName {
                         scope: ScopeRef::GLOBAL,
                         ident: ident.into(),
                     };
-                    types::FunctionKind::StaticMethod(Type::Name(TypeName {
+                    types::FunctionKind::Method(Type::Name(TypeName {
                         name,
                         arguments: Vec::new(),
                     }))
                 }
             };
-
-            let ident = Meta {
-                node: name.ident,
-                id: MetaId(0),
-            };
-
-            // Free functions are put in the global namespace
-            if let types::FunctionKind::Free = kind {
-                self.type_info
-                    .scope_graph
-                    .insert_function(
-                        ScopeRef::GLOBAL,
-                        &ident,
-                        FunctionDefinition::Runtime(func.get_ref()),
-                        &Type::Function(
-                            parameter_types.clone(),
-                            Box::new(return_type.clone()),
-                        ),
-                    )
-                    .unwrap();
-            }
 
             let signature = Signature {
                 kind,
@@ -736,82 +791,6 @@ impl TypeChecker {
             .fresh(move |x| Type::RecordVar(x, fields))
     }
 
-    /// Check whether `a` is a subtype of `b`
-    ///
-    /// Currently, the only possible subtype relation is generated by
-    /// type variables. For example, `[String]` is a subtype of `[T]` if
-    /// `T` is a type variable.
-    fn subtype_of(&mut self, a: &Type, b: &Type) -> bool {
-        self.subtype_inner(a, b, &mut HashMap::new())
-    }
-
-    fn subtype_inner(
-        &mut self,
-        a: &Type,
-        b: &Type,
-        subs: &mut HashMap<usize, Type>,
-    ) -> bool {
-        let mut a = self.resolve_type(a);
-        let b = self.resolve_type(b);
-
-        loop {
-            let Type::Var(v) = a else {
-                break;
-            };
-            let Some(t) = subs.get(&v) else {
-                break;
-            };
-            a = t.clone();
-        }
-
-        match (a, b) {
-            (a, b) if a == b => true,
-            (Type::Var(x), t) => {
-                subs.insert(x, t);
-                true
-            }
-            (Type::Record(a_fields), Type::Record(b_fields)) => {
-                self.subtype_fields(&a_fields, &b_fields, subs)
-            }
-            (
-                Type::RecordVar(_, a_fields),
-                Type::Record(b_fields) | Type::RecordVar(_, b_fields),
-            ) => self.subtype_fields(&a_fields, &b_fields, subs),
-            (Type::Name(a), Type::Name(b)) => {
-                if a.name != b.name {
-                    return false;
-                }
-                a.arguments
-                    .iter()
-                    .zip(&b.arguments)
-                    .all(|(a, b)| self.subtype_inner(a, b, subs))
-            }
-            _ => false,
-        }
-    }
-
-    fn subtype_fields(
-        &mut self,
-        a_fields: &[(Meta<Identifier>, Type)],
-        b_fields: &[(Meta<Identifier>, Type)],
-        subs: &mut HashMap<usize, Type>,
-    ) -> bool {
-        if a_fields.len() != b_fields.len() {
-            return false;
-        }
-
-        for (name, ty_a) in a_fields {
-            let Some((_, ty_b)) = b_fields.iter().find(|(n, _)| n == name)
-            else {
-                return false;
-            };
-            if !self.subtype_inner(ty_a, ty_b, subs) {
-                return false;
-            }
-        }
-        true
-    }
-
     /// Insert a context variable into the global scope
     fn insert_context(
         &mut self,
@@ -1103,59 +1082,6 @@ impl TypeChecker {
             self.type_info.unionfind.find(*x).clone()
         } else {
             t.clone()
-        }
-    }
-
-    /// Instantiate all type variables in a method
-    ///
-    /// Instantiation in this context means replacing the explicit type variables with
-    /// fresh variables.
-    fn instantiate_method(&mut self, method: &Function) -> Signature {
-        // This is probably all quite slow, but we can figure out a more
-        // efficient way later.
-        let Function {
-            name: _,
-            vars,
-            signature:
-                Signature {
-                    kind,
-                    parameter_types,
-                    return_type,
-                },
-            definition: _,
-        } = method;
-
-        let mut kind = kind.clone();
-        let mut parameter_types = parameter_types.clone();
-        let mut return_type = return_type.clone();
-
-        for method_var in vars {
-            let var = self.fresh_var();
-            let f = |x: &Type| {
-                x.substitute(&Type::ExplicitVar(*method_var), &var)
-            };
-
-            kind = match kind {
-                types::FunctionKind::Free => types::FunctionKind::Free,
-                types::FunctionKind::Method(ty) => {
-                    types::FunctionKind::Method(f(&ty))
-                }
-                types::FunctionKind::StaticMethod(ty) => {
-                    types::FunctionKind::StaticMethod(f(&ty))
-                }
-            };
-
-            for ty in &mut parameter_types {
-                *ty = f(ty);
-            }
-
-            return_type = f(&return_type);
-        }
-
-        Signature {
-            kind,
-            parameter_types,
-            return_type,
         }
     }
 
