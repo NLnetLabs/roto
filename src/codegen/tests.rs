@@ -1736,11 +1736,39 @@ fn construct_optional_value() {
 }
 
 #[test]
+<<<<<<< Conflict 1 of 1
++++++++ Contents of side #1
 fn construct_imported_optional() {
     let s = src!(
         "
         import Optional.{Some, None};
 
+        fn sub_one(x: u32) -> u32? {
+            if x == 0 {
+                None
+            } else {
+                Some(x - 1)
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), fn(u32) -> Option<u32>>("sub_one")
+        .unwrap();
+
+    let res = f.call(&mut (), 0);
+    assert_eq!(res, None);
+    let res = f.call(&mut (), 2);
+    assert_eq!(res, Some(1));
+}
+
+#[test]
+fn construct_optional_value_from_prelude() {
+    let s = src!(
+        "
         fn sub_one(x: u32) -> u32? {
             if x == 0 {
                 None

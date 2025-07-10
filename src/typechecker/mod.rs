@@ -258,6 +258,35 @@ impl TypeChecker {
         self.declare_runtime_functions(runtime)?;
         self.declare_constants(runtime)?;
         self.declare_context(runtime)?;
+
+        // Little hack to put Some and None in the global namespace until
+        // imports can be specified from the runtime.
+        let stub = self
+            .type_info
+            .scope_graph
+            .resolve_name(
+                ScopeRef::GLOBAL,
+                &Meta {
+                    node: "Optional".into(),
+                    id: MetaId(0),
+                },
+                false,
+            )
+            .unwrap();
+        for variant in ["Some", "None"] {
+            self.type_info
+                .scope_graph
+                .insert_import(
+                    ScopeRef::GLOBAL,
+                    MetaId(0),
+                    ResolvedName {
+                        scope: stub.scope.unwrap(),
+                        ident: variant.into(),
+                    },
+                )
+                .unwrap();
+        }
+
         Ok(())
     }
 
