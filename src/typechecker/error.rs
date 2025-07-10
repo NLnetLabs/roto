@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    scope::{ResolvedName, StubDeclaration, StubDeclarationKind},
+    scope::{StubDeclaration, StubDeclarationKind},
     scoped_display::TypeDisplay,
     types::Type,
     ResolvedPath, TypeChecker,
@@ -407,7 +407,7 @@ impl TypeChecker {
                 ty.display(&self.type_info),
             ),
             location: expr.id,
-            labels: vec![Label::error("not a numberic value", expr.id)],
+            labels: vec![Label::error("not a numeric value", expr.id)],
         }
     }
 
@@ -471,36 +471,6 @@ impl TypeChecker {
         )
     }
 
-    pub fn error_no_static_method_on_type(
-        &self,
-        ty: &impl TypeDisplay,
-        ident: &Meta<Identifier>,
-    ) -> TypeError {
-        self.error_simple(
-            format!(
-                "no static method `{ident}` on type `{}`",
-                ty.display(&self.type_info)
-            ),
-            format!("unknown static method `{ident}`"),
-            ident.id,
-        )
-    }
-
-    pub fn error_no_variant_on_type(
-        &self,
-        ty: &impl TypeDisplay,
-        ident: &Meta<Identifier>,
-    ) -> TypeError {
-        self.error_simple(
-            format!(
-                "no variant or static method `{ident}` on type `{}`",
-                ty.display(&self.type_info)
-            ),
-            format!("unknown variant or static method `{ident}`"),
-            ident.id,
-        )
-    }
-
     pub fn error_no_field_or_method_on_type(
         &self,
         ty: &impl TypeDisplay,
@@ -515,23 +485,6 @@ impl TypeChecker {
             ident.id,
         )
     }
-
-    pub fn error_multiple_methods(
-        &self,
-        ident: &Meta<Identifier>,
-        candidates: &[ResolvedName],
-    ) -> TypeError {
-        self.error_simple(
-            format!(
-                "multiple possible methods for {ident}: {}",
-                join_quoted(
-                    candidates.iter().map(|c| c.display(&self.type_info))
-                )
-            ),
-            "multiple possible methods".to_string(),
-            ident.id,
-        )
-    }
 }
 
 fn describe_declaration(d: &StubDeclaration) -> &str {
@@ -542,6 +495,8 @@ fn describe_declaration(d: &StubDeclaration) -> &str {
         StubDeclarationKind::Type(_) => "type",
         StubDeclarationKind::Function => "function",
         StubDeclarationKind::Module => "module",
+        StubDeclarationKind::Method => "method",
+        StubDeclarationKind::Variant => "variant",
     }
 }
 
