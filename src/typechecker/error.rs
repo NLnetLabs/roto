@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    scope::{StubDeclaration, StubDeclarationKind},
+    scope::{DeclarationKind, ValueKind},
     scoped_display::TypeDisplay,
     types::Type,
     ResolvedPath, TypeChecker,
@@ -138,7 +138,7 @@ impl TypeChecker {
     pub fn error_expected_type(
         &self,
         ident: &Meta<Identifier>,
-        stub: StubDeclaration,
+        stub: Declaration,
     ) -> TypeError {
         let kind = describe_declaration(&stub);
         TypeError {
@@ -151,9 +151,9 @@ impl TypeChecker {
     pub fn error_expected_module(
         &self,
         ident: &Meta<Identifier>,
-        stub: StubDeclaration,
+        declaration: Declaration,
     ) -> TypeError {
-        let kind = describe_declaration(&stub);
+        let kind = describe_declaration(&declaration);
         TypeError {
             description: format!(
                 "expected a module, but found {kind} `{ident}`",
@@ -375,8 +375,7 @@ impl TypeChecker {
         ident: &Meta<Identifier>,
         declaration: &Declaration,
     ) -> TypeError {
-        let stub = declaration.to_stub();
-        let kind = describe_declaration(&stub);
+        let kind = describe_declaration(&declaration);
         TypeError {
             description: format!(
                 "expected a value, but found {kind} `{}`",
@@ -487,16 +486,16 @@ impl TypeChecker {
     }
 }
 
-fn describe_declaration(d: &StubDeclaration) -> &str {
+fn describe_declaration(d: &Declaration) -> &str {
     match &d.kind {
-        StubDeclarationKind::Context => "context",
-        StubDeclarationKind::Constant => "constant",
-        StubDeclarationKind::Variable => "variable",
-        StubDeclarationKind::Type(_) => "type",
-        StubDeclarationKind::Function => "function",
-        StubDeclarationKind::Module => "module",
-        StubDeclarationKind::Method => "method",
-        StubDeclarationKind::Variant => "variant",
+        DeclarationKind::Value(ValueKind::Local, _) => "variable",
+        DeclarationKind::Value(ValueKind::Constant, _) => "constant",
+        DeclarationKind::Value(ValueKind::Context(..), _) => "context",
+        DeclarationKind::Type(..) => "type",
+        DeclarationKind::Function(..) => "function",
+        DeclarationKind::Module => "module",
+        DeclarationKind::Method(..) => "method",
+        DeclarationKind::Variant(..) => "variant",
     }
 }
 
