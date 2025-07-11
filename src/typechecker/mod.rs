@@ -108,8 +108,8 @@ use crate::{
 };
 use cycle::detect_type_cycles;
 use scope::{
-    Declaration, DeclarationKind, ModuleScope, ResolvedName, ScopeRef,
-    ScopeType, StubDeclarationKind,
+    DeclarationKind, ModuleScope, ResolvedName, ScopeRef, ScopeType,
+    StubDeclarationKind,
 };
 use scoped_display::TypeDisplay;
 use std::{any::TypeId, borrow::Borrow};
@@ -231,20 +231,12 @@ impl TypeChecker {
                                 node: variant.name,
                                 id: MetaId(0),
                             },
-                            Declaration {
-                                name: ResolvedName {
-                                    ident: variant.name,
-                                    scope,
-                                },
-                                kind: DeclarationKind::Variant(
-                                    type_def.clone(),
-                                    variant.clone(),
-                                ),
-                                id: MetaId(0),
-                                scope: None,
-                            },
+                            DeclarationKind::Variant(
+                                type_def.clone(),
+                                variant.clone(),
+                            ),
                         )
-                        .unwrap()
+                        .unwrap();
                 }
             }
 

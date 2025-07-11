@@ -66,6 +66,7 @@ pub enum DeclarationKind {
     Module,
     Method(FunctionDefinition, Type),
     Variant(TypeDefinition, EnumVariant),
+    Stub(StubDeclarationKind),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -102,7 +103,6 @@ pub enum StubDeclarationKind {
 
 #[derive(Clone)]
 pub struct ScopeGraph {
-    stub_declarations: BTreeMap<ResolvedName, StubDeclaration>,
     pub declarations: BTreeMap<ResolvedName, Declaration>,
     scopes: Vec<Scope>,
 }
@@ -163,6 +163,7 @@ impl DeclarationKind {
             Self::Method(_, _) => StubDeclarationKind::Method,
             Self::Variant(_, _) => StubDeclarationKind::Variant,
             Self::Module => StubDeclarationKind::Module,
+            Self::Stub(s) => *s,
         }
     }
 }
@@ -170,7 +171,6 @@ impl DeclarationKind {
 impl ScopeGraph {
     pub fn new() -> Self {
         Self {
-            stub_declarations: BTreeMap::new(),
             declarations: BTreeMap::new(),
             scopes: vec![Scope {
                 scope_type: ScopeType::Root,
@@ -215,13 +215,8 @@ impl ScopeGraph {
                 scope,
                 ident: **ident,
             };
-            if let Some(x) = self
-                .declarations
-                .get(&name)
-                .map(|d| d.to_stub())
-                .or_else(|| self.stub_declarations.get(&name).cloned())
-            {
-                return Some(x);
+            if let Some(d) = self.declarations.get(&name) {
+                return Some(d.to_stub());
             }
 
             if !recurse {
@@ -319,24 +314,9 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
         let kind = DeclarationKind::Value(ValueKind::Local, ty.clone());
-        let id = ident.id;
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration {
-                name,
-                kind,
-                id,
-                scope: None,
-            },
-        )?;
-        Ok(name)
+        let dec = self.insert_declaration(scope, ident, kind)?;
+        Ok(dec.name)
     }
 
     pub fn insert_type(
@@ -345,25 +325,12 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         ty: TypeDefinition,
     ) -> Result<(), MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
         let kind = DeclarationKind::Type(ty.clone());
-        let id = ident.id;
-
         let new_scope = self.wrap(scope, ScopeType::Type(**ident));
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration {
-                name,
-                kind,
-                id,
-                scope: Some(new_scope),
-            },
-        )
+        let dec = self.insert_declaration(scope, ident, kind)?;
+
+        dec.scope = Some(new_scope);
+        Ok(())
     }
 
     pub fn insert_module(
@@ -372,23 +339,10 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         mod_scope: ScopeRef,
     ) -> Result<(), MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
         let kind = DeclarationKind::Module;
-        let id = ident.id;
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration {
-                name,
-                kind,
-                id,
-                scope: Some(mod_scope),
-            },
-        )
+        let dec = self.insert_declaration(scope, ident, kind)?;
+        dec.scope = Some(mod_scope);
+        Ok(())
     }
 
     pub fn insert_function(
@@ -398,24 +352,9 @@ impl ScopeGraph {
         definition: FunctionDefinition,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
         let kind = DeclarationKind::Function(definition, ty.clone());
-        let id = ident.id;
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration {
-                name,
-                kind,
-                id,
-                scope: None,
-            },
-        )?;
-        Ok(name)
+        let dec = self.insert_declaration(scope, ident, kind)?;
+        Ok(dec.name)
     }
 
     pub fn insert_method(
@@ -425,24 +364,9 @@ impl ScopeGraph {
         definition: FunctionDefinition,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
         let kind = DeclarationKind::Method(definition, ty.clone());
-        let id = ident.id;
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration {
-                name,
-                kind,
-                id,
-                scope: None,
-            },
-        )?;
-        Ok(name)
+        let dec = self.insert_declaration(scope, ident, kind)?;
+        Ok(dec.name)
     }
 
     pub fn insert_stub(
@@ -455,11 +379,12 @@ impl ScopeGraph {
             scope,
             ident: **ident,
         };
-        self.stub_declarations.insert(
+        self.declarations.insert(
             name,
-            StubDeclaration {
+            Declaration {
+                kind: DeclarationKind::Stub(stub),
                 name,
-                kind: stub,
+                id: MetaId(0),
                 scope: None,
             },
         );
@@ -469,18 +394,42 @@ impl ScopeGraph {
         &mut self,
         scope: ScopeRef,
         ident: &Meta<Identifier>,
-        declaration: Declaration,
-    ) -> Result<(), MetaId> {
+        kind: DeclarationKind,
+    ) -> Result<&mut Declaration, MetaId> {
         let name = ResolvedName {
             scope,
             ident: **ident,
         };
+        let new = Declaration {
+            name,
+            kind,
+            id: ident.id,
+            scope: None,
+        };
         match self.declarations.entry(name) {
-            Entry::Vacant(entry) => {
-                entry.insert(declaration);
-                Ok(())
+            Entry::Vacant(entry) => Ok(entry.insert(new)),
+            Entry::Occupied(entry) => {
+                let old = entry.into_mut();
+
+                // We can only overwrite the existing enty if it is a
+                // stub declaration of the same kind as the new
+                // declaration and if the new declaration is not a stub
+                // declaration.
+                let DeclarationKind::Stub(stub_kind) = old.kind else {
+                    return Err(old.id);
+                };
+
+                if matches!(new.kind, DeclarationKind::Stub(_)) {
+                    return Err(old.id);
+                }
+
+                if new.kind.to_stub() != stub_kind {
+                    return Err(old.id);
+                }
+
+                *old = new;
+                Ok(old)
             }
-            Entry::Occupied(entry) => Err(entry.get().id),
         }
     }
 

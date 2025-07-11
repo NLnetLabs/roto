@@ -1220,6 +1220,9 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
+            DeclarationKind::Stub(_) => {
+                ice!()
+            }
         }
     }
 
