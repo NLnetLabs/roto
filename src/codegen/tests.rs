@@ -1736,8 +1736,6 @@ fn construct_optional_value() {
 }
 
 #[test]
-<<<<<<< Conflict 1 of 1
-+++++++ Contents of side #1
 fn construct_imported_optional() {
     let s = src!(
         "
