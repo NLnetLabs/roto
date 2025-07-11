@@ -41,9 +41,9 @@
 //! ## Declaring modules
 //!
 //! We first determine the general structure of the script. Meaning that we
-//! build the scope tree for the modules and add a [`StubDeclaration`] for
+//! build the scope tree for the modules and add a [`Declaration`] for
 //! the items in it. At this stage, we do not have all the information to
-//! resolve the contents of each declaration, so a [`StubDeclaration`] only
+//! resolve the contents of each declaration, so each [`Declaration`] only
 //! contains the minimal information we need for name resolution.
 //!
 //! See [`TypeChecker::declare_modules`].
@@ -60,9 +60,8 @@
 //! ## Declaring types
 //!
 //! The full structure for name resolution is now in place, which means we can
-//! start filling in the each [`StubDeclaration`] we found before and replace it
-//! with its actual [`Declaration`]. We start with the types declared in the
-//! script.
+//! start filling in the each [`Declaration`] we found before and add its
+//! with its actual definition. We start with the types declared in the script.
 //!
 //! See [`TypeChecker::declare_types`].
 //!
@@ -93,7 +92,6 @@
 //!
 //! See [`TypeChecker::force_filtermap_types`]
 //!
-//! [`StubDeclaration`]: scope::StubDeclaration
 //! [`Declaration`]: scope::Declaration
 
 use crate::{
@@ -109,7 +107,7 @@ use crate::{
 use cycle::detect_type_cycles;
 use scope::{
     DeclarationKind, ModuleScope, ResolvedName, ScopeRef, ScopeType,
-    StubDeclarationKind,
+    TypeOrStub,
 };
 use scoped_display::TypeDisplay;
 use std::{any::TypeId, borrow::Borrow};
@@ -218,7 +216,9 @@ impl TypeChecker {
 
             if let TypeDefinition::Enum(_, variants) = &ty {
                 let dec = self.type_info.scope_graph.get_declaration(name);
-                let DeclarationKind::Type(type_def) = dec.kind else {
+                let DeclarationKind::Type(TypeOrStub::Type(type_def)) =
+                    dec.kind
+                else {
                     ice!();
                 };
                 let scope = dec.scope.unwrap();
@@ -235,6 +235,7 @@ impl TypeChecker {
                                 type_def.clone(),
                                 variant.clone(),
                             ),
+                            |_| false,
                         )
                         .unwrap();
                 }
@@ -253,7 +254,7 @@ impl TypeChecker {
 
         // Little hack to put Some and None in the global namespace until
         // imports can be specified from the runtime.
-        let stub = self
+        let type_declaration = self
             .type_info
             .scope_graph
             .resolve_name(
@@ -272,7 +273,7 @@ impl TypeChecker {
                     ScopeRef::GLOBAL,
                     MetaId(0),
                     ResolvedName {
-                        scope: stub.scope.unwrap(),
+                        scope: type_declaration.scope.unwrap(),
                         ident: variant.into(),
                     },
                 )
@@ -348,7 +349,7 @@ impl TypeChecker {
                 FunctionKind::StaticMethod(id) | FunctionKind::Method(id) => {
                     let type_ident =
                         runtime.get_runtime_type(*id).unwrap().name();
-                    let stub = self
+                    let declaration = self
                         .type_info
                         .scope_graph
                         .resolve_name(
@@ -360,7 +361,7 @@ impl TypeChecker {
                             false,
                         )
                         .unwrap();
-                    stub.scope.unwrap()
+                    declaration.scope.unwrap()
                 }
             };
 
@@ -560,19 +561,31 @@ impl TypeChecker {
 
             for d in &ast.declarations {
                 let (kind, ident) = match d {
-                    ast::Declaration::Record(x) => {
-                        (StubDeclarationKind::Type(0), x.ident.clone())
-                    }
+                    ast::Declaration::Record(x) => (
+                        DeclarationKind::Type(TypeOrStub::Stub {
+                            num_params: 0,
+                        }),
+                        x.ident.clone(),
+                    ),
                     ast::Declaration::Function(x) => {
-                        (StubDeclarationKind::Function, x.ident.clone())
+                        (DeclarationKind::Function(None), x.ident.clone())
                     }
                     ast::Declaration::FilterMap(x) => {
-                        (StubDeclarationKind::Function, x.ident.clone())
+                        (DeclarationKind::Function(None), x.ident.clone())
                     }
                     ast::Declaration::Import(_) => continue,
                     ast::Declaration::Test(_) => continue,
                 };
-                self.type_info.scope_graph.insert_stub(scope, &ident, kind);
+
+                let res = self.type_info.scope_graph.insert_declaration(
+                    scope,
+                    &ident,
+                    kind,
+                    |_| false,
+                );
+                if let Err(e) = res {
+                    return Err(self.error_declared_twice(&ident, e));
+                }
             }
             modules.push((scope, m))
         }
@@ -766,7 +779,7 @@ impl TypeChecker {
         path: &ast::Path,
     ) -> TypeResult<()> {
         let mut idents = path.idents.iter();
-        let (ident, stub) =
+        let (ident, declaration) =
             self.resolve_module_part_of_path(scope, &mut idents)?;
 
         // This is a bit of an oversimplification. The
@@ -774,12 +787,12 @@ impl TypeChecker {
         // to import, but we might expand import functionality to enum
         // constructors.
         if let Some(_ident) = idents.next() {
-            return Err(self.error_expected_module(ident, stub));
+            return Err(self.error_expected_module(ident, declaration));
         }
 
         self.type_info
             .scope_graph
-            .insert_import(scope, ident.id, stub.name)
+            .insert_import(scope, ident.id, declaration.name)
             .map_err(|old| self.error_declared_twice(ident, old))
     }
 

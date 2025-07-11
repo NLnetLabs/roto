@@ -14,8 +14,7 @@ use crate::{
 
 use super::{
     scope::{
-        ResolvedName, ScopeRef, ScopeType, StubDeclaration,
-        StubDeclarationKind, ValueKind,
+        Declaration, ResolvedName, ScopeRef, ScopeType, TypeOrStub, ValueKind,
     },
     types::{
         EnumVariant, Function, FunctionDefinition, FunctionKind, Signature,
@@ -903,17 +902,16 @@ impl TypeChecker {
             self.type_info.scope_graph.get_declaration(type_name.name);
         let type_scope = type_dec.scope.unwrap();
 
-        let stub = self
+        let dec = self
             .type_info
             .scope_graph
             .resolve_name(type_scope, method, false)?;
-        let dec = self.type_info.scope_graph.get_declaration(stub.name);
 
-        let DeclarationKind::Method(func_def, ty) = dec.kind else {
+        let DeclarationKind::Method(Some(func_dec)) = dec.kind else {
             return None;
         };
 
-        let Type::Function(parameter_types, return_type) = ty else {
+        let Type::Function(parameter_types, return_type) = func_dec.ty else {
             ice!("Function must have function type");
         };
 
@@ -925,9 +923,9 @@ impl TypeChecker {
 
         Some(Function {
             signature,
-            name: stub.name,
+            name: dec.name,
             vars: Vec::new(),
-            definition: func_def,
+            definition: func_dec.definition,
         })
     }
 
@@ -935,13 +933,13 @@ impl TypeChecker {
     fn get_function(&mut self, name: ResolvedName) -> Option<Function> {
         let dec = self.type_info.scope_graph.get_declaration(name);
 
-        let (DeclarationKind::Function(func_def, ty)
-        | DeclarationKind::Method(func_def, ty)) = dec.kind
+        let (DeclarationKind::Function(Some(func_dec))
+        | DeclarationKind::Method(Some(func_dec))) = dec.kind
         else {
             return None;
         };
 
-        let Type::Function(parameter_types, return_type) = ty else {
+        let Type::Function(parameter_types, return_type) = func_dec.ty else {
             ice!("Function must have function type");
         };
 
@@ -955,7 +953,7 @@ impl TypeChecker {
             signature,
             name,
             vars: Vec::new(),
-            definition: func_def,
+            definition: func_dec.definition,
         })
     }
 
@@ -1046,11 +1044,11 @@ impl TypeChecker {
         &self,
         mut scope: ScopeRef,
         mut idents: impl Iterator<Item = &'a Meta<Identifier>>,
-    ) -> TypeResult<(&'a Meta<Identifier>, StubDeclaration)> {
+    ) -> TypeResult<(&'a Meta<Identifier>, Declaration)> {
         let mut ident = idents.next().unwrap();
 
         while ident.node == "super".into() {
-            let Some(stub) = self.type_info.scope_graph.parent_module(scope)
+            let Some(dec) = self.type_info.scope_graph.parent_module(scope)
             else {
                 return Err(self.error_simple(
                     "could not resolve name: too many leading `super` keywords".to_string(),
@@ -1059,7 +1057,6 @@ impl TypeChecker {
                 ));
             };
 
-            let dec = self.type_info.scope_graph.get_declaration(stub.name);
             let Some(s) = dec.scope else {
                 unreachable!();
             };
@@ -1067,7 +1064,7 @@ impl TypeChecker {
             scope = s;
 
             let Some(tmp_ident) = idents.next() else {
-                return Ok((ident, stub));
+                return Ok((ident, dec));
             };
 
             ident = tmp_ident;
@@ -1114,10 +1111,8 @@ impl TypeChecker {
         ast::Path { idents }: &ast::Path,
     ) -> TypeResult<ResolvedPath> {
         let mut idents = idents.iter();
-        let (ident, stub) =
+        let (ident, dec) =
             self.resolve_module_part_of_path(scope, &mut idents)?;
-
-        let dec = self.type_info.scope_graph.get_declaration(stub.name);
 
         match &dec.kind {
             // We have reached the end of the iterator, but are still a module even though we
@@ -1130,11 +1125,16 @@ impl TypeChecker {
                 Err(self.error_expected_value(ident, &dec))
             }
             // We ended on a function, which means there can be no identifiers left
-            DeclarationKind::Function(definition, ty) => {
+            DeclarationKind::Function(Some(func_dec))
+            | DeclarationKind::Method(Some(func_dec)) => {
                 if let Some(field) = idents.next() {
-                    return Err(self.error_no_field_on_type(ty, field));
+                    return Err(
+                        self.error_no_field_on_type(&func_dec.ty, field)
+                    );
                 }
-                let Type::Function(parameter_types, return_type) = ty else {
+                let Type::Function(parameter_types, return_type) =
+                    &func_dec.ty
+                else {
                     panic!()
                 };
                 let signature = Signature {
@@ -1144,7 +1144,7 @@ impl TypeChecker {
                 };
                 Ok(ResolvedPath::Function {
                     name: dec.name,
-                    definition: definition.clone(),
+                    definition: func_dec.definition.clone(),
                     signature,
                 })
             }
@@ -1193,24 +1193,6 @@ impl TypeChecker {
                     fields,
                 }))
             }
-            DeclarationKind::Method(definition, ty) => {
-                if let Some(field) = idents.next() {
-                    return Err(self.error_no_field_on_type(ty, field));
-                }
-                let Type::Function(parameter_types, return_type) = ty else {
-                    ice!()
-                };
-                let signature = Signature {
-                    kind: FunctionKind::Free, // TODO: change to method or not?
-                    parameter_types: parameter_types.clone(),
-                    return_type: (**return_type).clone(),
-                };
-                Ok(ResolvedPath::Function {
-                    name: dec.name,
-                    definition: definition.clone(),
-                    signature,
-                })
-            }
             DeclarationKind::Variant(ty, variant) => {
                 if let Some(_field) = idents.next() {
                     todo!("make a nice error for variant cannot have field")
@@ -1220,8 +1202,9 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
-            DeclarationKind::Stub(_) => {
-                ice!()
+            DeclarationKind::Function(None)
+            | DeclarationKind::Method(None) => {
+                ice!("These should be declared at this point")
             }
         }
     }
@@ -1233,20 +1216,25 @@ impl TypeChecker {
         params: &[Meta<TypeExpr>],
     ) -> TypeResult<Type> {
         let mut idents = path.idents.iter();
-        let (ident, stub) =
+        let (ident, declaration) =
             self.resolve_module_part_of_path(scope, &mut idents)?;
 
-        match stub.kind {
-            StubDeclarationKind::Variable
-            | StubDeclarationKind::Context
-            | StubDeclarationKind::Constant
-            | StubDeclarationKind::Function
-            | StubDeclarationKind::Method
-            | StubDeclarationKind::Variant
-            | StubDeclarationKind::Module => {
-                Err(self.error_expected_type(ident, stub))
+        match declaration.kind {
+            DeclarationKind::Value(..)
+            | DeclarationKind::Function(..)
+            | DeclarationKind::Method(..)
+            | DeclarationKind::Variant(..)
+            | DeclarationKind::Module => {
+                Err(self.error_expected_type(ident, declaration))
             }
-            StubDeclarationKind::Type(num_params) => {
+            DeclarationKind::Type(type_or_stub) => {
+                let num_params = match type_or_stub {
+                    TypeOrStub::Type(type_definition) => {
+                        type_definition.type_name().arguments.len()
+                    }
+                    TypeOrStub::Stub { num_params } => num_params,
+                };
+
                 if num_params != params.len() {
                     return Err(self.error_simple(
                         format!(
@@ -1264,7 +1252,7 @@ impl TypeChecker {
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(Type::Name(TypeName {
-                    name: stub.name,
+                    name: declaration.name,
                     arguments: params,
                 }))
             }

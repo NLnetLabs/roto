@@ -205,11 +205,12 @@ impl<'r> Lowerer<'r> {
         let name = self.type_info.resolved_name(&function.ident);
         let dec = self.type_info.scope_graph.get_declaration(name);
 
-        let DeclarationKind::Function(_, ty) = dec.kind else {
+        let DeclarationKind::Function(Some(func_dec)) = dec.kind else {
             ice!();
         };
 
-        let Type::Function(_, ret) = self.type_info.resolve(&ty) else {
+        let Type::Function(_, ret) = self.type_info.resolve(&func_dec.ty)
+        else {
             ice!("A function must have a function type");
         };
 
