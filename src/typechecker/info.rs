@@ -4,6 +4,7 @@ use std::{collections::HashMap, fmt::Debug};
 
 use crate::{
     ast::Identifier,
+    ice,
     parser::meta::MetaId,
     runtime::{
         layout::{Layout, LayoutBuilder},
@@ -15,7 +16,9 @@ use crate::{
 
 use super::{
     expr::ResolvedPath,
-    scope::{DeclarationKind, ResolvedName, ScopeGraph, ScopeRef},
+    scope::{
+        DeclarationKind, ResolvedName, ScopeGraph, ScopeRef, TypeOrStub,
+    },
     types::{
         Function, IntKind, IntSize, Primitive, Signature, Type,
         TypeDefinition, TypeName,
@@ -222,8 +225,8 @@ impl TypeInfo {
     pub fn resolve_type_name(&mut self, ty: &TypeName) -> TypeDefinition {
         let name = ty.name;
         let dec = self.scope_graph.get_declaration(name);
-        let DeclarationKind::Type(ty) = dec.kind else {
-            panic!()
+        let DeclarationKind::Type(TypeOrStub::Type(ty)) = dec.kind else {
+            ice!()
         };
         ty
     }

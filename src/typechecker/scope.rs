@@ -5,13 +5,14 @@ use std::collections::btree_map::{BTreeMap, Entry};
 
 use crate::{
     ast::Identifier,
+    ice,
     parser::meta::{Meta, MetaId},
 };
 
 use super::{
     info::TypeInfo,
     scoped_display::TypeDisplay,
-    types::{FunctionDefinition, TypeDefinition},
+    types::{EnumVariant, FunctionDefinition, TypeDefinition},
     Type,
 };
 
@@ -54,14 +55,29 @@ pub struct Declaration {
     pub name: ResolvedName,
     pub kind: DeclarationKind,
     pub id: MetaId,
+    pub scope: Option<ScopeRef>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DeclarationKind {
     Value(ValueKind, Type),
+    Type(TypeOrStub),
+    Function(Option<FunctionDeclaration>),
+    Module,
+    Method(Option<FunctionDeclaration>),
+    Variant(TypeDefinition, EnumVariant),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FunctionDeclaration {
+    pub definition: FunctionDefinition,
+    pub ty: Type,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TypeOrStub {
     Type(TypeDefinition),
-    Function(FunctionDefinition, Type),
-    Module(ScopeRef),
+    Stub { num_params: usize },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -71,31 +87,8 @@ pub enum ValueKind {
     Context(usize),
 }
 
-/// An incomplete declaration in a [`ScopeGraph`]
-///
-/// This is used to declare types before they can be fully defined.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct StubDeclaration {
-    pub name: ResolvedName,
-    pub kind: StubDeclarationKind,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum StubDeclarationKind {
-    Context,
-    Constant,
-    Variable,
-    /// The declaration is a type
-    ///
-    /// The usize parameter specifies the number of type parameters
-    Type(usize),
-    Function,
-    Module,
-}
-
 #[derive(Clone)]
 pub struct ScopeGraph {
-    stub_declarations: BTreeMap<ResolvedName, StubDeclaration>,
     pub declarations: BTreeMap<ResolvedName, Declaration>,
     scopes: Vec<Scope>,
 }
@@ -119,6 +112,7 @@ pub enum ScopeType {
     Module(ModuleScope),
     Function(Identifier),
     MatchArm(usize, Option<usize>),
+    Type(Identifier),
 }
 
 #[derive(Clone)]
@@ -127,38 +121,9 @@ pub struct ModuleScope {
     pub parent_module: Option<ScopeRef>,
 }
 
-impl Declaration {
-    pub fn to_stub(&self) -> StubDeclaration {
-        StubDeclaration {
-            name: self.name,
-            kind: self.kind.to_stub(),
-        }
-    }
-}
-
-impl DeclarationKind {
-    fn to_stub(&self) -> StubDeclarationKind {
-        match self {
-            Self::Value(ValueKind::Local, _) => StubDeclarationKind::Variable,
-            Self::Value(ValueKind::Constant, _) => {
-                StubDeclarationKind::Constant
-            }
-            Self::Value(ValueKind::Context(_), _) => {
-                StubDeclarationKind::Context
-            }
-            Self::Type(def) => {
-                StubDeclarationKind::Type(def.type_parameters())
-            }
-            Self::Function(_, _) => StubDeclarationKind::Function,
-            Self::Module(_) => StubDeclarationKind::Module,
-        }
-    }
-}
-
 impl ScopeGraph {
     pub fn new() -> Self {
         Self {
-            stub_declarations: BTreeMap::new(),
             declarations: BTreeMap::new(),
             scopes: vec![Scope {
                 scope_type: ScopeType::Root,
@@ -197,19 +162,14 @@ impl ScopeGraph {
         mut scope: ScopeRef,
         ident: &Meta<Identifier>,
         recurse: bool,
-    ) -> Option<StubDeclaration> {
+    ) -> Option<Declaration> {
         loop {
             let name = ResolvedName {
                 scope,
                 ident: **ident,
             };
-            if let Some(x) = self
-                .declarations
-                .get(&name)
-                .map(|d| d.to_stub())
-                .or_else(|| self.stub_declarations.get(&name).cloned())
-            {
-                return Some(x);
+            if let Some(d) = self.declarations.get(&name) {
+                return Some(d.clone());
             }
 
             if !recurse {
@@ -217,7 +177,7 @@ impl ScopeGraph {
             }
 
             if let Some(x) = self.scopes[scope.0].imports.get(ident) {
-                return Some(self.declarations.get(&x.1).unwrap().to_stub());
+                return Some(self.declarations.get(&x.1).unwrap().clone());
             }
 
             scope = self.parent(scope)?;
@@ -225,7 +185,10 @@ impl ScopeGraph {
     }
 
     pub fn get_declaration(&self, name: ResolvedName) -> Declaration {
-        self.declarations.get(&name).unwrap().clone()
+        let Some(dec) = self.declarations.get(&name) else {
+            ice!("Could not get declaration: {}", name.ident);
+        };
+        dec.clone()
     }
 
     pub fn insert_import(
@@ -261,7 +224,12 @@ impl ScopeGraph {
         match self.declarations.entry(name) {
             Entry::Occupied(_) => Err(()),
             Entry::Vacant(entry) => {
-                entry.insert(Declaration { name, kind, id });
+                entry.insert(Declaration {
+                    name,
+                    kind,
+                    id,
+                    scope: None,
+                });
                 Ok(name)
             }
         }
@@ -282,7 +250,12 @@ impl ScopeGraph {
         match self.declarations.entry(name) {
             Entry::Occupied(_) => Err(()),
             Entry::Vacant(entry) => {
-                entry.insert(Declaration { name, kind, id });
+                entry.insert(Declaration {
+                    name,
+                    kind,
+                    id,
+                    scope: None,
+                });
                 Ok(name)
             }
         }
@@ -294,19 +267,9 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
         let kind = DeclarationKind::Value(ValueKind::Local, ty.clone());
-        let id = ident.id;
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration { name, kind, id },
-        )?;
-        Ok(name)
+        let dec = self.insert_declaration(scope, ident, kind, |_| false)?;
+        Ok(dec.name)
     }
 
     pub fn insert_type(
@@ -315,14 +278,20 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         ty: TypeDefinition,
     ) -> Result<(), MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
+        let kind = DeclarationKind::Type(TypeOrStub::Type(ty.clone()));
+        let new_scope = self.wrap(scope, ScopeType::Type(**ident));
+        let dec = self.insert_declaration(scope, ident, kind, |kind| {
+            if let DeclarationKind::Type(TypeOrStub::Stub { num_params }) =
+                kind
+            {
+                *num_params == ty.type_name().arguments.len()
+            } else {
+                false
+            }
+        })?;
 
-        let kind = DeclarationKind::Type(ty.clone());
-        let id = ident.id;
-        self.insert_declaration(scope, ident, Declaration { name, kind, id })
+        dec.scope = Some(new_scope);
+        Ok(())
     }
 
     pub fn insert_module(
@@ -331,14 +300,10 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         mod_scope: ScopeRef,
     ) -> Result<(), MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
-        let kind = DeclarationKind::Module(mod_scope);
-        let id = ident.id;
-        self.insert_declaration(scope, ident, Declaration { name, kind, id })
+        let kind = DeclarationKind::Module;
+        let dec = self.insert_declaration(scope, ident, kind, |_| false)?;
+        dec.scope = Some(mod_scope);
+        Ok(())
     }
 
     pub fn insert_function(
@@ -348,58 +313,67 @@ impl ScopeGraph {
         definition: FunctionDefinition,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-
-        let kind = DeclarationKind::Function(definition, ty.clone());
-        let id = ident.id;
-        self.insert_declaration(
-            scope,
-            ident,
-            Declaration { name, kind, id },
-        )?;
-        Ok(name)
+        let kind = DeclarationKind::Function(Some(FunctionDeclaration {
+            definition,
+            ty: ty.clone(),
+        }));
+        let dec = self.insert_declaration(scope, ident, kind, |kind| {
+            matches!(kind, DeclarationKind::Function(None))
+        })?;
+        Ok(dec.name)
     }
 
-    pub fn insert_stub(
+    pub fn insert_method(
         &mut self,
         scope: ScopeRef,
         ident: &Meta<Identifier>,
-        stub: StubDeclarationKind,
-    ) {
-        let name = ResolvedName {
-            scope,
-            ident: **ident,
-        };
-        self.stub_declarations
-            .insert(name, StubDeclaration { name, kind: stub });
+        definition: FunctionDefinition,
+        ty: &Type,
+    ) -> Result<ResolvedName, MetaId> {
+        let kind = DeclarationKind::Method(Some(FunctionDeclaration {
+            definition,
+            ty: ty.clone(),
+        }));
+        let dec = self.insert_declaration(scope, ident, kind, |kind| {
+            matches!(kind, DeclarationKind::Method(None))
+        })?;
+        Ok(dec.name)
     }
 
     pub fn insert_declaration(
         &mut self,
         scope: ScopeRef,
         ident: &Meta<Identifier>,
-        declaration: Declaration,
-    ) -> Result<(), MetaId> {
+        kind: DeclarationKind,
+        update_if: impl Fn(&DeclarationKind) -> bool,
+    ) -> Result<&mut Declaration, MetaId> {
         let name = ResolvedName {
             scope,
             ident: **ident,
         };
         match self.declarations.entry(name) {
             Entry::Vacant(entry) => {
-                entry.insert(declaration);
-                Ok(())
+                let new = Declaration {
+                    name,
+                    kind,
+                    id: ident.id,
+                    scope: None,
+                };
+                Ok(entry.insert(new))
             }
-            Entry::Occupied(entry) => Err(entry.get().id),
+            Entry::Occupied(entry) => {
+                let old = entry.into_mut();
+                if update_if(&old.kind) {
+                    old.kind = kind;
+                    Ok(old)
+                } else {
+                    Err(old.id)
+                }
+            }
         }
     }
 
-    pub fn parent_module(
-        &self,
-        mut scope: ScopeRef,
-    ) -> Option<StubDeclaration> {
+    pub fn parent_module(&self, mut scope: ScopeRef) -> Option<Declaration> {
         loop {
             let s = &self.scopes[scope.0];
 
@@ -409,10 +383,7 @@ impl ScopeGraph {
                 else {
                     unreachable!();
                 };
-                return Some(StubDeclaration {
-                    name: parent.name,
-                    kind: StubDeclarationKind::Module,
-                });
+                return Some(self.get_declaration(parent.name));
             }
 
             scope = self.parent(scope)?;
@@ -470,6 +441,7 @@ impl ScopeGraph {
                 ScopeType::MatchArm(idx, None) => {
                     format!("$match_{idx}_arm_default")
                 }
+                ScopeType::Type(name) => name.as_str().to_string(),
             };
             idents.push(ident);
             scope = s.parent;
