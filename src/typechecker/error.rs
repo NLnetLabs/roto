@@ -135,21 +135,6 @@ impl TypeChecker {
         }
     }
 
-    pub fn error_expected_enum(
-        &self,
-        ident: &Meta<Identifier>,
-        ty: &impl TypeDisplay,
-    ) -> TypeError {
-        TypeError {
-            description: format!(
-                "expected enum, but found type `{}`",
-                ty.display(&self.type_info)
-            ),
-            location: ident.id,
-            labels: vec![Label::error("expected type", ident.id)],
-        }
-    }
-
     pub fn error_expected_type(
         &self,
         ident: &Meta<Identifier>,
@@ -459,15 +444,75 @@ impl TypeChecker {
     pub fn error_no_field_on_type(
         &self,
         ty: &impl TypeDisplay,
-        field: &Meta<Identifier>,
+        ident: &Meta<Identifier>,
     ) -> TypeError {
         self.error_simple(
             format!(
-                "no field `{field}` on type `{}`",
+                "no field `{ident}` on type `{}`",
                 ty.display(&self.type_info)
             ),
-            format!("unknown field `{field}`"),
-            field.id,
+            format!("unknown field `{ident}`"),
+            ident.id,
+        )
+    }
+
+    pub fn error_no_method_on_type(
+        &self,
+        ty: &impl TypeDisplay,
+        ident: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!(
+                "no method `{ident}` on type `{}`",
+                ty.display(&self.type_info)
+            ),
+            format!("unknown method `{ident}`"),
+            ident.id,
+        )
+    }
+
+    pub fn error_no_static_method_on_type(
+        &self,
+        ty: &impl TypeDisplay,
+        ident: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!(
+                "no static method `{ident}` on type `{}`",
+                ty.display(&self.type_info)
+            ),
+            format!("unknown static method `{ident}`"),
+            ident.id,
+        )
+    }
+
+    pub fn error_no_variant_on_type(
+        &self,
+        ty: &impl TypeDisplay,
+        ident: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!(
+                "no variant or static method `{ident}` on type `{}`",
+                ty.display(&self.type_info)
+            ),
+            format!("unknown variant or static method `{ident}`"),
+            ident.id,
+        )
+    }
+
+    pub fn error_no_field_or_method_on_type(
+        &self,
+        ty: &impl TypeDisplay,
+        ident: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!(
+                "no field or method `{ident}` on type `{}`",
+                ty.display(&self.type_info)
+            ),
+            format!("unknown field or method `{ident}`"),
+            ident.id,
         )
     }
 
