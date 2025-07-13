@@ -8,15 +8,19 @@
 use crate::ast::{
     Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };
-use std::{fmt::Display, iter::Peekable};
+use error::ParseErrorKind;
+use std::iter::Peekable;
 use token::{Keyword, Lexer, Token};
 
 use self::meta::{Meta, Span, Spans};
 
+mod error;
 mod expr;
 mod filter_map;
 pub mod meta;
 pub mod token;
+
+pub use error::ParseError;
 
 #[cfg(test)]
 mod test_expressions;
@@ -24,143 +28,6 @@ mod test_expressions;
 mod test_sections;
 
 type ParseResult<T> = Result<T, ParseError>;
-
-#[derive(Clone, Debug)]
-pub struct ParseError {
-    pub location: Span,
-    pub kind: ParseErrorKind,
-    pub note: Option<String>,
-}
-
-impl ParseError {
-    fn expected(
-        expected: impl Display,
-        got: impl Display,
-        span: Span,
-    ) -> Self {
-        Self {
-            kind: ParseErrorKind::Expected {
-                expected: expected.to_string(),
-                got: got.to_string(),
-            },
-            location: span,
-            note: None,
-        }
-    }
-
-    fn invalid_literal(
-        description: impl Display,
-        token: impl Display,
-        inner: impl Display,
-        span: Span,
-    ) -> Self {
-        Self {
-            kind: ParseErrorKind::InvalidLiteral {
-                description: description.to_string(),
-                token: token.to_string(),
-                inner_error: inner.to_string(),
-            },
-            location: span,
-            note: None,
-        }
-    }
-
-    fn custom(
-        description: impl Display,
-        label: impl Display,
-        span: Span,
-    ) -> Self {
-        Self {
-            kind: ParseErrorKind::Custom {
-                description: description.to_string(),
-                label: label.to_string(),
-            },
-            location: span,
-            note: None,
-        }
-    }
-
-    fn with_note(self, note: impl Into<String>) -> Self {
-        Self {
-            note: Some(note.into()),
-            ..self
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum ParseErrorKind {
-    EmptyInput,
-    EndOfInput,
-    FailedToParseEntireInput,
-    InvalidToken,
-    Expected {
-        expected: String,
-        got: String,
-    },
-    InvalidLiteral {
-        description: String,
-        token: String,
-        inner_error: String,
-    },
-    Custom {
-        description: String,
-        label: String,
-    },
-}
-
-impl ParseErrorKind {
-    pub fn label(&self) -> String {
-        match self {
-            Self::EmptyInput => "input is empty".into(),
-            Self::EndOfInput => "reached end of input".into(),
-            Self::FailedToParseEntireInput => "parser got stuck here".into(),
-            Self::InvalidToken => "invalid token".into(),
-            Self::Expected { expected, .. } => {
-                format!("expected {expected}")
-            }
-            Self::InvalidLiteral { description, .. } => {
-                format!("invalid {description}")
-            }
-            Self::Custom { label, .. } => label.clone(),
-        }
-    }
-}
-
-impl std::fmt::Display for ParseErrorKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::EmptyInput => write!(f, "input was empty"),
-            Self::EndOfInput => write!(f, "unexpected end of input"),
-            Self::FailedToParseEntireInput => {
-                write!(f, "failed to parse entire input")
-            }
-            Self::InvalidToken => write!(f, "invalid token"),
-            Self::Expected { expected, got, .. } => {
-                write!(f, "expected {expected} but got '{got}'")
-            }
-            Self::InvalidLiteral {
-                description,
-                token,
-                inner_error,
-                ..
-            } => {
-                write!(f, "found an invalid {description} literal '{token}': {inner_error}")
-            }
-            Self::Custom { description, .. } => {
-                write!(f, "{description}")
-            }
-        }
-    }
-}
-
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind)
-    }
-}
-
-impl std::error::Error for ParseError {}
 
 pub struct Parser<'source, 'spans> {
     file: usize,

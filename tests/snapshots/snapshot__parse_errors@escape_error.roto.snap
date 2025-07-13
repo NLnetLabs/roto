@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/parse_errors/escape_error.roto
+---
+Error: Parse error: unknown character escape
+   ╭─[ tests/scripts/parse_errors/escape_error.roto:2:17 ]
+   │
+ 2 │     let x = "blabla\y";
+   │                    ─┬  
+   │                     ╰── unknown character escape
+───╯
