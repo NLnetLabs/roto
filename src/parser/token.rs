@@ -75,6 +75,7 @@ pub enum Keyword {
     Super,
     Test,
     Type,
+    While,
 }
 
 pub struct Lexer<'a> {
@@ -425,6 +426,7 @@ impl<'s> Lexer<'s> {
             "super" => Keyword::Super,
             "test" => Keyword::Test,
             "type" => Keyword::Type,
+            "while" => Keyword::While,
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
             "false" => return ControlFlow::Break((Token::Bool(false), span)),
@@ -511,6 +513,7 @@ impl Keyword {
             Keyword::Super => "super",
             Keyword::Test => "test",
             Keyword::Type => "type",
+            Keyword::While => "while",
         }
     }
 }

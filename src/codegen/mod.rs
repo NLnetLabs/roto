@@ -552,7 +552,8 @@ impl ModuleBuilder {
 }
 
 impl<'c> FuncGen<'c> {
-    fn finalize(self) {
+    fn finalize(mut self) {
+        self.builder.seal_all_blocks();
         self.builder.finalize()
     }
 
@@ -566,7 +567,6 @@ impl<'c> FuncGen<'c> {
     ) {
         let entry_block = self.get_block(block.label);
         self.builder.switch_to_block(entry_block);
-        self.builder.seal_block(entry_block);
 
         let ty = self.module.cranelift_type(&IrType::Pointer);
         self.variable(
@@ -651,7 +651,6 @@ impl<'c> FuncGen<'c> {
     fn block(&mut self, block: &lir::Block) {
         let b = self.get_block(block.label);
         self.builder.switch_to_block(b);
-        self.builder.seal_block(b);
 
         for instruction in &block.instructions {
             self.instruction(instruction);
