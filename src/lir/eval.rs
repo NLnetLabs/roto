@@ -483,6 +483,19 @@ pub fn eval(
                 let val = eval_operand(&vars, val).as_bool();
                 vars.insert(to.clone(), IrValue::Bool(val));
             }
+            Instruction::Negate { to, val } => {
+                let val = eval_operand(&vars, val);
+                let res = match val {
+                    IrValue::I8(x) => IrValue::I8(-x),
+                    IrValue::I16(x) => IrValue::I16(-x),
+                    IrValue::I32(x) => IrValue::I32(-x),
+                    IrValue::I64(x) => IrValue::I64(-x),
+                    IrValue::F32(x) => IrValue::F32(-x),
+                    IrValue::F64(x) => IrValue::F64(-x),
+                    _ => panic!(),
+                };
+                vars.insert(to.clone(), res);
+            }
             Instruction::Add { to, left, right } => {
                 let left = eval_operand(&vars, left);
                 let right = eval_operand(&vars, right);

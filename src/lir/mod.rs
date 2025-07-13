@@ -170,6 +170,9 @@ pub enum Instruction {
     /// Boolean not
     Not { to: Var, val: Operand },
 
+    /// Numeric negation
+    Negate { to: Var, val: Operand },
+
     /// Add offset to a pointer
     Offset { to: Var, from: Operand, offset: u32 },
 

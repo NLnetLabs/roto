@@ -22,7 +22,7 @@ impl UnionFind {
     pub fn find(&mut self, index: usize) -> Type {
         match &self.inner[index] {
             Type::Var(i)
-            | Type::IntVar(i)
+            | Type::IntVar(i, _)
             | Type::FloatVar(i)
             | Type::RecordVar(i, _)
                 if *i != index =>
@@ -51,7 +51,7 @@ impl UnionFind {
     pub fn find_ref(&self, index: usize) -> &Type {
         match &self.inner[index] {
             Type::Var(i)
-            | Type::IntVar(i)
+            | Type::IntVar(i, _)
             | Type::FloatVar(i)
             | Type::RecordVar(i, _)
                 if *i != index =>

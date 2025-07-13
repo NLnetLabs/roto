@@ -103,6 +103,7 @@ pub enum Value {
     Clone(Place),
     Discriminant(Var),
     Not(Var),
+    Negate(Var, Type),
     Move(Var),
     BinOp {
         left: Var,

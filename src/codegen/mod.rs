@@ -771,6 +771,18 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
+            lir::Instruction::Negate { to, val } => {
+                let (val, val_ty) = self.operand(val);
+                let var = self.variable(to, val_ty);
+
+                let val = if let F32 | F64 = val_ty {
+                    self.ins().fneg(val)
+                } else {
+                    self.ins().ineg(val)
+                };
+
+                self.def(var, val)
+            }
             lir::Instruction::Add { to, left, right } => {
                 let (l, left_ty) = self.operand(left);
                 let (r, _) = self.operand(right);
