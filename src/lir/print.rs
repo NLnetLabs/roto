@@ -116,9 +116,9 @@ impl Printable for Instruction {
                     val.print(printer),
                 )
             }
-            LoadConstant { to, name, ty } => {
+            ConstantAddress { to, name } => {
                 format!(
-                    "{}: {ty} = LoadConstant(\"{}\")",
+                    "{} = ConstantAddress(\"{}\")",
                     to.print(printer),
                     name
                 )
@@ -183,7 +183,10 @@ impl Printable for Instruction {
                 string,
                 init_func: _,
             } => {
-                format!("{}: String = \"{string}\"", to.print(printer),)
+                format!(
+                    "{}: String = InitString(\"{string}\")",
+                    to.print(printer),
+                )
             }
             Return(None) => "return".to_string(),
             Return(Some(v)) => {

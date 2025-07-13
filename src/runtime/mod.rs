@@ -15,23 +15,18 @@ pub mod verdict;
 pub mod tests;
 
 use std::{
-    any::{type_name, TypeId},
-    collections::HashMap,
-    path::Path,
-    ptr, slice, str,
-    sync::Arc,
+    any::TypeId, collections::HashMap, path::Path, ptr, slice, str, sync::Arc,
 };
 
 use context::ContextDescription;
 use func::{Func, FunctionDescription};
 use layout::Layout;
-use ty::TypeDescription;
+use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 
 use crate::{
     ast::Identifier,
     codegen::check::RotoFunc,
     parser::token::{Lexer, Token},
-    runtime::ty::{Ty, TypeRegistry},
     Compiled, Context, FileTree, RotoReport,
 };
 
@@ -232,7 +227,28 @@ pub struct RuntimeConstant {
     pub name: Identifier,
     pub ty: TypeId,
     pub docstring: String,
-    pub bytes: Box<[u8]>,
+    pub value: Constant,
+}
+
+#[derive(Clone)]
+pub struct Constant(Arc<dyn Send + Sync + 'static>);
+
+impl std::fmt::Debug for Constant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Constant")
+            .field(&Arc::as_ptr(&self.0))
+            .finish()
+    }
+}
+
+impl Constant {
+    pub fn new<T: Send + Sync + 'static>(x: T) -> Self {
+        Self(Arc::new(x))
+    }
+
+    pub fn ptr(&self) -> *const () {
+        Arc::as_ptr(&self.0) as *const ()
+    }
 }
 
 impl Runtime {
@@ -516,31 +532,38 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_constant<T: 'static>(
+    /// Register a new global constant
+    ///
+    /// Constants are shared between function functions. Since functions
+    /// can be send to other threads, the constants must be `Send` and `Sync`.
+    pub fn register_constant<T: Reflect>(
         &mut self,
         name: impl Into<String>,
         docstring: &str,
         x: T,
-    ) -> Result<(), String> {
-        let type_id = TypeId::of::<T>();
-        self.find_type(type_id, type_name::<T>())?;
-        let mut bytes: Vec<u8> = vec![0; size_of::<T>()];
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                &x as *const T as *const _,
-                bytes.as_mut_ptr(),
-                bytes.len(),
+    ) -> Result<(), String>
+    where
+        T::Transformed: Send + Sync + 'static,
+    {
+        let ty = TypeRegistry::resolve::<T>();
+        let id = ty.type_id;
+
+        self.get_runtime_type(id).ok_or_else(|| {
+            let ty = TypeRegistry::get(id).unwrap();
+            format!(
+                "Registered a constant with an unregistered type: `{}`",
+                ty.rust_name
             )
-        };
+        })?;
 
         let symbol = Identifier::from(name.into());
         self.constants.insert(
             symbol,
             RuntimeConstant {
                 name: symbol,
-                ty: type_id,
+                ty: ty.type_id,
                 docstring: docstring.into(),
-                bytes: bytes.into_boxed_slice(),
+                value: Constant::new(x.transform()),
             },
         );
 
@@ -643,5 +666,6 @@ pub unsafe extern "C" fn init_string(
 ) {
     let slice = unsafe { slice::from_raw_parts(data, len as usize) };
     let str = unsafe { std::str::from_utf8_unchecked(slice) };
-    unsafe { ptr::write(s, str.into()) };
+    let arc = Arc::<str>::from(str);
+    unsafe { ptr::write(s, arc) };
 }

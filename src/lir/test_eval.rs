@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{eval::Memory, value::IrValue};
 use crate::{
     runtime::tests::routecore_runtime, src, FileTree, LoweredToLir, Runtime,
@@ -463,4 +465,26 @@ fn ip_addr_method() {
         let res = mem.read_array::<1>(verdict_pointer);
         assert_eq!(expected, u8::from_ne_bytes(res));
     }
+}
+
+#[test]
+fn string_global() {
+    let s = src!(
+        r#"fn main() -> bool {
+            FOO == "BAR"
+        }"#
+    );
+
+    let mut runtime = Runtime::new();
+
+    let foo: Arc<str> = "BAR".into();
+    runtime.register_constant("FOO", "...", foo).unwrap();
+
+    let p = compile(s, &runtime);
+
+    let mut mem = Memory::new();
+    let ctx = IrValue::Pointer(mem.allocate(0));
+    let res = p.eval(&mut mem, ctx, Vec::new()).unwrap();
+
+    assert_eq!(res, IrValue::Bool(true));
 }

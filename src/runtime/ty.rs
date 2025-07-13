@@ -145,16 +145,6 @@ pub trait Reflect: Sized + 'static {
     ///
     /// The information is also returned for direct use.
     fn resolve() -> Ty;
-
-    /// Turn this value into bytes
-    ///
-    /// This is used by the IR evaluator
-    fn to_bytes(mut transformed: Self::Transformed) -> Vec<u8> {
-        let ptr = &mut transformed as *mut Self::Transformed as *mut u8;
-        std::mem::forget(transformed);
-        let size = std::mem::size_of::<Self::Transformed>();
-        unsafe { Vec::from_raw_parts(ptr, size, size) }
-    }
 }
 
 pub struct IrValueDoesNotMatchType;

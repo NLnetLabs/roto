@@ -17,7 +17,7 @@ use crate::{
     label::{LabelRef, LabelStore},
     lir::{self, value::IrType, FloatCmp, IntCmp, Operand, Var, VarKind},
     runtime::{
-        context::ContextDescription, ty::Reflect, RuntimeConstant,
+        context::ContextDescription, ty::Reflect, Constant, RuntimeConstant,
         RuntimeFunctionRef,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
@@ -41,7 +41,7 @@ use cranelift::{
         Variable,
     },
     jit::{JITBuilder, JITModule},
-    module::{DataDescription, FuncId, FuncOrDataId, Linkage, Module as _},
+    module::{DataDescription, FuncId, Linkage, Module as _},
     prelude::{FloatCC, Signature},
 };
 use cranelift_codegen::ir::{SigRef, StackSlot};
@@ -52,46 +52,60 @@ pub mod testing;
 #[cfg(test)]
 mod tests;
 
-/// A wrapper around a cranelift [`JITModule`] that cleans up after itself
-///
-/// This is achieved by wrapping the module in an [`Arc`].
-#[derive(Clone)]
-pub struct ModuleData(Arc<ManuallyDrop<JITModule>>);
+struct ModuleData {
+    cranelift_jit: ManuallyDrop<JITModule>,
 
-// Just a simple debug to print _something_. We print the Arc pointer to
-// distinguish different ModuleData instances.
-impl std::fmt::Debug for ModuleData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("ModuleData")
-            .field(&Arc::as_ptr(&self.0))
-            .finish()
-    }
+    /// The functions in this module can reference constants. The values of
+    /// these constants are stored in this HashMap. So, as long as the function
+    /// are around, we have to keep these constants around. That is why they
+    /// need to be stored in this struct, even though this field is unused.
+    _constants: HashMap<Identifier, Constant>,
 }
 
-impl From<JITModule> for ModuleData {
-    fn from(value: JITModule) -> Self {
-        #[allow(clippy::arc_with_non_send_sync)]
-        Self(Arc::new(ManuallyDrop::new(value)))
+impl ModuleData {
+    fn new(
+        cranelift_jit: JITModule,
+        constants: HashMap<Identifier, Constant>,
+    ) -> Self {
+        Self {
+            cranelift_jit: ManuallyDrop::new(cranelift_jit),
+            _constants: constants,
+        }
     }
 }
 
 impl Drop for ModuleData {
     fn drop(&mut self) {
-        // get_mut returns None if we are not the last Arc, so the JITModule
-        // shouldn't be dropped yet.
-        let Some(module) = Arc::get_mut(&mut self.0) else {
-            return;
-        };
-
-        // SAFETY: We only give out functions that hold a ModuleData and
-        // therefore an Arc to this module. By `get_mut`, we know that we are
-        // the last Arc to this memory and hence it is safe to free its
-        // memory. New Arcs cannot have been created in the meantime because
-        // that requires access to the last Arc, which we know that we have.
+        // SAFETY: We only give out functions that hold a SharedModuleData and
+        // therefore an Arc to this module. This ensures that this drop method
+        // is only called after all functions have been dropped. Therefore,
+        // freeing this memory is ok.
         unsafe {
-            let inner = ManuallyDrop::take(module);
-            inner.free_memory();
-        };
+            let cranelift_jit = ManuallyDrop::take(&mut self.cranelift_jit);
+            cranelift_jit.free_memory();
+        }
+    }
+}
+
+/// A wrapper around a cranelift [`JITModule`] that cleans up after itself
+///
+/// This is achieved by wrapping the module in an [`Arc`].
+#[derive(Clone)]
+pub struct SharedModuleData(Arc<ModuleData>);
+
+impl SharedModuleData {
+    fn new(
+        cranelift_jit: JITModule,
+        constants: HashMap<Identifier, Constant>,
+    ) -> Self {
+        Self(Arc::new(ModuleData::new(cranelift_jit, constants)))
+    }
+}
+
+// Just a simple debug to print _something_.
+impl std::fmt::Debug for SharedModuleData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SharedModuleData").finish()
     }
 }
 
@@ -106,7 +120,7 @@ pub struct Module {
     context_description: ContextDescription,
 
     /// The inner cranelift module
-    inner: ModuleData,
+    inner: SharedModuleData,
 
     /// Info from the typechecker for checking types against Rust types
     type_info: TypeInfo,
@@ -127,7 +141,7 @@ pub struct TypedFunc<Ctx, F> {
     // to ensure that it doesn't get dropped. This field is ESSENTIAL
     // for the safety of calling this function. Without it, the data that
     // the `func` pointer points to might have been dropped.
-    _module: ModuleData,
+    _module: SharedModuleData,
     _ty: PhantomData<(Ctx, F)>,
 }
 
@@ -180,6 +194,8 @@ pub struct FunctionInfo {
 }
 
 struct ModuleBuilder {
+    constants: HashMap<Identifier, Constant>,
+
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -301,6 +317,7 @@ pub fn codegen(
         .push(AbiParam::new(cranelift::codegen::ir::types::I32));
 
     let mut module = ModuleBuilder {
+        constants: HashMap::new(),
         functions: HashMap::new(),
         runtime_functions: HashMap::new(),
         inner: jit,
@@ -354,16 +371,13 @@ pub fn codegen(
 
 impl ModuleBuilder {
     fn declare_constant(&mut self, constant: &RuntimeConstant) {
-        let full_name = format!(".{}", constant.name);
-        let data_id = self
-            .inner
-            .declare_data(&full_name, Linkage::Local, false, false)
-            .unwrap();
-
-        let mut description = DataDescription::new();
-        description.define(constant.bytes.clone());
-
-        self.inner.define_data(data_id, &description).unwrap();
+        // Every constant needs to live as long as the functions and therefore
+        // module that references them. However, the runtime might be dropped
+        // before we call a Roto function. Therefore we clone the constants into
+        // this hashmap which we pass to the ModuleData so that they will be
+        // kept around.
+        self.constants
+            .insert(constant.name.as_str().into(), constant.value.clone());
     }
 
     /// Declare a function and its signature (without the body)
@@ -531,7 +545,7 @@ impl ModuleBuilder {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
-            inner: self.inner.into(),
+            inner: SharedModuleData::new(self.inner, self.constants),
             type_info: self.type_info,
             context_description: self.context_description,
         }
@@ -972,18 +986,11 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, I32);
                 self.def(var, val);
             }
-            lir::Instruction::LoadConstant { to, name, ty } => {
-                let Some(FuncOrDataId::Data(data_id)) =
-                    self.module.inner.get_name(&format!(".{name}"))
-                else {
-                    panic!("Could not find {name}");
-                };
-                let val = self
-                    .module
-                    .inner
-                    .declare_data_in_func(data_id, self.builder.func);
-                let ty = self.module.cranelift_type(ty);
-                let val = self.ins().global_value(ty, val);
+            lir::Instruction::ConstantAddress { to, name } => {
+                let ty = self.module.cranelift_type(&IrType::Pointer);
+                let const_ptr = self.module.constants.get(name).unwrap();
+                let ptr = const_ptr.ptr() as usize;
+                let val = self.ins().iconst(ty, ptr as i64);
                 let to = self.variable(to, ty);
                 self.def(to, val);
             }
@@ -1191,7 +1198,7 @@ impl Module {
             )
         })?;
 
-        let func_ptr = self.inner.0.get_finalized_function(id);
+        let func_ptr = self.inner.0.cranelift_jit.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
             return_by_ref: function_info.return_by_ref,

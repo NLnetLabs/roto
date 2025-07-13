@@ -214,10 +214,20 @@ impl Lowerer<'_, '_> {
                 op
             }
             mir::Value::Constant(name, ty) => {
-                let Some(var) = self.new_var(&ty) else { return };
-                let ir_ty = self.lower_type(&ty).unwrap();
-                self.emit_load_constant(var.clone(), name, ir_ty);
-                var.into()
+                let ptr_var = self.new_tmp(IrType::Pointer);
+                self.emit_constant_address(ptr_var.clone(), name);
+
+                if let Some(to) = to {
+                    self.clone_place(
+                        to,
+                        Location::Pointer {
+                            base: ptr_var,
+                            offset: 0,
+                        },
+                        &ty,
+                    );
+                }
+                return;
             }
             mir::Value::Context(x) => {
                 let from = Location::Pointer {
@@ -965,8 +975,8 @@ impl Lowerer<'_, '_> {
         self.emit(Instruction::Return(var))
     }
 
-    fn emit_load_constant(&mut self, to: Var, name: Identifier, ty: IrType) {
-        self.emit(Instruction::LoadConstant { to, name, ty })
+    fn emit_constant_address(&mut self, to: Var, name: Identifier) {
+        self.emit(Instruction::ConstantAddress { to, name })
     }
 }
 
@@ -987,17 +997,6 @@ impl Lowerer<'_, '_> {
                 offset,
             });
             new.into()
-        }
-    }
-
-    fn new_var(&mut self, ty: &Type) -> Option<Var> {
-        let ir_ty = self.lower_type(ty)?;
-        if self.is_reference_type(ty)? {
-            let layout =
-                self.ctx.type_info.layout_of(ty, self.ctx.runtime).unwrap();
-            Some(self.new_stack_slot(layout))
-        } else {
-            Some(self.new_tmp(ir_ty))
         }
     }
 
