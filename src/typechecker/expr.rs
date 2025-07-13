@@ -496,6 +496,27 @@ impl TypeChecker {
 
                 Ok(diverges)
             }
+            QuestionMark(expr) => {
+                let opt_ty = Type::optional(ctx.expected_type.clone());
+                let diverges =
+                    self.expr(scope, &ctx.with_type(opt_ty), expr)?;
+                let Some(ret_ty) = &ctx.function_return_type else {
+                    return Err(self.error_simple("can only use `?` in function returning an optional value", "cannot use `?` here", id));
+                };
+                let Type::Name(type_name) = self.type_info.resolve(ret_ty)
+                else {
+                    return Err(self.error_simple("can only use `?` in function returning an optional value", "cannot use `?` here", id));
+                };
+                if (type_name.name
+                    != ResolvedName {
+                        scope: ScopeRef::GLOBAL,
+                        ident: "Optional".into(),
+                    })
+                {
+                    return Err(self.error_simple("can only use `?` in function returning an optional value", "cannot use `?` here", id));
+                }
+                Ok(diverges)
+            }
         }
     }
 

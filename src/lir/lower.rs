@@ -103,16 +103,23 @@ impl Lowerer<'_, '_> {
                 }
 
                 let lir_v = lowerer.var(v.clone());
-                let var_type = if lowerer.is_reference_type(&ty) {
+                let Some(is_reference_type) = lowerer.is_reference_type(&ty)
+                else {
+                    ice!("Need an inhabited type");
+                };
+                let var_type = if is_reference_type {
                     // Parameters don't need a slot because they already
                     // live somewhere.
                     if function.parameters.contains(v) {
                         ValueOrSlot::Val(IrType::Pointer)
                     } else {
-                        let layout = lowerer
+                        let Some(layout) = lowerer
                             .ctx
                             .type_info
-                            .layout_of(&ty, lowerer.ctx.runtime);
+                            .layout_of(&ty, lowerer.ctx.runtime)
+                        else {
+                            ice!("Need an inhabited type");
+                        };
                         ValueOrSlot::StackSlot(layout)
                     }
                 } else {
@@ -128,10 +135,12 @@ impl Lowerer<'_, '_> {
 
         let entry_block = lowerer.blocks[0].label;
 
-        let (return_ir_type, return_ptr) = match return_type {
-            x if lowerer.is_reference_type(&x) => (None, true),
-            x => (lowerer.lower_type(&x), false),
-        };
+        let (return_ir_type, return_ptr) =
+            match lowerer.is_reference_type(&return_type) {
+                Some(true) => (None, true),
+                Some(false) => (lowerer.lower_type(&return_type), false),
+                None => (None, false),
+            };
 
         let ir_signature = Signature {
             parameters: function
@@ -217,7 +226,9 @@ impl Lowerer<'_, '_> {
                     },
                     offset: x,
                 };
-                self.clone_place(to, from, &ty);
+                if let Some(to) = to {
+                    self.clone_place(to, from, &ty);
+                }
                 return;
             }
             mir::Value::Discriminant(v) => self.get_discriminant(v),
@@ -237,7 +248,9 @@ impl Lowerer<'_, '_> {
             mir::Value::Move(var) => self.var(var).into(),
             mir::Value::Clone(place) => {
                 let from = self.location(place, ty.clone());
-                self.clone_place(to, from, &ty);
+                if let (Some(to), Some(from)) = (to, from) {
+                    self.clone_place(to, from, &ty);
+                }
                 return;
             }
             mir::Value::BinOp {
@@ -260,7 +273,13 @@ impl Lowerer<'_, '_> {
             }
         };
 
-        self.move_val(to, op, &ty);
+        // There are valid assignments in MIR that have the never type. For
+        // example, a function call that returns the never type. So we cannot
+        // unwrap `to` here, but we will simply only assign the value if it is
+        // inhabited.
+        if let Some(to) = to {
+            self.move_val(to, op, &ty);
+        }
     }
 
     fn call(
@@ -270,16 +289,23 @@ impl Lowerer<'_, '_> {
         return_type: &Type,
     ) -> Option<Operand> {
         let reference_return = self.is_reference_type(return_type);
-        let (to, out_ptr) = if reference_return {
-            let layout =
-                self.ctx.type_info.layout_of(return_type, self.ctx.runtime);
-            let out_ptr = self.new_stack_slot(layout);
-            (None, Some(out_ptr))
-        } else {
-            let to = self
-                .lower_type(return_type)
-                .map(|ty| (self.new_tmp(ty), ty));
-            (to, None)
+        let (to, out_ptr) = match reference_return {
+            Some(true) => {
+                let layout = self
+                    .ctx
+                    .type_info
+                    .layout_of(return_type, self.ctx.runtime)
+                    .unwrap();
+                let out_ptr = self.new_stack_slot(layout);
+                (None, Some(out_ptr))
+            }
+            Some(false) => {
+                let to = self
+                    .lower_type(return_type)
+                    .map(|ty| (self.new_tmp(ty), ty));
+                (to, None)
+            }
+            None => (None, None),
         };
 
         let ctx = Var {
@@ -312,8 +338,11 @@ impl Lowerer<'_, '_> {
         args: Vec<mir::Var>,
         return_type: &Type,
     ) -> Option<Operand> {
-        let layout =
-            self.ctx.type_info.layout_of(return_type, self.ctx.runtime);
+        let layout = self
+            .ctx
+            .type_info
+            .layout_of(return_type, self.ctx.runtime)
+            .unwrap_or_else(|| Layout::new(0, 1));
         let out_ptr = self.new_stack_slot(layout);
 
         let mut parameters = Vec::new();
@@ -341,7 +370,7 @@ impl Lowerer<'_, '_> {
             args,
         });
 
-        if self.is_reference_type(return_type) {
+        if self.is_reference_type(return_type)? {
             Some(out_ptr.into())
         } else {
             let ty = self.lower_type(return_type)?;
@@ -362,13 +391,19 @@ impl Lowerer<'_, '_> {
             }
             Location::Pointer { base, offset } => {
                 let to = self.offset(base.into(), offset as u32);
-                let size =
-                    self.ctx.type_info.layout_of(ty, self.ctx.runtime).size();
 
-                if self.is_reference_type(ty) {
-                    self.emit_memcpy(to, val, size as u32);
-                } else {
-                    self.emit_write(to, val);
+                match self.is_reference_type(ty) {
+                    Some(true) => {
+                        let size = self
+                            .ctx
+                            .type_info
+                            .layout_of(ty, self.ctx.runtime)
+                            .unwrap()
+                            .size();
+                        self.emit_memcpy(to, val, size as u32);
+                    }
+                    Some(false) => self.emit_write(to, val),
+                    None => {}
                 }
             }
         }
@@ -420,16 +455,21 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    fn location(&mut self, place: mir::Place, ty: Type) -> Location {
+    /// Returns `None` if the type uninhabited
+    fn location(&mut self, place: mir::Place, ty: Type) -> Option<Location> {
         let root_ty = place.root_ty;
         if place.projection.is_empty() {
-            if self.ctx.type_info.is_reference_type(&ty, self.ctx.runtime) {
-                Location::Pointer {
+            if self
+                .ctx
+                .type_info
+                .is_reference_type(&ty, self.ctx.runtime)?
+            {
+                Some(Location::Pointer {
                     base: self.var(place.var),
                     offset: 0,
-                }
+                })
             } else {
-                Location::Var(self.var(place.var))
+                Some(Location::Var(self.var(place.var)))
             }
         } else {
             let base = self.var(place.var);
@@ -469,12 +509,11 @@ impl Lowerer<'_, '_> {
                         let mut new_offset = 0;
                         for field_ty in variant.fields.iter().take(n + 1) {
                             let field_ty = field_ty.substitute_many(&subs);
-                            new_offset = builder.add(
-                                &self
-                                    .ctx
-                                    .type_info
-                                    .layout_of(&field_ty, self.ctx.runtime),
-                            );
+                            new_offset =
+                                builder.add(&self.ctx.type_info.layout_of(
+                                    &field_ty,
+                                    self.ctx.runtime,
+                                )?);
                             last_ty = Some(field_ty);
                         }
 
@@ -483,7 +522,7 @@ impl Lowerer<'_, '_> {
                     }
                 }
             }
-            Location::Pointer { base, offset }
+            Some(Location::Pointer { base, offset })
         }
     }
 
@@ -511,7 +550,11 @@ impl Lowerer<'_, '_> {
         let mut builder = LayoutBuilder::new();
         for (field, new_ty) in fields {
             let offset = builder.add(
-                &self.ctx.type_info.layout_of(&new_ty, self.ctx.runtime),
+                &self
+                    .ctx
+                    .type_info
+                    .layout_of(&new_ty, self.ctx.runtime)
+                    .unwrap(),
             );
             if *field == ident {
                 return (offset, new_ty);
@@ -572,7 +615,7 @@ impl Lowerer<'_, '_> {
             .type_info
             .layout_of(&self.return_type, self.ctx.runtime);
 
-        if layout.size() == 0 {
+        if layout.as_ref().map_or(true, |l| l.size() == 0) {
             self.emit_return(None);
             return;
         }
@@ -581,6 +624,7 @@ impl Lowerer<'_, '_> {
             .ctx
             .type_info
             .is_reference_type(&self.return_type, self.ctx.runtime)
+            .unwrap()
         {
             self.emit_memcpy(
                 Var {
@@ -589,7 +633,7 @@ impl Lowerer<'_, '_> {
                 }
                 .into(),
                 var.into(),
-                layout.size() as u32,
+                layout.unwrap().size() as u32,
             );
             self.emit_return(None);
         } else {
@@ -598,7 +642,9 @@ impl Lowerer<'_, '_> {
     }
 
     fn drop(&mut self, val: mir::Place, ty: Type) {
-        let var = self.location(val, ty.clone());
+        let Some(var) = self.location(val, ty.clone()) else {
+            return;
+        };
 
         // Any reference type (and therefore any type that needs drop)
         // has a pointer location, we can ignore the rest.
@@ -826,8 +872,12 @@ impl Lowerer<'_, '_> {
         }
 
         if binop == ast::BinOp::Eq {
-            let size =
-                self.ctx.type_info.layout_of(&ty, self.ctx.runtime).size();
+            let size = self
+                .ctx
+                .type_info
+                .layout_of(&ty, self.ctx.runtime)
+                .map_or(0, |l| l.size());
+
             if size == 0 {
                 return Operand::Value(IrValue::Bool(true));
             }
@@ -944,8 +994,9 @@ impl Lowerer<'_, '_> {
 
     fn new_var(&mut self, ty: &Type) -> Option<Var> {
         let ir_ty = self.lower_type(ty)?;
-        if self.is_reference_type(ty) {
-            let layout = self.ctx.type_info.layout_of(ty, self.ctx.runtime);
+        if self.is_reference_type(ty)? {
+            let layout =
+                self.ctx.type_info.layout_of(ty, self.ctx.runtime).unwrap();
             Some(self.new_stack_slot(layout))
         } else {
             Some(self.new_tmp(ir_ty))
@@ -982,7 +1033,12 @@ impl Lowerer<'_, '_> {
 
     fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
         let ty = self.ctx.type_info.resolve(ty);
-        if self.ctx.type_info.layout_of(&ty, self.ctx.runtime).size() == 0 {
+        if self
+            .ctx
+            .type_info
+            .layout_of(&ty, self.ctx.runtime)
+            .map_or(false, |l| l.size() == 0)
+        {
             return None;
         }
 
@@ -1018,12 +1074,12 @@ impl Lowerer<'_, '_> {
         Some(match ty {
             Type::IntVar(_, _) => IrType::I32,
             Type::FloatVar(_) => IrType::F64,
-            x if self.is_reference_type(&x) => IrType::Pointer,
+            x if self.is_reference_type(&x)? => IrType::Pointer,
             _ => ice!("could not lower: {ty:?}"),
         })
     }
 
-    fn is_reference_type(&mut self, ty: &Type) -> bool {
+    fn is_reference_type(&mut self, ty: &Type) -> Option<bool> {
         self.ctx.type_info.is_reference_type(ty, self.ctx.runtime)
     }
 }

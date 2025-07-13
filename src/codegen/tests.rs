@@ -253,6 +253,27 @@ fn inversion() {
 }
 
 #[test]
+fn not_not() {
+    let s = src!(
+        "
+        fn main(x: i32) -> bool {
+            not not (x == 10)
+        } 
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(i32) -> bool>("main")
+        .expect("No function found (or mismatched types)");
+
+    for x in 0..20 {
+        let res = f.call(&mut (), x);
+        assert_eq!(res, x == 10, "{x}");
+    }
+}
+
+#[test]
 fn a_bunch_of_comparisons() {
     let s = src!(
         "
@@ -1671,6 +1692,24 @@ fn filter_map_with_manual_verdict() {
     assert_eq!(res, Verdict::Accept(12));
 }
 
+/// This tests the type checker because it needs to infer a never type for Reject
+#[test]
+fn unused_accept() {
+    let s = src!(
+        "
+        fn foo() {
+            Verdict.Accept(5);
+        }    
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p.get_function::<(), fn() -> ()>("foo").unwrap();
+
+    let _res = f.call(&mut ());
+}
+
 #[test]
 fn match_on_verdict() {
     let s = src!(
@@ -1721,6 +1760,119 @@ fn non_sugar_optional() {
 
     let res = f.call(&mut ());
     assert_eq!(res, Some(2));
+}
+
+#[test]
+fn none_with_unknown_type() {
+    let s = src!(
+        "
+        fn foo() {
+            Optional.None;
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> ()>("foo").unwrap();
+
+    // We don't care about the output
+    let _ = f.call(&mut ());
+}
+
+#[test]
+fn question_mark() {
+    let s = src!(
+        "
+        fn bar() -> u32? {
+            Optional.None
+        }
+
+        fn foo() -> u32? {
+            bar()?;
+            Optional.Some(3)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Option<u32>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, None);
+}
+
+#[test]
+fn add_optionals() {
+    let s = src!(
+        "
+        fn small(x: i32) -> i32? {
+            if x < 10 {
+                Optional.Some(x)
+            } else {
+                Optional.None
+            }
+        }
+
+        fn foo(x: i32, y: i32) -> i32? {
+            let z = small(x)? + small(y)?;
+            Optional.Some(z)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(i32, i32) -> Option<i32>>("foo")
+        .unwrap();
+
+    let res = f.call(&mut (), 2, 2);
+    assert_eq!(res, Some(4));
+    let res = f.call(&mut (), 5, 5);
+    assert_eq!(res, Some(10));
+    let res = f.call(&mut (), 15, 5);
+    assert_eq!(res, None);
+    let res = f.call(&mut (), 5, 10);
+    assert_eq!(res, None);
+}
+
+#[test]
+fn question_question() {
+    let s = src!(
+        "
+        fn bar() -> u32?? {
+            Optional.Some(Optional.None)
+        }
+
+        fn foo() -> u32? {
+            bar()??;
+            Optional.Some(4)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Option<u32>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, None);
+}
+
+#[test]
+fn question_mark_none() {
+    let s = src!(
+        "
+        fn foo() -> u32? {
+            Optional.None?;
+            Optional.Some(3)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Option<u32>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, None);
 }
 
 #[test]
