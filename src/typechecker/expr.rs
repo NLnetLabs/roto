@@ -144,16 +144,24 @@ impl TypeChecker {
         ctx: &Context,
         stmt: &Meta<ast::Stmt>,
     ) -> TypeResult<bool> {
-        let var = self.fresh_var();
-        let ctx = ctx.with_type(&var);
         match &stmt.node {
-            ast::Stmt::Let(ident, expr) => {
+            ast::Stmt::Let(ident, ty, expr) => {
+                let ty = if let Some(ty) = ty {
+                    self.evaluate_type_expr(scope, ty)?
+                } else {
+                    self.fresh_var()
+                };
+                let ctx = ctx.with_type(&ty);
                 let diverges = self.expr(scope, &ctx, expr)?;
-                let ty = self.resolve_type(&var);
+                let ty = self.resolve_type(&ty);
                 self.insert_var(scope, ident.clone(), ty)?;
                 Ok(diverges)
             }
-            ast::Stmt::Expr(expr) => self.expr(scope, &ctx, expr),
+            ast::Stmt::Expr(expr) => {
+                let var = self.fresh_var();
+                let ctx = ctx.with_type(&var);
+                self.expr(scope, &ctx, expr)
+            }
         }
     }
 
