@@ -1,7 +1,7 @@
-`Roto`
-======
+Roto
+====
 
-`Roto` is an embedded scripting language that is fast, safe and easy to use. 
+Roto is an embedded scripting language that is fast, safe and easy to use. 
 
 Primarily used by [Rotonda], the composable, programmable routing BGP engine. It
 is made to integrate especially well with Rotonda, so that writing filters is as
