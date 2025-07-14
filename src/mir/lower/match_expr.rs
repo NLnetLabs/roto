@@ -273,8 +273,8 @@ impl Lowerer<'_> {
                         scope: name.scope,
                         kind: VarKind::Explicit(name.ident),
                     };
-
-                    self.emit_assign(
+                    self.add_live_variable(var.clone(), ty.clone());
+                    self.do_assign(
                         Place::new(var, ty.clone()),
                         ty,
                         Value::Clone(Place {
