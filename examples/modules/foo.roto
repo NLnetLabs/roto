@@ -1,4 +1,4 @@
-function bar(x: i32) -> i32 {
+fn bar(x: i32) -> i32 {
     import pkg.double;
     let a = super.double(x);
     let b = pkg.double(a);

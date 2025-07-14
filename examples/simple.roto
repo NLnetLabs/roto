@@ -1,6 +1,6 @@
 # checks whether ip addr is 0.0.0.0
-function is_zero(x: IpAddr) -> bool {
-    x == 0
+fn is_zero(x: IpAddr) -> bool {
+    x == 0.0.0.0
 }
 
 filtermap main(x: IpAddr) {
