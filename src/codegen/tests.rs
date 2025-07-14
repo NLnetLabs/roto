@@ -1641,6 +1641,33 @@ fn match_optional_value() {
 }
 
 #[test]
+fn match_optional_string() {
+    let s = src!(
+        "
+        fn foo() -> String? {
+            Optional.Some(\"Foobar\")
+        }
+
+        fn bar() -> Verdict[String, String] {
+            match foo() {
+                Some(v) -> accept v,
+                _ -> reject \"nope\",
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), fn() -> Verdict<Arc<str>, Arc<str>>>("bar")
+        .unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, Verdict::Accept("Foobar".into()));
+}
+
+#[test]
 fn construct_optional_value() {
     let s = src!(
         "
