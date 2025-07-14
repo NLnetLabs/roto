@@ -250,7 +250,9 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
     let generics = sig.generics;
     let ret = match sig.output {
         syn::ReturnType::Default => quote!(()),
-        syn::ReturnType::Type(_, t) => quote!(#t),
+        syn::ReturnType::Type(_, t) => {
+            quote!(#t)
+        }
     };
 
     let input_types: Vec<_> = sig
@@ -282,10 +284,12 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
 
     let function = quote! {
         #(#attrs)*
-        #vis extern "C" fn #ident #generics ( out: *mut #ret, #(#transformed_params,)* ) {
+        #vis extern "C" fn #ident #generics ( out: *mut <#ret as roto::Reflect>::Transformed, #(#transformed_params,)* ) {
             #item
 
-            unsafe { std::ptr::write(out, #ident(#(#transformed_args),*)) };
+            let res = #ident(#(#transformed_args),*);
+            let res_transformed = <#ret as roto::Reflect>::transform(res);
+            unsafe { std::ptr::write(out, res_transformed) };
         }
     };
 
