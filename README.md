@@ -69,9 +69,6 @@ Some limitations are only present because we haven't come around to
 implementing them yet. Most limitations can be found in the issue tracker, but
 we've summarized some important missing features here.
 
-- Roto does not feature any looping constructs yet. If you need loops,
-  you can use recursion instead as a workaround.
-  (https://github.com/NLnetLabs/roto/issues/187)
 - Lists are not supported yet. (https://github.com/NLnetLabs/roto/issues/102)
 - It's not yet possible to declare your own `enum` types.
   (https://github.com/NLnetLabs/roto/issues/188)
