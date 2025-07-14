@@ -76,6 +76,36 @@ we've summarized some important missing features here.
   generic functions. (https://github.com/NLnetLabs/roto/issues/189 and
   https://github.com/NLnetLabs/roto/issues/190)
 
+## Memory safety
+
+Roto fundamentally relies on unsafe code, after all, we are generating machine
+code at runtime. However, we treat every unsoundness stemming from use of Roto
+with safe Rust as a bug of high priority. Please report any issues you find to
+the [GitHub repository](https://github.com/NLnetLabs/roto).
+
+We run our extensive test suite under Valgrind in CI to ensure that at least
+most common use cases are correctly implemented.
+
+## Security considerations
+
+If you allow users to submit **untrusted** Roto scripts to your application,
+you need to be aware that malicious (or erroneous) Roto scripts can do the
+following:
+
+- crash your process by running out of memory with infinite recursion,
+- loop indefinitely with a `while` loop, or
+- be so big that compiling it will slow down your application.
+
+Therefore, we make the following recommendations:
+
+- Impose a maximum size on scripts.
+- Compile and run the untrusted script in a separate process with a timeout and
+  proper handling of unexpected crashes of that process.
+
+Finally, Roto scripts have access to all functions you provide and are therefore
+as contained as you want them to be. Be careful not to expose information or
+functionality that compromises the security of your application.
+
 ## Learn more
 
 - Documentation of the Roto language is included in the
