@@ -13,7 +13,7 @@ Read more about it in the [documentation].
 
 ```roto
 # A function that returns true if an IP address is equal to 0.0.0.0
-function is_zero(x: IpAddr) -> bool {
+fn is_zero(x: IpAddr) -> bool {
     x == 0.0.0.0
 }
 
