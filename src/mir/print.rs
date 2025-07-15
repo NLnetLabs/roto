@@ -42,14 +42,14 @@ impl Printable for Function {
         for (var, ty) in &self.variables {
             let var = var.print(&printer);
             let ty = ty.display(printer.type_info);
-            let _ = write!(&mut s, "  {var}: {ty}\n");
+            let _ = writeln!(&mut s, "  {var}: {ty}");
         }
 
         let blocks = self.blocks.iter();
         for b in blocks {
             s.push('\n');
             for line in b.print(&printer).lines() {
-                let _ = write!(&mut s, "  {line}\n");
+                let _ = writeln!(&mut s, "  {line}");
             }
         }
 
@@ -208,9 +208,6 @@ impl Printable for Var {
         let name = match &self.kind {
             VarKind::Explicit(name) => name.print(printer).to_string(),
             VarKind::Tmp(idx) => format!("${idx}"),
-            VarKind::NamedTmp(name, idx) => {
-                format!("${}-{idx}", name.print(printer))
-            }
         };
         if Some(self.scope) != printer.scope {
             let f = self.scope.print(printer);

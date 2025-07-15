@@ -1,4 +1,4 @@
-use roto::{FileTree, Runtime, Val, Verdict};
+use roto::{Runtime, Val, Verdict};
 use roto_macros::roto_method;
 
 #[derive(Clone, Copy)]
@@ -21,8 +21,8 @@ fn main() -> Result<(), roto::RotoReport> {
         bla.x
     }
 
-    let mut compiled = FileTree::single_file("examples/runtime.roto")
-        .compile(runtime)
+    let mut compiled = runtime
+        .compile("examples/runtime.roto")
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled

@@ -1,12 +1,4 @@
-use clap::Parser;
-use roto::{cli, Runtime};
-
-#[derive(Parser)]
-struct Cli {
-    #[arg(short, long)]
-    rx: Option<String>,
-    file: String,
-}
+use roto::Runtime;
 
 fn main() {
     #[cfg(feature = "logger")]
@@ -15,5 +7,7 @@ fn main() {
         .format_target(false)
         .init();
 
-    cli(Runtime::new());
+    let mut rt = Runtime::new();
+    rt.add_io_functions();
+    rt.cli();
 }

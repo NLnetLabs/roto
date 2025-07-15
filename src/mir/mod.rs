@@ -32,7 +32,6 @@ pub struct Var {
 pub enum VarKind {
     Explicit(Identifier),
     Tmp(usize),
-    NamedTmp(Identifier, usize),
 }
 
 #[derive(Clone, Debug)]

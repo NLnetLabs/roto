@@ -270,7 +270,7 @@ pub fn eval(
     }
 
     let constants: HashMap<Identifier, &[u8]> = rt
-        .constants
+        .constants()
         .values()
         .map(|g| (g.name, g.bytes.as_ref()))
         .collect();

@@ -27,9 +27,7 @@ pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub use lir::eval::Memory;
 pub use lir::value::IrValue;
-pub use pipeline::{
-    interpret, Compiled, LoweredToLir, RotoError, RotoReport,
-};
+pub use pipeline::{Compiled, LoweredToLir, RotoError, RotoReport};
 pub use roto_macros::{
     roto_function, roto_method, roto_static_method, Context,
 };

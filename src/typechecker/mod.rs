@@ -101,7 +101,10 @@ use crate::{
     ice,
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
-    runtime::{ty::TypeDescription, FunctionKind, Runtime, RuntimeFunction},
+    runtime::{
+        ty::{TypeDescription, TypeRegistry},
+        FunctionKind, Runtime, RuntimeFunction,
+    },
 };
 use cycle::detect_type_cycles;
 use scope::{
@@ -225,7 +228,7 @@ impl TypeChecker {
     }
 
     fn declare_runtime_types(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        for ty in &runtime.runtime_types {
+        for ty in runtime.types() {
             let ident = Identifier::from(ty.name());
             let name = ResolvedName {
                 scope: ScopeRef::GLOBAL,
@@ -262,7 +265,7 @@ impl TypeChecker {
         // We need to know about all runtime methods, static methods and
         // functions when we start type checking. Therefore, we have to map
         // the runtime methods with TypeIds to function types.
-        for func in &runtime.functions {
+        for func in runtime.functions() {
             let RuntimeFunction {
                 name,
                 description,
@@ -360,7 +363,7 @@ impl TypeChecker {
         runtime: &Runtime,
         t: TypeId,
     ) -> Result<Type, TypeError> {
-        let ty = runtime.type_registry.get(t).unwrap();
+        let ty = TypeRegistry::get(t).unwrap();
         match ty.description {
             TypeDescription::Leaf => {
                 let ident =
@@ -396,17 +399,17 @@ impl TypeChecker {
     }
 
     fn declare_constants(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        for (v, t) in runtime.iter_constants() {
+        for (v, t) in runtime.constants() {
             self.insert_global_constant(
                 Meta {
                     id: MetaId(0),
-                    node: v,
+                    node: *v,
                 },
                 Type::Name(TypeName {
                     name: ResolvedName {
                         scope: ScopeRef::GLOBAL,
                         ident: runtime
-                            .get_runtime_type(t)
+                            .get_runtime_type(t.ty)
                             .unwrap()
                             .name()
                             .into(),
@@ -420,7 +423,7 @@ impl TypeChecker {
     }
 
     fn declare_context(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        if let Some(ctx) = &runtime.context {
+        if let Some(ctx) = runtime.context() {
             for field in &ctx.fields {
                 let ty = runtime
                     .get_runtime_type(field.type_id)

@@ -1,6 +1,6 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
-use std::{collections::HashMap, fmt, path::Path};
+use std::{collections::HashMap, fmt};
 
 use crate::{
     codegen::{
@@ -29,7 +29,6 @@ use crate::{
         error::{Level, TypeError},
         info::TypeInfo,
     },
-    FileTree,
 };
 
 #[cfg(feature = "logger")]
@@ -48,7 +47,6 @@ pub enum RotoError {
 /// An error report containing a set of Roto errors
 ///
 /// The errors can be printed with the regular [`std::fmt::Display`].
-#[derive(Debug)]
 pub struct RotoReport {
     pub files: Vec<SourceFile>,
     pub errors: Vec<RotoError>,
@@ -56,27 +54,26 @@ pub struct RotoReport {
 }
 
 /// Compiler stage: loaded, parsed and type checked
-pub struct TypeChecked {
+pub struct TypeChecked<'r> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
-    runtime: Runtime,
+    runtime: &'r Runtime,
     context_type: ContextDescription,
 }
 
 /// Compiler stage: MIR
-#[allow(dead_code)]
-pub struct LoweredToMir {
-    runtime: Runtime,
-    pub ir: mir::Mir,
+pub struct LoweredToMir<'r> {
+    runtime: &'r Runtime,
+    ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_type: ContextDescription,
 }
 
 /// Compiler stage: LIR
-pub struct LoweredToLir {
-    runtime: Runtime,
-    pub ir: lir::Lir,
+pub struct LoweredToLir<'r> {
+    runtime: &'r Runtime,
+    ir: lir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -192,6 +189,12 @@ impl std::fmt::Display for RotoReport {
     }
 }
 
+impl std::fmt::Debug for RotoReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write(f, true)
+    }
+}
+
 impl RotoReport {
     fn filename(&self, s: Span) -> String {
         self.files[s.file].name.clone()
@@ -220,28 +223,10 @@ macro_rules! source_file {
     };
 }
 
-/// Compile and run a Roto script from a file
-pub fn interpret(
-    runtime: Runtime,
-    path: &Path,
-    mem: &mut Memory,
-    ctx: IrValue,
-    args: Vec<IrValue>,
-) -> Result<Option<IrValue>, RotoReport> {
-    let lowered = FileTree::read(path)
-        .parse()?
-        .typecheck(runtime)?
-        .lower_to_mir()
-        .lower_to_lir();
-
-    let res = lowered.eval(mem, ctx, args);
-    Ok(res)
-}
-
 impl Parsed {
     pub fn typecheck(
         self,
-        runtime: Runtime,
+        runtime: &Runtime,
     ) -> Result<TypeChecked, RotoReport> {
         let Parsed {
             file_tree,
@@ -250,9 +235,9 @@ impl Parsed {
         } = self;
 
         let context_type =
-            runtime.context.clone().unwrap_or_else(<()>::description);
+            runtime.context().clone().unwrap_or_else(<()>::description);
 
-        let result = crate::typechecker::typecheck(&runtime, &module_tree);
+        let result = crate::typechecker::typecheck(runtime, &module_tree);
 
         let type_info = match result {
             Ok(type_info) => type_info,
@@ -274,8 +259,8 @@ impl Parsed {
     }
 }
 
-impl TypeChecked {
-    pub fn lower_to_mir(&self) -> LoweredToMir {
+impl<'r> TypeChecked<'r> {
+    pub fn lower_to_mir(&self) -> LoweredToMir<'r> {
         let TypeChecked {
             module_tree,
             type_info,
@@ -307,7 +292,7 @@ impl TypeChecked {
 
         LoweredToMir {
             ir,
-            runtime: runtime.clone(),
+            runtime,
             label_store,
             context_type: context_type.clone(),
             type_info,
@@ -315,8 +300,8 @@ impl TypeChecked {
     }
 }
 
-impl LoweredToMir {
-    pub fn lower_to_lir(self) -> LoweredToLir {
+impl<'r> LoweredToMir<'r> {
+    pub fn lower_to_lir(self) -> LoweredToLir<'r> {
         let LoweredToMir {
             runtime,
             ir,
@@ -327,7 +312,7 @@ impl LoweredToMir {
 
         let mut runtime_functions = HashMap::new();
         let mut ctx = lir::lower::LowerCtx {
-            runtime: &runtime,
+            runtime,
             type_info: &mut type_info,
             label_store: &mut label_store,
             runtime_functions: &mut runtime_functions,
@@ -358,19 +343,19 @@ impl LoweredToMir {
     }
 }
 
-impl LoweredToLir {
+impl LoweredToLir<'_> {
     pub fn eval(
         &self,
         mem: &mut Memory,
         ctx: IrValue,
         args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(&self.runtime, &self.ir.functions, "main", mem, ctx, args)
+        eval::eval(self.runtime, &self.ir.functions, "main", mem, ctx, args)
     }
 
     pub fn codegen(self) -> Compiled {
         let module = codegen::codegen(
-            &self.runtime,
+            self.runtime,
             &self.ir.functions,
             &self.runtime_functions,
             self.label_store,
