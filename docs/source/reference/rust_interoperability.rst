@@ -39,7 +39,7 @@ This pages details how Roto types map to Rust types for interoperability. The
 +-------------------------+-------------------------+
 | ``Verdict[A, R]``       | ``roto::Verdict<A, R>`` |
 +-------------------------+-------------------------+
-| ``T?``, ``Optional[T]`` | ``Option<T>``           |
+| ``T?``, ``Option[T]``   | ``Option<T>``           |
 +-------------------------+-------------------------+
 | other types ``T``       | ``roto::Val<T>``        |
 +-------------------------+-------------------------+
