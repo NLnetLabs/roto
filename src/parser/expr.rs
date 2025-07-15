@@ -897,7 +897,7 @@ impl Parser<'_, '_> {
         while self.peek_is(Token::QuestionMark) {
             let span2 = self.take(Token::QuestionMark).unwrap();
             span = span.merge(span2);
-            type_name = TypeExpr::Optional(Box::new(type_name));
+            type_name = TypeExpr::Option(Box::new(type_name));
         }
         Ok(self.add_span(span, type_name))
     }

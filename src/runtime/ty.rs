@@ -19,7 +19,7 @@ use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{IrValue, Memory};
 
-use super::{optional::Optional, val::Val, verdict::Verdict};
+use super::{option::RotoOption, val::Val, verdict::Verdict};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -232,20 +232,20 @@ where
 impl<T: Reflect> seal::Sealed for Option<T> {}
 
 impl<T: Reflect> Reflect for Option<T> {
-    type Transformed = Optional<T::Transformed>;
+    type Transformed = RotoOption<T::Transformed>;
     type AsParam = *mut Self::Transformed;
 
     fn transform(self) -> Self::Transformed {
         match self {
-            Some(t) => Optional::Some(t.transform()),
-            None => Optional::None,
+            Some(t) => RotoOption::Some(t.transform()),
+            None => RotoOption::None,
         }
     }
 
     fn untransform(transformed: Self::Transformed) -> Self {
         match transformed {
-            Optional::Some(t) => Some(T::untransform(t)),
-            Optional::None => None,
+            RotoOption::Some(t) => Some(T::untransform(t)),
+            RotoOption::None => None,
         }
     }
 

@@ -1658,7 +1658,7 @@ fn string_repeat() {
 }
 
 #[test]
-fn match_optional_value() {
+fn match_option_value() {
     let s = src!(
         "
         fn or_fortytwo(x: u32?) -> u32 {
@@ -1683,11 +1683,11 @@ fn match_optional_value() {
 }
 
 #[test]
-fn match_optional_string() {
+fn match_option_string() {
     let s = src!(
         "
         fn foo() -> String? {
-            Optional.Some(\"Foobar\")
+            Option.Some(\"Foobar\")
         }
 
         fn bar() -> Verdict[String, String] {
@@ -1710,14 +1710,14 @@ fn match_optional_string() {
 }
 
 #[test]
-fn construct_optional_value() {
+fn construct_option_value() {
     let s = src!(
         "
         fn sub_one(x: u32) -> u32? {
             if x == 0 {
-                Optional.None
+                Option.None
             } else {
-                Optional.Some(x - 1)
+                Option.Some(x - 1)
             }
         }
         "
@@ -1736,10 +1736,10 @@ fn construct_optional_value() {
 }
 
 #[test]
-fn construct_imported_optional() {
+fn construct_imported_option() {
     let s = src!(
         "
-        import Optional.{Some, None};
+        import Option.{Some, None};
 
         fn sub_one(x: u32) -> u32? {
             if x == 0 {
@@ -1764,7 +1764,7 @@ fn construct_imported_optional() {
 }
 
 #[test]
-fn construct_optional_value_from_prelude() {
+fn construct_option_value_from_prelude() {
     let s = src!(
         "
         fn sub_one(x: u32) -> u32? {
@@ -1869,11 +1869,11 @@ fn match_on_verdict() {
 }
 
 #[test]
-fn non_sugar_optional() {
+fn non_sugar_option() {
     let s = src!(
         "
-        fn foo() -> Optional[u32] {
-            Optional.Some(2)
+        fn foo() -> Option[u32] {
+            Option.Some(2)
         }
         "
     );
@@ -1890,7 +1890,7 @@ fn none_with_unknown_type() {
     let s = src!(
         "
         fn foo() {
-            Optional.None;
+            Option.None;
         }
         "
     );
@@ -1907,12 +1907,12 @@ fn question_mark() {
     let s = src!(
         "
         fn bar() -> u32? {
-            Optional.None
+            Option.None
         }
 
         fn foo() -> u32? {
             bar()?;
-            Optional.Some(3)
+            Option.Some(3)
         }
         "
     );
@@ -1925,20 +1925,20 @@ fn question_mark() {
 }
 
 #[test]
-fn add_optionals() {
+fn add_options() {
     let s = src!(
         "
         fn small(x: i32) -> i32? {
             if x < 10 {
-                Optional.Some(x)
+                Option.Some(x)
             } else {
-                Optional.None
+                Option.None
             }
         }
 
         fn foo(x: i32, y: i32) -> i32? {
             let z = small(x)? + small(y)?;
-            Optional.Some(z)
+            Option.Some(z)
         }
         "
     );
@@ -1963,12 +1963,12 @@ fn question_question() {
     let s = src!(
         "
         fn bar() -> u32?? {
-            Optional.Some(Optional.None)
+            Option.Some(Option.None)
         }
 
         fn foo() -> u32? {
             bar()??;
-            Optional.Some(4)
+            Option.Some(4)
         }
         "
     );
@@ -1985,8 +1985,8 @@ fn question_mark_none() {
     let s = src!(
         "
         fn foo() -> u32? {
-            Optional.None?;
-            Optional.Some(3)
+            Option.None?;
+            Option.Some(3)
         }
         "
     );

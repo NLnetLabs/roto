@@ -189,7 +189,7 @@ fn check_roto_type(
             if type_name.name
                 != (ResolvedName {
                     scope: ScopeRef::GLOBAL,
-                    ident: "Optional".into(),
+                    ident: "Option".into(),
                 })
             {
                 return Err(error_message);

@@ -34,7 +34,7 @@ pub use roto_macros::{
 pub use runtime::{
     context::{Context, ContextField},
     func::Func,
-    optional::Optional,
+    option::RotoOption,
     ty::Reflect,
     val::Val,
     verdict::Verdict,
