@@ -12,10 +12,11 @@ use crate::{
         value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
         ValueOrSlot, Var, VarKind,
     },
-    runtime::RuntimeFunctionRef,
+    runtime::{Constant, RuntimeFunctionRef},
+    typechecker::types::Primitive,
     Runtime,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 /// Memory for the IR evaluation
 ///
@@ -62,7 +63,18 @@ pub struct Memory {
 }
 
 #[derive(Clone, Debug)]
-pub struct Pointer {
+enum Pointer {
+    Global(GlobalPointer),
+    Local(LocalPointer),
+}
+
+#[derive(Clone, Debug)]
+pub struct GlobalPointer {
+    ptr: *mut (),
+}
+
+#[derive(Clone, Debug)]
+pub struct LocalPointer {
     /// Where in the stack the pointee lives
     stack_index: usize,
 
@@ -89,7 +101,7 @@ struct Allocation {
     inner: Box<[u8]>,
 }
 
-impl Pointer {
+impl LocalPointer {
     fn offset_by(&self, offset: usize) -> Self {
         Self {
             allocation_offset: self.allocation_offset + offset,
@@ -125,9 +137,16 @@ impl Memory {
 
     pub fn write(&mut self, p: usize, val: &[u8]) {
         let p = &self.pointers[p];
-        let frame = &mut self.stack[p.stack_index];
-        assert_eq!(frame.id, p.stack_id);
-        frame.write(p, val)
+        match p {
+            Pointer::Local(p) => {
+                let frame = &mut self.stack[p.stack_index];
+                assert_eq!(frame.id, p.stack_id);
+                frame.write(p, val)
+            }
+            Pointer::Global(_p) => {
+                panic!("Don't write to globals!");
+            }
+        }
     }
 
     pub fn read_array<const N: usize>(&self, p: usize) -> [u8; N] {
@@ -137,9 +156,16 @@ impl Memory {
 
     pub fn read_slice(&self, p: usize, size: usize) -> &[u8] {
         let p = &self.pointers[p];
-        let frame = &self.stack[p.stack_index];
-        assert_eq!(frame.id, p.stack_id);
-        frame.read(p, size)
+        match p {
+            Pointer::Local(p) => {
+                let frame = &self.stack[p.stack_index];
+                assert_eq!(frame.id, p.stack_id);
+                frame.read(p, size)
+            }
+            Pointer::Global(p) => unsafe {
+                std::slice::from_raw_parts(p.ptr as *mut u8, size)
+            },
+        }
     }
 
     fn push_frame(
@@ -167,8 +193,15 @@ impl Memory {
 
     fn offset_by(&mut self, p: usize, offset: usize) -> usize {
         let p = &self.pointers[p];
-        self.pointers.push(p.offset_by(offset));
-        self.pointers.len() - 1
+        match p {
+            Pointer::Local(p) => {
+                self.pointers.push(Pointer::Local(p.offset_by(offset)));
+                self.pointers.len() - 1
+            }
+            Pointer::Global(_) => {
+                panic!("Don't offset global pointer");
+            }
+        }
     }
 
     pub fn allocate(&mut self, bytes: usize) -> usize {
@@ -179,34 +212,39 @@ impl Memory {
         frame.allocations.push(Allocation {
             inner: vec![0; bytes].into_boxed_slice(),
         });
-        self.pointers.push(Pointer {
+        self.pointers.push(Pointer::Local(LocalPointer {
             stack_index,
             stack_id,
             allocation_index,
             allocation_offset: 0,
-        });
+        }));
         self.pointers.len() - 1
     }
 
     pub fn get(&self, p: usize) -> *mut () {
         let p = &self.pointers[p];
-        let frame = &self.stack[p.stack_index];
-        frame.get(p)
+        match p {
+            Pointer::Local(p) => {
+                let frame = &self.stack[p.stack_index];
+                frame.get(p)
+            }
+            Pointer::Global(p) => p.ptr,
+        }
     }
 }
 
 impl StackFrame {
-    fn write(&mut self, p: &Pointer, val: &[u8]) {
+    fn write(&mut self, p: &LocalPointer, val: &[u8]) {
         let alloc = &mut self.allocations[p.allocation_index];
         alloc.write(p.allocation_offset, val);
     }
 
-    fn read(&self, p: &Pointer, size: usize) -> &[u8] {
+    fn read(&self, p: &LocalPointer, size: usize) -> &[u8] {
         let alloc = &self.allocations[p.allocation_index];
         alloc.read(p.allocation_offset, size)
     }
 
-    fn get(&self, p: &Pointer) -> *mut () {
+    fn get(&self, p: &LocalPointer) -> *mut () {
         let alloc = &self.allocations[p.allocation_index];
         alloc.get(p.allocation_offset)
     }
@@ -269,10 +307,10 @@ pub fn eval(
         instructions.extend(block.instructions.clone());
     }
 
-    let constants: HashMap<Identifier, &[u8]> = rt
+    let constants: HashMap<Identifier, Constant> = rt
         .constants()
         .values()
-        .map(|g| (g.name, g.bytes.as_ref()))
+        .map(|g| (g.name, g.value.clone()))
         .collect();
 
     // This is our working memory for the interpreter
@@ -356,10 +394,16 @@ pub fn eval(
                 let val = eval_operand(&vars, val);
                 vars.insert(to.clone(), val.clone());
             }
-            Instruction::LoadConstant { to, name, ty } => {
-                let val = constants.get(name).unwrap();
-                let val = IrValue::from_slice(ty, val);
-                vars.insert(to.clone(), val.clone());
+            Instruction::ConstantAddress { to, name } => {
+                let x = constants.get(name).unwrap();
+                let x = x.ptr();
+                mem.pointers.push(Pointer::Global(GlobalPointer {
+                    ptr: x as *mut (),
+                }));
+                vars.insert(
+                    to.clone(),
+                    IrValue::Pointer(mem.pointers.len() - 1),
+                );
             }
             Instruction::Call {
                 to,
@@ -634,7 +678,7 @@ pub fn eval(
 
                 let to = mem.get(to);
                 let from = mem.get(from);
-                unsafe { (clone_fn)(to, from) }
+                unsafe { (clone_fn)(from, to) }
             }
             Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
@@ -675,10 +719,18 @@ pub fn eval(
                 vars.insert(to.clone(), IrValue::Pointer(res));
             }
             Instruction::InitString {
-                to: _,
-                string: _,
+                to,
+                string,
                 init_func: _,
-            } => todo!(),
+            } => {
+                let layout = Primitive::String.layout();
+                let ptr = mem.allocate(layout.size());
+                let ptr_value = mem.get(ptr) as *mut Arc<str>;
+                unsafe {
+                    std::ptr::write(ptr_value, Arc::from(string.as_ref()))
+                };
+                vars.insert(to.clone(), IrValue::Pointer(ptr));
+            }
         }
 
         program_counter += 1;

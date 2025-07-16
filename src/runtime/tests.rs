@@ -1,3 +1,5 @@
+use crate::Val;
+
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
 use routecore::bgp::{
@@ -28,7 +30,7 @@ pub fn routecore_runtime() -> Result<Runtime, String> {
     rt.register_constant(
         "BLACKHOLE",
         "The well-known BLACKHOLE community.",
-        Community::from(Wellknown::Blackhole),
+        Val(Community::from(Wellknown::Blackhole)),
     )
     .unwrap();
 

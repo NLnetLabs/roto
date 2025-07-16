@@ -49,6 +49,8 @@ jobs:
       uses: hecrj/setup-rust-action@v1
       with:
         rust-version: ${{ matrix.rust }}
+    - name: Run apt-get update
+      run: sudo apt-get update
     - name: Install Valgrind
       run: sudo apt-get install -y valgrind
     - name: Install Just

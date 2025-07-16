@@ -2849,3 +2849,22 @@ fn return_verdict_from_runtime_function() {
 
     assert_eq!(Verdict::Accept(()), func.call(&mut ()));
 }
+
+#[test]
+fn string_global() {
+    let s = src!(
+        "fn use_foo() -> String {
+            FOO
+        }"
+    );
+
+    let mut runtime = Runtime::new();
+
+    let foo: Arc<str> = "BAR".into();
+    runtime.register_constant("FOO", "...", foo).unwrap();
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p.get_function::<(), fn() -> Arc<str>>("use_foo").unwrap();
+
+    assert_eq!(f.call(&mut ()), "BAR".into());
+}

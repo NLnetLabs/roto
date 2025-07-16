@@ -82,12 +82,8 @@ pub enum Instruction {
     /// Assign the value `val` to `to`.
     Assign { to: Var, val: Operand, ty: IrType },
 
-    /// Load a constant
-    LoadConstant {
-        to: Var,
-        name: Identifier,
-        ty: IrType,
-    },
+    /// Get the address of a constant
+    ConstantAddress { to: Var, name: Identifier },
 
     /// Create string
     InitString {
