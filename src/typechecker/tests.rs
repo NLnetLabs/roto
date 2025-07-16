@@ -1109,3 +1109,21 @@ fn assignment_to_record() {
 
     typecheck(s).unwrap();
 }
+
+#[test]
+fn invalid_type_in_f_string() {
+    let s = src!(
+        r#"
+            type Foo {
+                x: i32,
+            }
+
+            fn foo() -> String {
+                let y = Foo { x: 10 };
+                f"Value is {y}"
+            }
+        "#
+    );
+
+    typecheck(s).unwrap_err();
+}

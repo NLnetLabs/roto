@@ -1237,6 +1237,59 @@ fn to_string() {
 }
 
 #[test]
+fn simple_f_string() {
+    let s = src!(
+        r#"
+        fn foo(name: String) -> String {
+            f"Hello {name}!"
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(Arc<str>) -> Arc<str>>("foo")
+        .unwrap();
+
+    let res = f.call(&mut (), "John".into());
+    assert_eq!(res, "Hello John!".into());
+}
+
+#[test]
+fn simple_f_string_number() {
+    let s = src!(
+        r#"
+        fn foo(x: i32) -> String {
+            f"Hello {x}!"
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn(i32) -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut (), 10);
+    assert_eq!(res, "Hello 10!".into());
+}
+
+#[test]
+fn complex_f_string() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            f"This is a string with { f"another string which prints {true}" }, isn't that wonderful?"
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "This is a string with another string which prints true, isn't that wonderful?".into());
+}
+
+#[test]
 fn arc_type() {
     use std::sync::atomic::Ordering;
 

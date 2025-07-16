@@ -517,6 +517,71 @@ impl TypeChecker {
                 }
                 Ok(diverges)
             }
+            FString(parts) => {
+                // An f-string always has the type string
+                self.unify(&ctx.expected_type, &Type::string(), id, None)?;
+
+                let mut diverges = false;
+                for part in parts {
+                    match part {
+                        ast::FStringPart::String(_) => {
+                            // always ok!
+                        }
+                        ast::FStringPart::Expr(expr) => {
+                            // Each f-string part can be of any type
+                            let ty = self.fresh_var();
+                            let ctx = ctx.with_type(ty.clone());
+                            diverges |= self.expr(scope, &ctx, expr)?;
+
+                            // But that type needs a `to_string` method
+                            let res = self.get_method(
+                                &ty,
+                                &Meta {
+                                    id: MetaId(0),
+                                    node: "to_string".into(),
+                                },
+                            );
+
+                            match res {
+                                Some(function) => {
+                                    let sig = &function.signature;
+                                    let mut correct = true;
+                                    correct &= sig.parameter_types.len() == 1;
+                                    correct &= self
+                                        .unify(
+                                            &ty,
+                                            &sig.parameter_types[0],
+                                            expr.id,
+                                            None,
+                                        )
+                                        .is_ok();
+                                    correct &= self
+                                        .unify(
+                                            &sig.return_type,
+                                            &Type::string(),
+                                            expr.id,
+                                            None,
+                                        )
+                                        .is_ok();
+                                    if !correct {
+                                        return Err(self.error_simple("the `to_string` method of this type does not have the right signature", "does not have a valid `to_string` method", expr.id));
+                                    }
+                                    self.type_info
+                                        .function_calls
+                                        .insert(expr.id, function);
+                                }
+                                None => return Err(self.error_simple(
+                                    "type does not have a `to_string` method",
+                                    "does not have a `to_string` method",
+                                    expr.id,
+                                )),
+                            }
+                        }
+                    }
+                }
+
+                Ok(diverges)
+            }
         }
     }
 

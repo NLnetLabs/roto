@@ -9,7 +9,6 @@ use crate::ast::{
     Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
 };
 use error::ParseErrorKind;
-use std::iter::Peekable;
 use token::{Keyword, Lexer, Token};
 
 use self::meta::{Meta, Span, Spans};
@@ -32,7 +31,7 @@ type ParseResult<T> = Result<T, ParseError>;
 pub struct Parser<'source, 'spans> {
     file: usize,
     file_length: usize,
-    lexer: Peekable<Lexer<'source>>,
+    lexer: Lexer<'source>,
     pub spans: &'spans mut Spans,
 }
 
@@ -165,7 +164,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let mut p = Self {
             file,
             file_length: input.len(),
-            lexer: Lexer::new(input).peekable(),
+            lexer: Lexer::new(input),
             spans,
         };
         let out = parser(&mut p)?;
