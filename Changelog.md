@@ -1,16 +1,189 @@
 # Changelog
 
-## Unreleased new version
+## 0.7.0
 
-Released yyyy-mm-dd.
+Released 2026-08-25.
 
-### Breaking changes
+This release features a new documentation website available at
+<https://roto.docs.nlnetlabs.nl>. If you're new to Roto, it is a great place
+to start learning. It is a work in progress, so please give us feedback!
 
-### New
+We have also made a tree-sitter grammar for Roto, that is now good enough to
+try out: <https://github.com/NLnetLabs/tree-sitter-roto>.
 
-### Bug fixes
+### Language
 
-### Other changes
+#### Breaking changes
+
+- The `function` keyword was changed into the `fn` keyword. (#213)
+- The `Optional` type has been renamed to `Option`. (#216)
+- The `Unit` type has been renamed to `()`. It can also be constructed with
+  `()` (#225)
+
+#### New
+
+- Roto now allows multiple items to be imported on a single line. Thanks
+  @Wrimo! (#180)
+
+```roto
+import foo.{bar1, bar2};
+import foo.{bar.fn1, bar2.{fn2, fn3}};
+```
+
+- Variants, methods and static methods can now be imported directly. (#202)
+
+```roto
+# Import variants
+import Option.{Some, None};
+
+# Import a method (as `append`)
+import String.append;
+
+# Import a static method (as `new`)
+import Prefix.new;
+
+fn foo() {
+    let x = Some(10);
+    let y = append("race", "car");
+    let z = new(1.1.0.0, 16);
+}
+```
+
+- Methods can now be called as if they were static functions. (#202)
+
+```roto
+fn foo() {
+    # previously:
+    let x = "race".append("car");
+
+    # now also possible:
+    let y = String.append("race", "car");
+}
+```
+
+- Roto now has its first looping construct: `while`. (#194)
+
+```roto
+fn factorial(x: u64) -> u64 {
+    let i = 1;
+    let n = 1;
+    while i <= x {
+        n = n * i;
+        i = i + 1;
+    }
+    n
+}
+```
+
+- A new `?` operator, will return a `Option.None` value or yield the value
+  inside `Option.Some`, much like the same operator in Rust. (#195)
+
+```roto
+fn small(x: i32) -> i32? {
+    if x < 10 {
+        Some(x)
+    } else {
+        None
+    }
+}
+
+fn foo(x: i32, y: i32) -> i32? {
+    let z = small(x)? + small(y)?;
+    Some(z)
+}
+```
+
+- The unary minus operator has been added to negate signed integers and
+  floating point numbers. (#196)
+
+```roto
+fn abs(x: i32) -> i32 {
+    if x { x } else { -x }
+}
+```
+
+- It is now possible to add a type annotation on `let` bindings. (#197)
+
+```roto
+fn foo() -> u64 {
+    let x: u64 = 10;
+    x
+}
+```
+
+- Python-like f-strings have been added. This is a basic implementation
+  that is still rough around the edges. All primitives and registered types
+  with a `to_string` method can be put in a string prefixed with `f`. Any
+  expression evaluating to such a type is valid. See issue #244 for the
+  current limitations. (#220)
+
+```roto
+fn foo() -> String {
+    let x: u64 = 10;
+    f"The value of x is {x} and twice x is {2 * x}"
+}
+```
+
+#### Bug fixes
+
+- Roto now has an additional compiler pass: MIR. A lot of the code generation
+  was rewritten from scratch for this change. With the MIR we model values
+  passed to Roto in a more robust and several memory safety issues were fixed
+  in the process. (#182)
+
+- The error message for multiple item declarations with the same name have been
+  improved, especially when two tests with the same name are declared. (#191)
+
+- The error messages for unresolved paths have been improved. (#198)
+
+- String literals are now properly unescaped. (#200)
+
+- The previous implementation of constants turned out to be unsound, so a new
+  implementation should fix memory safety issues around them. (#208)
+
+- The `Reflect` and `RotoFunc` traits are now sealed because they should not
+  be implemented by downstream crates. (#214)
+
+- Fixed a bug where it wasn't possible to use multiple `not` operators. (#195)
+
+- Fixed an incorrect error message for `==` that showed the wrong type as
+  expected. (#242)
+
+### Crate
+
+#### Breaking changes
+
+- The CLI is now gated by a `cli` feature flag. (#175)
+- Logging is now gated by a `logger` feature flag. (#175)
+- The fields of `Runtime` are now private. (#193)
+- `Runtime` is passed by reference instead of moved to the compilation procedure,
+  allow for easier reuse across multiple compilations. (#193)
+- Registered constants are now required to be `Send + Sync`. (#208)
+- Registered constants are now required to have a valid identifier as name. (#223)
+
+#### New
+
+- There is a new `Compiled::get_tests` method to get the tests in a Roto script
+  without running them. This allows more flexibility in how the tests are run
+  and what the output is. Thanks @algernon! (#185)
+- The `Runtime::add_io_functions` method adds a `print` method to the runtime,
+  making it possible to write `"Hello, world!"` to the terminal! (#193)
+- `Runtime::compile` is a convenience function that will compile the script at
+  the given path. It is no longer necessary to make a `FileTree` first. (#193)
+
+#### Bug fixes
+
+- Fixed some cases where it was impossible to return certain types from
+  registered functions. (#210)
+
+#### Other changes
+
+- We switched from the `icu` crate to `unicode-ident` for the parsing of
+  identifiers. This shrinks the dependency graph of `roto`. (#173)
+- We removed unnecessary files from the crate as published on <crates.io>.
+  (#174)
+- `Runtime` has improved documentation that was previously on the non-public
+  `runtime` module. (#193)
 
 ## 0.6.0
 
