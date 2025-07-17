@@ -3,13 +3,13 @@
 /// This type cannot make use of niches because it uses the C-representation.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Optional<T> {
+pub enum RotoOption<T> {
     // WARNING: Roto relies on the order of these variants.
     Some(T),
     None,
 }
 
-impl<T> From<Option<T>> for Optional<T> {
+impl<T> From<Option<T>> for RotoOption<T> {
     fn from(value: Option<T>) -> Self {
         match value {
             Some(x) => Self::Some(x),
@@ -18,11 +18,11 @@ impl<T> From<Option<T>> for Optional<T> {
     }
 }
 
-impl<T> From<Optional<T>> for Option<T> {
-    fn from(value: Optional<T>) -> Self {
+impl<T> From<RotoOption<T>> for Option<T> {
+    fn from(value: RotoOption<T>) -> Self {
         match value {
-            Optional::Some(x) => Some(x),
-            Optional::None => None,
+            RotoOption::Some(x) => Some(x),
+            RotoOption::None => None,
         }
     }
 }

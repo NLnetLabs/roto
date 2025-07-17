@@ -1,4 +1,4 @@
 fn main(s: String) -> NonEmptyString? {
 	let x = NonEmptyString.new(s)?;
-	Optional.Some(x)
+	Option.Some(x)
 }

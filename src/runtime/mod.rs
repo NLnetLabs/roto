@@ -6,7 +6,7 @@ mod docs;
 pub mod func;
 mod io;
 pub mod layout;
-pub mod optional;
+pub mod option;
 pub mod ty;
 pub mod val;
 pub mod verdict;

@@ -23,7 +23,7 @@
 //!
 //! We start by declaring all the built-in types, since these need to be
 //! available for things in the runtime and in the script. This includes
-//! primitives (`bool`, `u32`, etc.), `Optional[T]`, `Verdict[A, R]` and
+//! primitives (`bool`, `u32`, etc.), `Option[T]`, `Verdict[A, R]` and
 //! things like that.
 //!
 //! The methods of these types are also declared.
@@ -260,7 +260,7 @@ impl TypeChecker {
             .resolve_name(
                 ScopeRef::GLOBAL,
                 &Meta {
-                    node: "Optional".into(),
+                    node: "Option".into(),
                     id: MetaId(0),
                 },
                 false,
@@ -455,7 +455,7 @@ impl TypeChecker {
                 }))
             }
             TypeDescription::Option(t) => {
-                Ok(Type::optional(Self::rust_type_to_roto_type(runtime, t)?))
+                Ok(Type::option(Self::rust_type_to_roto_type(runtime, t)?))
             }
             TypeDescription::Verdict(a, r) => Ok(Type::verdict(
                 Self::rust_type_to_roto_type(runtime, a)?,
@@ -1133,9 +1133,9 @@ impl TypeChecker {
             ast::TypeExpr::Record(record_ty) => {
                 Type::Record(self.evaluate_record_type(scope, record_ty)?)
             }
-            ast::TypeExpr::Optional(inner) => {
+            ast::TypeExpr::Option(inner) => {
                 let inner = self.evaluate_type_expr(scope, inner)?;
-                Type::optional(inner)
+                Type::option(inner)
             }
             ast::TypeExpr::Never => Type::Never,
             ast::TypeExpr::Unit => Type::unit(),

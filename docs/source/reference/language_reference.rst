@@ -641,12 +641,12 @@ Optional values
 
 Roto does not feature a value like ``None``, ``null`` or ``nil``. Instead, it
 has optional values. The type of an optional value is written ``T?``, which is
-shorthand for ``Optional[T]``. For example, an optional ``u32`` is ``u32?``, or
-equivalently, ``Optional[u32]``.
+shorthand for ``Option[T]``. For example, an optional ``u32`` is ``u32?``, or
+equivalently, ``Option[u32]``.
 
-The ``Optional`` type is an enum with 2 variants: ``None`` and ``Some``. A value
-of ``T?`` is constructed with either ``Optional.None`` or ``Optional.Some(t)``
-where ``t`` is a value of type ``T``.
+The ``Option`` type is an enum with 2 variants: ``None`` and ``Some``. A value
+of ``T?`` is constructed with either ``Option.None`` or ``Option.Some(t)`` where
+``t`` is a value of type ``T``.
 
 Like any enum it is possible to match on a value of type ``T?``
 
@@ -658,14 +658,14 @@ Like any enum it is possible to match on a value of type ``T?``
     }
 
 In addition, there is a ``?`` operator, which will evaluate to the value of 
-``Some`` or return ``Optional.None``. That is, if ``x`` is of type ``T?``, then
+``Some`` or return ``Option.None``. That is, if ``x`` is of type ``T?``, then
 ``x?`` is equivalent to the following match expression:
 
 .. code-block:: roto
 
     match x {
         Some(x) -> x,
-        None -> return Optional.None,
+        None -> return Option.None,
     }
 
 Next steps

@@ -51,8 +51,8 @@ impl Type {
         Type::named("Verdict", vec![a.borrow().clone(), b.borrow().clone()])
     }
 
-    pub fn optional(t: impl Borrow<Type>) -> Type {
-        Type::named("Optional", vec![t.borrow().clone()])
+    pub fn option(t: impl Borrow<Type>) -> Type {
+        Type::named("Option", vec![t.borrow().clone()])
     }
 
     pub fn list(t: impl Borrow<Type>) -> Type {
@@ -592,7 +592,7 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
 
     let compound_types = vec![
         Enum {
-            name: "Optional",
+            name: "Option",
             params: vec!["T"],
             variants: vec![
                 ("Some", vec![Type::ExplicitVar("T".into())]),
