@@ -95,6 +95,7 @@ fn visit<'a>(
         Type::Never => {
             Err("never should not appear in a type declaration".into())
         }
+        Type::Unit => Ok(()),
         Type::Function(_, _) => Ok(()),
         Type::ExplicitVar(_) => Ok(()),
         Type::Record(fields) => {

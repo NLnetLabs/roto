@@ -8,5 +8,5 @@ Error: Type error: mismatched types
    │
  2 │     return true;
    │            ──┬─  
-   │              ╰─── expected `Unit`, found `bool`
+   │              ╰─── expected `()`, found `bool`
 ───╯

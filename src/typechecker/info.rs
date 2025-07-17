@@ -318,6 +318,7 @@ impl TypeInfo {
             Type::Function(_, _) => {
                 ice!("Can't get the layout of a function type")
             }
+            Type::Unit => Layout::new(0, 1),
             Type::Var(_) | Type::Never => return None,
             Type::IntVar(_, _) => Primitive::i32().layout(),
             Type::FloatVar(_) => Primitive::f64().layout(),

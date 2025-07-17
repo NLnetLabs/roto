@@ -99,13 +99,6 @@ impl Runtime {
             constants: Default::default(),
         };
 
-        rt.register_value_type_with_name::<()>(
-            "Unit",
-            "The unit type that has just one possible value. It can be used \
-            when there is nothing meaningful to be returned.",
-        )
-        .unwrap();
-
         rt.register_value_type::<bool>(
             "The boolean type\n\n\
             This type has two possible values: `true` and `false`. Several \

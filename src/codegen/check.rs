@@ -74,7 +74,7 @@ fn check_roto_type(
     rust_ty: TypeId,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
-    // Convert this to consts when TypeId::of is const on stable
+    // TODO: Convert this to consts when TypeId::of is const on stable
     let BOOL: TypeId = TypeId::of::<bool>();
     let U8: TypeId = TypeId::of::<u8>();
     let U16: TypeId = TypeId::of::<u16>();
@@ -116,6 +116,14 @@ fn check_roto_type(
 
     match rust_ty.description {
         TypeDescription::Leaf => {
+            if rust_ty.type_id == UNIT {
+                return if roto_ty == Type::Unit {
+                    Ok(())
+                } else {
+                    Err(error_message)
+                };
+            }
+
             let expected_name = match rust_ty.type_id {
                 x if x == BOOL => "bool",
                 x if x == U8 => "u8",
@@ -128,7 +136,6 @@ fn check_roto_type(
                 x if x == I64 => "i64",
                 x if x == F32 => "f32",
                 x if x == F64 => "f64",
-                x if x == UNIT => "Unit",
                 x if x == ASN => "Asn",
                 x if x == IPADDR => "IpAddr",
                 x if x == PREFIX => "Prefix",

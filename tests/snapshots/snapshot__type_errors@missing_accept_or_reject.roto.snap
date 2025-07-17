@@ -8,5 +8,5 @@ Error: Type error: mismatched types
    │
  2 │     if 2 == 4 { reject }
    │     ──────────┬─────────  
-   │               ╰─────────── expected `Verdict[_, _]`, found `Unit`
+   │               ╰─────────── expected `Verdict[_, _]`, found `()`
 ───╯
