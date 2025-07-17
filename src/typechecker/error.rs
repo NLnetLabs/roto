@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::{
-    scope::{ResolvedName, StubDeclaration, StubDeclarationKind},
+    scope::{DeclarationKind, ValueKind},
     scoped_display::TypeDisplay,
     types::Type,
     ResolvedPath, TypeChecker,
@@ -138,7 +138,7 @@ impl TypeChecker {
     pub fn error_expected_type(
         &self,
         ident: &Meta<Identifier>,
-        stub: StubDeclaration,
+        stub: Declaration,
     ) -> TypeError {
         let kind = describe_declaration(&stub);
         TypeError {
@@ -151,9 +151,9 @@ impl TypeChecker {
     pub fn error_expected_module(
         &self,
         ident: &Meta<Identifier>,
-        stub: StubDeclaration,
+        declaration: Declaration,
     ) -> TypeError {
-        let kind = describe_declaration(&stub);
+        let kind = describe_declaration(&declaration);
         TypeError {
             description: format!(
                 "expected a module, but found {kind} `{ident}`",
@@ -375,8 +375,7 @@ impl TypeChecker {
         ident: &Meta<Identifier>,
         declaration: &Declaration,
     ) -> TypeError {
-        let stub = declaration.to_stub();
-        let kind = describe_declaration(&stub);
+        let kind = describe_declaration(&declaration);
         TypeError {
             description: format!(
                 "expected a value, but found {kind} `{}`",
@@ -407,7 +406,7 @@ impl TypeChecker {
                 ty.display(&self.type_info),
             ),
             location: expr.id,
-            labels: vec![Label::error("not a numberic value", expr.id)],
+            labels: vec![Label::error("not a numeric value", expr.id)],
         }
     }
 
@@ -471,36 +470,6 @@ impl TypeChecker {
         )
     }
 
-    pub fn error_no_static_method_on_type(
-        &self,
-        ty: &impl TypeDisplay,
-        ident: &Meta<Identifier>,
-    ) -> TypeError {
-        self.error_simple(
-            format!(
-                "no static method `{ident}` on type `{}`",
-                ty.display(&self.type_info)
-            ),
-            format!("unknown static method `{ident}`"),
-            ident.id,
-        )
-    }
-
-    pub fn error_no_variant_on_type(
-        &self,
-        ty: &impl TypeDisplay,
-        ident: &Meta<Identifier>,
-    ) -> TypeError {
-        self.error_simple(
-            format!(
-                "no variant or static method `{ident}` on type `{}`",
-                ty.display(&self.type_info)
-            ),
-            format!("unknown variant or static method `{ident}`"),
-            ident.id,
-        )
-    }
-
     pub fn error_no_field_or_method_on_type(
         &self,
         ty: &impl TypeDisplay,
@@ -515,33 +484,18 @@ impl TypeChecker {
             ident.id,
         )
     }
-
-    pub fn error_multiple_methods(
-        &self,
-        ident: &Meta<Identifier>,
-        candidates: &[ResolvedName],
-    ) -> TypeError {
-        self.error_simple(
-            format!(
-                "multiple possible methods for {ident}: {}",
-                join_quoted(
-                    candidates.iter().map(|c| c.display(&self.type_info))
-                )
-            ),
-            "multiple possible methods".to_string(),
-            ident.id,
-        )
-    }
 }
 
-fn describe_declaration(d: &StubDeclaration) -> &str {
+fn describe_declaration(d: &Declaration) -> &str {
     match &d.kind {
-        StubDeclarationKind::Context => "context",
-        StubDeclarationKind::Constant => "constant",
-        StubDeclarationKind::Variable => "variable",
-        StubDeclarationKind::Type(_) => "type",
-        StubDeclarationKind::Function => "function",
-        StubDeclarationKind::Module => "module",
+        DeclarationKind::Value(ValueKind::Local, _) => "variable",
+        DeclarationKind::Value(ValueKind::Constant, _) => "constant",
+        DeclarationKind::Value(ValueKind::Context(..), _) => "context",
+        DeclarationKind::Type(..) => "type",
+        DeclarationKind::Function(..) => "function",
+        DeclarationKind::Module => "module",
+        DeclarationKind::Method(..) => "method",
+        DeclarationKind::Variant(..) => "variant",
     }
 }
 

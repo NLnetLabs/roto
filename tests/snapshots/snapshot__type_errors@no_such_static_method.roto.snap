@@ -3,10 +3,10 @@ source: tests/snapshot.rs
 expression: string
 input_file: tests/scripts/type_errors/no_such_static_method.roto
 ---
-Error: Type error: no static method `bar` on type `String`
+Error: Type error: cannot find value `bar` in this scope
    ╭─[ tests/scripts/type_errors/no_such_static_method.roto:2:12 ]
    │
  2 │     String.bar();
    │            ─┬─  
-   │             ╰─── unknown static method `bar`
+   │             ╰─── not found in this scope
 ───╯
