@@ -870,6 +870,20 @@ impl Parser<'_, '_> {
     }
 
     pub(super) fn type_expr(&mut self) -> ParseResult<Meta<TypeExpr>> {
+        let mut type_expr = self.type_expr_atom()?;
+
+        while self.peek_is(Token::QuestionMark) {
+            let span = self.spans.get(&type_expr);
+            let span2 = self.take(Token::QuestionMark).unwrap();
+            let span = span.merge(span2);
+            let new_type_expr = TypeExpr::Option(Box::new(type_expr));
+            type_expr = self.spans.add(span, new_type_expr);
+        }
+
+        Ok(type_expr)
+    }
+
+    fn type_expr_atom(&mut self) -> ParseResult<Meta<TypeExpr>> {
         if self.peek_is(Token::Bang) {
             let span = self.take(Token::Bang)?;
             return Ok(self.spans.add(span, TypeExpr::Never));
@@ -889,27 +903,20 @@ impl Parser<'_, '_> {
         }
 
         let path = self.path()?;
-        let mut span = self.get_span(&path);
+        let path_span = self.get_span(&path);
 
-        let params = if self.peek_is(Token::SquareLeft) {
-            self.separated(
+        Ok(if self.peek_is(Token::SquareLeft) {
+            let params = self.separated(
                 Token::SquareLeft,
                 Token::SquareRight,
                 Token::Comma,
                 Self::type_expr,
-            )?
-            .node
+            )?;
+            let span = path_span.merge(self.spans.get(&params));
+            self.spans.add(span, TypeExpr::Path(path, Some(params)))
         } else {
-            Vec::new()
-        };
-
-        let mut type_name = TypeExpr::Path(path, params);
-        while self.peek_is(Token::QuestionMark) {
-            let span2 = self.take(Token::QuestionMark).unwrap();
-            span = span.merge(span2);
-            type_name = TypeExpr::Option(Box::new(type_name));
-        }
-        Ok(self.add_span(span, type_name))
+            self.spans.add(path_span, TypeExpr::Path(path, None))
+        })
     }
 
     pub(super) fn record_type(&mut self) -> ParseResult<RecordType> {

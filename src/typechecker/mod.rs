@@ -1132,7 +1132,10 @@ impl TypeChecker {
     ) -> TypeResult<Type> {
         Ok(match ty {
             ast::TypeExpr::Path(path, params) => {
-                let path = path.clone();
+                let params = match &params {
+                    Some(params) => &params.node[..],
+                    None => &[],
+                };
                 self.resolve_type_path(scope, &path, params)?
             }
             ast::TypeExpr::Record(record_ty) => {
