@@ -103,6 +103,19 @@ impl TypeRegistry {
 }
 
 /// A type that can register itself into the global type registry.
+mod seal {
+    /// A trait that can be used to seal other traits if added as a trait bound.
+    ///
+    /// It lives in a private module, but the name is public. Hence, we can use
+    /// it a bound, but downstream crates can't implement it.
+    ///
+    /// Based on a [blog post] by Predrag Gruevski
+    ///
+    /// [blog post]: https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/#sealing-traits-with-a-supertrait
+    pub trait Sealed {}
+}
+
+/// A type that can register itself into a [`TypeRegistry`].
 ///
 /// Via the type registry, it is then possible to query for information
 /// about this type. Reflection is recursive for types such as [`Verdict`],
@@ -114,7 +127,10 @@ impl TypeRegistry {
 ///
 /// Additionally, this trait specifies how a type should be passed to Roto, via
 /// the `AsParam` associated type.
-pub trait Reflect: Sized + 'static {
+///
+/// This trait is _sealed_, meaning that it cannot be implemented by downstream
+/// crates.
+pub trait Reflect: Sized + seal::Sealed + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed;
 
@@ -180,6 +196,8 @@ impl<T> Param<T> for *mut T {
     }
 }
 
+impl<A: Reflect, R: Reflect> seal::Sealed for Verdict<A, R> {}
+
 impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R>
 where
     A::Transformed: Clone,
@@ -210,6 +228,8 @@ where
         TypeRegistry::store::<Self>(desc)
     }
 }
+
+impl<T: Reflect> seal::Sealed for Option<T> {}
 
 impl<T: Reflect> Reflect for Option<T> {
     type Transformed = Optional<T::Transformed>;
@@ -257,6 +277,8 @@ impl<T> Param<Val<T>> for *mut T {
     }
 }
 
+impl<T: 'static + Clone> seal::Sealed for Val<T> {}
+
 impl<T: 'static + Clone> Reflect for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
@@ -277,6 +299,8 @@ impl<T: 'static + Clone> Reflect for Val<T> {
     }
 }
 
+impl seal::Sealed for IpAddr {}
+
 impl Reflect for IpAddr {
     type Transformed = Self;
     type AsParam = *mut Self;
@@ -294,6 +318,8 @@ impl Reflect for IpAddr {
     }
 }
 
+impl seal::Sealed for Prefix {}
+
 impl Reflect for Prefix {
     type Transformed = Self;
     type AsParam = *mut Self;
@@ -310,6 +336,8 @@ impl Reflect for Prefix {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
 }
+
+impl seal::Sealed for Arc<str> {}
 
 impl Reflect for Arc<str> {
     type Transformed = Self;
@@ -348,6 +376,8 @@ impl Param<()> for () {
         Ok(())
     }
 }
+
+impl seal::Sealed for () {}
 
 impl Reflect for () {
     type Transformed = Self;
@@ -404,6 +434,8 @@ macro_rules! simple_reflect {
                 Ok(p)
             }
         }
+
+        impl seal::Sealed for $t {}
 
         impl Reflect for $t {
             type Transformed = Self;
