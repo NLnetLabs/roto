@@ -114,3 +114,10 @@ fn invalid_type_name() {
     rt.register_clone_type::<accept>("").unwrap_err();
     rt.register_copy_type::<accept>("").unwrap_err();
 }
+
+#[test]
+fn invalid_constant_name() {
+    let mut rt = Runtime::new();
+
+    rt.register_constant("FOO$BAR", "...", 10u32).unwrap_err();
+}

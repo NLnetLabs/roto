@@ -547,6 +547,9 @@ impl Runtime {
     {
         let ty = TypeRegistry::resolve::<T>();
         let id = ty.type_id;
+        let name = name.into();
+
+        Self::check_name(&name)?;
 
         self.get_runtime_type(id).ok_or_else(|| {
             let ty = TypeRegistry::get(id).unwrap();
@@ -556,7 +559,7 @@ impl Runtime {
             )
         })?;
 
-        let symbol = Identifier::from(name.into());
+        let symbol = Identifier::from(name);
         self.constants.insert(
             symbol,
             RuntimeConstant {
@@ -583,6 +586,7 @@ impl Runtime {
         self.types.iter().find(|ty| ty.type_id == id)
     }
 
+    /// Check that the given string is a valid Roto identifier
     fn check_name(name: &str) -> Result<(), String> {
         let mut lexer = Lexer::new(name);
         let Some((Ok(tok), _)) = lexer.next() else {
