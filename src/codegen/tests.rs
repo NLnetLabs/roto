@@ -1992,6 +1992,62 @@ fn question_mark_in_chain() {
 }
 
 #[test]
+fn question_unit() {
+    let s = src!(
+        "
+        fn maybe_a_unit(x: bool) -> ()? {
+            if x {
+                Some(())
+            } else {
+                None
+            }
+        }    
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(bool) -> Option<()>>("maybe_a_unit")
+        .unwrap();
+
+    let res = f.call(&mut (), false);
+    assert_eq!(res, None);
+
+    let res = f.call(&mut (), true);
+    assert_eq!(res, Some(()));
+}
+
+#[test]
+fn question_record() {
+    let s = src!(
+        "
+        fn maybe_an_i32(x: bool) -> i32? {
+            Some(maybe_a_record(x)?.a)
+        }
+
+        fn maybe_a_record(x: bool) -> { a: i32 }? {
+            if x {
+                Some({ a: 5 })
+            } else {
+                None
+            }
+        }    
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(bool) -> Option<i32>>("maybe_an_i32")
+        .unwrap();
+
+    let res = f.call(&mut (), false);
+    assert_eq!(res, None);
+
+    let res = f.call(&mut (), true);
+    assert_eq!(res, Some(5));
+}
+
+#[test]
 fn add_options() {
     let s = src!(
         "

@@ -85,8 +85,8 @@ pub struct Path {
 
 #[derive(Clone, Debug)]
 pub enum TypeExpr {
-    Option(Box<TypeExpr>),
-    Path(Meta<Path>, Vec<Meta<TypeExpr>>),
+    Option(Box<Meta<TypeExpr>>),
+    Path(Meta<Path>, Option<Meta<Vec<Meta<TypeExpr>>>>),
     Never,
     Unit,
     Record(RecordType),
