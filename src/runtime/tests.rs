@@ -45,7 +45,6 @@ pub fn default_runtime() {
     assert_eq!(
         names,
         &[
-            "Unit",
             "bool",
             "u8",
             "u16",

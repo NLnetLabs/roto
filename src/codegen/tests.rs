@@ -39,6 +39,45 @@ fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
 }
 
 #[test]
+fn unit() {
+    let s = src!(
+        "
+        fn unit_expression() {
+            if true {
+                ()
+            } else {
+                ()
+            }
+        }
+    "
+    );
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn() -> ()>("unit_expression")
+        .expect("No function found (or mismatched types)");
+
+    let _res = f.call(&mut ());
+}
+
+#[test]
+fn unit_type() {
+    let s = src!(
+        "
+        fn unit_type() -> () {
+            let x: () = ();
+            x
+        }
+    "
+    );
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn() -> ()>("unit_type")
+        .expect("No function found (or mismatched types)");
+
+    let _res = f.call(&mut ());
+}
+
+#[test]
 fn accept() {
     let s = src!(
         "

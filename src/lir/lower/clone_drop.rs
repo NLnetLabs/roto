@@ -63,6 +63,7 @@ impl Lowerer<'_, '_> {
             }
             // These aren't copied, since they aren't leafs or zero sized
             Type::Never
+            | Type::Unit
             | Type::Record(_)
             | Type::RecordVar(_, _)
             | Type::Function(_, _) => return,
@@ -267,7 +268,10 @@ impl Lowerer<'_, '_> {
                     }
                 }
             }
-            Type::Never | Type::IntVar(_, _) | Type::FloatVar(_) => {}
+            Type::Never
+            | Type::Unit
+            | Type::IntVar(_, _)
+            | Type::FloatVar(_) => {}
             Type::Var(_) | Type::Function(_, _) | Type::ExplicitVar(_) => {
                 panic!("Can't traverse: {ty:?}")
             }

@@ -20,7 +20,7 @@ use super::{
 
 impl Type {
     pub fn unit() -> Type {
-        Type::named("Unit", Vec::new())
+        Type::Unit
     }
 
     pub fn bool() -> Type {
@@ -81,6 +81,7 @@ pub enum Type {
     IntVar(usize, MustBeSigned),
     FloatVar(usize),
     RecordVar(usize, Vec<(Meta<Identifier>, Type)>),
+    Unit,
     Never,
     Record(Vec<(Meta<Identifier>, Type)>),
     Function(Vec<Type>, Box<Type>),
@@ -119,7 +120,6 @@ pub struct EnumVariant {
 pub enum Primitive {
     Int(IntKind, IntSize),
     Float(FloatSize),
-    Unit,
     String,
     Bool,
     Asn,
@@ -288,7 +288,6 @@ impl Display for Primitive {
                 Primitive::Int(ty, size) =>
                     format!("{}{}", ty.prefix(), size.int()),
                 Primitive::Float(size) => format!("f{}", size.int()),
-                Primitive::Unit => "Unit".into(),
                 Primitive::String => "String".into(),
                 Primitive::Bool => "bool".into(),
                 Primitive::Asn => "Asn".into(),
@@ -340,6 +339,7 @@ impl TypeDisplay for Type {
                         .join(", ")
                 )
             }
+            Type::Unit => write!(f, "()"),
             Type::Never => write!(f, "!"),
             Type::Function(args, ret) => {
                 write!(
@@ -495,7 +495,6 @@ impl Primitive {
             }
             Bool => Layout::new(1, 1),
             Asn => Layout::new(4, 4),
-            Unit => Layout::new(0, 1),
             String => Layout::of::<Arc<str>>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
             Prefix => Layout::of::<inetnum::addr::Prefix>(),
@@ -571,7 +570,6 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
         ("f64", Float(FloatSize::F64)),
         ("bool", Bool),
         ("String", String),
-        ("Unit", Unit),
         ("Asn", Asn),
         ("IpAddr", IpAddr),
         ("Prefix", Prefix),

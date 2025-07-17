@@ -441,6 +441,11 @@ impl TypeChecker {
         t: TypeId,
     ) -> Result<Type, TypeError> {
         let ty = TypeRegistry::get(t).unwrap();
+
+        if ty.type_id == TypeId::of::<()>() {
+            return Ok(Type::Unit);
+        }
+
         match ty.description {
             TypeDescription::Leaf => {
                 let ident =

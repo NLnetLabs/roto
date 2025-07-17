@@ -459,7 +459,20 @@ impl Parser<'_, '_> {
     /// ```
     fn atom(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         if self.peek_is(Token::RoundLeft) {
-            self.take(Token::RoundLeft)?;
+            let span_left = self.take(Token::RoundLeft)?;
+
+            // If the next token is `)` then this is a unit expression
+            // otherwise it's just parentheses.
+            if self.peek_is(Token::RoundRight) {
+                let span_right = self.take(Token::RoundRight)?;
+                let span = span_left.merge(span_right);
+                let literal = self.spans.add(span, Literal::Unit);
+                return Ok(Meta {
+                    id: literal.id,
+                    node: Expr::Literal(literal),
+                });
+            }
+
             let expr = self.expr()?;
             self.take(Token::RoundRight)?;
             return Ok(expr);
@@ -860,6 +873,13 @@ impl Parser<'_, '_> {
         if self.peek_is(Token::Bang) {
             let span = self.take(Token::Bang)?;
             return Ok(self.spans.add(span, TypeExpr::Never));
+        }
+
+        if self.peek_is(Token::RoundLeft) {
+            let span_left = self.take(Token::RoundLeft)?;
+            let span_right = self.take(Token::RoundRight)?;
+            let span = span_left.merge(span_right);
+            return Ok(self.spans.add(span, TypeExpr::Unit));
         }
 
         if self.peek_is(Token::CurlyLeft) {
