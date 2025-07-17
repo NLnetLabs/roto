@@ -1925,6 +1925,34 @@ fn question_mark() {
 }
 
 #[test]
+fn question_mark_in_chain() {
+    let s = src!(
+        "
+        fn is_finite(x: f64) -> f64? {
+            if x.is_finite() {
+                Option.Some(x)
+            } else {
+                Option.None
+            }
+        }
+
+        fn foo(x: f64) -> f64? {
+            let y = is_finite(x)?.pow(2.0);
+            Option.Some(y)
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn(f64) -> Option<f64>>("foo").unwrap();
+
+    let res = f.call(&mut (), 10.0);
+    assert_eq!(res, Some(100.0));
+    let res = f.call(&mut (), f64::NAN);
+    assert_eq!(res, None);
+}
+
+#[test]
 fn add_options() {
     let s = src!(
         "

@@ -408,23 +408,8 @@ impl Parser<'_, '_> {
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Negate(Box::new(expr))))
         } else {
-            self.question_mark(r)
+            self.access(r)
         }
-    }
-
-    /// Parse a question mark expression
-    ///
-    /// ```ebnf
-    /// QuestionMark ::= Access '?'*
-    /// ```
-    fn question_mark(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let mut expr = self.access(r)?;
-        while self.peek_is(Token::QuestionMark) {
-            let span = self.take(Token::QuestionMark)?;
-            let span = span.merge(self.get_span(&expr));
-            expr = self.spans.add(span, Expr::QuestionMark(Box::new(expr)));
-        }
-        Ok(expr)
     }
 
     /// Parse an access expression
@@ -436,7 +421,12 @@ impl Parser<'_, '_> {
         let mut expr = self.atom(r)?;
 
         loop {
-            if self.peek_is(Token::RoundLeft) {
+            if self.peek_is(Token::QuestionMark) {
+                let span = self.take(Token::QuestionMark)?;
+                let span = span.merge(self.get_span(&expr));
+                expr =
+                    self.spans.add(span, Expr::QuestionMark(Box::new(expr)));
+            } else if self.peek_is(Token::RoundLeft) {
                 let args = self.args()?;
                 let span = self.merge_spans(&expr, &args);
                 expr = self
