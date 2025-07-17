@@ -153,6 +153,15 @@ pub enum Expr {
 
     /// Question mark operator
     QuestionMark(Box<Meta<Expr>>),
+
+    /// f-string
+    FString(Vec<FStringPart>),
+}
+
+#[derive(Clone, Debug)]
+pub enum FStringPart {
+    String(String),
+    Expr(Meta<Expr>),
 }
 
 #[derive(Clone, Debug)]

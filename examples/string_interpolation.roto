@@ -1,0 +1,8 @@
+fn main() {
+    let name = "Terts";
+    let number: i32 = 150;
+    print(f"Hello {name}!");
+    print(f"Your number is {number}!");
+    print(f"And {number} multiplied by 2 is {2 * number}.");
+    print(f"This is a string with { f"another string which prints {true}" }, isn't that wonderful?");
+}
