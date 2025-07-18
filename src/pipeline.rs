@@ -37,6 +37,7 @@ use crate::ir_printer::{IrPrinter, Printable};
 #[cfg(feature = "logger")]
 use log::info;
 
+/// An error from a compilation of a Roto script.
 #[derive(Debug)]
 pub enum RotoError {
     Read(String, std::io::Error),
@@ -44,7 +45,7 @@ pub enum RotoError {
     Type(TypeError),
 }
 
-/// An error report containing a set of Roto errors
+/// An error report containing a set of Roto errors.
 ///
 /// The errors can be printed with the regular [`std::fmt::Display`].
 pub struct RotoReport {
@@ -80,7 +81,10 @@ pub struct LoweredToLir<'r> {
     context_type: ContextDescription,
 }
 
-pub struct Compiled {
+/// The final compiled package of script.
+///
+/// Functions can be extracted from this package using [`Package::get_function`].
+pub struct Package {
     module: Module,
 }
 
@@ -203,14 +207,17 @@ impl RotoReport {
 
 impl std::error::Error for RotoReport {}
 
-#[macro_export]
+#[cfg(test)]
 macro_rules! src {
     ($code:literal) => {
         $crate::FileTree::test_file(file!(), $code, line!() as usize - 1)
     };
 }
 
-#[macro_export]
+#[cfg(test)]
+pub(crate) use src;
+
+#[cfg(test)]
 macro_rules! source_file {
     ($module_name:literal, $code:literal) => {
         $crate::SourceFile {
@@ -222,6 +229,9 @@ macro_rules! source_file {
         }
     };
 }
+
+#[cfg(test)]
+pub(crate) use source_file;
 
 impl Parsed {
     pub fn typecheck(
@@ -353,7 +363,7 @@ impl LoweredToLir<'_> {
         eval::eval(self.runtime, &self.ir.functions, "main", mem, ctx, args)
     }
 
-    pub fn codegen(self) -> Compiled {
+    pub fn codegen(self) -> Package {
         let module = codegen::codegen(
             self.runtime,
             &self.ir.functions,
@@ -362,11 +372,11 @@ impl LoweredToLir<'_> {
             self.type_info,
             self.context_type,
         );
-        Compiled { module }
+        Package { module }
     }
 }
 
-impl Compiled {
+impl Package {
     pub fn get_tests<Ctx: 'static>(
         &mut self,
     ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
