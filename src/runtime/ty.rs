@@ -17,7 +17,7 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{IrValue, Memory};
+use crate::lir::{IrValue, Memory};
 
 use super::{option::RotoOption, val::Val, verdict::Verdict};
 
@@ -115,21 +115,18 @@ mod seal {
     pub trait Sealed {}
 }
 
-/// A type that can register itself into a [`TypeRegistry`].
-///
-/// Via the type registry, it is then possible to query for information
-/// about this type. Reflection is recursive for types such as [`Verdict`],
-/// [`Result`] and [`Option`].
-///
-/// Pointers are explicitly _not_ recursive, because they can be used to pass
-/// pointers to types that have been registered to Roto and therefore don't
-/// need to implement this trait.
-///
-/// Additionally, this trait specifies how a type should be passed to Roto, via
-/// the `AsParam` associated type.
+/// A type that can be passed to Roto.
 ///
 /// This trait is _sealed_, meaning that it cannot be implemented by downstream
-/// crates.
+/// crates, instead these types can be wrapped in [`Val`].
+///
+/// The `Reflect::Transformed` type represents the type that this type will be
+/// converted into before being passed to Roto. For example, `Option` will be
+/// converted into [`RotoOption`] to ensure that it has a predictable layout.
+///
+/// The `Reflect::AsParam` then specifies how this value is passed to a Roto
+/// function. Most primitives are simply passed by value, but many other types
+/// are passed by `*mut Reflect::Transformed`.
 pub trait Reflect: Sized + seal::Sealed + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed;
@@ -137,8 +134,10 @@ pub trait Reflect: Sized + seal::Sealed + 'static {
     /// The type that this type should be converted into when passed to Roto
     type AsParam: Param<Self::Transformed>;
 
+    /// Transform this value into a value that Roto understands
     fn transform(self) -> Self::Transformed;
 
+    /// Transform this a Roto value back into this type
     fn untransform(transformed: Self::Transformed) -> Self;
 
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {

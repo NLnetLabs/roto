@@ -28,17 +28,16 @@ pub mod value;
 #[cfg(test)]
 mod test_eval;
 
-pub use lower::lower_to_lir;
-use std::{fmt::Display, sync::Arc};
-
 use crate::{
     ast::Identifier,
     label::LabelRef,
     runtime::{self, layout::Layout},
     typechecker::{self, scope::ScopeRef},
 };
-
-use value::{IrType, IrValue};
+pub use eval::Memory;
+pub use lower::lower_to_lir;
+use std::{fmt::Display, sync::Arc};
+pub use value::{IrType, IrValue};
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

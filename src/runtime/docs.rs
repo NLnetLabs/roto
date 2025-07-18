@@ -1,11 +1,8 @@
 use std::any::TypeId;
 
-use crate::{
-    runtime::{
-        context::ContextDescription, FunctionKind, RuntimeConstant,
-        RuntimeFunction,
-    },
-    Runtime, RuntimeType,
+use super::{
+    context::ContextDescription, FunctionKind, Runtime, RuntimeConstant,
+    RuntimeFunction, RuntimeType,
 };
 
 impl Runtime {
@@ -74,6 +71,9 @@ impl Runtime {
         println!();
     }
 
+    /// Print documentation for all the types registerd into this runtime.
+    ///
+    /// The format for the documentation is markdown that can be passed to Sphinx.
     pub fn print_documentation(&self) {
         println!("# Standard Library");
         println!();
@@ -91,7 +91,7 @@ impl Runtime {
             fields,
         }) = &self.context
         {
-            for crate::ContextField {
+            for super::context::ContextField {
                 name,
                 offset: _,
                 type_name: _,
