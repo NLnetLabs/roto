@@ -32,7 +32,7 @@ pub fn roto_context(item: TokenStream) -> TokenStream {
             let docstring = gather_docstring(&f.attrs);
 
             quote!(
-                roto::ContextField {
+                roto::__internal::ContextField {
                     name: stringify!(#field_name),
                     offset: #offset,
                     type_name: #type_name,
@@ -44,8 +44,8 @@ pub fn roto_context(item: TokenStream) -> TokenStream {
         .collect();
 
     let expanded = quote!(
-        impl Context for #struct_name {
-            fn fields() -> Vec<roto::ContextField> {
+        unsafe impl Context for #struct_name {
+            fn fields() -> Vec<roto::__internal::ContextField> {
                 vec![
                     #(#fields),*
                 ]
@@ -58,8 +58,10 @@ pub fn roto_context(item: TokenStream) -> TokenStream {
 
 struct Intermediate {
     function: proc_macro2::TokenStream,
-    name: syn::Ident,
-    identifier: proc_macro2::TokenStream,
+    fn_ty: proc_macro2::TokenStream,
+    ident: syn::Ident,
+    docstring: String,
+    parameter_names: proc_macro2::TokenStream,
 }
 
 struct FunctionArgs {
@@ -91,8 +93,10 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::ItemFn);
     let Intermediate {
         function,
-        identifier,
-        name: function_ident,
+        fn_ty: ty,
+        ident,
+        docstring,
+        parameter_names,
     } = generate_function(item);
 
     let FunctionArgs {
@@ -100,12 +104,17 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
         name,
     } = syn::parse(attr).unwrap();
 
-    let name = name.unwrap_or(function_ident);
+    let name = name.unwrap_or(ident.clone());
 
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_function(stringify!(#name), #identifier).unwrap();
+        #runtime_ident.register_function::<#ty>(
+            stringify!(#name),
+            stringify!(#docstring).to_string(),
+            #parameter_names,
+            #ident,
+        ).unwrap();
     };
 
     TokenStream::from(expanded)
@@ -143,8 +152,10 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::ItemFn);
     let Intermediate {
         function,
-        identifier,
-        name: function_name,
+        fn_ty,
+        ident,
+        docstring,
+        parameter_names,
     } = generate_function(item);
 
     let MethodArgs {
@@ -153,12 +164,17 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
         name,
     } = parse_macro_input!(attr as MethodArgs);
 
-    let name = name.unwrap_or(function_name);
+    let name = name.unwrap_or(ident.clone());
 
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_method::<#ty, _>(stringify!(#name), #identifier).unwrap();
+        #runtime_ident.register_method::<#ty, #fn_ty>(
+            stringify!(#name),
+            stringify!(#docstring).to_string(),
+            #parameter_names,
+            #ident
+        ).unwrap();
     };
 
     TokenStream::from(expanded)
@@ -172,8 +188,10 @@ pub fn roto_static_method(
     let item = parse_macro_input!(item as syn::ItemFn);
     let Intermediate {
         function,
-        identifier,
-        name: function_name,
+        fn_ty,
+        ident,
+        docstring,
+        parameter_names,
     } = generate_function(item);
 
     let MethodArgs {
@@ -182,12 +200,17 @@ pub fn roto_static_method(
         name,
     } = parse_macro_input!(attr as MethodArgs);
 
-    let name = name.unwrap_or(function_name);
+    let name = name.unwrap_or(ident.clone());
 
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_static_method::<#ty, _>(stringify!(#name), #identifier).unwrap();
+        #runtime_ident.register_static_method::<#ty, #fn_ty>(
+            stringify!(#name),
+            stringify!(#docstring).to_string(),
+            #parameter_names,
+            #ident
+        ).unwrap();
     };
 
     TokenStream::from(expanded)
@@ -279,9 +302,6 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
             .push(quote!(<#t as roto::Reflect>::untransform(unsafe { <#t as roto::Reflect>::to_value(#ident) })));
     }
 
-    let underscored_types = input_types.iter().map(|_| quote!(_));
-    let arg_types = quote!(_, #(#underscored_types,)*);
-
     let function = quote! {
         #(#attrs)*
         #vis extern "C" fn #ident #generics ( out: *mut <#ret as roto::Reflect>::Transformed, #(#transformed_params,)* ) {
@@ -293,17 +313,14 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         }
     };
 
-    let identifier = quote! {
-        unsafe { roto::Func::<fn(#(#input_types),*) -> #ret>::new(
-            #ident as extern "C" fn(#arg_types),
-            #docstring,
-            &[#(stringify!(#args)),*]
-        ) }
-    };
+    let ty = quote!( fn(#(#input_types),*) -> #ret );
+    let parameter_names = quote!( &[#(stringify!(#args)),*] );
 
     Intermediate {
         function,
-        name: ident,
-        identifier,
+        fn_ty: ty,
+        ident,
+        docstring,
+        parameter_names,
     }
 }

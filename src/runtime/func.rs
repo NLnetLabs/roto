@@ -2,61 +2,6 @@ use std::any::TypeId;
 
 use crate::codegen::check::{RotoFunc, RustIrFunction};
 
-pub struct Func<F: RotoFunc> {
-    wrapper: <F as RotoFunc>::RustWrapper,
-    docstring: &'static str,
-    argument_names: &'static [&'static str],
-}
-
-impl<F: RotoFunc> Func<F> {
-    /// Construct a new [`Func`] to register to Roto.
-    ///
-    /// # Safety
-    ///
-    /// The `wrapper` argument must be a function that can be called safely
-    /// from Roto.
-    ///
-    /// Use the [`roto_function`], [`roto_method`] and [`roto_static_method`]
-    /// macros to be sure of that.
-    ///
-    /// [`roto_function`]: crate::roto_function
-    /// [`roto_method`]: crate::roto_method
-    /// [`roto_static_method`]: crate::roto_static_method
-    pub unsafe fn new(
-        wrapper: <F as RotoFunc>::RustWrapper,
-        docstring: &'static str,
-        argument_names: &'static [&'static str],
-    ) -> Self {
-        Self {
-            wrapper,
-            docstring,
-            argument_names,
-        }
-    }
-
-    pub(crate) fn docstring(&self) -> &'static str {
-        self.docstring
-    }
-
-    pub(crate) fn argument_names(&self) -> &'static [&'static str] {
-        self.argument_names
-    }
-
-    pub(crate) fn to_function_description(&self) -> FunctionDescription {
-        let parameter_types = F::parameter_types();
-        let return_type = F::return_type();
-        let pointer = F::ptr(&self.wrapper);
-        let ir_function = F::ir_function(&self.wrapper);
-
-        FunctionDescription {
-            parameter_types,
-            return_type,
-            pointer,
-            ir_function,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct FunctionDescription {
     parameter_types: Vec<TypeId>,
@@ -73,6 +18,20 @@ unsafe impl Send for FunctionDescription {}
 unsafe impl Sync for FunctionDescription {}
 
 impl FunctionDescription {
+    pub fn of<F: RotoFunc>(wrapper: &F::RustWrapper) -> Self {
+        let parameter_types = F::parameter_types();
+        let return_type = F::return_type();
+        let pointer = F::ptr(&wrapper);
+        let ir_function = F::ir_function(&wrapper);
+
+        Self {
+            parameter_types,
+            return_type,
+            pointer,
+            ir_function,
+        }
+    }
+
     pub fn parameter_types(&self) -> &[TypeId] {
         &self.parameter_types
     }

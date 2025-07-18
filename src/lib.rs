@@ -23,23 +23,23 @@ mod typechecker;
 #[cfg(feature = "cli")]
 pub use cli::cli;
 
+#[cfg(test)]
+pub(crate) use pipeline::{source_file, src};
+
 pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
-pub use lir::eval::Memory;
-pub use lir::value::IrValue;
-pub use pipeline::{Compiled, LoweredToLir, RotoError, RotoReport};
+pub use pipeline::{Package, RotoError, RotoReport};
 pub use roto_macros::{
     roto_function, roto_method, roto_static_method, Context,
 };
 pub use runtime::{
-    context::{Context, ContextField},
-    func::Func,
-    option::RotoOption,
-    ty::Reflect,
-    val::Val,
-    verdict::Verdict,
-    Runtime, RuntimeType,
+    context::Context, ty::Reflect, val::Val, verdict::Verdict, Runtime,
 };
+
+/// Items exported only for use in macros
+pub mod __internal {
+    pub use crate::runtime::context::ContextField;
+}
 
 pub(crate) const FIND_HELP: &str = "\n\
     If you are seeing this error you have found a bug in the Roto compiler.\n\

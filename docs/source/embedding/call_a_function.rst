@@ -25,8 +25,8 @@ parameter ``4``.
 
         // Step 2: Compile the script and check for type errors
         let result = runtime.compile("script.roto");
-        let compiled = match result {
-            Ok(compiled) => compiled,
+        let pkg = match result {
+            Ok(pkg) => pkg,
             Err(err) => {
                 eprint!("{e}");
                 return 1;

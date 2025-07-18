@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
 use crate::{
-    runtime::tests::routecore_runtime, src, FileTree, LoweredToLir, Runtime,
+    pipeline::LoweredToLir, runtime::tests::routecore_runtime, src, FileTree,
+    Runtime,
 };
 
 #[track_caller]

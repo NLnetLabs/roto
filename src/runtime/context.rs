@@ -4,7 +4,7 @@ use std::any::{type_name, TypeId};
 ///
 /// This declares a set of global variables that are initialized just before
 /// the script is run.
-pub trait Context: 'static {
+pub unsafe trait Context: 'static {
     /// Return the fields of this struct, their offsets and their types
     fn fields() -> Vec<ContextField>;
 
@@ -33,7 +33,7 @@ pub struct ContextField {
     pub docstring: String,
 }
 
-impl Context for () {
+unsafe impl Context for () {
     fn fields() -> Vec<ContextField> {
         Vec::new()
     }

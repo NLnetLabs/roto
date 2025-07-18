@@ -15,13 +15,15 @@ use crate::{
     ast::Identifier,
     ice,
     label::{LabelRef, LabelStore},
-    lir::{self, value::IrType, FloatCmp, IntCmp, Operand, Var, VarKind},
+    lir::{
+        self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
+    },
     runtime::{
         context::ContextDescription, ty::Reflect, Constant, RuntimeConstant,
         RuntimeFunctionRef,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
-    IrValue, Runtime,
+    Runtime,
 };
 use check::{
     check_roto_type_reflect, FunctionRetrievalError, RotoFunc, TypeMismatch,

@@ -94,8 +94,8 @@ Not very useful yet, of course, but let's see it in action anyway:
 
     use roto::Val;
 
-    let compiled = runtime.read("script.roto").unwrap();
-    let f = compiled
+    let pkg = runtime.read("script.roto").unwrap();
+    let f = pkg
         .get_function::<_, fn(Val<Range>) -> Val<Range>>("passthrough")
         .unwrap();
 
@@ -130,8 +130,8 @@ expose methods on it to Roto.
         range.low <= x && x < range.high
     }
 
-    let compiled = runtime.read("script.roto").unwrap();
-    let f = compiled
+    let pkg = runtime.read("script.roto").unwrap();
+    let f = pkg
         .get_function::<_, fn(Val<Range>, x: i64) -> Val<Range>>("in_range")
         .unwrap();
 
