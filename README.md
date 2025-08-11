@@ -1,7 +1,7 @@
-`Roto`
-======
+Roto
+====
 
-`Roto` is an embedded scripting language that is fast, safe and easy to use. 
+Roto is an embedded scripting language that is fast, safe and easy to use. 
 
 Primarily used by [Rotonda], the composable, programmable routing BGP engine. It
 is made to integrate especially well with Rotonda, so that writing filters is as
@@ -13,7 +13,7 @@ Read more about it in the [documentation].
 
 ```roto
 # A function that returns true if an IP address is equal to 0.0.0.0
-function is_zero(x: IpAddr) -> bool {
+fn is_zero(x: IpAddr) -> bool {
     x == 0.0.0.0
 }
 
@@ -69,15 +69,42 @@ Some limitations are only present because we haven't come around to
 implementing them yet. Most limitations can be found in the issue tracker, but
 we've summarized some important missing features here.
 
-- Roto does not feature any looping constructs yet. If you need loops,
-  you can use recursion instead as a workaround.
-  (https://github.com/NLnetLabs/roto/issues/187)
 - Lists are not supported yet. (https://github.com/NLnetLabs/roto/issues/102)
 - It's not yet possible to declare your own `enum` types.
   (https://github.com/NLnetLabs/roto/issues/188)
 - It's not yet possible to declare types with generics and write
   generic functions. (https://github.com/NLnetLabs/roto/issues/189 and
   https://github.com/NLnetLabs/roto/issues/190)
+
+## Memory safety
+
+Roto fundamentally relies on unsafe code, after all, we are generating machine
+code at runtime. However, we treat every unsoundness stemming from use of Roto
+with safe Rust as a bug of high priority. Please report any issues you find to
+the [GitHub repository](https://github.com/NLnetLabs/roto).
+
+We run our extensive test suite under Valgrind in CI to ensure that at least
+most common use cases are correctly implemented.
+
+## Security considerations
+
+If you allow users to submit **untrusted** Roto scripts to your application,
+you need to be aware that malicious (or erroneous) Roto scripts can do the
+following:
+
+- crash your process by running out of memory with infinite recursion,
+- loop indefinitely with a `while` loop, or
+- be so big that compiling it will slow down your application.
+
+Therefore, we make the following recommendations:
+
+- Impose a maximum size on scripts.
+- Compile and run the untrusted script in a separate process with a timeout and
+  proper handling of unexpected crashes of that process.
+
+Finally, Roto scripts have access to all functions you provide and are therefore
+as contained as you want them to be. Be careful not to expose information or
+functionality that compromises the security of your application.
 
 ## Learn more
 
