@@ -120,3 +120,101 @@ fn invalid_constant_name() {
 
     rt.register_constant("FOO$BAR", "...", 10u32).unwrap_err();
 }
+
+#[test]
+fn constant_declared_twice() {
+    let mut rt = Runtime::new();
+
+    rt.register_constant("FOO", "...", 10u32).unwrap();
+    rt.register_constant("FOO", "...", 10u32).unwrap_err();
+}
+
+#[test]
+#[should_panic]
+fn function_declared_twice() {
+    let mut rt = Runtime::new();
+
+    #[roto_function(rt)]
+    fn foo() {}
+
+    #[roto_function(rt, foo)]
+    fn foo2() -> bool {
+        false
+    }
+}
+
+#[test]
+#[should_panic]
+fn method_declared_twice() {
+    let mut rt = Runtime::new();
+
+    #[roto_method(rt, bool, foo)]
+    fn foo1(_: bool) {}
+
+    #[roto_method(rt, bool, foo)]
+    fn foo2(_: bool) -> bool {
+        false
+    }
+}
+
+#[test]
+#[should_panic]
+fn static_method_declared_twice() {
+    let mut rt = Runtime::new();
+
+    #[roto_static_method(rt, bool, foo)]
+    fn foo1() {}
+
+    #[roto_static_method(rt, bool, foo)]
+    fn foo2() -> bool {
+        false
+    }
+}
+
+#[test]
+#[should_panic]
+fn method_and_static_method_with_the_same_name() {
+    let mut rt = Runtime::new();
+
+    #[roto_method(rt, bool, foo)]
+    fn foo1(_: bool) {}
+
+    #[roto_static_method(rt, bool, foo)]
+    fn foo2() -> bool {
+        false
+    }
+}
+
+#[test]
+fn function_and_method_with_the_same_name() {
+    let mut rt = Runtime::new();
+
+    #[roto_function(rt, foo)]
+    fn foo1(_: bool) {}
+
+    #[roto_method(rt, bool, foo)]
+    fn foo2(_: bool) -> bool {
+        false
+    }
+}
+
+#[test]
+fn function_and_constant_with_the_same_name_1() {
+    let mut rt = Runtime::new();
+
+    #[roto_function(rt, foo)]
+    fn foo1(_: bool) {}
+
+    rt.register_constant("foo", "...", true).unwrap_err();
+}
+
+#[test]
+#[should_panic]
+fn function_and_constant_with_the_same_name_2() {
+    let mut rt = Runtime::new();
+
+    rt.register_constant("foo", "...", true).unwrap();
+
+    #[roto_function(rt, foo)]
+    fn foo1(_: bool) {}
+}

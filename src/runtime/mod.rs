@@ -435,24 +435,7 @@ impl Runtime {
         name: impl Into<String>,
         f: Func<F>,
     ) -> Result<(), String> {
-        let docstring = f.docstring();
-        let argument_names = f.argument_names();
-        let description = f.to_function_description();
-        let name = name.into();
-
-        Self::check_name(&name)?;
-        self.check_description(&description)?;
-
-        let id = self.functions.len();
-        self.functions.push(RuntimeFunction {
-            name,
-            description,
-            kind: FunctionKind::Free,
-            id,
-            docstring,
-            argument_names,
-        });
-        Ok(())
+        self.register_function_internal(name.into(), FunctionKind::Free, f)
     }
 
     pub fn register_method<T: 'static, F: RotoFunc>(
@@ -460,13 +443,7 @@ impl Runtime {
         name: impl Into<String>,
         f: Func<F>,
     ) -> Result<(), String> {
-        let docstring = f.docstring();
-        let argument_names = f.argument_names();
         let description = f.to_function_description();
-        let name = name.into();
-
-        Self::check_name(&name)?;
-        self.check_description(&description)?;
 
         let Some(first) = description.parameter_types().first() else {
             return Err("a method must have at least one parameter".into());
@@ -494,17 +471,8 @@ impl Runtime {
             );
         }
 
-        let id = self.functions.len();
-        self.functions.push(RuntimeFunction {
-            name,
-            description,
-            kind: FunctionKind::Method(std::any::TypeId::of::<T>()),
-            id,
-            docstring,
-            argument_names,
-        });
-
-        Ok(())
+        let kind = FunctionKind::Method(std::any::TypeId::of::<T>());
+        self.register_function_internal(name.into(), kind, f)
     }
 
     pub fn register_static_method<T: 'static, F: RotoFunc>(
@@ -512,19 +480,35 @@ impl Runtime {
         name: impl Into<String>,
         f: Func<F>,
     ) -> Result<(), String> {
+        let kind = FunctionKind::StaticMethod(std::any::TypeId::of::<T>());
+        self.register_function_internal(name.into(), kind, f)
+    }
+
+    fn register_function_internal<F: RotoFunc>(
+        &mut self,
+        name: String,
+        kind: FunctionKind,
+        f: Func<F>,
+    ) -> Result<(), String> {
         let docstring = f.docstring();
         let argument_names = f.argument_names();
         let description = f.to_function_description();
-        let name = name.into();
 
         Self::check_name(&name)?;
+
+        let type_id = match kind {
+            FunctionKind::Free => None,
+            FunctionKind::Method(type_id)
+            | FunctionKind::StaticMethod(type_id) => Some(type_id),
+        };
+        self.check_name_collision(type_id, &name)?;
         self.check_description(&description)?;
 
         let id = self.functions.len();
         self.functions.push(RuntimeFunction {
             name,
             description,
-            kind: FunctionKind::StaticMethod(std::any::TypeId::of::<T>()),
+            kind,
             id,
             docstring,
             argument_names,
@@ -550,6 +534,7 @@ impl Runtime {
         let name = name.into();
 
         Self::check_name(&name)?;
+        Self::check_name_collision(&self, None, &name)?;
 
         self.get_runtime_type(id).ok_or_else(|| {
             let ty = TypeRegistry::get(id).unwrap();
@@ -560,6 +545,7 @@ impl Runtime {
         })?;
 
         let symbol = Identifier::from(name);
+
         self.constants.insert(
             symbol,
             RuntimeConstant {
@@ -608,6 +594,48 @@ impl Runtime {
                 Err(format!("Name {name:?} is not a valid Roto identifier."))
             }
         }
+    }
+
+    /// Check that there doesn't already exist a function with the same name
+    ///
+    /// The `type_id` refers to the id of the type that a method or static
+    /// method is registered under.
+    fn check_name_collision(
+        &self,
+        type_id: Option<TypeId>,
+        name: &str,
+    ) -> Result<(), String> {
+        let kind_to_id = |kind: &FunctionKind| match kind {
+            FunctionKind::Method(id) | FunctionKind::StaticMethod(id) => {
+                Some(*id)
+            }
+            FunctionKind::Free => None,
+        };
+
+        for f in &self.functions {
+            if kind_to_id(&f.kind) == type_id && f.name == name {
+                if let Some(id) = type_id {
+                    let ty = TypeRegistry::get(id).unwrap();
+                    let type_name = ty.rust_name;
+                    return Err(format!("Symbol `{name}` on type `{type_name}` is declared twice in runtime"));
+                } else {
+                    return Err(format!(
+                        "Symbol `{name}` is declared twice in runtime"
+                    ));
+                }
+            }
+        }
+
+        if type_id.is_none() {
+            let symbol = Identifier::from(name);
+            if self.constants.iter().any(|(c, _)| *c == symbol) {
+                return Err(format!(
+                    "Symbol `{name}` is declared twice in runtime"
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     fn check_description(
