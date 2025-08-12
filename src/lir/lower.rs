@@ -6,6 +6,7 @@ use crate::{
     ast::{self, Identifier, Literal},
     ice,
     label::{LabelRef, LabelStore},
+    lir::IrValue,
     mir,
     runtime::{
         init_string,
@@ -21,7 +22,7 @@ use crate::{
             TypeDefinition,
         },
     },
-    IrValue, Runtime,
+    Runtime,
 };
 
 use super::{

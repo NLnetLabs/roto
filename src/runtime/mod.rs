@@ -19,7 +19,7 @@ use std::{
 };
 
 use context::ContextDescription;
-use func::{Func, FunctionDescription};
+use func::FunctionDescription;
 use layout::Layout;
 use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 
@@ -27,7 +27,7 @@ use crate::{
     ast::Identifier,
     codegen::check::RotoFunc,
     parser::token::{Lexer, Token},
-    Compiled, Context, FileTree, RotoReport,
+    Context, FileTree, Package, RotoReport,
 };
 
 /// Provides the types and functions that Roto can access via FFI
@@ -78,10 +78,14 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Compile a script from a path and return the result.
+    ///
+    /// If the path is a file, then that file will be loaded. If the path is a
+    /// directory, the directory will be scanned for modules.
     pub fn compile(
         &self,
         path: impl AsRef<Path>,
-    ) -> Result<Compiled, RotoReport> {
+    ) -> Result<Package, RotoReport> {
         FileTree::read(path).compile(self)
     }
 }
@@ -202,7 +206,7 @@ pub struct RuntimeFunction {
     /// Unique identifier for this function
     pub(crate) id: usize,
 
-    pub(crate) docstring: &'static str,
+    pub(crate) docstring: String,
 
     pub(crate) argument_names: &'static [&'static str],
 }
@@ -433,17 +437,31 @@ impl Runtime {
     pub fn register_function<F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
-        f: Func<F>,
+        docstring: String,
+        argument_names: &'static [&'static str],
+        wrapper: F::RustWrapper,
     ) -> Result<(), String> {
-        self.register_function_internal(name.into(), FunctionKind::Free, f)
+        self.register_function_internal::<F>(
+            name.into(),
+            docstring,
+            argument_names,
+            FunctionKind::Free,
+            wrapper,
+        )
     }
 
     pub fn register_method<T: 'static, F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
-        f: Func<F>,
+        docstring: String,
+        argument_names: &'static [&'static str],
+        wrapper: F::RustWrapper,
     ) -> Result<(), String> {
-        let description = f.to_function_description();
+        let description = FunctionDescription::of::<F>(&wrapper);
+        let name = name.into();
+
+        Self::check_name(&name)?;
+        self.check_description(&description)?;
 
         let Some(first) = description.parameter_types().first() else {
             return Err("a method must have at least one parameter".into());
@@ -472,27 +490,41 @@ impl Runtime {
         }
 
         let kind = FunctionKind::Method(std::any::TypeId::of::<T>());
-        self.register_function_internal(name.into(), kind, f)
+        self.register_function_internal::<F>(
+            name.into(),
+            docstring,
+            argument_names,
+            kind,
+            wrapper,
+        )
     }
 
     pub fn register_static_method<T: 'static, F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
-        f: Func<F>,
+        docstring: String,
+        argument_names: &'static [&'static str],
+        wrapper: F::RustWrapper,
     ) -> Result<(), String> {
         let kind = FunctionKind::StaticMethod(std::any::TypeId::of::<T>());
-        self.register_function_internal(name.into(), kind, f)
+        self.register_function_internal::<F>(
+            name.into(),
+            docstring,
+            argument_names,
+            kind,
+            wrapper,
+        )
     }
 
     fn register_function_internal<F: RotoFunc>(
         &mut self,
         name: String,
+        docstring: String,
+        argument_names: &'static [&'static str],
         kind: FunctionKind,
-        f: Func<F>,
+        wrapper: F::RustWrapper,
     ) -> Result<(), String> {
-        let docstring = f.docstring();
-        let argument_names = f.argument_names();
-        let description = f.to_function_description();
+        let description = FunctionDescription::of::<F>(&wrapper);
 
         Self::check_name(&name)?;
 

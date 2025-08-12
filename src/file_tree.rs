@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{Compiled, RotoReport, Runtime};
+use crate::{Package, RotoReport, Runtime};
 
 /// A filename with its contents
 #[derive(Clone, Debug)]
@@ -40,7 +40,7 @@ impl SourceFile {
     }
 }
 
-/// Compiler stage: Files loaded and ready to be parsed
+/// A set of files loaded and ready to be parsed
 pub struct FileTree {
     /// All files
     ///
@@ -49,10 +49,10 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    pub fn compile(self, rt: &Runtime) -> Result<Compiled, RotoReport> {
+    pub fn compile(self, rt: &Runtime) -> Result<Package, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
-        let compiled = checked.lower_to_mir().lower_to_lir().codegen();
-        Ok(compiled)
+        let pkg = checked.lower_to_mir().lower_to_lir().codegen();
+        Ok(pkg)
     }
 }
 

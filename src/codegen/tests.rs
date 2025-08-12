@@ -8,19 +8,19 @@ use inetnum::{addr::Prefix, asn::Asn};
 use roto_macros::{roto_function, roto_method, roto_static_method};
 
 use crate::{
-    file_tree::FileSpec, pipeline::Compiled,
+    file_tree::FileSpec, pipeline::Package,
     runtime::tests::routecore_runtime, source_file, src, Context, FileTree,
     Runtime, Val, Verdict,
 };
 
 #[track_caller]
-fn compile(f: FileTree) -> Compiled {
+fn compile(f: FileTree) -> Package {
     let runtime = routecore_runtime().unwrap();
     compile_with_runtime(f, runtime)
 }
 
 #[track_caller]
-fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Compiled {
+fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Package {
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 

@@ -1,6 +1,7 @@
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
+    lir::{IrValue, Memory},
     runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
         info::TypeInfo,
@@ -8,7 +9,6 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{Type, TypeDefinition},
     },
-    IrValue, Memory,
 };
 use std::{
     any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, ops::Deref,
