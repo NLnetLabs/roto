@@ -6,7 +6,7 @@ each application should supply the functionality that they allow the scripts to
 use.
 
 The standard runtime doesn't even have a way to print to stdout, because
-the host application doesn't want to allow the scripts to do that. But it is
+the host application may not want to allow the scripts to do that. But it is
 possible to add some standard modules to the runtime. For example, there is a
 method ``add_io_functions`` on ``Runtime`` to add the ``print`` function.
 
@@ -22,12 +22,17 @@ that makes your application scriptable.
 Add functions
 -------------
 
-However, you might not want the standard implementation of `print`. For
-instance, you might want to let scripts print to a file instead. We can do that
-quite easily.
+Even though Roto provides a standard `print` function, you might not want
+to expose that. For instance, you might want to let scripts print to a file
+instead. We can do that quite easily with the `roto_function` macro. You can
+use this macro as an attribute macro on a function and pass it the runtime you
+want to add the function to. This function will then become available in the
+scripts you compile.
 
 .. code-block:: rust
 
+    use std::fs::OpenOptions;
+    use std::io::Write;
     use roto::{Runtime, roto_function};
     let mut runtime = Runtime::new();
 
@@ -36,6 +41,7 @@ quite easily.
     #[roto_function(runtime)]
     fn print(s: Arc<str>) {
         let mut file = OpenOptions::new()
+            .create(true)
             .write(true)
             .append(true)
             .open("log.txt")
@@ -62,6 +68,16 @@ Here is another example which returns a value:
     registered. You should probably register all your types before registering
     functions.
 
+You can also give the function a custom name by passing that to the macro.
+
+.. code-block:: rust
+
+    // This function will be available as "factorial", not "my_factorial_function"
+    #[roto_function(runtime, factorial)]
+    fn my_factorial_function(n: u32) -> u32 {
+        (1..=n).fold(1, |a, i| a * i)
+    }
+
 Add types
 ---------
 
@@ -70,7 +86,7 @@ type. All registered types must implement ``Clone``.
 
 .. code-block:: rust
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Copy, Debug)]
     struct Range {
         low: i64,
         high: i64,
@@ -94,7 +110,7 @@ Not very useful yet, of course, but let's see it in action anyway:
 
     use roto::Val;
 
-    let pkg = runtime.read("script.roto").unwrap();
+    let mut pkg = runtime.compile("script.roto").unwrap();
     let f = pkg
         .get_function::<_, fn(Val<Range>) -> Val<Range>>("passthrough")
         .unwrap();
@@ -125,19 +141,21 @@ expose methods on it to Roto.
 
 .. code-block:: rust
 
+    use roto::roto_method;
+
     #[roto_method(runtime, Range)]
     fn contains(range: Val<Range>, x: i64) -> bool {
         range.low <= x && x < range.high
     }
 
-    let pkg = runtime.read("script.roto").unwrap();
+    let mut pkg = runtime.compile("script.roto").unwrap();
     let f = pkg
-        .get_function::<_, fn(Val<Range>, x: i64) -> Val<Range>>("in_range")
+        .get_function::<_, fn(Val<Range>, x: i64) -> bool>("in_range")
         .unwrap();
 
     let range = Range { low: 0, high: 99 };
     let res = f.call(&mut (), Val(range), 50);
-    println!("{res:?}")
+    println!("{res:?}");
 
 And then in Roto:
 
@@ -152,9 +170,11 @@ without an instance of the type.
 
 .. code-block:: rust
 
+    use roto::roto_static_method;
+
     #[roto_static_method(runtime, Range)]
     fn new(low: i64, high: i64) -> Val<Range> {
-        Range { low, high }
+        Val(Range { low, high })
     }
 
 Which can be used in Roto like this:
@@ -168,18 +188,21 @@ Add constants
 -------------
 
 Finally, we can register constants into the runtime. Like functions, we can
-only add constants of types we've already registered. Along with a constant
-we have to provide a docstring.
+only add constants of types we've already registered. Along with the constant
+we have to provide a docstring. This docstring will show up in the
+documentation generated for this runtime.
 
 .. code-block:: rust
 
     runtime.register_constant(
         "ONE_HUNDRED",
         "A range from 0 to 100",
-        Range { low: 0, high: 100 },
+        Val(Range { low: 0, high: 100 }),
     ).unwrap();
 
 The name ``ONE_HUNDRED`` will then be available in Roto scripts.
+
+.. _add-context:
 
 Add context
 -----------
@@ -204,6 +227,8 @@ then create and register the following type.
 
 .. code-block:: rust
 
+    use roto::Context;
+
     #[derive(Context)]
     struct Ctx {
         pub first_name: Arc<str>,
@@ -212,17 +237,19 @@ then create and register the following type.
 
     runtime.register_context_type::<Ctx>().unwrap();
 
-    let pkg = runtime.compile("script.roto").unwrap();
+    let mut pkg = runtime.compile("script.roto").unwrap();
 
     //                         We need to use the correct context type here
     //                         |
     //                         v
     let f = pkg.get_function::<Ctx, fn() -> Arc<str>>("greeting").unwrap();
 
-    let ctx = Ctx {
-        username: "John".into(),  
+    let mut ctx = Ctx {
+        first_name: "John".into(),  
+        last_name: "Doe".into(),  
     };
-    f.call(&mut ctx);
+    let greeting = f.call(&mut ctx);
+    println!("{greeting}");
 
 All the fields of ``Ctx`` have to be public, to acknowledge the fact that
 they are exposed to Roto. The first argument of ``f.call`` is the context we

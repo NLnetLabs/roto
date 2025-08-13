@@ -1,9 +1,18 @@
+.code-block-caption {
+  padding: 0.2em !important;
+  border-radius: 1em 1em 0 0;
+}
+
 @media (prefers-color-scheme: light) {
+    .code-block-caption {
+      background: #d9d9d9;
+    }
 
     .wy-menu-vertical li.toctree-l2.current a,
     .wy-menu-vertical li.toctree-l3.current a {
         background-color: #c9c9c9;
     }
+
     .sphinx-tabs {
         margin-bottom: 1rem;
       }

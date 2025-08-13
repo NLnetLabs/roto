@@ -7,8 +7,12 @@ use super::{
 
 impl Runtime {
     fn print_ty(&self, ty: TypeId) -> &str {
-        let ty = self.get_runtime_type(ty).unwrap();
-        ty.name.as_ref()
+        if ty == TypeId::of::<()>() {
+            "()"
+        } else {
+            let ty = self.get_runtime_type(ty).unwrap();
+            ty.name.as_ref()
+        }
     }
 
     fn print_function(&self, f: &RuntimeFunction) {

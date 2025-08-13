@@ -49,7 +49,7 @@ enum Command {
 ///  - `test`: run tests for a script
 ///  - `run`: run the main function of a script
 pub fn cli(rt: &Runtime) {
-    match cli_inner(&rt) {
+    match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
             eprintln!("{err}");

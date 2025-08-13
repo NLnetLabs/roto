@@ -4,45 +4,42 @@ Call a Roto function
 Now we can start loading and compiling a Roto script. The first thing we need
 is a ``Runtime``, which is the value that defines all the types and functions
 that are available to Roto. We'll start out with the most basic ``Runtime`` by
-calling ``Runtime_new`` (step 1).
+calling ``Runtime::new`` (step 1).
 
 We load and compile a script by calling the ``Runtime::compile`` method (step 2). A
 compiled script can contain many different functions, so we pick one that we
 want to extract by calling the ``get_function`` method, with the function type we
 expect and the name of the function (step 3).
 
-Finally, we call the extracted Roto function with the `call` method (step 4). We
-pass it a context of ``&mut ()`` (explained in :doc:`add_context`) and the
+Finally, we call the extracted Roto function with the ``call`` method (step 4). We
+pass it a context of ``&mut ()`` (explained in :ref:`add-context`) and the
 parameter ``4``.
 
-.. code-block:: rust
+.. code:: rust
 
     use roto::Runtime;
 
-    fn main() -> i32 {
+    fn main() {
         // Step 1: Create a runtime
         let runtime = Runtime::new();
 
         // Step 2: Compile the script and check for type errors
         let result = runtime.compile("script.roto");
-        let pkg = match result {
+        let mut pkg = match result {
             Ok(pkg) => pkg,
             Err(err) => {
-                eprint!("{e}");
-                return 1;
+                panic!("{err}");
             }
         }
 
         // Step 3: Extract the function
-        let func = compiled
-            .get_function::<(), fn(i32) -> i32>("main")
+        let func = pkg
+            .get_function::<(), fn(i32) -> i32>("times_two")
             .unwrap();
 
         // Step 4: Call the function
         let result = func.call(&mut (), 4);
         println!("main(4) = {result}");
-
-        return 0;
     }
 
 Now we can create roto script that can be loaded by this Rust application. In
@@ -52,7 +49,7 @@ a function that doubles its input.
 
 .. code-block:: roto
 
-    fn main(x: i32) -> i32 {
+    fn times_two(x: i32) -> i32 {
         2 * x
     }
 

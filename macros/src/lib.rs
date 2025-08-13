@@ -111,7 +111,7 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #runtime_ident.register_function::<#ty>(
             stringify!(#name),
-            stringify!(#docstring).to_string(),
+            #docstring.to_string(),
             #parameter_names,
             #ident,
         ).unwrap();
@@ -171,7 +171,7 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #runtime_ident.register_method::<#ty, #fn_ty>(
             stringify!(#name),
-            stringify!(#docstring).to_string(),
+            #docstring.to_string(),
             #parameter_names,
             #ident
         ).unwrap();
@@ -207,7 +207,7 @@ pub fn roto_static_method(
 
         #runtime_ident.register_static_method::<#ty, #fn_ty>(
             stringify!(#name),
-            stringify!(#docstring).to_string(),
+            #docstring.to_string(),
             #parameter_names,
             #ident
         ).unwrap();

@@ -63,6 +63,7 @@ extensions = [
     'sphinx.ext.autosectionlabel',
     'sphinx_substitution_extensions',
     'roto_domain',
+    'my_code',
     'myst_parser',
 ]
 
@@ -264,7 +265,7 @@ class RotoLexer(RegexLexer):
             (r'#.*?$', token.Comment.Singleline),
             (
                 words(
-                    ('type', 'fn', 'filtermap', 'filter', 'match', 'let', 'if', 'else', 'accept', 'reject', 'return', 'super', 'pkg', 'std', 'dep', 'import'),
+                    ('type', 'fn', 'filtermap', 'filter', 'match', 'while', 'let', 'if', 'else', 'accept', 'reject', 'return', 'super', 'pkg', 'std', 'dep', 'import'),
                     suffix=r'\b'
                 ),
                 token.Keyword

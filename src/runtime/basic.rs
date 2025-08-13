@@ -23,7 +23,7 @@ macro_rules! float_docs {
     ($t:ty) => {
         &{
             #[allow(unused_comparisons)]
-            let bits = std::mem::size_of::<$t>();
+            let bits = std::mem::size_of::<$t>() * 8;
             format!("The {bits}-bit floating point type")
         }
     };
@@ -135,6 +135,8 @@ impl Runtime {
 
         rt.register_copy_type::<IpAddr>(
             "An IP address\n\nCan be either IPv4 or IPv6.\n\
+            \n\
+            For IPv4, only dot-separated quad notation is supported.\n\
             \n\
             ```roto\n\
             # IPv4 examples\n\
@@ -275,8 +277,8 @@ impl Runtime {
         /// Check whether a string starts with a given prefix
         ///
         /// ```roto
-        /// "haystack".contains("hay")   # -> true
-        /// "haystack".contains("trees") # -> false
+        /// "haystack".starts_with("hay")   # -> true
+        /// "haystack".starts_with("trees") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
         fn starts_with(s: Arc<str>, prefix: Arc<str>) -> bool {
@@ -286,8 +288,8 @@ impl Runtime {
         /// Check whether a string end with a given suffix
         ///
         /// ```roto
-        /// "haystack".contains("stack") # -> true
-        /// "haystack".contains("black") # -> false
+        /// "haystack".ends_with("stack") # -> true
+        /// "haystack".ends_with("black") # -> false
         /// ```
         #[roto_method(rt, Arc<str>)]
         fn ends_with(s: Arc<str>, suffix: Arc<str>) -> bool {
@@ -304,7 +306,7 @@ impl Runtime {
             s.to_lowercase().into()
         }
 
-        /// Create a new string with all characters converted to lowercase
+        /// Create a new string with all characters converted to uppercase
         ///
         /// ```roto
         /// "quiet".to_uppercase() # -> "QUIET"

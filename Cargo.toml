@@ -25,6 +25,7 @@ test = false
 bench = false
 
 [features]
+default = ["cli"]
 cli = ["clap"]
 logger = ["env_logger"]
 

@@ -306,6 +306,18 @@ a value. This means that it can be used in the place of a ternary operator.
 
     let x = if y { 1 } else { 0 };
 
+If-else expressions can be chained without additional braces.
+
+.. code-block:: roto
+
+    if x > 0 {
+        print("x is positive!");
+    } else if x < 0 {
+        print("x is negative!");
+    } else {
+        print("x is zero!");
+    }
+
 Match
 -----
 
@@ -319,7 +331,7 @@ until the condition evaluates to ``false``.
 
 .. code-block:: roto
 
-    let i = 0
+    let i = 0;
     while i < 10 {
         i = i + 1;
     }
@@ -411,7 +423,7 @@ A ``filtermap`` is a function that filters and transforms some incoming value.
 
 Filter-maps resemble functions but they don't ``return``. Instead they
 either ``accept`` or ``reject``, which determines what happens to the value.
-Generally, as accepted value is stored or fed to some other component and a
+Generally, an accepted value is stored or fed to some other component and a
 reject value is dropped.
 
 .. code-block:: roto
@@ -442,6 +454,32 @@ bindings.
     }
 
 A ``filtermap`` can also ``accept`` or ``reject`` with a value.
+
+.. code-block:: roto
+
+    filtermap small_enough(x: i32) {
+        if x < 10 {
+            accept x
+        } else {
+            reject "value was too big!"
+        }
+    }
+
+This ``filtermap`` is identical to the following function:
+
+.. code-block:: roto
+
+    fn small_enough(x: i32) -> Verdict[i32, String] {
+        if x < 10 {
+            return Verdict.Accept(x)
+        } else {
+            return Verdict.Reject("value was too big!")
+        }
+    }
+
+On the Rust side, a filtermap is a function that returns a ``Verdict<A, R>``.
+The type parameters of a ``Verdict`` specify the types of the values given in
+the ``accept`` and ``reject`` cases, respectively.
 
 Anonymous records
 -----------------

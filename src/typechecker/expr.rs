@@ -403,7 +403,7 @@ impl TypeChecker {
 
                 let operand_ty = self.type_info.resolve(&operand_ty);
                 if let Type::Name(name) = &operand_ty {
-                    let def = self.type_info.resolve_type_name(&name);
+                    let def = self.type_info.resolve_type_name(name);
                     let is_unsigned = matches!(
                         def,
                         TypeDefinition::Primitive(Primitive::Int(

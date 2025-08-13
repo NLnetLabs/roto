@@ -15,6 +15,7 @@ impl Runtime {
     pub fn add_io_functions(&mut self) {
         let rt = self;
 
+        /// Print a string to stdout
         #[roto_function(rt)]
         fn print(s: Arc<str>) {
             println!("{s}");

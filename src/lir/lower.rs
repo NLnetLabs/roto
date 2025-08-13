@@ -627,7 +627,7 @@ impl Lowerer<'_, '_> {
             .type_info
             .layout_of(&self.return_type, self.ctx.runtime);
 
-        if layout.as_ref().map_or(true, |l| l.size() == 0) {
+        if layout.as_ref().is_none_or(|l| l.size() == 0) {
             self.emit_return(None);
             return;
         }
@@ -1058,7 +1058,7 @@ impl Lowerer<'_, '_> {
             .ctx
             .type_info
             .layout_of(&ty, self.ctx.runtime)
-            .map_or(false, |l| l.size() == 0)
+            .is_some_and(|l| l.size() == 0)
         {
             return None;
         }

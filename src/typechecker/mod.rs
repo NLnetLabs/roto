@@ -1136,7 +1136,7 @@ impl TypeChecker {
                     Some(params) => &params.node[..],
                     None => &[],
                 };
-                self.resolve_type_path(scope, &path, params)?
+                self.resolve_type_path(scope, path, params)?
             }
             ast::TypeExpr::Record(record_ty) => {
                 Type::Record(self.evaluate_record_type(scope, record_ty)?)

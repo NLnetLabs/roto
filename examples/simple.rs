@@ -9,15 +9,15 @@ fn main() -> ExitCode {
     let runtime = Runtime::new();
 
     let result = runtime.compile("example/simple.roto");
-    let mut compiled = match result {
-        Ok(compiled) => compiled,
+    let mut pkg = match result {
+        Ok(pkg) => pkg,
         Err(e) => {
             eprint!("{e}");
             return ExitCode::FAILURE;
         }
     };
 
-    let func = compiled
+    let func = pkg
         .get_function::<(), fn(IpAddr) -> Verdict<(), ()>>("main")
         .unwrap();
 
@@ -27,7 +27,7 @@ fn main() -> ExitCode {
     let res = func.call(&mut (), "1.1.1.1".parse().unwrap());
     println!("main(1.1.1.1) = {res:?}");
 
-    let is_zero = compiled
+    let is_zero = pkg
         .get_function::<(), fn(IpAddr) -> bool>("is_zero")
         .unwrap();
 
@@ -35,7 +35,7 @@ fn main() -> ExitCode {
     println!("is_zero(0.0.0.0) = {res:?}");
 
     println!();
-    let _ = compiled.run_tests(());
+    let _ = pkg.run_tests(());
 
     ExitCode::SUCCESS
 }
