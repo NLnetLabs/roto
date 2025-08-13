@@ -1,5 +1,5 @@
-Roto |version|
-=================
+Roto
+====
 
 .. note::
 

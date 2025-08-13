@@ -69,19 +69,19 @@ Some limitations are only present because we haven't come around to
 implementing them yet. Most limitations can be found in the issue tracker, but
 we've summarized some important missing features here.
 
-- Lists are not supported yet. (https://github.com/NLnetLabs/roto/issues/102)
+- Lists are not supported yet. ([#102](https://github.com/NLnetLabs/roto/issues/102))
 - It's not yet possible to declare your own `enum` types.
-  (https://github.com/NLnetLabs/roto/issues/188)
+  ([#188](https://github.com/NLnetLabs/roto/issues/188))
 - It's not yet possible to declare types with generics and write
-  generic functions. (https://github.com/NLnetLabs/roto/issues/189 and
-  https://github.com/NLnetLabs/roto/issues/190)
+  generic functions. ([#189](https://github.com/NLnetLabs/roto/issues/189) and
+  [#190](https://github.com/NLnetLabs/roto/issues/190))
 
 ## Memory safety
 
 Roto fundamentally relies on unsafe code, after all, we are generating machine
 code at runtime. However, we treat every unsoundness stemming from use of Roto
 with safe Rust as a bug of high priority. Please report any issues you find to
-the [GitHub repository](https://github.com/NLnetLabs/roto).
+the [GitHub repository].
 
 We run our extensive test suite under Valgrind in CI to ensure that at least
 most common use cases are correctly implemented.
@@ -108,8 +108,7 @@ functionality that compromises the security of your application.
 
 ## Learn more
 
-- Documentation of the Roto language is included in the
-  [documentation for Rotonda](documentation).
+- To learn how to use and embed Roto, you can read the [documentation].
 - The API docs for the latest version are available on [docs.rs]
 - Some examples are available in the examples folder of the Roto repository.
 
@@ -122,11 +121,11 @@ case, we would love to hear from you!
 
 [Rotonda]: https://github.com/NlnetLabs/rotonda
 [GitHub repository]: https://github.com/NLnetLabs/routecore
-[Documentation]: https://rotonda.docs.nlnetlabs.nl/en/stable/roto/00_introduction.html
+[Documentation]: https://roto.docs.nlnetlabs.nl/
 [crate]: https://crates.io/crates/roto
 [docs.rs]: https://docs.rs/roto
 
 ## License
 
-The _roto_ crate is distributed under the terms of the BSD-3-clause license.
+Roto is distributed under the terms of the BSD-3-clause license.
 See LICENSE for details.
