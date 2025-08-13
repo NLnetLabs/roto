@@ -1749,6 +1749,45 @@ fn match_option_string() {
 }
 
 #[test]
+fn match_on_string_with_guards() {
+    let s = src!(
+        r#"
+        fn foo(s: String?, x: i32) -> String {
+            match s {
+                Some(s) | s == "hello" -> "hey!",
+                _ | x == 5 ->  "x is 5",
+                Some(s) | s.starts_with("lorem ipsum") -> {
+                    "You've generated lorem ipsum: " + s
+                }
+                _ -> "Can't recognize",
+            }
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<(), fn(Option<Arc<str>>, i32) -> Arc<str>>("foo")
+        .unwrap();
+
+    let res = f.call(&mut (), Some("hello".into()), 5);
+    assert_eq!(&*res, "hey!");
+    let res = f.call(&mut (), Some("hello".into()), 4);
+    assert_eq!(&*res, "hey!");
+
+    let res = f.call(&mut (), Some("lorem ipsum dolor".into()), 5);
+    assert_eq!(&*res, "x is 5");
+    let res = f.call(&mut (), Some("lorem ipsum dolor".into()), 4);
+    assert_eq!(&*res, "You've generated lorem ipsum: lorem ipsum dolor");
+
+    let res = f.call(&mut (), Some("nothing".into()), 5);
+    assert_eq!(&*res, "x is 5");
+    let res = f.call(&mut (), Some("nothing".into()), 4);
+    assert_eq!(&*res, "Can't recognize");
+}
+
+#[test]
 fn construct_option_value() {
     let s = src!(
         "
@@ -3086,4 +3125,27 @@ fn string_global() {
     let f = p.get_function::<(), fn() -> Arc<str>>("use_foo").unwrap();
 
     assert_eq!(f.call(&mut ()), "BAR".into());
+}
+
+// Originally from issue #234
+#[test]
+fn layered_option_matching_none() {
+    let s = src!(
+        "
+        fn reproducer() -> String? {
+          let s = match None {
+            Some(v) -> v,
+            None -> { return None; },
+          };
+          Some(s)
+        }
+        "
+    );
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn() -> Option<Arc<str>>>("reproducer")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert_eq!(res, None);
 }
