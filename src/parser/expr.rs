@@ -4,15 +4,17 @@ use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, Identifier, Literal, Match, MatchArm, Path,
-        Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
+        BinOp, Block, Expr, FStringPart, Identifier, Literal, Match,
+        MatchArm, Path, Pattern, Record, RecordType, ReturnKind, Stmt,
+        TypeExpr,
     },
     parser::ParseError,
 };
 
 use super::{
+    error::ParseErrorKind,
     meta::{Meta, Span},
-    token::{Keyword, Token},
+    token::{FStringToken, Keyword, Token},
     ParseResult, Parser,
 };
 
@@ -561,6 +563,10 @@ impl Parser<'_, '_> {
             }
         }
 
+        if self.peek_is(Token::FStringStart) {
+            return self.f_string();
+        }
+
         let literal = self.literal()?;
 
         Ok(Meta {
@@ -763,31 +769,14 @@ impl Parser<'_, '_> {
             Token::String(s) => {
                 // Trim the quotes from the string literal
                 let trimmed = &s[1..s.len() - 1];
-                let mut unescaped = String::new();
-                let mut errors = Vec::new();
-                rustc_literal_escaper::unescape_str(
-                    trimmed,
-                    |range: Range<usize>, res| match res {
-                        Ok(ch) => unescaped.push(ch),
-                        Err(e) => errors.push((range, e)),
-                    },
-                );
-
-                // We don't care about these because they are not errors but
-                // warnings.
-                // TODO: Print these warnings
-                errors.retain(|(_, e)| e.is_fatal());
-
-                if let Some((range, e)) = errors.first() {
-                    // The span starts at the quote so we add one to get to the
-                    // string content.
-                    let start = span.start + 1 + range.start;
-                    let end = span.start + 1 + range.end;
-                    let span = Span::new(span.file, start..end);
-                    return Err(ParseError::escape(e, span));
-                } else {
-                    Literal::String(unescaped)
-                }
+                // The span starts at the quote so we add one to get to the
+                // string content.
+                let span = Span {
+                    start: span.start + 1,
+                    ..span
+                };
+                let unescaped = unescape(trimmed, span)?;
+                Literal::String(unescaped)
             }
             Token::Integer(s) => {
                 Literal::Integer(s.parse::<i64>().map_err(|e| {
@@ -1020,5 +1009,70 @@ impl Parser<'_, '_> {
             }
         };
         Ok(self.spans.add(span, ident))
+    }
+
+    fn f_string(&mut self) -> ParseResult<Meta<Expr>> {
+        let mut parts = Vec::new();
+
+        let start_span = self.take(Token::FStringStart)?;
+
+        // TODO: we need to properly unescape the `{{` and `}}`
+        while let Some((part, span)) = self.lexer.f_string_part() {
+            let (FStringToken::StringEnd(s)
+            | FStringToken::StringIntermediate(s)) = &part;
+
+            if !s.is_empty() {
+                let span = Span {
+                    file: self.file,
+                    start: span.start,
+                    end: span.end,
+                };
+                parts.push(FStringPart::String(unescape(s, span)?));
+            }
+
+            if matches!(part, FStringToken::StringEnd(_)) {
+                let span = start_span.merge(Span::new(self.file, span));
+                return Ok(self.spans.add(span, Expr::FString(parts)));
+            }
+
+            self.take(Token::CurlyLeft)?;
+            let expr = self.expr()?;
+            parts.push(FStringPart::Expr(expr));
+            self.take(Token::CurlyRight)?;
+        }
+
+        Err(ParseError {
+            kind: ParseErrorKind::EndOfInput,
+            location: Span::new(
+                self.file,
+                self.file_length..self.file_length,
+            ),
+            note: None,
+        })
+    }
+}
+
+fn unescape(s: &str, span: Span) -> ParseResult<String> {
+    let mut unescaped = String::new();
+    let mut errors = Vec::new();
+    rustc_literal_escaper::unescape_str(s, |range: Range<usize>, res| {
+        match res {
+            Ok(ch) => unescaped.push(ch),
+            Err(e) => errors.push((range, e)),
+        }
+    });
+
+    // We don't care about these because they are not errors but
+    // warnings.
+    // TODO: Print these warnings
+    errors.retain(|(_, e)| e.is_fatal());
+
+    if let Some((range, e)) = errors.first() {
+        let start = span.start + range.start;
+        let end = span.start + range.end;
+        let span = Span::new(span.file, start..end);
+        Err(ParseError::escape(e, span))
+    } else {
+        Ok(unescaped)
     }
 }
