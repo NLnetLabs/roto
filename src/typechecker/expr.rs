@@ -807,7 +807,7 @@ impl TypeChecker {
                 }
             }
             Eq | Ne => {
-                self.unify(&Type::bool(), &ctx.expected_type, span, None)?;
+                self.unify(&ctx.expected_type, &Type::bool(), span, None)?;
                 let ctx = ctx.with_type(self.fresh_var());
 
                 let mut diverges = false;
@@ -861,7 +861,7 @@ impl TypeChecker {
                 }
             }
             In | NotIn => {
-                self.unify(&Type::bool(), &ctx.expected_type, span, None)?;
+                self.unify(&ctx.expected_type, &Type::bool(), span, None)?;
 
                 let ty = self.fresh_var();
 
