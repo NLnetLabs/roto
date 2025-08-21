@@ -3,7 +3,7 @@ mod clone_drop;
 use std::collections::HashMap;
 
 use crate::{
-    ast::{self, Identifier, Literal},
+    ast::{self, BinOp, Identifier, Literal},
     ice,
     label::{LabelRef, LabelStore},
     lir::IrValue,
@@ -781,6 +781,29 @@ impl Lowerer<'_, '_> {
     ) -> Operand {
         let left = self.var(left).into();
         let right = self.var(right).into();
+
+        if ty == Type::bool() {
+            if binop == BinOp::Eq {
+                let to = self.new_tmp(IrType::Bool);
+                self.emit(Instruction::IntCmp {
+                    to: to.clone(),
+                    cmp: IntCmp::Eq,
+                    left,
+                    right,
+                });
+                return to.into();
+            }
+            if binop == BinOp::Ne {
+                let to = self.new_tmp(IrType::Bool);
+                self.emit(Instruction::IntCmp {
+                    to: to.clone(),
+                    cmp: IntCmp::Ne,
+                    left,
+                    right,
+                });
+                return to.into();
+            }
+        }
 
         if let Some((kind, _size)) = self.ctx.type_info.get_int_type(&ty) {
             if let Some(cmp) = binop_to_int_cmp(&binop, kind) {

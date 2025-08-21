@@ -710,7 +710,7 @@ fn mismatched_types() {
 }
 
 #[test]
-fn multiply() {
+fn multply() {
     let s = src!(
         "
         filtermap main(x: u8) {
@@ -3148,4 +3148,70 @@ fn layered_option_matching_none() {
 
     let res = f.call(&mut ());
     assert_eq!(res, None);
+}
+
+#[test]
+fn strings_from_if() {
+    let s = src!(
+        r#"
+        fn foo(x: bool) -> String {
+            if x { "true" } else { "false" }
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(bool) -> Arc<str>>("foo")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), false);
+    assert_eq!(res, "false".into());
+
+    let res = f.call(&mut (), true);
+    assert_eq!(res, "true".into());
+}
+
+#[test]
+fn bool_is_true() {
+    let s = src!(
+        r#"
+        fn foo(x: bool) -> bool {
+            x == true
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(bool) -> bool>("foo")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), false);
+    assert_eq!(res, false);
+
+    let res = f.call(&mut (), true);
+    assert_eq!(res, true);
+}
+
+#[test]
+fn bool_is_not_true() {
+    let s = src!(
+        r#"
+        fn foo(x: bool) -> bool {
+            x != true
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(bool) -> bool>("foo")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut (), false);
+    assert_eq!(res, true);
+
+    let res = f.call(&mut (), true);
+    assert_eq!(res, false);
 }
