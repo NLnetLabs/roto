@@ -234,10 +234,10 @@ macro_rules! source_file {
 pub(crate) use source_file;
 
 impl Parsed {
-    pub fn typecheck(
+    pub fn typecheck<'r>(
         self,
-        runtime: &Runtime,
-    ) -> Result<TypeChecked, RotoReport> {
+        runtime: &'r Runtime,
+    ) -> Result<TypeChecked<'r>, RotoReport> {
         let Parsed {
             file_tree,
             module_tree,

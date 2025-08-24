@@ -21,8 +21,8 @@ impl FunctionDescription {
     pub fn of<F: RotoFunc>(wrapper: &F::RustWrapper) -> Self {
         let parameter_types = F::parameter_types();
         let return_type = F::return_type();
-        let pointer = F::ptr(&wrapper);
-        let ir_function = F::ir_function(&wrapper);
+        let pointer = F::ptr(wrapper);
+        let ir_function = F::ir_function(wrapper);
 
         Self {
             parameter_types,

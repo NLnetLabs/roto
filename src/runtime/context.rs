@@ -4,6 +4,12 @@ use std::any::{type_name, TypeId};
 ///
 /// This declares a set of global variables that are initialized just before
 /// the script is run.
+///
+/// # Safety
+///
+/// This trait is unsafe because it tell Roto about the offsets and types of
+/// each field. It is crucial that this information is correct. Therefore,
+/// you should only ever derive this trait and not implement it manually.
 pub unsafe trait Context: 'static {
     /// Return the fields of this struct, their offsets and their types
     fn fields() -> Vec<ContextField>;

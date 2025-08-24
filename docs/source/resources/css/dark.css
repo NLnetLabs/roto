@@ -1,4 +1,9 @@
 @media (prefers-color-scheme: dark) {
+    /* custom */
+    .code-block-caption {
+        background: #292929;
+    }
+    
     /*
                             _______
                         /       \

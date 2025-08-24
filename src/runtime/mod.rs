@@ -491,7 +491,7 @@ impl Runtime {
 
         let kind = FunctionKind::Method(std::any::TypeId::of::<T>());
         self.register_function_internal::<F>(
-            name.into(),
+            name,
             docstring,
             argument_names,
             kind,
@@ -566,7 +566,7 @@ impl Runtime {
         let name = name.into();
 
         Self::check_name(&name)?;
-        Self::check_name_collision(&self, None, &name)?;
+        self.check_name_collision(None, &name)?;
 
         self.get_runtime_type(id).ok_or_else(|| {
             let ty = TypeRegistry::get(id).unwrap();

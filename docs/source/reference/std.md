@@ -1,16 +1,15 @@
 # Standard Library
 
-`````{roto:constant} LOCALHOSTV4: IpAddr
-The IPv4 address pointing to localhost: `127.0.0.1`
-`````
+````{roto:function} print(s: String) -> ()
+Print a string to stdout
+````
 
 `````{roto:constant} LOCALHOSTV6: IpAddr
 The IPv6 address pointing to localhost: `::1`
 `````
 
-`````{roto:type} Unit
-The unit type that has just one possible value. It can be used when there is nothing meaningful to be returned.
-
+`````{roto:constant} LOCALHOSTV4: IpAddr
+The IPv4 address pointing to localhost: `127.0.0.1`
 `````
 
 `````{roto:type} bool
@@ -77,7 +76,7 @@ This type can represent integers from -9223372036854775808 up to (and including)
 `````
 
 `````{roto:type} f32
-The 4-bit floating point type
+The 32-bit floating point type
 
 ````{roto:method} f32.floor() -> f32
 Returns the largest integer less than or equal to self.
@@ -118,7 +117,7 @@ Returns true if this number is neither infinite nor NaN.
 `````
 
 `````{roto:type} f64
-The 8-bit floating point type
+The 64-bit floating point type
 
 ````{roto:method} f64.floor() -> f64
 Returns the largest integer less than or equal to self.
@@ -175,6 +174,8 @@ AS4294967295
 An IP address
 
 Can be either IPv4 or IPv6.
+
+For IPv4, only dot-separated quad notation is supported.
 
 ```roto
 # IPv4 examples
@@ -281,8 +282,8 @@ Check whether a string contains another string
 Check whether a string starts with a given prefix
 
 ```roto
-"haystack".contains("hay")   # -> true
-"haystack".contains("trees") # -> false
+"haystack".starts_with("hay")   # -> true
+"haystack".starts_with("trees") # -> false
 ```
 ````
 
@@ -290,8 +291,8 @@ Check whether a string starts with a given prefix
 Check whether a string end with a given suffix
 
 ```roto
-"haystack".contains("stack") # -> true
-"haystack".contains("black") # -> false
+"haystack".ends_with("stack") # -> true
+"haystack".ends_with("black") # -> false
 ```
 ````
 
@@ -304,7 +305,7 @@ Create a new string with all characters converted to lowercase
 ````
 
 ````{roto:method} String.to_uppercase() -> String
-Create a new string with all characters converted to lowercase
+Create a new string with all characters converted to uppercase
 
 ```roto
 "quiet".to_uppercase() # -> "QUIET"

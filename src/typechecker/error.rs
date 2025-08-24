@@ -375,7 +375,7 @@ impl TypeChecker {
         ident: &Meta<Identifier>,
         declaration: &Declaration,
     ) -> TypeError {
-        let kind = describe_declaration(&declaration);
+        let kind = describe_declaration(declaration);
         TypeError {
             description: format!(
                 "expected a value, but found {kind} `{}`",
