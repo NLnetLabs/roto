@@ -19,6 +19,16 @@ macro_rules! int_docs {
     }};
 }
 
+macro_rules! to_string_impl {
+    ($rt:ident, $t:ty) => {{
+        /// Convert this value into a `String`
+        #[roto_method($rt, $t, to_string)]
+        fn to_string(x: $t) -> Arc<str> {
+            x.to_string().into()
+        }
+    }};
+}
+
 macro_rules! float_docs {
     ($t:ty) => {
         &{
@@ -166,6 +176,33 @@ impl Runtime {
             ",
         ).unwrap();
 
+        rt.register_clone_type_with_name::<Arc<str>>(
+            "String",
+            "The string type",
+        )
+        .unwrap();
+
+        to_string_impl!(rt, bool);
+        to_string_impl!(rt, u8);
+        to_string_impl!(rt, u16);
+        to_string_impl!(rt, u32);
+        to_string_impl!(rt, u64);
+        to_string_impl!(rt, i8);
+        to_string_impl!(rt, i16);
+        to_string_impl!(rt, i32);
+        to_string_impl!(rt, i64);
+        to_string_impl!(rt, f32);
+        to_string_impl!(rt, f64);
+        to_string_impl!(rt, IpAddr);
+        to_string_impl!(rt, Prefix);
+        to_string_impl!(rt, Asn);
+
+        /// Convert this value into a `String`
+        #[roto_method(rt, Arc<str>, to_string)]
+        fn to_string(x: Arc<str>) -> Arc<str> {
+            x
+        }
+
         float_impl!(rt, f32);
         float_impl!(rt, f64);
 
@@ -244,12 +281,6 @@ impl Runtime {
             "LOCALHOSTV6",
             "The IPv6 address pointing to localhost: `::1`",
             IpAddr::from(Ipv6Addr::LOCALHOST),
-        )
-        .unwrap();
-
-        rt.register_clone_type_with_name::<Arc<str>>(
-            "String",
-            "The string type",
         )
         .unwrap();
 

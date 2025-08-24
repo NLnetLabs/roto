@@ -1197,6 +1197,99 @@ fn function_returning_unit() {
 }
 
 #[test]
+fn to_string() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let a: u8 = 10;
+            let b: i32 = 20;
+            let c: f64 = 15.5;
+            let d = false;
+            let e = 1.1.1.1;
+            let f = 1.1.0.0 / 16;
+            let g = AS1000;
+            let h = "foo";
+
+            a.to_string()
+            + " "
+            + b.to_string()
+            + " "
+            + c.to_string()
+            + " "
+            + d.to_string()
+            + " "
+            + e.to_string()
+            + " "
+            + f.to_string()
+            + " "
+            + g.to_string()
+            + " "
+            + h.to_string()
+        }     
+    "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "10 20 15.5 false 1.1.1.1 1.1.0.0/16 AS1000 foo".into());
+}
+
+#[test]
+fn simple_f_string() {
+    let s = src!(
+        r#"
+        fn foo(name: String) -> String {
+            f"Hello {name}!"
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn(Arc<str>) -> Arc<str>>("foo")
+        .unwrap();
+
+    let res = f.call(&mut (), "John".into());
+    assert_eq!(res, "Hello John!".into());
+}
+
+#[test]
+fn simple_f_string_number() {
+    let s = src!(
+        r#"
+        fn foo(x: i32) -> String {
+            f"Hello {x}!"
+        }
+    "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn(i32) -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut (), 10);
+    assert_eq!(res, "Hello 10!".into());
+}
+
+#[test]
+fn complex_f_string() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            f"This is a string with { f"another string which prints {true}" }, isn't that wonderful?"
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "This is a string with another string which prints true, isn't that wonderful?".into());
+}
+
+#[test]
 fn arc_type() {
     use std::sync::atomic::Ordering;
 

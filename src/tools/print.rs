@@ -16,9 +16,9 @@ mod ansi {
 }
 
 pub fn print_highlighted(s: &str) {
-    let lexer = Lexer::new(s);
+    let mut lexer = Lexer::new(s);
     let mut last_end = 0;
-    for (token, range) in lexer {
+    for (token, range) in std::iter::from_fn(|| lexer.next()) {
         if range.start > last_end {
             print!(
                 "{}{}{}{}",
@@ -68,6 +68,7 @@ pub fn print_highlighted(s: &str) {
             Token::IpV4(_) => ansi::PURPLE,
             Token::IpV6(_) => ansi::PURPLE,
             Token::Bool(_) => ansi::PURPLE,
+            Token::FStringStart => todo!(),
         };
         print!("{color}{}{}", &s[range.start..range.end], ansi::RESET);
     }

@@ -52,6 +52,20 @@ pub enum Token<'s> {
     IpV4(&'s str),
     IpV6(&'s str),
     Bool(bool),
+
+    /// An f-string start token signals to the parser that an f-string is coming up
+    FStringStart,
+}
+
+pub enum FStringToken<'s> {
+    /// The final part of a string.
+    ///
+    /// This is the token from the current position to the end of the string.
+    /// For non-f-strings, this will be the entire string.
+    StringEnd(&'s str),
+
+    /// An intermediate part of an f-string, until the next `{` token.
+    StringIntermediate(&'s str),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -81,12 +95,27 @@ pub enum Keyword {
 pub struct Lexer<'a> {
     input: &'a str,
     original_length: usize,
+    peeked: Option<(Result<Token<'a>, ()>, Range<usize>)>,
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = (Result<Token<'a>, ()>, Range<usize>);
+impl<'a> Lexer<'a> {
+    pub fn next(&mut self) -> Option<(Result<Token<'a>, ()>, Range<usize>)> {
+        if self.peeked.is_some() {
+            return self.peeked.take();
+        }
+        self.next_inner()
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn peek(&mut self) -> &Option<(Result<Token<'a>, ()>, Range<usize>)> {
+        if self.peeked.is_none() {
+            self.peeked = self.next_inner();
+        }
+        &self.peeked
+    }
+
+    fn next_inner(
+        &mut self,
+    ) -> Option<(Result<Token<'a>, ()>, Range<usize>)> {
         match self.next_token() {
             ControlFlow::Continue(()) => {
                 if self.input.is_empty() {
@@ -107,6 +136,7 @@ impl<'s> Lexer<'s> {
         Self {
             input,
             original_length: input.len(),
+            peeked: None,
         }
     }
 
@@ -137,6 +167,7 @@ impl<'s> Lexer<'s> {
         self.hex_number()?;
         self.float()?;
         self.integer()?;
+        self.f_string()?;
         self.string()?;
         self.keyword_or_ident()?;
 
@@ -360,6 +391,58 @@ impl<'s> Lexer<'s> {
         ControlFlow::Break((Token::Integer(tok), span))
     }
 
+    fn f_string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(_rest) = self.input.strip_prefix("f\"") else {
+            return ControlFlow::Continue(());
+        };
+        let (_tok, span) = self.bump(2);
+        ControlFlow::Break((Token::FStringStart, span))
+    }
+
+    pub fn f_string_part(
+        &mut self,
+    ) -> Option<(FStringToken<'s>, Range<usize>)> {
+        let mut last_is_backslash = false;
+        let mut last_is_curly = false;
+        for (i, c) in self.input.chars().enumerate() {
+            // If we currently have an escaped character, we just continue to the next one
+            if last_is_backslash {
+                last_is_backslash = false;
+                continue;
+            }
+
+            // Check for the end of the string, which is an unescaped quote
+            if c == '"' {
+                let (tok, span) = self.bump(i);
+                // Eat the `"`
+                self.bump(1);
+                return Some((FStringToken::StringEnd(tok), span));
+            }
+
+            // Check for the end of the part, which is when we find a character
+            // that's not a curly after an unescaped curly.
+            if c != '{' && last_is_curly {
+                // We bump to _before_ the curly
+                let (tok, span) = self.bump(i - 1);
+                return Some((FStringToken::StringIntermediate(tok), span));
+            }
+
+            // If we find a curly, we negate the value of last_is_curly, because
+            // "{{" is not a "single curly".
+            match c {
+                '{' => last_is_curly = !last_is_curly,
+                _ => last_is_curly = false,
+            }
+
+            if c == '\\' {
+                last_is_backslash = true;
+            }
+        }
+
+        // Reached the end of the input, but were still in an f-string!
+        None
+    }
+
     fn string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
         let Some(rest) = self.input.strip_prefix('"') else {
             return ControlFlow::Continue(());
@@ -485,6 +568,8 @@ impl Display for Token<'_> {
             Token::IpV6(s) => s,
             Token::Bool(true) => "true",
             Token::Bool(false) => "false",
+
+            Token::FStringStart => "f\"",
         };
 
         f.write_str(s)

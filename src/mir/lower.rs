@@ -386,6 +386,7 @@ impl<'r> Lowerer<'r> {
                 self.r#while(condition, block)
             }
             ast::Expr::QuestionMark(expr) => self.question_mark(expr),
+            ast::Expr::FString(parts) => self.f_string(parts),
         }
     }
 
@@ -1090,6 +1091,55 @@ impl<'r> Lowerer<'r> {
             self.remove_live_variable(var);
         }
         self.emit_assign(to, ty, val);
+    }
+
+    fn f_string(&mut self, parts: &[ast::FStringPart]) -> Value {
+        fn make_string(s: String) -> Value {
+            Value::Const(Literal::String(s), Type::string())
+        }
+
+        let string_val = make_string("".into());
+        let string = self.assign_to_var(string_val, Type::string());
+
+        let type_id = TypeId::of::<Arc<str>>();
+        let func = self.find_runtime_function(
+            runtime::FunctionKind::Method(type_id),
+            "append",
+        );
+        let func_ref = func.get_ref();
+
+        for part in parts {
+            let new_string = match part {
+                ast::FStringPart::String(s) => make_string(s.clone()),
+                ast::FStringPart::Expr(expr) => {
+                    let val = self.expr(expr);
+                    let ty = self.type_info.type_of(expr);
+
+                    // Get the function that the type checker determined we
+                    // should call, this will be the `to_string` method on
+                    // the type.
+                    let func = self.type_info.function(expr).clone();
+                    self.normalized_function_call(&func, Some((val, ty)), &[])
+                }
+            };
+
+            let new_string = self.assign_to_var(new_string, Type::string());
+
+            let val =
+                self.call_runtime(func_ref, vec![string.clone(), new_string]);
+
+            self.stack_slots
+                .last_mut()
+                .unwrap()
+                .push((string.clone(), Type::string()));
+            self.do_assign(
+                Place::new(string.clone(), Type::string()),
+                Type::string(),
+                val,
+            );
+        }
+
+        Value::Move(string)
     }
 }
 
