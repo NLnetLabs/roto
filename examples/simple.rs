@@ -8,7 +8,7 @@ fn main() -> ExitCode {
 
     let runtime = Runtime::new();
 
-    let result = runtime.compile("example/simple.roto");
+    let result = runtime.compile("examples/simple.roto");
     let mut pkg = match result {
         Ok(pkg) => pkg,
         Err(e) => {
