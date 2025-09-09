@@ -3308,3 +3308,87 @@ fn bool_is_not_true() {
     let res = f.call(&mut (), true);
     assert_eq!(res, false);
 }
+
+#[test]
+fn unwrap_or_empty() {
+    let mut runtime = Runtime::new();
+
+    runtime.register_clone_type::<Option<Arc<str>>>("").unwrap();
+
+    #[roto_method(runtime, Option<Arc<str>>)]
+    fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
+        x.unwrap_or_default()
+    }
+
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let a = Some("foo");
+            let b = a.unwrap_or_empty();
+            let c = None;
+            let d = c.unwrap_or_empty();
+            b + d
+        }
+        "#
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+    assert_eq!(f.call(&mut ()), "foo".into());
+}
+
+#[test]
+fn algernon() {
+    #[derive(Debug, Clone)]
+    pub enum MapValue {
+        Str(Arc<str>),
+    }
+
+    let mut runtime = Runtime::new();
+    runtime.add_io_functions();
+    runtime
+        .register_clone_type_with_name::<MapValue>(
+            "MapValue",
+            "A value in a HashMap",
+        )
+        .unwrap();
+
+    runtime
+        .register_clone_type_with_name::<Option<Val<MapValue>>>(
+            "OptMapValue",
+            "A value in a HashMap",
+        )
+        .unwrap();
+
+    #[roto_method(runtime, Option<Val<MapValue>>)]
+    fn unwrap_or(
+        value: Val<Option<Val<MapValue>>>,
+        default: Arc<str>,
+    ) -> Arc<str> {
+        match value.0 {
+            Some(Val(MapValue::Str(x))) => x,
+            None => default,
+        }
+    }
+
+    #[roto_static_method(runtime, Option<Val<MapValue>>)]
+    fn new(s: Arc<str>) -> Val<Option<Val<MapValue>>> {
+        Val(Some(Val(MapValue::Str(s))))
+    }
+
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let a = OptMapValue.new("foo");
+            let b = a.unwrap_or("bar");
+            let c = None;
+            let d = c.unwrap_or("bar");
+            b + d
+        }
+        "#
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+    assert_eq!(f.call(&mut ()), "foobar".into());
+}
