@@ -4,7 +4,7 @@
 //! then does the rest.
 
 use std::{
-    any::{type_name, TypeId},
+    any::{type_name, Any, TypeId},
     collections::HashMap,
     marker::PhantomData,
     mem::ManuallyDrop,
@@ -62,16 +62,22 @@ struct ModuleData {
     /// are around, we have to keep these constants around. That is why they
     /// need to be stored in this struct, even though this field is unused.
     _constants: HashMap<Identifier, Constant>,
+
+    /// The functions in this module can reference registerd function that
+    /// might contain data (i.e. closures). We need to properly drop these.
+    _registered_fns: Vec<Arc<Box<dyn Any>>>,
 }
 
 impl ModuleData {
     fn new(
         cranelift_jit: JITModule,
         constants: HashMap<Identifier, Constant>,
+        registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self {
             cranelift_jit: ManuallyDrop::new(cranelift_jit),
             _constants: constants,
+            _registered_fns: registered_fns,
         }
     }
 }
@@ -99,8 +105,13 @@ impl SharedModuleData {
     fn new(
         cranelift_jit: JITModule,
         constants: HashMap<Identifier, Constant>,
+        registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
-        Self(Arc::new(ModuleData::new(cranelift_jit, constants)))
+        Self(Arc::new(ModuleData::new(
+            cranelift_jit,
+            constants,
+            registered_fns,
+        )))
     }
 }
 
@@ -197,6 +208,8 @@ pub struct FunctionInfo {
 
 struct ModuleBuilder {
     constants: HashMap<Identifier, Constant>,
+
+    registered_fns: Vec<Arc<Box<dyn Any>>>,
 
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
@@ -321,6 +334,7 @@ pub fn codegen(
     let mut module = ModuleBuilder {
         constants: HashMap::new(),
         functions: HashMap::new(),
+        registered_fns: Vec::new(),
         runtime_functions: HashMap::new(),
         inner: jit,
         isa,
@@ -359,9 +373,10 @@ pub fn codegen(
             panic!()
         };
 
-        module
-            .runtime_functions
-            .insert(*func_ref, (f.description.pointer(), func_id));
+        let arc_box = f.description.pointer();
+        let ptr = &raw const **arc_box as *const u8;
+        module.registered_fns.push(arc_box);
+        module.runtime_functions.insert(*func_ref, (ptr, func_id));
     }
 
     // Our functions might call each other, so we declare them before we
@@ -555,7 +570,11 @@ impl ModuleBuilder {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
-            inner: SharedModuleData::new(self.inner, self.constants),
+            inner: SharedModuleData::new(
+                self.inner,
+                self.constants,
+                self.registered_fns,
+            ),
             type_info: self.type_info,
             context_description: self.context_description,
         }
