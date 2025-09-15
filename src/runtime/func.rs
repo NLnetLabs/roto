@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use crate::Reflect;
 pub struct FunctionDescription {
     parameter_types: Vec<TypeId>,
     return_type: TypeId,
-    pointer: *const u8,
+    pointer: Arc<Box<dyn Any>>,
     trampoline: *const u8,
     ir_function: RustIrFunction,
 }
@@ -28,7 +28,7 @@ pub trait RegisterableFn<A, R>: Send + 'static {
 
     const TRAMPOLINE: Self::RustWrapper;
 
-    fn ptr(self) -> *const u8;
+    fn ptr(self) -> Arc<Box<dyn Any>>;
     fn parameter_types(&self) -> Vec<TypeId>;
     fn return_type() -> TypeId;
 
@@ -61,8 +61,8 @@ impl FunctionDescription {
         self.return_type
     }
 
-    pub fn pointer(&self) -> *const u8 {
-        self.pointer
+    pub fn pointer(&self) -> Arc<Box<dyn Any>> {
+        self.pointer.clone()
     }
 
     pub fn ir_function(&self) -> RustIrFunction {
@@ -78,7 +78,7 @@ impl PartialEq for FunctionDescription {
     fn eq(&self, other: &Self) -> bool {
         self.parameter_types == other.parameter_types
             && self.return_type == other.return_type
-            && self.pointer == other.pointer
+            && Arc::ptr_eq(&self.pointer, &other.pointer)
     }
 }
 
@@ -131,9 +131,8 @@ macro_rules! registerable_fn {
                 foo
             };
 
-            fn ptr(self) -> *const u8 {
-                let ptr = Box::leak(Box::new(self));
-                ptr as *const _ as *const u8
+            fn ptr(self) -> Arc<Box<dyn Any>> {
+                Arc::new(Box::new(self))
             }
 
             fn parameter_types(&self) -> Vec<TypeId> {
