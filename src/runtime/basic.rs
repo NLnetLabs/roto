@@ -41,17 +41,19 @@ macro_rules! float_docs {
 
 macro_rules! float_impl {
     ($rt:ident, $t:ty) => {{
-        /// Returns the largest integer less than or equal to self.
-        #[roto_method($rt, $t, floor)]
-        fn floor(x: $t) -> $t {
-            x.floor()
-        }
+        $rt.register_method::<$t, _, _>(
+            "floor",
+            "Returns the largest integer less than or equal to self".into(),
+            &["x"],
+            <$t>::floor,
+        ).unwrap();
 
-        /// Returns the smallest integer greater than or equal to self.
-        #[roto_method($rt, $t, ceil)]
-        fn ceil(x: $t) -> $t {
-            x.ceil()
-        }
+        $rt.register_method::<$t, _, _>(
+            "ceil",
+            "Returns the smallest integer greater than or equal to self.".into(),
+            &["x"],
+            <$t>::ceil,
+        ).unwrap();
 
         /// Returns the nearest integer to self. If a value is half-way between two integers, round away from 0.0.
         #[roto_method($rt, $t, round)]
