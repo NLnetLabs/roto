@@ -160,6 +160,10 @@ pub trait Reflect: Sized + seal::Sealed + 'static {
     ///
     /// The information is also returned for direct use.
     fn resolve() -> Ty;
+
+    fn name() -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 pub struct IrValueDoesNotMatchType;
@@ -295,6 +299,10 @@ impl<T: 'static + Clone> Reflect for Val<T> {
 
         let desc = TypeDescription::Val(t);
         TypeRegistry::store::<Self>(desc)
+    }
+
+    fn name() -> &'static str {
+        std::any::type_name::<T>()
     }
 }
 

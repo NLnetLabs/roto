@@ -466,8 +466,9 @@ impl TypeChecker {
                 Self::rust_type_to_roto_type(runtime, a)?,
                 Self::rust_type_to_roto_type(runtime, r)?,
             )),
-            TypeDescription::Val(type_id) => {
-                let ident = runtime.get_runtime_type(type_id).unwrap().name();
+            TypeDescription::Val(_) => {
+                let ident =
+                    runtime.get_runtime_type(ty.type_id).unwrap().name();
                 let name = ResolvedName {
                     scope: ScopeRef::GLOBAL,
                     ident: ident.into(),

@@ -623,9 +623,9 @@ fn issue_52() {
     }
 
     let mut rt = Runtime::new();
-    rt.register_clone_type::<Foo>("A Foo!").unwrap();
+    rt.register_clone_type::<Val<Foo>>("A Foo!").unwrap();
 
-    #[roto_static_method(rt, Foo)]
+    #[roto_static_method(rt, Val<Foo>)]
     fn bar(_x: u32) -> u32 {
         2
     }
@@ -656,7 +656,7 @@ fn issue_54() {
     // rt.register_type::<Foo>().unwrap();
 
     // But we do register a method on it:
-    #[roto_method(rt, Foo)]
+    #[roto_method(rt, Val<Foo>)]
     fn bar(_foo: Val<Foo>, _x: u32) {}
 }
 
@@ -1320,7 +1320,7 @@ fn arc_type() {
 
     let mut rt = Runtime::new();
 
-    rt.register_clone_type::<CloneDrop>("A CloneDrop type")
+    rt.register_clone_type::<Val<CloneDrop>>("A CloneDrop type")
         .unwrap();
 
     let s = src!(
@@ -2706,10 +2706,10 @@ fn mutate() {
     }
 
     runtime
-        .register_copy_type::<*mut MyType>("my type")
+        .register_copy_type::<Val<*mut MyType>>("my type")
         .unwrap();
 
-    #[roto_method(runtime, *mut MyType)]
+    #[roto_method(runtime, Val<*mut MyType>)]
     fn increase(mut t: Val<*mut MyType>) {
         eprintln!("increase, pre: {}", unsafe { (**t).i });
         unsafe { (**t).i += 1 };
@@ -2754,7 +2754,9 @@ fn return_vec() {
         v: Vec<u8>,
     }
 
-    runtime.register_clone_type::<MyType>("my type").unwrap();
+    runtime
+        .register_clone_type::<Val<MyType>>("my type")
+        .unwrap();
 
     let s = src!(
         "
@@ -2815,15 +2817,15 @@ fn name_collision() {
     for _ in 0..100 {
         let mut runtime = Runtime::new();
 
-        runtime.register_clone_type::<A>("").unwrap();
-        runtime.register_clone_type::<B>("").unwrap();
+        runtime.register_clone_type::<Val<A>>("").unwrap();
+        runtime.register_clone_type::<Val<B>>("").unwrap();
 
-        #[roto_method(runtime, A, foo)]
+        #[roto_method(runtime, Val<A>, foo)]
         fn foo_a(_: Val<A>) -> bool {
             true
         }
 
-        #[roto_method(runtime, B, foo)]
+        #[roto_method(runtime, Val<B>, foo)]
         fn foo_b(_: Val<B>) -> bool {
             unreachable!()
         }
@@ -2861,7 +2863,7 @@ fn refcounting_in_a_recursive_function() {
     let mut runtime = Runtime::new();
 
     runtime
-        .register_clone_type_with_name::<Arc<Foo>>("Foo", "...")
+        .register_clone_type_with_name::<Val<Arc<Foo>>>("Foo", "...")
         .unwrap();
 
     let s = src!(
@@ -3082,7 +3084,7 @@ fn sigill() {
     let mut runtime = Runtime::new();
 
     struct Arcane(Arc<()>);
-    runtime.register_clone_type::<Arcane>("...").unwrap();
+    runtime.register_clone_type::<Val<Arcane>>("...").unwrap();
 
     impl Clone for Arcane {
         fn clone(&self) -> Self {
@@ -3097,7 +3099,7 @@ fn sigill() {
         }
     }
 
-    #[roto_method(runtime, Arcane)]
+    #[roto_method(runtime, Val<Arcane>)]
     fn get(Val(a): Val<Arcane>) -> u64 {
         Arc::strong_count(&a.0) as u64
     }
@@ -3139,10 +3141,10 @@ fn rust_string_string() {
     let mut runtime = Runtime::new();
 
     runtime
-        .register_clone_type_with_name::<String>("RustString", "...")
+        .register_clone_type_with_name::<Val<String>>("RustString", "...")
         .unwrap();
 
-    #[roto_static_method(runtime, String)]
+    #[roto_static_method(runtime, Val<String>)]
     fn new(s: Arc<str>) -> Val<String> {
         Val(s.as_ref().into())
     }
@@ -3310,85 +3312,34 @@ fn bool_is_not_true() {
 }
 
 #[test]
-fn unwrap_or_empty() {
+fn register_on_optstr() {
     let mut runtime = Runtime::new();
 
-    runtime.register_clone_type::<Option<Arc<str>>>("").unwrap();
+    runtime
+        .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
+        .unwrap();
 
-    #[roto_method(runtime, Option<Arc<str>>)]
-    fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
+    #[roto_method(runtime, Val<Option<Arc<str>>>)]
+    fn unwrap_or_empty(Val(x): Val<Option<Arc<str>>>) -> Arc<str> {
         x.unwrap_or_default()
     }
 
     let s = src!(
         r#"
-        fn foo() -> String {
-            let a = Some("foo");
-            let b = a.unwrap_or_empty();
-            let c = None;
-            let d = c.unwrap_or_empty();
-            b + d
+        fn foo(x: OptStr) -> String {
+            x.unwrap_or_empty()
         }
-        "#
+    "#
     );
 
     let mut p = compile_with_runtime(s, runtime);
-    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
-    assert_eq!(f.call(&mut ()), "foo".into());
-}
+    let f = p
+        .get_function::<(), fn(Val<Option<Arc<str>>>) -> Arc<str>>("foo")
+        .expect("No function found (or mismatched types)");
 
-#[test]
-fn algernon() {
-    #[derive(Debug, Clone)]
-    pub enum MapValue {
-        Str(Arc<str>),
-    }
+    let res = f.call(&mut (), Val(None));
+    assert_eq!(res, "".into());
 
-    let mut runtime = Runtime::new();
-    runtime.add_io_functions();
-    runtime
-        .register_clone_type_with_name::<MapValue>(
-            "MapValue",
-            "A value in a HashMap",
-        )
-        .unwrap();
-
-    runtime
-        .register_clone_type_with_name::<Option<Val<MapValue>>>(
-            "OptMapValue",
-            "A value in a HashMap",
-        )
-        .unwrap();
-
-    #[roto_method(runtime, Option<Val<MapValue>>)]
-    fn unwrap_or(
-        value: Val<Option<Val<MapValue>>>,
-        default: Arc<str>,
-    ) -> Arc<str> {
-        match value.0 {
-            Some(Val(MapValue::Str(x))) => x,
-            None => default,
-        }
-    }
-
-    #[roto_static_method(runtime, Option<Val<MapValue>>)]
-    fn new(s: Arc<str>) -> Val<Option<Val<MapValue>>> {
-        Val(Some(Val(MapValue::Str(s))))
-    }
-
-    let s = src!(
-        r#"
-        fn foo() -> String {
-            let a = OptMapValue.new("foo");
-            let b = a.unwrap_or("bar");
-            let c = None;
-            let d = c.unwrap_or("bar");
-            b + d
-        }
-        "#
-    );
-
-    let mut p = compile_with_runtime(s, runtime);
-    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
-    assert_eq!(f.call(&mut ()), "foobar".into());
+    let res = f.call(&mut (), Val(Some("hello".into())));
+    assert_eq!(res, "hello".into());
 }

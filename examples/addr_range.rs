@@ -14,11 +14,11 @@ fn main() {
 
     // Register the AddrRange type into Roto with a docstring
     runtime
-        .register_clone_type::<AddrRange>("A range of IP addresses")
+        .register_clone_type::<Val<AddrRange>>("A range of IP addresses")
         .unwrap();
 
     // Register the contains method with a docstring
-    #[roto_method(runtime, AddrRange)]
+    #[roto_method(runtime, Val<AddrRange>)]
     fn contains(range: Val<AddrRange>, addr: Val<IpAddr>) -> bool {
         range.min <= *addr && *addr <= range.max
     }

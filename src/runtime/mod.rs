@@ -280,7 +280,7 @@ impl Runtime {
     ///
     /// If that doesn't work for the type you want, use
     /// [`Runtime::register_clone_type_with_name`] instead.
-    pub fn register_clone_type<T: 'static + Clone>(
+    pub fn register_clone_type<T: Reflect + Clone>(
         &mut self,
         docstring: &str,
     ) -> Result<(), String> {
@@ -294,7 +294,7 @@ impl Runtime {
     /// the compiler needs special knowledge about them.
     ///
     /// See [`Runtime::register_clone_type`]
-    fn register_value_type<T: Copy + 'static>(
+    fn register_value_type<T: Reflect + Copy>(
         &mut self,
         docstring: &str,
     ) -> Result<(), String> {
@@ -302,7 +302,7 @@ impl Runtime {
         self.register_value_type_with_name::<T>(name, docstring)
     }
 
-    fn register_value_type_with_name<T: Copy + 'static>(
+    fn register_value_type_with_name<T: Reflect + Copy>(
         &mut self,
         name: &str,
         docstring: &str,
@@ -317,7 +317,7 @@ impl Runtime {
     /// Register a `Copy` type with a default name
     ///
     /// See [`Runtime::register_clone_type`]
-    pub fn register_copy_type<T: Copy + 'static>(
+    pub fn register_copy_type<T: Reflect + Copy>(
         &mut self,
         docstring: &str,
     ) -> Result<(), String> {
@@ -325,7 +325,7 @@ impl Runtime {
         self.register_copy_type_with_name::<T>(name, docstring)
     }
 
-    pub fn register_copy_type_with_name<T: Copy + 'static>(
+    pub fn register_copy_type_with_name<T: Reflect + Copy>(
         &mut self,
         name: &str,
         docstring: &str,
@@ -341,7 +341,7 @@ impl Runtime {
     ///
     /// This makes the type available for use in Roto. However, Roto will
     /// only store pointers to this type.
-    pub fn register_clone_type_with_name<T: 'static + Clone>(
+    pub fn register_clone_type_with_name<T: Reflect + Clone>(
         &mut self,
         name: &str,
         docstring: &str,
@@ -355,8 +355,9 @@ impl Runtime {
         )
     }
 
-    fn extract_name<T: 'static>() -> &'static str {
-        let mut name = std::any::type_name::<T>();
+    fn extract_name<T: Reflect>() -> &'static str {
+        let mut name = T::name();
+
         if let Some((first, _)) = name.split_once('<') {
             name = first;
         }
@@ -369,7 +370,7 @@ impl Runtime {
     /// Register a type for use in Roto specifying whether the type is `Copy`
     ///
     /// The `Copy`-ness is not checked. Which is why this is a private function
-    fn register_type_with_name_internal<T: 'static>(
+    fn register_type_with_name_internal<T: Reflect>(
         &mut self,
         name: &str,
         movability: Movability,
@@ -398,7 +399,22 @@ impl Runtime {
             ));
         }
 
-        TypeRegistry::store::<T>(ty::TypeDescription::Leaf);
+        let ty = T::resolve();
+
+        let is_allowed = match ty.description {
+            TypeDescription::Leaf => true,
+            TypeDescription::Val(_) => true,
+            TypeDescription::Option(_) => false,
+            TypeDescription::Verdict(_, _) => false,
+        };
+
+        if !is_allowed {
+            return Err(format!(
+                "Cannot register the type `{}`. Only `Val<T>` types can be registered",
+                ty.rust_name
+            ));
+        }
+
         self.types.push(RuntimeType {
             name: name.into(),
             type_id: TypeId::of::<T>(),
@@ -450,7 +466,7 @@ impl Runtime {
         )
     }
 
-    pub fn register_method<T: 'static, F: RotoFunc>(
+    pub fn register_method<T: Reflect, F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
         docstring: String,
@@ -473,10 +489,10 @@ impl Runtime {
 
         let type_id = match ty.description {
             TypeDescription::Leaf => ty.type_id,
-            TypeDescription::Val(type_id) => type_id,
+            TypeDescription::Val(_) => ty.type_id,
             _ => {
                 return Err(format!(
-                    "Cannot register a method on {}",
+                    "Cannot register a method on `{}`",
                     ty.rust_name
                 ));
             }
@@ -499,7 +515,7 @@ impl Runtime {
         )
     }
 
-    pub fn register_static_method<T: 'static, F: RotoFunc>(
+    pub fn register_static_method<T: Reflect, F: RotoFunc>(
         &mut self,
         name: impl Into<String>,
         docstring: String,
@@ -595,12 +611,6 @@ impl Runtime {
         &self,
         id: TypeId,
     ) -> Option<&RuntimeType> {
-        let ty = TypeRegistry::get(id)?;
-        let id = match ty.description {
-            TypeDescription::Leaf => id,
-            TypeDescription::Val(id) => id,
-            _ => panic!(),
-        };
         self.types.iter().find(|ty| ty.type_id == id)
     }
 

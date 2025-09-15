@@ -15,13 +15,13 @@ fn main() -> Result<(), roto::RotoReport> {
     let mut runtime = Runtime::new();
 
     runtime
-        .register_clone_type_with_name::<NonEmptyString>(
+        .register_clone_type_with_name::<Val<NonEmptyString>>(
             "NonEmptyString",
             "...",
         )
         .unwrap();
 
-    #[roto_static_method(runtime, NonEmptyString)]
+    #[roto_static_method(runtime, Val<NonEmptyString>)]
     fn new(s: Arc<str>) -> Option<Val<NonEmptyString>> {
         if s.is_empty() {
             return None;
