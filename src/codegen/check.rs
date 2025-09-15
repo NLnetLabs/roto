@@ -149,7 +149,7 @@ fn check_roto_type(
                 Err(error_message)
             }
         }
-        TypeDescription::Val(ty) => {
+        TypeDescription::Val(_) => {
             let Type::Name(type_name) = roto_ty else {
                 return Err(error_message);
             };
@@ -160,7 +160,7 @@ fn check_roto_type(
                 return Err(error_message);
             };
 
-            if ty != id {
+            if rust_ty.type_id != id {
                 return Err(error_message);
             }
 

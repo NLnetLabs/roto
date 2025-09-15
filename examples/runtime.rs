@@ -13,10 +13,10 @@ fn main() -> Result<(), roto::RotoReport> {
     let mut runtime = Runtime::new();
 
     runtime
-        .register_copy_type::<Bla>("Some random type")
+        .register_copy_type::<Val<Bla>>("Some random type")
         .unwrap();
 
-    #[roto_method(runtime, Bla, x)]
+    #[roto_method(runtime, Val<Bla>, x)]
     fn get_x(bla: Val<Bla>) -> u32 {
         bla.x
     }

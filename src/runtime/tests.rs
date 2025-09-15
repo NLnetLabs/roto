@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::Val;
 
 use super::Runtime;
@@ -11,11 +13,11 @@ use routecore::bgp::{
 pub fn routecore_runtime() -> Result<Runtime, String> {
     let mut rt = Runtime::new();
 
-    rt.register_clone_type::<OriginType>("TODO")?;
-    rt.register_clone_type::<LocalPref>("TODO")?;
-    rt.register_clone_type::<Community>("TODO")?;
-    rt.register_clone_type::<HopPath>("TODO")?;
-    rt.register_clone_type::<AsPath<Vec<u8>>>("TODO")?;
+    rt.register_clone_type::<Val<OriginType>>("TODO")?;
+    rt.register_clone_type::<Val<LocalPref>>("TODO")?;
+    rt.register_clone_type::<Val<Community>>("TODO")?;
+    rt.register_clone_type::<Val<HopPath>>("TODO")?;
+    rt.register_clone_type::<Val<AsPath<Vec<u8>>>>("TODO")?;
 
     #[roto_function(rt)]
     fn pow(x: u32, y: u32) -> u32 {
@@ -110,8 +112,8 @@ fn invalid_type_name() {
     #[derive(Clone, Copy)]
     struct accept;
 
-    rt.register_clone_type::<accept>("").unwrap_err();
-    rt.register_copy_type::<accept>("").unwrap_err();
+    rt.register_clone_type::<Val<accept>>("").unwrap_err();
+    rt.register_copy_type::<Val<accept>>("").unwrap_err();
 }
 
 #[test]
@@ -217,4 +219,35 @@ fn function_and_constant_with_the_same_name_2() {
 
     #[roto_function(rt, foo)]
     fn foo1(_: bool) {}
+}
+
+#[test]
+fn register_option_arc_str() {
+    let mut runtime = Runtime::new();
+
+    // Cannot register Option
+    runtime
+        .register_clone_type_with_name::<Option<Arc<str>>>("OptStr", "")
+        .unwrap_err();
+
+    // But with Val it's fine
+    runtime
+        .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
+        .unwrap();
+}
+
+#[test]
+#[should_panic]
+fn unwrap_or_empty() {
+    let mut runtime = Runtime::new();
+
+    runtime
+        .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
+        .unwrap();
+
+    // This should panic because the argument is missing `Val<_>`
+    #[roto_method(runtime, Val<Option<Arc<str>>>)]
+    fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
+        x.unwrap_or_default()
+    }
 }
