@@ -58,7 +58,6 @@ pub fn roto_context(item: TokenStream) -> TokenStream {
 
 struct Intermediate {
     function: proc_macro2::TokenStream,
-    fn_ty: proc_macro2::TokenStream,
     ident: syn::Ident,
     docstring: String,
     parameter_names: proc_macro2::TokenStream,
@@ -93,7 +92,6 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::ItemFn);
     let Intermediate {
         function,
-        fn_ty: ty,
         ident,
         docstring,
         parameter_names,
@@ -109,7 +107,7 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_function::<#ty>(
+        #runtime_ident.register_function(
             stringify!(#name),
             #docstring.to_string(),
             #parameter_names,
@@ -152,7 +150,6 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as syn::ItemFn);
     let Intermediate {
         function,
-        fn_ty,
         ident,
         docstring,
         parameter_names,
@@ -169,7 +166,7 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_method::<#ty, #fn_ty>(
+        #runtime_ident.register_method::<#ty, _, _>(
             stringify!(#name),
             #docstring.to_string(),
             #parameter_names,
@@ -188,7 +185,6 @@ pub fn roto_static_method(
     let item = parse_macro_input!(item as syn::ItemFn);
     let Intermediate {
         function,
-        fn_ty,
         ident,
         docstring,
         parameter_names,
@@ -205,7 +201,7 @@ pub fn roto_static_method(
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_static_method::<#ty, #fn_ty>(
+        #runtime_ident.register_static_method::<#ty, _, _>(
             stringify!(#name),
             #docstring.to_string(),
             #parameter_names,
@@ -248,7 +244,7 @@ fn gather_docstring(attrs: &[syn::Attribute]) -> String {
 fn generate_function(item: syn::ItemFn) -> Intermediate {
     let syn::ItemFn {
         attrs,
-        vis,
+        vis: _,
         sig,
         block: _,
     } = item.clone();
@@ -270,55 +266,10 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         })
         .collect();
 
-    let generics = sig.generics;
-    let ret = match sig.output {
-        syn::ReturnType::Default => quote!(()),
-        syn::ReturnType::Type(_, t) => {
-            quote!(#t)
-        }
-    };
-
-    let input_types: Vec<_> = sig
-        .inputs
-        .clone()
-        .into_iter()
-        .map(|i| {
-            let syn::FnArg::Typed(syn::PatType { ty, .. }) = i else {
-                panic!()
-            };
-            ty
-        })
-        .collect();
-
-    let mut transformed_params = Vec::new();
-    let mut transformed_args = Vec::new();
-
-    for (i, t) in input_types.iter().enumerate() {
-        let ident =
-            syn::Ident::new(&format!("_{i}"), proc_macro2::Span::call_site());
-        transformed_params
-            .push(quote!(#ident: <#t as roto::Reflect>::AsParam));
-        transformed_args
-            .push(quote!(<#t as roto::Reflect>::untransform(unsafe { <#t as roto::Reflect>::to_value(#ident) })));
-    }
-
-    let function = quote! {
-        #(#attrs)*
-        #vis extern "C" fn #ident #generics ( out: *mut <#ret as roto::Reflect>::Transformed, #(#transformed_params,)* ) {
-            #item
-
-            let res = #ident(#(#transformed_args),*);
-            let res_transformed = <#ret as roto::Reflect>::transform(res);
-            unsafe { std::ptr::write(out, res_transformed) };
-        }
-    };
-
-    let ty = quote!( fn(#(#input_types),*) -> #ret );
     let parameter_names = quote!( &[#(stringify!(#args)),*] );
 
     Intermediate {
-        function,
-        fn_ty: ty,
+        function: quote!(#item),
         ident,
         docstring,
         parameter_names,

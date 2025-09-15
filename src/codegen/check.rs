@@ -1,7 +1,6 @@
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
-    lir::{IrValue, Memory},
     runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
         info::TypeInfo,
@@ -11,8 +10,7 @@ use crate::{
     },
 };
 use std::{
-    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, ops::Deref,
-    sync::Arc,
+    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
 };
 
 #[derive(Debug)]
@@ -247,9 +245,6 @@ pub trait RotoFunc: seal::Sealed {
     /// Type of a Roto function with this type returning directly
     type RotoWithoutReturnPointer;
 
-    /// The type of a Rust function wrapping a function of this type
-    type RustWrapper;
-
     /// Check whether these parameters match a parameter list from Roto.
     fn check_args(
         type_info: &mut TypeInfo,
@@ -270,24 +265,6 @@ pub trait RotoFunc: seal::Sealed {
         func_ptr: *const u8,
         return_by_ref: bool,
     ) -> Self::Return;
-
-    fn ptr(w: &Self::RustWrapper) -> *const u8;
-    fn parameter_types() -> Vec<TypeId>;
-    fn return_type() -> TypeId;
-
-    fn ir_function(f: &Self::RustWrapper) -> RustIrFunction;
-}
-
-#[allow(clippy::type_complexity)]
-#[derive(Clone)]
-pub struct RustIrFunction(Arc<dyn Fn(&mut Memory, Vec<IrValue>)>);
-
-impl Deref for RustIrFunction {
-    type Target = Arc<dyn Fn(&mut Memory, Vec<IrValue>)>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
 }
 
 /// Little helper macro to create a unit
@@ -312,7 +289,6 @@ macro_rules! func {
 
             type RotoWithReturnPointer = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
             type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> $r::Transformed;
-            type RustWrapper = extern "C" fn (*mut $r::Transformed, $($a::AsParam),*) -> ();
 
             fn check_args(
                 type_info: &mut TypeInfo,
@@ -333,10 +309,6 @@ macro_rules! func {
                         .map_err(|e| FunctionRetrievalError::TypeMismatch(format!("argument {i}"), e))?;
                 )*
                 Ok(())
-            }
-
-            fn ptr(w: &Self::RustWrapper) -> *const u8 {
-                (*w) as *const u8
             }
 
             unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8, return_by_ref: bool) -> R {
@@ -367,40 +339,6 @@ macro_rules! func {
                     let ret = func_ptr(ctx as *mut Ctx as *mut (), $($a),*);
                     <R as Reflect>::untransform(ret)
                 }
-            }
-
-            fn parameter_types() -> Vec<TypeId> {
-                vec![$($a::resolve().type_id,)*]
-            }
-
-            fn return_type() -> TypeId {
-                $r::resolve().type_id
-            }
-
-            fn ir_function(f: &Self::RustWrapper) -> RustIrFunction {
-                let f = *f;
-                // We reuse the type names as variable names, so they are
-                // uppercase, but that's the easiest way to do this.
-                #[allow(non_snake_case)]
-                let f = move |mem: &mut Memory, args: Vec<IrValue>| {
-                    let [$r, $($a),*]: &[IrValue] = &args else {
-                        panic!("Number of arguments is not correct")
-                    };
-
-                    let &IrValue::Pointer($r) = $r else {
-                        panic!("Out pointer is not a pointer")
-                    };
-                    let $r = mem.get($r);
-
-                    $(
-                        let Ok($a) = <$a as Reflect>::from_ir_value(mem, $a.clone()) else {
-                            panic!("Type of argument is not correct: {}", $a)
-                        };
-                    )*
-                    let mut uninit_ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
-                    f($r as *mut <$r as Reflect>::Transformed, $($a),*);
-                };
-                RustIrFunction(Arc::new(f))
             }
         }
     };

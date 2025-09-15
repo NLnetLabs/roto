@@ -1,7 +1,10 @@
 use core::f32;
 use std::{
     net::IpAddr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{
+        atomic::{AtomicI32, AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
@@ -3342,4 +3345,59 @@ fn register_on_optstr() {
 
     let res = f.call(&mut (), Val(Some("hello".into())));
     assert_eq!(res, "hello".into());
+}
+
+#[test]
+fn register_closure() {
+    let some_number = 10;
+
+    let mut runtime = Runtime::new();
+    runtime
+        .register_function("get", "".into(), &[], move || some_number)
+        .unwrap();
+
+    let s = src!(
+        r#"
+        fn foo() -> i32 {
+            get()
+        }
+        "#
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), fn() -> i32>("foo")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert_eq!(res, 10);
+}
+
+#[test]
+fn increment_via_closure() {
+    static COUNTER: AtomicI32 = AtomicI32::new(0);
+
+    let mut runtime = Runtime::new();
+    runtime
+        .register_function("inc", "".into(), &[], || {
+            COUNTER.fetch_add(1, Ordering::Relaxed);
+        })
+        .unwrap();
+
+    let s = src!(
+        r#"
+        fn foo() {
+            inc();
+            inc();
+        }
+        "#
+    );
+
+    let mut p = compile_with_runtime(s, runtime);
+    let f = p
+        .get_function::<(), fn()>("foo")
+        .expect("No function found (or mismatched types)");
+
+    f.call(&mut ());
+    assert_eq!(COUNTER.load(Ordering::Relaxed), 2);
 }

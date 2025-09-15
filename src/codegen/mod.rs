@@ -202,7 +202,7 @@ struct ModuleBuilder {
     functions: HashMap<String, FunctionInfo>,
 
     /// External functions
-    runtime_functions: HashMap<RuntimeFunctionRef, FuncId>,
+    runtime_functions: HashMap<RuntimeFunctionRef, (*const u8, FuncId)>,
 
     /// The inner cranelift module
     inner: JITModule,
@@ -287,8 +287,8 @@ pub fn codegen(
     for func_ref in runtime_functions.keys() {
         let f = runtime.get_function(*func_ref);
         builder.symbol(
-            format!("runtime_function_{}", f.id),
-            f.description.pointer(),
+            format!("runtime_function_trampoline_{}", f.id),
+            f.description.trampoline(),
         );
     }
 
@@ -339,6 +339,11 @@ pub fn codegen(
 
     for (func_ref, ir_sig) in runtime_functions {
         let mut sig = module.inner.make_signature();
+
+        // This function is the trampoline, so we need to pass the pointer
+        // to the actual function.
+        sig.params.push(AbiParam::new(module.isa.pointer_type()));
+
         for (_, ty) in &ir_sig.parameters {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
         }
@@ -347,13 +352,16 @@ pub fn codegen(
         }
         let f = runtime.get_function(*func_ref);
         let Ok(func_id) = module.inner.declare_function(
-            &format!("runtime_function_{}", f.id),
+            &format!("runtime_function_trampoline_{}", f.id),
             Linkage::Import,
             &sig,
         ) else {
             panic!()
         };
-        module.runtime_functions.insert(*func_ref, func_id);
+
+        module
+            .runtime_functions
+            .insert(*func_ref, (f.description.pointer(), func_id));
     }
 
     // Our functions might call each other, so we declare them before we
@@ -739,15 +747,21 @@ impl<'c> FuncGen<'c> {
                 }
             }
             lir::Instruction::CallRuntime { func, args } => {
-                let func_id = self.module.runtime_functions[func];
-                let func_ref = self
-                    .module
-                    .inner
-                    .declare_func_in_func(func_id, self.builder.func);
+                let (ptr, trampoline_func_id) =
+                    self.module.runtime_functions[func];
+                let func_ref = self.module.inner.declare_func_in_func(
+                    trampoline_func_id,
+                    self.builder.func,
+                );
 
-                let args: Vec<_> =
-                    args.iter().map(|op| self.operand(op).0).collect();
-                self.ins().call(func_ref, &args);
+                let ptr_type = self.module.isa.pointer_type();
+                let ptr = self.ins().iconst(ptr_type, ptr as usize as i64);
+
+                let mut new_args = Vec::new();
+                new_args.push(ptr);
+                new_args.extend(args.iter().map(|op| self.operand(op).0));
+
+                self.ins().call(func_ref, &new_args);
             }
             lir::Instruction::Return(Some(v)) => {
                 let (val, _) = self.operand(v);

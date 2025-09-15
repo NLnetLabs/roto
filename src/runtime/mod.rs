@@ -25,8 +25,8 @@ use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 
 use crate::{
     ast::Identifier,
-    codegen::check::RotoFunc,
     parser::token::{Lexer, Token},
+    runtime::func::RegisterableFn,
     Context, FileTree, Package, RotoReport,
 };
 
@@ -450,41 +450,38 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_function<F: RotoFunc>(
+    pub fn register_function<A, R>(
         &mut self,
         name: impl Into<String>,
         docstring: String,
         argument_names: &'static [&'static str],
-        wrapper: F::RustWrapper,
+        func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
-        self.register_function_internal::<F>(
+        self.register_function_internal(
             name.into(),
             docstring,
             argument_names,
             FunctionKind::Free,
-            wrapper,
+            func,
         )
     }
 
-    pub fn register_method<T: Reflect, F: RotoFunc>(
+    pub fn register_method<T: Reflect, A, R>(
         &mut self,
         name: impl Into<String>,
         docstring: String,
         argument_names: &'static [&'static str],
-        wrapper: F::RustWrapper,
+        func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
-        let description = FunctionDescription::of::<F>(&wrapper);
         let name = name.into();
 
         Self::check_name(&name)?;
-        self.check_description(&description)?;
 
-        let Some(first) = description.parameter_types().first() else {
+        let params = func.parameter_types();
+        let Some(first) = params.first() else {
             return Err("a method must have at least one parameter".into());
         };
 
-        // `to_function_description` already checks the validity of the types
-        // so unwrap is ok.
         let ty = TypeRegistry::get(*first).unwrap();
 
         let type_id = match ty.description {
@@ -506,41 +503,41 @@ impl Runtime {
         }
 
         let kind = FunctionKind::Method(std::any::TypeId::of::<T>());
-        self.register_function_internal::<F>(
+        self.register_function_internal::<A, R>(
             name,
             docstring,
             argument_names,
             kind,
-            wrapper,
+            func,
         )
     }
 
-    pub fn register_static_method<T: Reflect, F: RotoFunc>(
+    pub fn register_static_method<T: Reflect, A, R>(
         &mut self,
         name: impl Into<String>,
         docstring: String,
         argument_names: &'static [&'static str],
-        wrapper: F::RustWrapper,
+        func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let kind = FunctionKind::StaticMethod(std::any::TypeId::of::<T>());
-        self.register_function_internal::<F>(
+        self.register_function_internal::<A, R>(
             name.into(),
             docstring,
             argument_names,
             kind,
-            wrapper,
+            func,
         )
     }
 
-    fn register_function_internal<F: RotoFunc>(
+    fn register_function_internal<A, R>(
         &mut self,
         name: String,
         docstring: String,
         argument_names: &'static [&'static str],
         kind: FunctionKind,
-        wrapper: F::RustWrapper,
+        func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
-        let description = FunctionDescription::of::<F>(&wrapper);
+        let description = FunctionDescription::of(func);
 
         Self::check_name(&name)?;
 
