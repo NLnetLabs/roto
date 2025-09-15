@@ -3353,7 +3353,7 @@ fn register_closure() {
 
     let mut runtime = Runtime::new();
     runtime
-        .register_function("get", "".into(), &[], move || some_number)
+        .register_fn("get", "", [], move || some_number)
         .unwrap();
 
     let s = src!(
@@ -3379,7 +3379,7 @@ fn increment_via_closure() {
 
     let mut runtime = Runtime::new();
     runtime
-        .register_function("inc", "".into(), &[], || {
+        .register_fn("inc", "", [], || {
             COUNTER.fetch_add(1, Ordering::Relaxed);
         })
         .unwrap();
