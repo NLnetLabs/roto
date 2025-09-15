@@ -107,9 +107,9 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #function
 
-        #runtime_ident.register_function(
+        #runtime_ident.register_fn(
             stringify!(#name),
-            #docstring.to_string(),
+            #docstring,
             #parameter_names,
             #ident,
         ).unwrap();
@@ -168,7 +168,7 @@ pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
 
         #runtime_ident.register_method::<#ty, _, _>(
             stringify!(#name),
-            #docstring.to_string(),
+            #docstring,
             #parameter_names,
             #ident
         ).unwrap();
@@ -266,7 +266,7 @@ fn generate_function(item: syn::ItemFn) -> Intermediate {
         })
         .collect();
 
-    let parameter_names = quote!( &[#(stringify!(#args)),*] );
+    let parameter_names = quote!( [#(stringify!(#args)),*] );
 
     Intermediate {
         function: quote!(#item),

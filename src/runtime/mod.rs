@@ -54,7 +54,7 @@ use crate::{
 ///
 /// ## Registering functions and methods
 ///
-/// - [`Runtime::register_function`]
+/// - [`Runtime::register_fn`]
 /// - [`Runtime::register_method`]
 /// - [`Runtime::register_static_method`]
 ///
@@ -208,7 +208,7 @@ pub struct RuntimeFunction {
 
     pub(crate) docstring: String,
 
-    pub(crate) argument_names: &'static [&'static str],
+    pub(crate) argument_names: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -450,15 +450,15 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_function<A, R>(
+    pub fn register_fn<'a, A, R>(
         &mut self,
-        name: impl Into<String>,
-        docstring: String,
-        argument_names: &'static [&'static str],
+        name: impl AsRef<str>,
+        docstring: impl AsRef<str>,
+        argument_names: impl IntoIterator<Item = &'a str>,
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         self.register_function_internal(
-            name.into(),
+            name,
             docstring,
             argument_names,
             FunctionKind::Free,
@@ -466,16 +466,16 @@ impl Runtime {
         )
     }
 
-    pub fn register_method<T: Reflect, A, R>(
+    pub fn register_method<'a, T: Reflect, A, R>(
         &mut self,
-        name: impl Into<String>,
-        docstring: String,
-        argument_names: &'static [&'static str],
+        name: impl AsRef<str>,
+        docstring: impl AsRef<str>,
+        argument_names: impl IntoIterator<Item = &'a str>,
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
-        let name = name.into();
+        let name = name.as_ref();
 
-        Self::check_name(&name)?;
+        Self::check_name(name)?;
 
         let params = func.parameter_types();
         let Some(first) = params.first() else {
@@ -512,11 +512,11 @@ impl Runtime {
         )
     }
 
-    pub fn register_static_method<T: Reflect, A, R>(
+    pub fn register_static_method<'a, T: Reflect, A, R>(
         &mut self,
         name: impl Into<String>,
         docstring: String,
-        argument_names: &'static [&'static str],
+        argument_names: impl IntoIterator<Item = &'a str>,
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let kind = FunctionKind::StaticMethod(std::any::TypeId::of::<T>());
@@ -529,34 +529,37 @@ impl Runtime {
         )
     }
 
-    fn register_function_internal<A, R>(
+    fn register_function_internal<'a, A, R>(
         &mut self,
-        name: String,
-        docstring: String,
-        argument_names: &'static [&'static str],
+        name: impl AsRef<str>,
+        docstring: impl AsRef<str>,
+        argument_names: impl IntoIterator<Item = &'a str>,
         kind: FunctionKind,
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let description = FunctionDescription::of(func);
 
-        Self::check_name(&name)?;
+        Self::check_name(name.as_ref())?;
 
         let type_id = match kind {
             FunctionKind::Free => None,
             FunctionKind::Method(type_id)
             | FunctionKind::StaticMethod(type_id) => Some(type_id),
         };
-        self.check_name_collision(type_id, &name)?;
+        self.check_name_collision(type_id, name.as_ref())?;
         self.check_description(&description)?;
 
         let id = self.functions.len();
         self.functions.push(RuntimeFunction {
-            name,
+            name: name.as_ref().to_string(),
             description,
             kind,
             id,
-            docstring,
-            argument_names,
+            docstring: docstring.as_ref().to_string(),
+            argument_names: argument_names
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         });
         Ok(())
     }

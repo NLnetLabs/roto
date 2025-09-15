@@ -43,15 +43,15 @@ macro_rules! float_impl {
     ($rt:ident, $t:ty) => {{
         $rt.register_method::<$t, _, _>(
             "floor",
-            "Returns the largest integer less than or equal to self".into(),
-            &["x"],
+            "Returns the largest integer less than or equal to self",
+            ["x"],
             <$t>::floor,
         ).unwrap();
 
         $rt.register_method::<$t, _, _>(
             "ceil",
-            "Returns the smallest integer greater than or equal to self.".into(),
-            &["x"],
+            "Returns the smallest integer greater than or equal to self.",
+            ["x"],
             <$t>::ceil,
         ).unwrap();
 
