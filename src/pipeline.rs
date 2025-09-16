@@ -43,11 +43,14 @@ pub enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
     Type(TypeError),
+    TestsFailed(),
+    CouldNotRetrieveFunction(FunctionRetrievalError),
 }
 
 /// An error report containing a set of Roto errors.
 ///
 /// The errors can be printed with the regular [`std::fmt::Display`].
+#[derive(Default)]
 pub struct RotoReport {
     pub files: Vec<SourceFile>,
     pub errors: Vec<RotoError>,
@@ -117,7 +120,7 @@ impl RotoReport {
         for error in &self.errors {
             match error {
                 RotoError::Read(name, io) => {
-                    write!(f, "could not open `{name}`: {io}")?;
+                    write!(f, "Could not read file `{name}`: {io}")?;
                 }
                 RotoError::Parse(error) => {
                     let label_message = error.kind.label();
@@ -179,6 +182,12 @@ impl RotoReport {
                     report.write(&mut file_cache, &mut v).unwrap();
                     let s = String::from_utf8_lossy(&v);
                     write!(f, "{s}")?;
+                }
+                RotoError::TestsFailed() => {
+                    write!(f, "Tests failed")?;
+                }
+                RotoError::CouldNotRetrieveFunction(e) => {
+                    write!(f, "Could not retrieve function: {e}")?;
                 }
             }
         }
