@@ -5,6 +5,7 @@ pub mod context;
 mod docs;
 pub mod func;
 mod io;
+pub mod items;
 pub mod layout;
 pub mod option;
 pub mod ty;
@@ -26,8 +27,19 @@ use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 use crate::{
     ast::Identifier,
     file_tree::FileTree,
-    parser::token::{Lexer, Token},
-    runtime::func::RegisterableFn,
+    parser::{
+        meta::{Meta, MetaId},
+        token::{Lexer, Token},
+    },
+    runtime::{
+        func::RegisterableFn,
+        items::{Constant, Function, IntoItems, Item, Module, Type},
+    },
+    typechecker::{
+        scope::{ResolvedName, ScopeGraph, ScopeRef},
+        types::{self, FunctionDefinition},
+        TypeChecker,
+    },
     Context, Package, RotoReport,
 };
 
@@ -72,6 +84,7 @@ use crate::{
 /// - [`Runtime::print_documentation`]
 #[derive(Clone)]
 pub struct Runtime {
+    pub(crate) type_checker: TypeChecker,
     context: Option<ContextDescription>,
     types: Vec<RuntimeType>,
     functions: Vec<RuntimeFunction>,
@@ -79,6 +92,10 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    pub fn builder() -> RuntimeBuilder {
+        RuntimeBuilder::new()
+    }
+
     /// Compile a script from a path and return the result.
     ///
     /// If the path is a file, then that file will be loaded. If the path is a
@@ -91,8 +108,56 @@ impl Runtime {
     }
 }
 
+#[derive(Clone)]
+pub struct RuntimeBuilder {
+    items: Vec<Item>,
+}
+
+impl RuntimeBuilder {
+    fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    fn add(mut self, items: impl IntoItems) -> Self {
+        self.items.extend(items.into_items());
+        self
+    }
+
+    fn build(self) -> Result<Runtime, String> {
+        Runtime::from_items(self.items)
+    }
+}
+
 /// Inspecting the [`Runtime`]
 impl Runtime {
+    /// A Runtime that is as empty as possible.
+    ///
+    /// This contains only type information for Roto primitives.
+    pub fn new() -> Self {
+        Self {
+            type_checker: TypeChecker::new(),
+            context: None,
+            types: Default::default(),
+            functions: Default::default(),
+            constants: Default::default(),
+        }
+    }
+
+    pub fn from_items(items: impl IntoItems) -> Result<Self, String> {
+        let mut rt = Self::new();
+
+        let items = items.into_items();
+
+        let root = ScopeRef::GLOBAL;
+        rt.declare_modules(None, &items)?;
+        rt.declare_types(root, &items)?;
+        rt.declare_functions(root, &items)?;
+        rt.declare_constants(root, &items)?;
+        rt.declare_context(root, &items)?;
+
+        Ok(rt)
+    }
+
     /// Get the context type, if any.
     pub fn context(&self) -> &Option<ContextDescription> {
         &self.context
@@ -151,7 +216,7 @@ unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
 #[derive(Clone, Debug)]
 pub struct RuntimeType {
     /// The name the type can be referenced by from Roto
-    name: String,
+    name: ResolvedName,
 
     /// [`TypeId`] of the registered type
     ///
@@ -169,8 +234,8 @@ pub struct RuntimeType {
 }
 
 impl RuntimeType {
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> ResolvedName {
+        self.name.clone()
     }
 
     pub fn type_id(&self) -> TypeId {
@@ -196,20 +261,19 @@ pub enum FunctionKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeFunction {
     /// Name that the function can be referenced by
-    pub(crate) name: String,
+    pub(crate) name: ResolvedName,
 
     /// Description of the signature of the function
-    pub(crate) description: FunctionDescription,
-
-    /// Whether it's a free function, method or a static method
-    pub(crate) kind: FunctionKind,
+    pub(crate) func: FunctionDescription,
 
     /// Unique identifier for this function
     pub(crate) id: usize,
 
-    pub(crate) docstring: String,
+    /// Documentation for this function
+    pub(crate) doc: String,
 
-    pub(crate) argument_names: Vec<String>,
+    /// Names of the parameters of this function for generated documentation
+    pub(crate) params: Vec<Identifier>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -232,13 +296,13 @@ pub struct RuntimeConstant {
     pub name: Identifier,
     pub ty: TypeId,
     pub docstring: String,
-    pub value: Constant,
+    pub value: ConstantValue,
 }
 
 #[derive(Clone)]
-pub struct Constant(Arc<dyn Send + Sync + 'static>);
+pub struct ConstantValue(Arc<dyn Send + Sync + 'static>);
 
-impl std::fmt::Debug for Constant {
+impl std::fmt::Debug for ConstantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Constant")
             .field(&Arc::as_ptr(&self.0))
@@ -246,7 +310,7 @@ impl std::fmt::Debug for Constant {
     }
 }
 
-impl Constant {
+impl ConstantValue {
     pub fn new<T: Send + Sync + 'static>(x: T) -> Self {
         Self(Arc::new(x))
     }
@@ -264,96 +328,207 @@ impl Runtime {
         &self.functions[f.0]
     }
 
-    /// Register a type with a default name
-    ///
-    /// This type will be cloned and dropped many times, so make sure to have
-    /// a cheap [`Clone`] and [`Drop`] implementations, for example an
-    /// [`Rc`](std::rc::Rc) or an [`Arc`].
-    ///
-    /// The default type name is based on [`std::any::type_name`]. The string
-    /// returned from that consists of a path with possibly some generics.
-    /// Neither full paths and generics make sense in Roto, so we just want
-    /// the last part of the path just before any generics. So, we determine
-    /// the name with the following procedure:
-    ///
-    ///  - Split at the first `<` (if any) and take the first part
-    ///  - Then split at the last `::` and take the last part.
-    ///
-    /// If that doesn't work for the type you want, use
-    /// [`Runtime::register_clone_type_with_name`] instead.
-    pub fn register_clone_type<T: Reflect + Clone>(
+    fn declare_modules(
         &mut self,
-        docstring: &str,
+        scope: Option<ScopeRef>,
+        items: &[Item],
     ) -> Result<(), String> {
-        let name = Self::extract_name::<T>();
-        self.register_clone_type_with_name::<T>(name, docstring)
+        for item in items {
+            match item {
+                Item::Function(_) => {}
+                Item::Type(_) => {}
+                Item::Constant(_) => {}
+                Item::Module(module) => self.declare_module(scope, module)?,
+            }
+        }
+        Ok(())
     }
 
-    /// Register a type that is passed by value with a default name
-    ///
-    /// The functions registering types by value cannot be made public, because
-    /// the compiler needs special knowledge about them.
-    ///
-    /// See [`Runtime::register_clone_type`]
-    fn register_value_type<T: Reflect + Copy>(
+    fn declare_module(
         &mut self,
-        docstring: &str,
+        scope: Option<ScopeRef>,
+        module: &Module,
     ) -> Result<(), String> {
-        let name = Self::extract_name::<T>();
-        self.register_value_type_with_name::<T>(name, docstring)
+        let scope = self
+            .type_checker
+            .declare_runtime_module(scope, module.ident)?;
+
+        self.declare_modules(Some(scope), &module.children)?;
+
+        Ok(())
     }
 
-    fn register_value_type_with_name<T: Reflect + Copy>(
+    fn declare_types(
         &mut self,
-        name: &str,
-        docstring: &str,
+        scope: ScopeRef,
+        items: &[Item],
     ) -> Result<(), String> {
-        self.register_type_with_name_internal::<T>(
-            name,
-            Movability::Value,
-            docstring,
-        )
+        for item in items {
+            match item {
+                Item::Module(module) => {
+                    let scope = self
+                        .type_checker
+                        .get_scope_of(scope, module.ident)
+                        .unwrap();
+                    self.declare_types(scope, &module.children)?;
+                }
+                Item::Type(ty) => self.declare_type(scope, ty)?,
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
-    /// Register a `Copy` type with a default name
-    ///
-    /// See [`Runtime::register_clone_type`]
-    pub fn register_copy_type<T: Reflect + Copy>(
+    fn declare_type(
         &mut self,
-        docstring: &str,
+        scope: ScopeRef,
+        ty: &Type,
     ) -> Result<(), String> {
-        let name = Self::extract_name::<T>();
-        self.register_copy_type_with_name::<T>(name, docstring)
-    }
+        if let Some(old_ty) = self
+            .types
+            .iter()
+            .find(|old_ty| old_ty.type_id == ty.type_id)
+        {
+            // TODO: Print scope in this error message
+            return Err(format!(
+                "Type {} is already registered under a different name: {}`",
+                ty.rust_name, old_ty.name.ident,
+            ));
+        }
 
-    pub fn register_copy_type_with_name<T: Reflect + Copy>(
-        &mut self,
-        name: &str,
-        docstring: &str,
-    ) -> Result<(), String> {
-        self.register_type_with_name_internal::<T>(
-            name,
-            Movability::Copy,
-            docstring,
-        )
-    }
+        self.type_checker
+            .declare_runtime_type(scope, ty.ident, ty.type_id)?;
 
-    /// Register a reference type with a given name
-    ///
-    /// This makes the type available for use in Roto. However, Roto will
-    /// only store pointers to this type.
-    pub fn register_clone_type_with_name<T: Reflect + Clone>(
-        &mut self,
-        name: &str,
-        docstring: &str,
-    ) -> Result<(), String> {
-        let movability = Movability::CloneDrop(CloneDrop {
-            clone: extern_clone::<T> as _,
-            drop: extern_drop::<T> as _,
+        let name = ResolvedName {
+            scope,
+            ident: ty.ident,
+        };
+
+        self.types.push(RuntimeType {
+            name: name,
+            type_id: ty.type_id,
+            movability: ty.movability.clone(),
+            layout: ty.layout.clone(),
+            docstring: ty.doc.clone(),
         });
-        self.register_type_with_name_internal::<T>(
-            name, movability, docstring,
-        )
+
+        Ok(())
+    }
+
+    fn declare_functions(
+        &mut self,
+        scope: ScopeRef,
+        items: &[Item],
+    ) -> Result<(), String> {
+        for item in items {
+            match item {
+                Item::Module(Module {
+                    ident, children, ..
+                }) => {
+                    let scope = self
+                        .type_checker
+                        .get_scope_of(scope, *ident)
+                        .unwrap();
+                    self.declare_functions(scope, children)?;
+                }
+                Item::Type(Type {
+                    ident, children, ..
+                }) => {
+                    let scope = self
+                        .type_checker
+                        .get_scope_of(scope, *ident)
+                        .unwrap();
+                    self.declare_methods(scope, children)?;
+                }
+                Item::Function(f) => {
+                    self.declare_function(scope, f, false)?
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn declare_methods(
+        &mut self,
+        scope: ScopeRef,
+        items: &[Item],
+    ) -> Result<(), String> {
+        for item in items {
+            match item {
+                Item::Function(f) => {
+                    self.declare_function(scope, f, true)?;
+                }
+                Item::Type(_) => {
+                    return Err("Cannot nest a type in a type".into())
+                }
+                Item::Module(_) => {
+                    return Err("Cannot nest a module in a type".into());
+                }
+                Item::Constant(_) => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn declare_function(
+        &mut self,
+        scope: ScopeRef,
+        f: &Function,
+        method: bool,
+    ) -> Result<(), String> {
+        let parameter_types: Vec<_> = f
+            .func
+            .parameter_types()
+            .iter()
+            .map(|ty| TypeChecker::rust_type_to_roto_type(self, *ty))
+            .collect();
+
+        let return_type =
+            TypeChecker::rust_type_to_roto_type(self, f.func.return_type());
+
+        let id = self.functions.len();
+        let func = RuntimeFunction {
+            name: ResolvedName {
+                scope,
+                ident: f.ident,
+            },
+            id,
+            func: f.func.clone(),
+            doc: f.doc.clone(),
+            params: f.params.clone(),
+        };
+        self.functions.push(func);
+
+        // TODO: Remove unwrap here.
+        self.type_checker
+            .declare_runtime_function(
+                scope,
+                f.ident,
+                RuntimeFunctionRef(id),
+                parameter_types,
+                return_type,
+                method,
+            )
+            .unwrap();
+
+        Ok(())
+    }
+
+    fn declare_constants(
+        &mut self,
+        scope: ScopeRef,
+        items: &[Item],
+    ) -> Result<(), String> {
+        todo!()
+    }
+
+    fn declare_context(
+        &mut self,
+        scope: ScopeRef,
+        items: &[Item],
+    ) -> Result<(), String> {
+        todo!()
     }
 
     fn extract_name<T: Reflect>() -> &'static str {
@@ -366,64 +541,6 @@ impl Runtime {
             name = second;
         }
         name
-    }
-
-    /// Register a type for use in Roto specifying whether the type is `Copy`
-    ///
-    /// The `Copy`-ness is not checked. Which is why this is a private function
-    fn register_type_with_name_internal<T: Reflect>(
-        &mut self,
-        name: &str,
-        movability: Movability,
-        docstring: &str,
-    ) -> Result<(), String> {
-        Self::check_name(name)?;
-
-        if let Some(ty) = self.types.iter().find(|ty| ty.name == name) {
-            let name = TypeRegistry::get(ty.type_id).unwrap().rust_name;
-            return Err(format!(
-                "Type with name {name} already registered.\n\
-                Previously registered type: {}\n\
-                Newly registered type: {}",
-                name,
-                std::any::type_name::<T>(),
-            ));
-        }
-
-        if let Some(ty) =
-            self.types.iter().find(|ty| ty.type_id == TypeId::of::<T>())
-        {
-            return Err(format!(
-                "Type {} is already registered under a different name: {}`",
-                std::any::type_name::<T>(),
-                ty.name,
-            ));
-        }
-
-        let ty = T::resolve();
-
-        let is_allowed = match ty.description {
-            TypeDescription::Leaf => true,
-            TypeDescription::Val(_) => true,
-            TypeDescription::Option(_) => false,
-            TypeDescription::Verdict(_, _) => false,
-        };
-
-        if !is_allowed {
-            return Err(format!(
-                "Cannot register the type `{}`. Only `Val<T>` types can be registered",
-                ty.rust_name
-            ));
-        }
-
-        self.types.push(RuntimeType {
-            name: name.into(),
-            type_id: TypeId::of::<T>(),
-            movability,
-            layout: Layout::of::<T>(),
-            docstring: String::from(docstring),
-        });
-        Ok(())
     }
 
     pub fn register_context_type<Ctx: Context + 'static>(
@@ -451,120 +568,6 @@ impl Runtime {
         Ok(())
     }
 
-    pub fn register_fn<'a, A, R>(
-        &mut self,
-        name: impl AsRef<str>,
-        docstring: impl AsRef<str>,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        self.register_function_internal(
-            name,
-            docstring,
-            argument_names,
-            FunctionKind::Free,
-            func,
-        )
-    }
-
-    pub fn register_method<'a, T: Reflect, A, R>(
-        &mut self,
-        name: impl AsRef<str>,
-        docstring: impl AsRef<str>,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        let name = name.as_ref();
-
-        Self::check_name(name)?;
-
-        let params = func.parameter_types();
-        let Some(first) = params.first() else {
-            return Err("a method must have at least one parameter".into());
-        };
-
-        let ty = TypeRegistry::get(*first).unwrap();
-
-        let type_id = match ty.description {
-            TypeDescription::Leaf => ty.type_id,
-            TypeDescription::Val(_) => ty.type_id,
-            _ => {
-                return Err(format!(
-                    "Cannot register a method on `{}`",
-                    ty.rust_name
-                ));
-            }
-        };
-
-        if type_id != std::any::TypeId::of::<T>() {
-            return Err(
-                "Registering a method on a type that doesn't correspond."
-                    .to_string(),
-            );
-        }
-
-        let kind = FunctionKind::Method(std::any::TypeId::of::<T>());
-        self.register_function_internal::<A, R>(
-            name,
-            docstring,
-            argument_names,
-            kind,
-            func,
-        )
-    }
-
-    pub fn register_static_method<'a, T: Reflect, A, R>(
-        &mut self,
-        name: impl Into<String>,
-        docstring: String,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        let kind = FunctionKind::StaticMethod(std::any::TypeId::of::<T>());
-        self.register_function_internal::<A, R>(
-            name.into(),
-            docstring,
-            argument_names,
-            kind,
-            func,
-        )
-    }
-
-    fn register_function_internal<'a, A, R>(
-        &mut self,
-        name: impl AsRef<str>,
-        docstring: impl AsRef<str>,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        kind: FunctionKind,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        let description = FunctionDescription::of(func);
-
-        Self::check_name(name.as_ref())?;
-
-        let type_id = match kind {
-            FunctionKind::Free => None,
-            FunctionKind::Method(type_id)
-            | FunctionKind::StaticMethod(type_id) => Some(type_id),
-        };
-        self.check_name_collision(type_id, name.as_ref())?;
-        self.check_description(&description)?;
-
-        let id = self.functions.len();
-        self.functions.push(RuntimeFunction {
-            name: name.as_ref().to_string(),
-            description,
-            kind,
-            id,
-            docstring: docstring.as_ref().to_string(),
-            argument_names: argument_names
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        });
-        Ok(())
-    }
-
     /// Register a new global constant
     ///
     /// Constants are shared between function functions. Since functions
@@ -583,7 +586,6 @@ impl Runtime {
         let name = name.into();
 
         Self::check_name(&name)?;
-        self.check_name_collision(None, &name)?;
 
         self.get_runtime_type(id).ok_or_else(|| {
             let ty = TypeRegistry::get(id).unwrap();
@@ -601,7 +603,7 @@ impl Runtime {
                 name: symbol,
                 ty: ty.type_id,
                 docstring: docstring.into(),
-                value: Constant::new(x.transform()),
+                value: ConstantValue::new(x.transform()),
             },
         );
 
@@ -637,48 +639,6 @@ impl Runtime {
                 Err(format!("Name {name:?} is not a valid Roto identifier."))
             }
         }
-    }
-
-    /// Check that there doesn't already exist a function with the same name
-    ///
-    /// The `type_id` refers to the id of the type that a method or static
-    /// method is registered under.
-    fn check_name_collision(
-        &self,
-        type_id: Option<TypeId>,
-        name: &str,
-    ) -> Result<(), String> {
-        let kind_to_id = |kind: &FunctionKind| match kind {
-            FunctionKind::Method(id) | FunctionKind::StaticMethod(id) => {
-                Some(*id)
-            }
-            FunctionKind::Free => None,
-        };
-
-        for f in &self.functions {
-            if kind_to_id(&f.kind) == type_id && f.name == name {
-                if let Some(id) = type_id {
-                    let ty = TypeRegistry::get(id).unwrap();
-                    let type_name = ty.rust_name;
-                    return Err(format!("Symbol `{name}` on type `{type_name}` is declared twice in runtime"));
-                } else {
-                    return Err(format!(
-                        "Symbol `{name}` is declared twice in runtime"
-                    ));
-                }
-            }
-        }
-
-        if type_id.is_none() {
-            let symbol = Identifier::from(name);
-            if self.constants.iter().any(|(c, _)| *c == symbol) {
-                return Err(format!(
-                    "Symbol `{name}` is declared twice in runtime"
-                ));
-            }
-        }
-
-        Ok(())
     }
 
     fn check_description(

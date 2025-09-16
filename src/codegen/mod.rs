@@ -19,8 +19,8 @@ use crate::{
         self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
     },
     runtime::{
-        context::ContextDescription, ty::Reflect, Constant, RuntimeConstant,
-        RuntimeFunctionRef,
+        context::ContextDescription, ty::Reflect, ConstantValue,
+        RuntimeConstant, RuntimeFunctionRef,
     },
     typechecker::{info::TypeInfo, scope::ScopeRef, types},
     Runtime,
@@ -61,7 +61,7 @@ struct ModuleData {
     /// these constants are stored in this HashMap. So, as long as the function
     /// are around, we have to keep these constants around. That is why they
     /// need to be stored in this struct, even though this field is unused.
-    _constants: HashMap<Identifier, Constant>,
+    _constants: HashMap<Identifier, ConstantValue>,
 
     /// The functions in this module can reference registerd function that
     /// might contain data (i.e. closures). We need to properly drop these.
@@ -71,7 +71,7 @@ struct ModuleData {
 impl ModuleData {
     fn new(
         cranelift_jit: JITModule,
-        constants: HashMap<Identifier, Constant>,
+        constants: HashMap<Identifier, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self {
@@ -104,7 +104,7 @@ pub struct SharedModuleData(Arc<ModuleData>);
 impl SharedModuleData {
     fn new(
         cranelift_jit: JITModule,
-        constants: HashMap<Identifier, Constant>,
+        constants: HashMap<Identifier, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self(Arc::new(ModuleData::new(
@@ -207,7 +207,7 @@ pub struct FunctionInfo {
 }
 
 struct ModuleBuilder {
-    constants: HashMap<Identifier, Constant>,
+    constants: HashMap<Identifier, ConstantValue>,
 
     registered_fns: Vec<Arc<Box<dyn Any>>>,
 
@@ -301,7 +301,7 @@ pub fn codegen(
         let f = runtime.get_function(*func_ref);
         builder.symbol(
             format!("runtime_function_trampoline_{}", f.id),
-            f.description.trampoline(),
+            f.func.trampoline(),
         );
     }
 
@@ -373,7 +373,7 @@ pub fn codegen(
             panic!()
         };
 
-        let arc_box = f.description.pointer();
+        let arc_box = f.func.pointer();
         let ptr = &raw const **arc_box as *const u8;
         module.registered_fns.push(arc_box);
         module.runtime_functions.insert(*func_ref, (ptr, func_id));
