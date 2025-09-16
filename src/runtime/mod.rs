@@ -25,7 +25,7 @@ use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 
 use crate::{
     ast::Identifier,
-    file_tree::{FileTree, FileTreeError},
+    file_tree::FileTree,
     parser::token::{Lexer, Token},
     runtime::func::RegisterableFn,
     Context, Package, RotoReport,
@@ -78,12 +78,6 @@ pub struct Runtime {
     constants: HashMap<Identifier, RuntimeConstant>,
 }
 
-#[derive(Debug)]
-pub enum RuntimeCompileError {
-    FileTree(FileTreeError),
-    Report(RotoReport),
-}
-
 impl Runtime {
     /// Compile a script from a path and return the result.
     ///
@@ -93,17 +87,7 @@ impl Runtime {
         &self,
         path: impl AsRef<Path>,
     ) -> Result<Package, RotoReport> {
-        FileTree::read(path).compile(self)
-    }
-
-    pub fn try_compile(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<Package, RuntimeCompileError> {
-        FileTree::try_read(path)
-            .map_err(RuntimeCompileError::FileTree)?
-            .compile(self)
-            .map_err(RuntimeCompileError::Report)
+        FileTree::read(path)?.compile(self)
     }
 }
 

@@ -8,7 +8,7 @@ fn parse_errors() {
         let runtime = Runtime::new();
 
         let relative_path = path.strip_prefix(&root).unwrap();
-        let file_tree = FileTree::read(relative_path);
+        let file_tree = FileTree::read(relative_path).unwrap();
         let res = file_tree.compile(&runtime);
         let Err(e) = res else {
             panic!("should not succeed");
@@ -26,7 +26,7 @@ fn type_errors() {
         let runtime = Runtime::new();
 
         let relative_path = path.strip_prefix(&root).unwrap();
-        let file_tree = FileTree::read(relative_path);
+        let file_tree = FileTree::read(relative_path).unwrap();
         let res = file_tree.compile(&runtime);
         let Err(e) = res else {
             panic!("should not succeed");

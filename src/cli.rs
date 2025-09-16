@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::{tools::print::print_highlighted, FileTree, Runtime};
+use crate::{
+    tools::print::print_highlighted, FileTree, RotoError, RotoReport, Runtime,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -58,7 +60,7 @@ pub fn cli(rt: &Runtime) {
     }
 }
 
-fn cli_inner(rt: &Runtime) -> Result<(), String> {
+fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
     let cli = Cli::parse();
 
     match &cli.command {
@@ -66,40 +68,38 @@ fn cli_inner(rt: &Runtime) -> Result<(), String> {
             rt.print_documentation();
         }
         Command::Check { file } => {
-            FileTree::read(file)
-                .parse()
-                .map_err(|r| r.to_string())?
-                .typecheck(rt)
-                .map_err(|r| r.to_string())?;
+            FileTree::read(file)?.parse()?.typecheck(rt)?;
             println!("All ok!")
         }
         Command::Test { file } => {
-            let mut p = FileTree::read(file)
-                .parse()
-                .map_err(|r| r.to_string())?
-                .typecheck(rt)
-                .map_err(|r| r.to_string())?
+            let mut p = FileTree::read(file)?
+                .parse()?
+                .typecheck(rt)?
                 .lower_to_mir()
                 .lower_to_lir()
                 .codegen();
 
             if let Err(()) = p.run_tests(()) {
-                return Err("tests failed".into());
+                return Err(RotoReport {
+                    errors: vec![RotoError::TestsFailed()],
+                    ..Default::default()
+                });
             }
         }
         Command::Run { file } => {
-            let mut p = FileTree::read(file)
-                .parse()
-                .map_err(|r| r.to_string())?
-                .typecheck(rt)
-                .map_err(|r| r.to_string())?
+            let mut p = FileTree::read(file)?
+                .parse()?
+                .typecheck(rt)?
                 .lower_to_mir()
                 .lower_to_lir()
                 .codegen();
 
-            let f = p
-                .get_function::<(), fn()>("main")
-                .map_err(|e| e.to_string())?;
+            let f = p.get_function::<(), fn()>("main").map_err(|e| {
+                RotoReport {
+                    errors: vec![RotoError::CouldNotRetrieveFunction(e)],
+                    ..Default::default()
+                }
+            })?;
 
             f.call(&mut ())
         }

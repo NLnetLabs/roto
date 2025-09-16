@@ -1,28 +1,21 @@
 use std::path::Path;
 
-use crate::file_tree::{FileTree, FileTreeError, SourceFile};
+use crate::file_tree::{FileTree, SourceFile};
 
 #[test]
 fn source_file_try_read_empty_file() {
-    let source = SourceFile::try_read(Path::new(""));
-    let err = source.unwrap_err();
-
-    assert!(matches!(err, FileTreeError::PathNotFound));
+    let source = SourceFile::read(Path::new(""));
+    let _err = source.unwrap_err();
 }
 
 #[test]
 fn source_file_try_read_nonexistent_file() {
-    let source =
-        SourceFile::try_read(Path::new("/non-existent/file/pkg.roto"));
-    let err = source.unwrap_err();
-
-    assert!(matches!(err, FileTreeError::IOError(_)));
+    let source = SourceFile::read(Path::new("/non-existent/file/pkg.roto"));
+    let _err = source.unwrap_err();
 }
 
 #[test]
 fn file_tree_try_single_file() {
-    let tree = FileTree::try_single_file("");
-    let err = tree.unwrap_err();
-
-    assert!(matches!(err, FileTreeError::PathNotFound));
+    let tree = FileTree::single_file("");
+    let _err = tree.unwrap_err();
 }

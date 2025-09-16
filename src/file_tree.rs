@@ -1,21 +1,11 @@
-use std::io;
 use std::path::Path;
 
-use crate::{Package, RotoReport, Runtime};
+use crate::{Package, RotoError, RotoReport, Runtime};
 
-/// An error from [FileTree].
-#[derive(Debug)]
-pub enum FileTreeError {
-    /// The file, or a path leading up to it was not found.
-    PathNotFound,
-    /// An [io::Error] occurred.
-    IOError(io::Error),
-}
-
-#[doc(hidden)]
-impl From<io::Error> for FileTreeError {
-    fn from(error: io::Error) -> Self {
-        Self::IOError(error)
+fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
+    RotoReport {
+        errors: vec![RotoError::Read(p.to_string_lossy().into(), e)],
+        ..Default::default()
     }
 }
 
@@ -36,19 +26,26 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    pub fn try_read(path: &Path) -> Result<Self, FileTreeError> {
-        let file_name =
-            path.file_name().ok_or(FileTreeError::PathNotFound)?;
+    pub fn read(path: &Path) -> Result<Self, RotoReport> {
+        Self::read_internal(path).map_err(|e| read_error(path, e))
+    }
+
+    fn read_internal(path: &Path) -> Result<Self, std::io::Error> {
+        let file_name = path
+            .file_name()
+            .ok_or(std::io::Error::other("invalid path"))?;
         let module_name = if file_name == "mod.roto" {
             path.parent()
-                .ok_or(FileTreeError::PathNotFound)?
+                .ok_or(std::io::Error::other("invalid path"))?
                 .file_name()
-                .ok_or(FileTreeError::PathNotFound)?
+                .ok_or(std::io::Error::other("invalid path"))?
         } else {
-            path.file_stem().ok_or(FileTreeError::PathNotFound)?
+            path.file_stem()
+                .ok_or(std::io::Error::other("invalid path"))?
         }
         .to_string_lossy()
         .to_string();
+
         let name = path.to_string_lossy().to_string();
         let contents = std::fs::read_to_string(path)?;
         Ok(Self {
@@ -58,10 +55,6 @@ impl SourceFile {
             location_offset: 0,
             children: Vec::new(),
         })
-    }
-
-    pub fn read(path: &Path) -> Self {
-        Self::try_read(path).unwrap()
     }
 }
 
@@ -95,30 +88,24 @@ pub enum FileSpec {
 }
 
 impl FileTree {
-    pub fn read(path: impl AsRef<Path>) -> Self {
-        Self::try_read(path).unwrap()
-    }
-
-    pub fn try_read(path: impl AsRef<Path>) -> Result<Self, FileTreeError> {
+    pub fn read(path: impl AsRef<Path>) -> Result<Self, RotoReport> {
         let path = path.as_ref();
-        if path.metadata()?.file_type().is_dir() {
-            Self::try_directory(path)
+        if path
+            .metadata()
+            .map_err(|e| read_error(path, e))?
+            .file_type()
+            .is_dir()
+        {
+            Self::directory(path)
         } else {
-            Self::try_single_file(path)
+            Self::single_file(path)
         }
     }
 
-    pub fn try_single_file(
-        path: impl AsRef<Path>,
-    ) -> Result<Self, FileTreeError> {
-        let mut file = SourceFile::try_read(path.as_ref())?;
+    pub fn single_file(path: impl AsRef<Path>) -> Result<Self, RotoReport> {
+        let mut file = SourceFile::read(path.as_ref())?;
         file.module_name = "pkg".into();
         Ok(FileTree { files: vec![file] })
-    }
-
-    /// A Roto script consisting of a single file
-    pub fn single_file(path: impl AsRef<Path>) -> Self {
-        Self::try_single_file(path).unwrap()
     }
 
     pub fn test_file(
@@ -175,12 +162,8 @@ impl FileTree {
     }
 
     /// A Roto script defined by a directory
-    pub fn directory(root: &Path) -> FileTree {
-        Self::try_directory(root).unwrap()
-    }
-
-    pub fn try_directory(root: &Path) -> Result<FileTree, FileTreeError> {
-        let pkg_file = SourceFile::try_read(&root.join("pkg.roto"))?;
+    pub fn directory(root: &Path) -> Result<FileTree, RotoReport> {
+        let pkg_file = SourceFile::read(&root.join("pkg.roto"))?;
         assert_eq!(pkg_file.module_name, "pkg");
         let mut tree = Self {
             files: vec![pkg_file],
@@ -193,11 +176,16 @@ impl FileTree {
         &mut self,
         parent_id: usize,
         path: &Path,
-    ) -> Result<(), FileTreeError> {
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
+    ) -> Result<(), RotoReport> {
+        for entry in
+            std::fs::read_dir(path).map_err(|e| read_error(path, e))?
+        {
+            let entry = entry.map_err(|e| read_error(path, e))?;
             let path = entry.path();
-            if entry.file_type()?.is_dir() {
+            let file_type =
+                entry.file_type().map_err(|e| read_error(&path, e))?;
+
+            if file_type.is_dir() {
                 self.process_subdir(parent_id, &path)?;
                 continue;
             }
@@ -208,15 +196,24 @@ impl FileTree {
 
             let ident = path
                 .file_stem()
-                .ok_or(FileTreeError::PathNotFound)?
+                .ok_or_else(|| {
+                    read_error(&path, std::io::Error::other("invalid path"))
+                })?
                 .to_str()
-                .ok_or(FileTreeError::PathNotFound)?;
+                .ok_or_else(|| {
+                    read_error(
+                        &path,
+                        std::io::Error::other(
+                            "file name is not a valid Roto identifier",
+                        ),
+                    )
+                })?;
 
             if ident == "pkg" || ident == "mod" {
                 continue;
             }
 
-            let file = SourceFile::try_read(&path)?;
+            let file = SourceFile::read(&path)?;
 
             let idx = self.files.len();
             self.files.push(file);
@@ -230,14 +227,14 @@ impl FileTree {
         &mut self,
         parent_id: usize,
         path: &Path,
-    ) -> Result<(), FileTreeError> {
+    ) -> Result<(), RotoReport> {
         let file_path = path.join("mod.roto");
 
         if !file_path.exists() {
             return Ok(());
         }
 
-        let file = SourceFile::try_read(&file_path)?;
+        let file = SourceFile::read(&file_path)?;
 
         let idx = self.files.len();
         self.files.push(file);
