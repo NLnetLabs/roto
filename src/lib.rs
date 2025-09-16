@@ -9,6 +9,8 @@ mod ast;
 mod cli;
 mod codegen;
 mod file_tree;
+#[cfg(test)]
+mod file_tree_tests;
 mod ir_printer;
 mod label;
 mod lir;
