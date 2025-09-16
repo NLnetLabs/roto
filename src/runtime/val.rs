@@ -21,14 +21,14 @@ use std::ops::{Deref, DerefMut};
 /// // compile a script...
 ///
 /// // Pass Foo to Roto wrapped in Val:
-/// let f = pkg.get_function::<(), fn(Val<Foo>) -> ()>("main")
+/// let f = pkg.get_function::<(), fn(Val<Foo>) -> ()>("main").unwrap();
 /// f.call(&mut (), Val(Foo { a: 1, b: 2 }));
 ///
 /// // For Option and Verdict, wrap the inner type in Val
-/// pkg.get_function::<(), fn(Option<Val<Foo>>) -> ()>("main")
+/// pkg.get_function::<(), fn(Option<Val<Foo>>) -> ()>("main").unwrap();
 ///
 /// // Do not wrap types that already implement Reflect.
-/// pkg.get_function::<(), fn(i32) -> ()>("main")
+/// pkg.get_function::<(), fn(i32) -> ()>("main").unwrap();
 /// ```
 ///
 /// [`Reflect`]: super::Reflect
