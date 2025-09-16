@@ -443,7 +443,6 @@ impl TypeDefinition {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
-    pub kind: FunctionKind,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
 }

@@ -17,7 +17,10 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::lir::{IrValue, Memory};
+use crate::{
+    lir::{IrValue, Memory},
+    runtime::layout::Layout,
+};
 
 use super::{option::RotoOption, val::Val, verdict::Verdict};
 
@@ -42,10 +45,7 @@ pub struct Ty {
     pub rust_name: &'static str,
 
     /// The memory alignment of the type in bytes
-    pub alignment: usize,
-
-    /// The size of the type in bytes
-    pub size: usize,
+    pub layout: Layout,
 
     /// The [`TypeId`] corresponding to this type
     pub type_id: TypeId,
@@ -58,8 +58,7 @@ impl Ty {
     fn new<T: 'static>(description: TypeDescription) -> Self {
         Self {
             rust_name: type_name::<T>(),
-            alignment: std::mem::align_of::<T>(),
-            size: std::mem::size_of::<T>(),
+            layout: Layout::of::<T>(),
             type_id: TypeId::of::<T>(),
             description,
         }
