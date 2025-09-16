@@ -981,7 +981,6 @@ impl TypeChecker {
         };
 
         let signature = Signature {
-            kind: FunctionKind::Free,
             parameter_types: parameter_types.clone(),
             return_type: (*return_type).clone(),
         };
@@ -1009,7 +1008,6 @@ impl TypeChecker {
         };
 
         let signature = Signature {
-            kind: FunctionKind::Free,
             parameter_types: parameter_types.clone(),
             return_type: (*return_type).clone(),
         };
@@ -1203,7 +1201,6 @@ impl TypeChecker {
                     panic!()
                 };
                 let signature = Signature {
-                    kind: FunctionKind::Free,
                     parameter_types: parameter_types.clone(),
                     return_type: (**return_type).clone(),
                 };

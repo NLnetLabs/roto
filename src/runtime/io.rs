@@ -16,7 +16,7 @@ impl Runtime {
         let rt = self;
 
         /// Print a string to stdout
-        #[roto_function(rt)]
+        // #[roto_function(rt)]
         fn print(s: Arc<str>) {
             println!("{s}");
         }

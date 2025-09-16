@@ -264,7 +264,6 @@ impl<'r> Lowerer<'r> {
         }
 
         let signature = Signature {
-            kind: FunctionKind::Free,
             parameter_types: parameter_types
                 .iter()
                 .map(|x| &x.1)
@@ -1079,11 +1078,7 @@ impl<'r> Lowerer<'r> {
         kind: runtime::FunctionKind,
         name: &str,
     ) -> &RuntimeFunction {
-        self.runtime
-            .functions()
-            .iter()
-            .find(|f| f.kind == kind && f.name == name)
-            .unwrap()
+        todo!()
     }
 
     fn do_assign(&mut self, to: Place, ty: Type, val: Value) {

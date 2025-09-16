@@ -12,7 +12,7 @@ use crate::{
         value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
         ValueOrSlot, Var, VarKind,
     },
-    runtime::{Constant, RuntimeFunctionRef},
+    runtime::{ConstantValue, RuntimeFunctionRef},
     typechecker::types::Primitive,
     Runtime,
 };
@@ -307,7 +307,7 @@ pub fn eval(
         instructions.extend(block.instructions.clone());
     }
 
-    let constants: HashMap<Identifier, Constant> = rt
+    let constants: HashMap<Identifier, ConstantValue> = rt
         .constants()
         .values()
         .map(|g| (g.name, g.value.clone()))
@@ -747,9 +747,9 @@ fn call_runtime_function(
 
     // The number of passed arguments should be the number of arguments the
     // function takes plus 1 for the out pointer.
-    assert_eq!(func.description.parameter_types().len() + 1, args.len());
+    assert_eq!(func.func.parameter_types().len() + 1, args.len());
 
-    (func.description.ir_function())(mem, args)
+    (func.func.ir_function())(mem, args)
 }
 
 fn eval_operand<'a>(
