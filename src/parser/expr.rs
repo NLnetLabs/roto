@@ -698,7 +698,13 @@ impl Parser<'_, '_> {
                 exprs
             } else {
                 let expr = self.expr()?;
-                self.take(Token::Comma)?;
+
+                // If this is not the last item, we require a comma, if it is
+                // the last one, (i.e. if we get a `}` next), we don't need it.
+                if !self.peek_is(Token::CurlyRight) {
+                    self.take(Token::Comma)?;
+                }
+
                 Meta {
                     id: expr.id,
                     node: Block {
