@@ -171,3 +171,46 @@ fn hex_number() {
     let s = "0xffff029";
     parse_expr(s).unwrap();
 }
+
+#[test]
+fn match_without_trailing_comma() {
+    let s = "
+      match s {
+          Foo -> 10,
+          Bar -> 20
+      }
+    ";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn match_with_trailing_comma() {
+    let s = "
+      match s {
+          Foo -> 10,
+          Bar -> 20,
+      }
+    ";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn match_with_braces_and_commas() {
+    let s = "
+      match s {
+          Foo -> { 10 },
+          Bar -> { 20 },
+      }
+    ";
+    parse_expr(s).unwrap();
+}
+#[test]
+fn match_with_braces_without_commas() {
+    let s = "
+      match s {
+          Foo -> { 10 }
+          Bar -> { 20 }
+      }
+    ";
+    parse_expr(s).unwrap();
+}
