@@ -14,6 +14,7 @@ mod file_tree_tests;
 mod ir_printer;
 mod label;
 mod lir;
+mod macros;
 mod mir;
 mod module;
 pub(crate) mod parser;

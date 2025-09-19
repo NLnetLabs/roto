@@ -101,7 +101,7 @@ use crate::{
     parser::meta::{Meta, MetaId},
     runtime::{
         ty::{TypeDescription, TypeRegistry},
-        FunctionKind, Runtime, RuntimeFunction,
+        FunctionKind, Runtime, RuntimeFunction, RuntimeFunctionRef,
     },
 };
 use cycle::detect_type_cycles;
@@ -138,6 +138,7 @@ use info::TypeInfo;
 /// Holds the state for type checking
 ///
 /// Most type checking steps are methods on this type.
+#[derive(Clone)]
 pub struct TypeChecker {
     /// The list of built-in functions, methods and static methods.
     functions: Vec<Function>,
@@ -154,15 +155,12 @@ pub fn typecheck(
     runtime: &Runtime,
     module_tree: &ModuleTree,
 ) -> TypeResult<TypeInfo> {
-    TypeChecker::check_module_tree(runtime, module_tree)
+    let type_checker = runtime.type_checker.clone();
+    type_checker.check_module_tree(module_tree)
 }
 
 impl TypeChecker {
-    /// Perform type checking for a module tree (i.e. the entire program)
-    pub fn check_module_tree(
-        runtime: &Runtime,
-        tree: &ModuleTree,
-    ) -> Result<TypeInfo, TypeError> {
+    pub fn new() -> Self {
         let mut checker = TypeChecker {
             functions: Vec::new(),
             type_info: TypeInfo::new(),
@@ -170,33 +168,48 @@ impl TypeChecker {
             if_else_counter: 0,
             while_counter: 0,
         };
-
-        // Add all the stuff that's gonna be included in any script
-        // We unwrap these because they really shouldn't fail. If
-        // the built-in types would fail then it would be an internal
-        // compiler error and if the runtime fails then the runtime is
-        // malformed.
         checker.declare_builtin_types().unwrap();
-        checker.declare_runtime_items(runtime).unwrap();
+        checker
+    }
+    /// Perform type checking for a module tree (i.e. the entire program)
+    pub fn check_module_tree(
+        mut self,
+        tree: &ModuleTree,
+    ) -> Result<TypeInfo, TypeError> {
+        let modules = self.declare_modules(tree)?;
+        self.declare_imports(&modules)?;
+        self.declare_types(&modules)?;
 
-        let modules = checker.declare_modules(tree)?;
-        checker.declare_imports(&modules)?;
-        checker.declare_types(&modules)?;
+        detect_type_cycles(&self.type_info.types).map_err(|description| {
+            self.error_simple(
+                description,
+                "type cycle detected",
+                MetaId(0), // TODO: make a more useful error here with the recursive chain
+            )
+        })?;
 
-        detect_type_cycles(&checker.type_info.types).map_err(
-            |description| {
-                checker.error_simple(
-                    description,
-                    "type cycle detected",
-                    MetaId(0), // TODO: make a more useful error here with the recursive chain
-                )
-            },
-        )?;
+        self.declare_functions(&modules)?;
+        self.tree(&modules)?;
+        self.force_filtermap_types(&modules);
+        Ok(self.type_info)
+    }
 
-        checker.declare_functions(&modules)?;
-        checker.tree(&modules)?;
-        checker.force_filtermap_types(&modules);
-        Ok(checker.type_info)
+    pub(crate) fn get_scope_of(
+        &self,
+        scope: ScopeRef,
+        ident: Identifier,
+    ) -> Option<ScopeRef> {
+        self.type_info
+            .scope_graph
+            .resolve_name(
+                scope,
+                &Meta {
+                    node: ident,
+                    id: MetaId(0),
+                },
+                false,
+            )?
+            .scope
     }
 
     fn declare_builtin_types(&mut self) -> TypeResult<()> {
@@ -247,8 +260,6 @@ impl TypeChecker {
     }
 
     fn declare_runtime_items(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        self.declare_runtime_types(runtime)?;
-        self.declare_runtime_functions(runtime)?;
         self.declare_constants(runtime)?;
         self.declare_context(runtime)?;
 
@@ -283,200 +294,152 @@ impl TypeChecker {
         Ok(())
     }
 
-    fn declare_runtime_types(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        for ty in runtime.types() {
-            let ident = Identifier::from(ty.name());
-            let name = ResolvedName {
-                scope: ScopeRef::GLOBAL,
-                ident,
-            };
-            let ident = Meta {
-                node: ident,
-                id: MetaId(0),
-            };
-
-            // If the type is already in the scope graph, then it's a primitive type, we don't need
-            // to insert it again
-            if self
-                .type_info
-                .scope_graph
-                .resolve_name(ScopeRef::GLOBAL, &ident, true)
-                .is_none()
-            {
-                let ty = TypeDefinition::Runtime(name, ty.type_id());
-                self.type_info
-                    .scope_graph
-                    .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
-                    .map_err(|id| self.error_declared_twice(&ident, id))?;
-                self.type_info.types.insert(name, ty);
-            }
-        }
-        Ok(())
-    }
-
-    fn declare_runtime_functions(
+    pub(crate) fn declare_runtime_module(
         &mut self,
-        runtime: &Runtime,
-    ) -> TypeResult<()> {
-        // We need to know about all runtime methods, static methods and
-        // functions when we start type checking. Therefore, we have to map
-        // the runtime methods with TypeIds to function types.
-        for func in runtime.functions() {
-            let RuntimeFunction {
-                name,
-                description,
-                kind,
-                id: _,
-                docstring: _,
-                argument_names: _,
-            } = func;
+        parent: Option<ScopeRef>,
+        ident: Identifier,
+    ) -> Result<ScopeRef, String> {
+        let mod_scope = ModuleScope {
+            name: ResolvedName {
+                ident,
+                scope: parent.unwrap_or(ScopeRef::GLOBAL),
+            },
+            parent_module: parent,
+        };
+        let mod_scope = self
+            .type_info
+            .scope_graph
+            .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
 
-            let parameter_types: Vec<_> = description
-                .parameter_types()
-                .iter()
-                .map(|ty| Self::rust_type_to_roto_type(runtime, *ty))
-                .collect::<Result<_, _>>()?;
+        let scope = parent.unwrap_or(ScopeRef::GLOBAL);
 
-            let return_type = Self::rust_type_to_roto_type(
-                runtime,
-                description.return_type(),
-            )?;
+        // TODO: Remove unwrap
+        let ident = Meta {
+            node: ident,
+            id: MetaId(0),
+        };
+        self.type_info
+            .scope_graph
+            .insert_module(scope, &ident, mod_scope)
+            .unwrap();
 
-            // Free functions are put in the global namespace, methods and
-            // static methods are put under their type.
-            let scope = match kind {
-                FunctionKind::Free => ScopeRef::GLOBAL,
-                FunctionKind::StaticMethod(id) | FunctionKind::Method(id) => {
-                    let type_ident =
-                        runtime.get_runtime_type(*id).unwrap().name();
-                    let declaration = self
-                        .type_info
-                        .scope_graph
-                        .resolve_name(
-                            ScopeRef::GLOBAL,
-                            &Meta {
-                                node: type_ident.into(),
-                                id: MetaId(0),
-                            },
-                            false,
-                        )
-                        .unwrap();
-                    declaration.scope.unwrap()
-                }
-            };
+        Ok(mod_scope)
+    }
 
-            let ident = Meta {
-                node: name.into(),
-                id: MetaId(0),
-            };
-            let def = FunctionDefinition::Runtime(func.get_ref());
-            let ty = &Type::Function(
-                parameter_types.clone(),
-                Box::new(return_type.clone()),
-            );
+    pub(crate) fn declare_runtime_type(
+        &mut self,
+        scope: ScopeRef,
+        ident: Identifier,
+        type_id: TypeId,
+    ) -> Result<(), String> {
+        let name = ResolvedName { scope, ident };
+        let ident = Meta {
+            node: ident,
+            id: MetaId(0),
+        };
 
-            let name = if let FunctionKind::Method(_) = kind {
-                self.type_info
-                    .scope_graph
-                    .insert_method(scope, &ident, def, ty)
-                    .unwrap()
-            } else {
-                self.type_info
-                    .scope_graph
-                    .insert_function(scope, &ident, def, ty)
-                    .unwrap()
-            };
-
-            let kind = match kind {
-                FunctionKind::Free => types::FunctionKind::Free,
-                FunctionKind::Method(type_id) => {
-                    let ident =
-                        runtime.get_runtime_type(*type_id).unwrap().name();
-                    let name = ResolvedName {
-                        scope: ScopeRef::GLOBAL,
-                        ident: ident.into(),
-                    };
-                    types::FunctionKind::Method(Type::Name(TypeName {
-                        name,
-                        arguments: Vec::new(),
-                    }))
-                }
-                FunctionKind::StaticMethod(type_id) => {
-                    let ident =
-                        runtime.get_runtime_type(*type_id).unwrap().name();
-                    let name = ResolvedName {
-                        scope: ScopeRef::GLOBAL,
-                        ident: ident.into(),
-                    };
-                    types::FunctionKind::Method(Type::Name(TypeName {
-                        name,
-                        arguments: Vec::new(),
-                    }))
-                }
-            };
-
-            let signature = Signature {
-                kind,
-                parameter_types,
-                return_type,
-            };
-
-            self.functions.push(Function::new(
-                name,
-                &[],
-                signature.clone(),
-                FunctionDefinition::Runtime(func.get_ref()),
-            ));
-
+        if self
+            .type_info
+            .scope_graph
+            .resolve_name(ScopeRef::GLOBAL, &ident, true)
+            .is_none()
+        {
+            let ty = TypeDefinition::Runtime(name, type_id);
             self.type_info
-                .runtime_function_signatures
-                .insert(func.get_ref(), signature);
+                .scope_graph
+                .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
+                .map_err(|_id| String::new())?;
+            self.type_info.types.insert(name, ty);
         }
+        Ok(())
+    }
+
+    pub(crate) fn declare_runtime_function(
+        &mut self,
+        scope: ScopeRef,
+        ident: Identifier,
+        id: RuntimeFunctionRef,
+        parameter_types: Vec<Type>,
+        return_type: Type,
+        method: bool,
+    ) -> Result<(), String> {
+        let ty = Type::Function(
+            parameter_types.clone(),
+            Box::new(return_type.clone()),
+        );
+
+        // TODO: Figure out some what to make nice spans for built-in types
+        let ident = Meta {
+            node: ident,
+            id: MetaId(0),
+        };
+        let def = FunctionDefinition::Runtime(id);
+
+        // TODO: Remove unwraps here
+        let name = if method {
+            self.type_info
+                .scope_graph
+                .insert_method(scope, &ident, def, &ty)
+                .unwrap()
+        } else {
+            self.type_info
+                .scope_graph
+                .insert_function(scope, &ident, def, &ty)
+                .unwrap()
+        };
+
+        let signature = Signature {
+            parameter_types,
+            return_type,
+        };
+
+        self.functions.push(Function::new(
+            name,
+            &[],
+            signature.clone(),
+            FunctionDefinition::Runtime(id),
+        ));
+
+        self.type_info
+            .runtime_function_signatures
+            .insert(id, signature);
 
         Ok(())
     }
 
-    fn rust_type_to_roto_type(
+    pub(crate) fn rust_type_to_roto_type(
         runtime: &Runtime,
         t: TypeId,
-    ) -> Result<Type, TypeError> {
+    ) -> Type {
         let ty = TypeRegistry::get(t).unwrap();
 
         if ty.type_id == TypeId::of::<()>() {
-            return Ok(Type::Unit);
+            return Type::Unit;
         }
 
         match ty.description {
             TypeDescription::Leaf => {
-                let ident =
+                let name =
                     runtime.get_runtime_type(ty.type_id).unwrap().name();
-                let name = ResolvedName {
-                    scope: ScopeRef::GLOBAL,
-                    ident: ident.into(),
-                };
-                Ok(Type::Name(TypeName {
+                Type::Name(TypeName {
                     name,
                     arguments: Vec::new(),
-                }))
+                })
             }
             TypeDescription::Option(t) => {
-                Ok(Type::option(Self::rust_type_to_roto_type(runtime, t)?))
+                Type::option(Self::rust_type_to_roto_type(runtime, t))
             }
-            TypeDescription::Verdict(a, r) => Ok(Type::verdict(
-                Self::rust_type_to_roto_type(runtime, a)?,
-                Self::rust_type_to_roto_type(runtime, r)?,
-            )),
+            TypeDescription::Verdict(a, r) => Type::verdict(
+                Self::rust_type_to_roto_type(runtime, a),
+                Self::rust_type_to_roto_type(runtime, r),
+            ),
             TypeDescription::Val(_) => {
-                let ident =
+                let name =
                     runtime.get_runtime_type(ty.type_id).unwrap().name();
-                let name = ResolvedName {
-                    scope: ScopeRef::GLOBAL,
-                    ident: ident.into(),
-                };
-                Ok(Type::Name(TypeName {
+                Type::Name(TypeName {
                     name,
                     arguments: Vec::new(),
-                }))
+                })
             }
         }
     }
@@ -489,14 +452,7 @@ impl TypeChecker {
                     node: *v,
                 },
                 Type::Name(TypeName {
-                    name: ResolvedName {
-                        scope: ScopeRef::GLOBAL,
-                        ident: runtime
-                            .get_runtime_type(t.ty)
-                            .unwrap()
-                            .name()
-                            .into(),
-                    },
+                    name: runtime.get_runtime_type(t.ty).unwrap().name(),
                     arguments: Vec::new(),
                 }),
             )?
@@ -508,15 +464,8 @@ impl TypeChecker {
     fn declare_context(&mut self, runtime: &Runtime) -> TypeResult<()> {
         if let Some(ctx) = runtime.context() {
             for field in &ctx.fields {
-                let ty = runtime
-                    .get_runtime_type(field.type_id)
-                    .unwrap()
-                    .name()
-                    .into();
-                let name = ResolvedName {
-                    scope: ScopeRef::GLOBAL,
-                    ident: ty,
-                };
+                let name =
+                    runtime.get_runtime_type(field.type_id).unwrap().name();
                 self.insert_context(
                     Meta {
                         id: MetaId(0),

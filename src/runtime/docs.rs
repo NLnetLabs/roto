@@ -11,41 +11,42 @@ impl Runtime {
             "()"
         } else {
             let ty = self.get_runtime_type(ty).unwrap();
-            ty.name.as_ref()
+            // TODO: This ignores the scope
+            ty.name.ident.as_str()
         }
     }
 
     fn print_function(&self, f: &RuntimeFunction) {
         let RuntimeFunction {
             name,
-            description,
-            kind,
+            func,
             id: _,
-            docstring,
-            argument_names,
+            doc,
+            params,
         } = f;
 
-        let params = description
+        let params = func
             .parameter_types()
             .iter()
             .map(|ty| self.print_ty(*ty))
             .collect::<Vec<_>>();
 
-        let ret = self.print_ty(description.return_type());
+        let ret = self.print_ty(func.return_type());
 
-        let mut argument_names = argument_names.iter();
-        let mut params = params.iter();
-        let receiver = match *kind {
-            FunctionKind::Method(_) => {
-                // Discard the name of the receiver from the arguments
-                let _ = argument_names.next();
-                format!("{}.", params.next().unwrap())
-            }
-            FunctionKind::StaticMethod(id) => {
-                format!("{}.", self.print_ty(id))
-            }
-            FunctionKind::Free => "".into(),
-        };
+        let mut argument_names = params.iter();
+        let params = params.iter();
+        // let receiver = match *kind {
+        //     FunctionKind::Method(_) => {
+        //         // Discard the name of the receiver from the arguments
+        //         let _ = argument_names.next();
+        //         format!("{}.", params.next().unwrap())
+        //     }
+        //     FunctionKind::StaticMethod(id) => {
+        //         format!("{}.", self.print_ty(id))
+        //     }
+        //     FunctionKind::Free => "".into(),
+        // };
+        let receiver = "";
 
         let mut parameter_string = String::new();
         let mut first = true;
@@ -60,15 +61,18 @@ impl Runtime {
             first = false;
         }
 
-        let kind = match kind {
-            FunctionKind::Free => "function",
-            FunctionKind::Method(_) => "method",
-            FunctionKind::StaticMethod(_) => "static_method",
-        };
+        // let kind = match kind {
+        //     FunctionKind::Free => "function",
+        //     FunctionKind::Method(_) => "method",
+        //     FunctionKind::StaticMethod(_) => "static_method",
+        // };
+        let kind = "function";
+        let name = name.ident;
+
         println!(
             "````{{roto:{kind}}} {receiver}{name}({parameter_string}) -> {ret}"
         );
-        for line in docstring.lines() {
+        for line in doc.lines() {
             println!("{line}")
         }
         println!("````");
@@ -83,9 +87,6 @@ impl Runtime {
         println!();
 
         for f in &self.functions {
-            if f.kind != FunctionKind::Free {
-                continue;
-            }
             self.print_function(f);
         }
 
@@ -130,26 +131,18 @@ impl Runtime {
 
         for RuntimeType {
             name,
-            type_id,
+            type_id: _,
             docstring,
             ..
         } in &self.types
         {
-            println!("`````{{roto:type}} {name}");
+            println!("`````{{roto:type}} {}", name.ident);
             for line in docstring.lines() {
                 println!("{line}");
             }
             println!();
 
             for f in &self.functions {
-                let id = match f.kind {
-                    FunctionKind::Free => continue,
-                    FunctionKind::Method(id)
-                    | FunctionKind::StaticMethod(id) => id,
-                };
-                if id != *type_id {
-                    continue;
-                }
                 self.print_function(f);
             }
 
