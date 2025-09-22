@@ -1,17 +1,36 @@
 use std::any::TypeId;
 
+use crate::runtime::ty::TypeRegistry;
+
 use super::{
     context::ContextDescription, FunctionKind, Runtime, RuntimeConstant,
     RuntimeFunction, RuntimeType,
 };
 
 impl Runtime {
-    fn print_ty(&self, ty: TypeId) -> &str {
+    fn print_ty(&self, ty: TypeId) -> String {
         if ty == TypeId::of::<()>() {
-            "()"
+            "()".into()
         } else {
-            let ty = self.get_runtime_type(ty).unwrap();
-            ty.name.as_ref()
+            let ty = TypeRegistry::get(ty).unwrap();
+            match ty.description {
+                super::ty::TypeDescription::Leaf => {
+                    self.get_runtime_type(ty.type_id).unwrap().name.clone()
+                }
+                super::ty::TypeDescription::Option(t) => {
+                    format!("{}?", self.print_ty(t))
+                }
+                super::ty::TypeDescription::Verdict(a, r) => {
+                    format!(
+                        "Verdict[{}, {}]",
+                        self.print_ty(a),
+                        self.print_ty(r)
+                    )
+                }
+                super::ty::TypeDescription::Val(type_id) => {
+                    self.get_runtime_type(type_id).unwrap().name.clone()
+                }
+            }
         }
     }
 
