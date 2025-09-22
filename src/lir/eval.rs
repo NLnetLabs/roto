@@ -13,7 +13,7 @@ use crate::{
         ValueOrSlot, Var, VarKind,
     },
     runtime::{ConstantValue, RuntimeFunctionRef},
-    typechecker::types::Primitive,
+    typechecker::{scope::ResolvedName, types::Primitive},
     Runtime,
 };
 use std::{collections::HashMap, sync::Arc};
@@ -307,7 +307,7 @@ pub fn eval(
         instructions.extend(block.instructions.clone());
     }
 
-    let constants: HashMap<Identifier, ConstantValue> = rt
+    let constants: HashMap<ResolvedName, ConstantValue> = rt
         .constants()
         .values()
         .map(|g| (g.name, g.value.clone()))

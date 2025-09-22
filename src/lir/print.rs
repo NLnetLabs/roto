@@ -120,7 +120,7 @@ impl Printable for Instruction {
                 format!(
                     "{} = ConstantAddress(\"{}\")",
                     to.print(printer),
-                    name
+                    name.print(printer),
                 )
             }
             Call {

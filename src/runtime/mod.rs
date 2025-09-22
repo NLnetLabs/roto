@@ -88,7 +88,13 @@ pub struct Runtime {
     context: Option<ContextDescription>,
     types: Vec<RuntimeType>,
     functions: Vec<RuntimeFunction>,
-    constants: HashMap<Identifier, RuntimeConstant>,
+    constants: HashMap<ResolvedName, RuntimeConstant>,
+}
+
+impl std::fmt::Debug for Runtime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Runtime").finish()
+    }
 }
 
 impl Runtime {
@@ -114,16 +120,16 @@ pub struct RuntimeBuilder {
 }
 
 impl RuntimeBuilder {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { items: Vec::new() }
     }
 
-    fn add(mut self, items: impl IntoItems) -> Self {
+    pub fn add(mut self, items: impl IntoItems) -> Self {
         self.items.extend(items.into_items());
         self
     }
 
-    fn build(self) -> Result<Runtime, String> {
+    pub fn build(self) -> Result<Runtime, String> {
         Runtime::from_items(self.items)
     }
 }
@@ -134,28 +140,32 @@ impl Runtime {
     ///
     /// This contains only type information for Roto primitives.
     pub fn new() -> Self {
-        Self {
+        let mut this = Self {
             type_checker: TypeChecker::new(),
             context: None,
             types: Default::default(),
             functions: Default::default(),
             constants: Default::default(),
-        }
+        };
+        this.add_items(basic::built_ins()).unwrap();
+        this
     }
 
     pub fn from_items(items: impl IntoItems) -> Result<Self, String> {
         let mut rt = Self::new();
-
-        let items = items.into_items();
-
-        let root = ScopeRef::GLOBAL;
-        rt.declare_modules(None, &items)?;
-        rt.declare_types(root, &items)?;
-        rt.declare_functions(root, &items)?;
-        rt.declare_constants(root, &items)?;
-        rt.declare_context(root, &items)?;
-
+        rt.add_items(items)?;
         Ok(rt)
+    }
+
+    fn add_items(&mut self, items: impl IntoItems) -> Result<(), String> {
+        let root = ScopeRef::GLOBAL;
+        let items = items.into_items();
+        self.declare_modules(None, &items)?;
+        self.declare_types(root, &items)?;
+        self.declare_functions(root, &items)?;
+        self.declare_constants(root, &items)?;
+        // rt.declare_context(root, &all_items)?;
+        Ok(())
     }
 
     /// Get the context type, if any.
@@ -174,7 +184,7 @@ impl Runtime {
     }
 
     /// Get the registered constants.
-    pub fn constants(&self) -> &HashMap<Identifier, RuntimeConstant> {
+    pub fn constants(&self) -> &HashMap<ResolvedName, RuntimeConstant> {
         &self.constants
     }
 }
@@ -293,7 +303,7 @@ impl RuntimeFunction {
 
 #[derive(Clone, Debug)]
 pub struct RuntimeConstant {
-    pub name: Identifier,
+    pub name: ResolvedName,
     pub ty: TypeId,
     pub docstring: String,
     pub value: ConstantValue,
@@ -477,6 +487,8 @@ impl Runtime {
         f: &Function,
         method: bool,
     ) -> Result<(), String> {
+        Self::check_name(f.ident)?;
+
         let parameter_types: Vec<_> = f
             .func
             .parameter_types()
@@ -500,17 +512,14 @@ impl Runtime {
         };
         self.functions.push(func);
 
-        // TODO: Remove unwrap here.
-        self.type_checker
-            .declare_runtime_function(
-                scope,
-                f.ident,
-                RuntimeFunctionRef(id),
-                parameter_types,
-                return_type,
-                method,
-            )
-            .unwrap();
+        self.type_checker.declare_runtime_function(
+            scope,
+            f.ident,
+            RuntimeFunctionRef(id),
+            parameter_types,
+            return_type,
+            method,
+        )?;
 
         Ok(())
     }
@@ -520,7 +529,47 @@ impl Runtime {
         scope: ScopeRef,
         items: &[Item],
     ) -> Result<(), String> {
-        todo!()
+        for item in items {
+            match item {
+                Item::Module(module) => {
+                    let scope = self
+                        .type_checker
+                        .get_scope_of(scope, module.ident)
+                        .unwrap();
+                    self.declare_types(scope, &module.children)?;
+                }
+                Item::Constant(c) => self.declare_constant(scope, c)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn declare_constant(
+        &mut self,
+        scope: ScopeRef,
+        constant: &Constant,
+    ) -> Result<(), String> {
+        let ty = TypeChecker::rust_type_to_roto_type(&self, constant.type_id);
+        self.type_checker.declare_runtime_constant(
+            scope,
+            constant.ident,
+            ty,
+        )?;
+        let name = ResolvedName {
+            scope,
+            ident: constant.ident,
+        };
+        self.constants.insert(
+            name,
+            RuntimeConstant {
+                name: name,
+                ty: constant.type_id,
+                docstring: constant.doc.clone(),
+                value: constant.value.clone(),
+            },
+        );
+        Ok(())
     }
 
     fn declare_context(
@@ -581,33 +630,7 @@ impl Runtime {
     where
         T::Transformed: Send + Sync + 'static,
     {
-        let ty = TypeRegistry::resolve::<T>();
-        let id = ty.type_id;
-        let name = name.into();
-
-        Self::check_name(&name)?;
-
-        self.get_runtime_type(id).ok_or_else(|| {
-            let ty = TypeRegistry::get(id).unwrap();
-            format!(
-                "Registered a constant with an unregistered type: `{}`",
-                ty.rust_name
-            )
-        })?;
-
-        let symbol = Identifier::from(name);
-
-        self.constants.insert(
-            symbol,
-            RuntimeConstant {
-                name: symbol,
-                ty: ty.type_id,
-                docstring: docstring.into(),
-                value: ConstantValue::new(x.transform()),
-            },
-        );
-
-        Ok(())
+        todo!()
     }
 
     pub(crate) fn get_runtime_type(
@@ -618,8 +641,8 @@ impl Runtime {
     }
 
     /// Check that the given string is a valid Roto identifier
-    fn check_name(name: &str) -> Result<(), String> {
-        let mut lexer = Lexer::new(name);
+    fn check_name(name: Identifier) -> Result<(), String> {
+        let mut lexer = Lexer::new(name.as_str());
         let Some((Ok(tok), _)) = lexer.next() else {
             return Err(format!(
                 "Name {name:?} is not a valid Roto identifier"

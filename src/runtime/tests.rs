@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::Val;
+use crate::{item, runtime::items::IntoItems as _, Val};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
@@ -12,44 +12,14 @@ use routecore::bgp::{
     types::{LocalPref, OriginType},
 };
 
-pub fn routecore_runtime() -> Result<Runtime, String> {
-    let mut rt = Runtime::new();
-
-    // rt.register_clone_type::<Val<OriginType>>("TODO")?;
-    // rt.register_clone_type::<Val<LocalPref>>("TODO")?;
-    // rt.register_clone_type::<Val<Community>>("TODO")?;
-    // rt.register_clone_type::<Val<HopPath>>("TODO")?;
-    // rt.register_clone_type::<Val<AsPath<Vec<u8>>>>("TODO")?;
-
-    // #[roto_function(rt)]
-    // fn pow(x: u32, y: u32) -> u32 {
-    //     x.pow(y)
-    // }
-
-    // #[roto_method(rt, u32)]
-    // fn is_even(x: u32) -> bool {
-    //     x % 2 == 0
-    // }
-
-    // rt.register_constant(
-    //     "BLACKHOLE",
-    //     "The well-known BLACKHOLE community.",
-    //     Val(Community::from(Wellknown::Blackhole)),
-    // )
-    // .unwrap();
-
-    Ok(rt)
-}
-
 #[test]
 #[should_panic]
 fn invalid_function_name() {
-    let rt = Runtime::new();
-
-    // #[roto_function(rt)]
-    fn accept() -> bool {
-        true
-    }
+    let _ = Runtime::from_items(item! {
+        fn accept() -> bool {
+            true
+        }
+    });
 }
 
 #[test]
@@ -75,44 +45,61 @@ fn invalid_static_method_name() {
 }
 
 #[test]
-fn invalid_type_name() {
-    let rt = Runtime::new();
+#[should_panic]
+fn invalid_clone_type_name() {
+    #[derive(Clone)]
+    struct Foo;
 
-    #[allow(non_camel_case_types)]
-    #[derive(Clone, Copy)]
-    struct accept;
-
-    // rt.register_clone_type::<Val<accept>>("").unwrap_err();
-    // rt.register_copy_type::<Val<accept>>("").unwrap_err();
-}
-
-#[test]
-fn invalid_constant_name() {
-    let mut rt = Runtime::new();
-
-    rt.register_constant("FOO$BAR", "...", 10u32).unwrap_err();
-}
-
-#[test]
-fn constant_declared_twice() {
-    let mut rt = Runtime::new();
-
-    rt.register_constant("FOO", "...", 10u32).unwrap();
-    rt.register_constant("FOO", "...", 10u32).unwrap_err();
+    item! {
+        clone type accept = Val<Foo>;
+    };
 }
 
 #[test]
 #[should_panic]
+fn invalid_copy_type_name() {
+    #[derive(Clone, Copy)]
+    struct Foo;
+
+    item! {
+        copy type accept = Val<Foo>;
+    };
+}
+
+#[test]
+#[should_panic]
+fn invalid_constant_name() {
+    item! {
+        const accept: u32 = 0;
+    };
+}
+
+#[test]
+fn constant_declared_twice() {
+    Runtime::from_items([
+        item! {
+            const FOO: u32 = 10;
+        },
+        item! {
+            const FOO: u32 = 12;
+        },
+    ])
+    .unwrap_err();
+}
+
+#[test]
 fn function_declared_twice() {
-    let rt = Runtime::new();
-
-    // #[roto_function(rt)]
-    fn foo() {}
-
-    // #[roto_function(rt, foo)]
-    fn foo2() -> bool {
-        false
-    }
+    Runtime::from_items([
+        item! {
+            fn foo() {}
+        },
+        item! {
+            fn foo() -> bool {
+                false
+            }
+        },
+    ])
+    .unwrap_err();
 }
 
 #[test]
@@ -181,43 +168,46 @@ fn function_and_constant_with_the_same_name_1() {
 }
 
 #[test]
-#[should_panic]
 fn function_and_constant_with_the_same_name_2() {
-    let mut rt = Runtime::new();
-
-    rt.register_constant("foo", "...", true).unwrap();
-
-    // #[roto_function(rt, foo)]
-    fn foo1(_: bool) {}
+    Runtime::from_items([
+        item! {
+            const foo: bool = true;
+        }
+        .into_items(),
+        item! {
+            fn foo1(_x: bool) {}
+        }
+        .into_items(),
+    ])
+    .unwrap_err();
 }
 
 #[test]
 fn register_option_arc_str() {
-    let runtime = Runtime::new();
-
     // Cannot register Option
-    // runtime
-    //     .register_clone_type_with_name::<Option<Arc<str>>>("OptStr", "")
-    //     .unwrap_err();
+    Runtime::from_items(item! {
+        clone type OptStr = Option<Arc<str>>;
+    })
+    .unwrap_err();
 
     // But with Val it's fine
-    // runtime
-    //     .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
-    //     .unwrap();
+    Runtime::from_items(item! {
+        clone type OptStr = Val<Option<Arc<str>>>;
+    })
+    .unwrap();
 }
 
 #[test]
-#[should_panic]
 fn unwrap_or_empty() {
-    let runtime = Runtime::new();
+    let mut ty = item! {
+        clone type OptStr = Val<Option<Arc<str>>>;
+    };
 
-    // runtime
-    //     .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
-    //     .unwrap();
+    ty.add(item! {
+        fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
+            x.unwrap_or_default()
+        }
+    });
 
-    // This should panic because the argument is missing `Val<_>`
-    // #[roto_method(runtime, Val<Option<Arc<str>>>)]
-    fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
-        x.unwrap_or_default()
-    }
+    Runtime::from_items(ty).unwrap_err();
 }

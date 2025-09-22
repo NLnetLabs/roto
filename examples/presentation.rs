@@ -2,7 +2,7 @@ use std::error::Error;
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
-use roto::{roto_method, TypedFunc, Val, Verdict};
+use roto::{item, Runtime, TypedFunc, Val, Verdict};
 use routecore::bgp::aspath::{Hop, HopPath};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::workshop::route::RouteWorkshop;
@@ -71,51 +71,60 @@ type Log = *mut OutputStream<Output>;
 type Func = TypedFunc<(), fn(Val<Log>, Val<RotondaRoute>) -> Verdict<(), ()>>;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut rt = roto::Runtime::new();
-
     // Registering types and their methods
 
-    // rt.register_clone_type_with_name::<Val<RotondaRoute>>(
-    //     "Route", "A route",
-    // )?;
+    let mut route_ty = item! {
+        /// A route
+        clone type Route = Val<RotondaRoute>;
+    };
 
-    // rt.register_clone_type_with_name::<Val<Log>>("Log", "A thing to log to")?;
+    route_ty.add(item! {
+        fn prefix_matches(rr: Val<RotondaRoute>, to_match: Prefix) -> bool {
+            let rr_prefix = match &*rr {
+                RotondaRoute::Ipv4Unicast(n) => n.nlri().prefix(),
+                RotondaRoute::Ipv6Unicast(n) => n.nlri().prefix(),
+                RotondaRoute::Ipv4Multicast(n) => n.nlri().prefix(),
+                RotondaRoute::Ipv6Multicast(n) => n.nlri().prefix(),
+            };
 
-    // #[roto_method(rt, Val<RotondaRoute>)]
-    // fn prefix_matches(rr: Val<RotondaRoute>, to_match: Val<Prefix>) -> bool {
-    //     let rr_prefix = match &*rr {
-    //         RotondaRoute::Ipv4Unicast(n) => n.nlri().prefix(),
-    //         RotondaRoute::Ipv6Unicast(n) => n.nlri().prefix(),
-    //         RotondaRoute::Ipv4Multicast(n) => n.nlri().prefix(),
-    //         RotondaRoute::Ipv6Multicast(n) => n.nlri().prefix(),
-    //     };
+            rr_prefix == to_match
+        }
+    });
 
-    //     rr_prefix == *to_match
-    // }
+    route_ty.add(item! {
+        fn aspath_origin(rr: Val<RotondaRoute>, to_match: Asn) -> bool {
+            if let Some(hoppath) = rr.attributes().get::<HopPath>() {
+                if let Some(Hop::Asn(asn)) = hoppath.origin() {
+                    return *asn == to_match;
+                }
+            }
 
-    // #[allow(improper_ctypes_definitions)] // While Asn in inetnum is not FFI-safe
-    // #[roto_method(rt, Val<RotondaRoute>, aspath_origin)]
-    // fn rr_aspath_origin(rr: Val<RotondaRoute>, to_match: Asn) -> bool {
-    //     if let Some(hoppath) = rr.attributes().get::<HopPath>() {
-    //         if let Some(Hop::Asn(asn)) = hoppath.origin() {
-    //             return *asn == to_match;
-    //         }
-    //     }
+            false
+        }
+    });
 
-    //     false
-    // }
+    let mut log_ty = item! {
+        /// A thing to log to
+        clone type Log = Val<Log>;
+    };
 
-    // #[roto_method(rt, Val<Log>)]
-    // fn log_prefix(mut stream: Val<Log>, prefix: Val<Prefix>) {
-    //     let stream = unsafe { &mut **stream };
-    //     stream.push(Output::Prefix(*prefix));
-    // }
+    log_ty.add(item! {
+        fn log_prefix(stream: Val<Log>, prefix: Prefix) {
+            let mut stream = stream;
+            let stream = unsafe { &mut **stream };
+            stream.push(Output::Prefix(prefix));
+        }
+    });
 
-    // #[roto_method(rt, Val<Log>)]
-    // fn log_custom(mut stream: Val<Log>, id: u32, local: u32) {
-    //     let stream = unsafe { &mut **stream };
-    //     stream.push(Output::Custom(id, local));
-    // }
+    log_ty.add(item! {
+        fn log_custom(stream: Val<Log>, id: u32, local: u32) {
+            let mut stream = stream;
+            let stream = unsafe { &mut **stream };
+            stream.push(Output::Custom(id, local));
+        }
+    });
+
+    let rt = Runtime::from_items([route_ty, log_ty]).unwrap();
 
     let mut compiled = rt
         .compile("examples/presentation.roto")

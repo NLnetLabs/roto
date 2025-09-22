@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use roto_macros::roto_function;
-
-use crate::Runtime;
+use crate::{item, Runtime};
 
 impl Runtime {
     /// Add functions using I/O to the runtime.
@@ -13,12 +11,12 @@ impl Runtime {
     /// For now, this just adds the `print` function. More functions will be
     /// added in the future.
     pub fn add_io_functions(&mut self) {
-        let rt = self;
-
-        /// Print a string to stdout
-        // #[roto_function(rt)]
-        fn print(s: Arc<str>) {
-            println!("{s}");
-        }
+        self.add_items(item! {
+            /// Print a string to stdout
+            fn print(s: Arc<str>) {
+                println!("{s}");
+            }
+        })
+        .unwrap();
     }
 }

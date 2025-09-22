@@ -63,7 +63,7 @@ impl Module {
         doc: impl AsRef<str>,
     ) -> Result<Self, String> {
         let name = name.into();
-        Runtime::check_name(name.as_str())?;
+        Runtime::check_name(name)?;
 
         Ok(Self {
             ident: name,
@@ -151,7 +151,7 @@ impl Type {
         movability: Movability,
     ) -> Result<Self, String> {
         let name = name.into();
-        Runtime::check_name(name.as_str())?;
+        Runtime::check_name(name)?;
 
         let ty = T::resolve();
 
@@ -214,7 +214,7 @@ impl Function {
         func: impl RegisterableFn<A, R>,
     ) -> Result<Self, String> {
         let name = name.into();
-        Runtime::check_name(name.as_str())?;
+        Runtime::check_name(name)?;
 
         let func = FunctionDescription::of(func);
 
@@ -241,10 +241,10 @@ impl From<Function> for Item {
 
 #[derive(Clone, Debug)]
 pub struct Constant {
-    ident: Identifier,
-    type_id: TypeId,
-    doc: String,
-    value: ConstantValue,
+    pub(crate) ident: Identifier,
+    pub(crate) type_id: TypeId,
+    pub(crate) doc: String,
+    pub(crate) value: ConstantValue,
 }
 
 impl Constant {
@@ -257,7 +257,7 @@ impl Constant {
         T::Transformed: Send + Sync + 'static,
     {
         let name = name.into();
-        Runtime::check_name(name.as_str())?;
+        Runtime::check_name(name)?;
 
         let ty = T::resolve();
 

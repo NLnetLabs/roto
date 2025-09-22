@@ -122,7 +122,11 @@ impl Runtime {
             ..
         } in self.constants.values()
         {
-            println!("`````{{roto:constant}} {name}: {}", self.print_ty(*ty));
+            println!(
+                "`````{{roto:constant}} {}: {}",
+                name.ident,
+                self.print_ty(*ty)
+            );
             for line in docstring.lines() {
                 println!("{line}");
             }

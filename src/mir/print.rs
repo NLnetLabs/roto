@@ -144,6 +144,7 @@ impl Printable for Value {
                 format!("{ty}({x})")
             }
             Value::Constant(x, ty) => {
+                let x = x.print(printer);
                 let ty = ty.display(printer.type_info);
                 format!("load_constant({x}: {ty})")
             }

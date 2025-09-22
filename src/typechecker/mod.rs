@@ -260,7 +260,6 @@ impl TypeChecker {
     }
 
     fn declare_runtime_items(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        self.declare_constants(runtime)?;
         self.declare_context(runtime)?;
 
         // Little hack to put Some and None in the global namespace until
@@ -380,12 +379,12 @@ impl TypeChecker {
             self.type_info
                 .scope_graph
                 .insert_method(scope, &ident, def, &ty)
-                .unwrap()
+                .map_err(|_| "name is declared twice")?
         } else {
             self.type_info
                 .scope_graph
                 .insert_function(scope, &ident, def, &ty)
-                .unwrap()
+                .map_err(|_| "name is declared twice")?
         };
 
         let signature = Signature {
@@ -444,20 +443,23 @@ impl TypeChecker {
         }
     }
 
-    fn declare_constants(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        for (v, t) in runtime.constants() {
-            self.insert_global_constant(
-                Meta {
-                    id: MetaId(0),
-                    node: *v,
-                },
-                Type::Name(TypeName {
-                    name: runtime.get_runtime_type(t.ty).unwrap().name(),
-                    arguments: Vec::new(),
-                }),
-            )?
+    pub(crate) fn declare_runtime_constant(
+        &mut self,
+        scope: ScopeRef,
+        ident: Identifier,
+        ty: Type,
+    ) -> Result<(), String> {
+        if let Err(_) = self.type_info.scope_graph.insert_constant(
+            scope,
+            &Meta {
+                id: MetaId(0),
+                node: ident,
+            },
+            &ty,
+        ) {
+            // TODO: Improve error message
+            return Err("Name declared twice!".into());
         }
-
         Ok(())
     }
 
@@ -799,13 +801,14 @@ impl TypeChecker {
     }
 
     /// Insert a constant into the global scope
-    fn insert_global_constant(
+    fn insert_constant(
         &mut self,
+        scope: ScopeRef,
         k: Meta<Identifier>,
         ty: impl Borrow<Type>,
     ) -> TypeResult<()> {
         let ty = ty.borrow();
-        match self.type_info.scope_graph.insert_global_constant(&k, ty) {
+        match self.type_info.scope_graph.insert_constant(scope, &k, ty) {
             Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
                 self.type_info.expr_types.insert(k.id, ty.clone());
