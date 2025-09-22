@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
-use crate::{
-    pipeline::LoweredToLir, runtime::tests::routecore_runtime, src, FileTree,
-    Runtime,
-};
+use crate::{item, pipeline::LoweredToLir, src, FileTree, Runtime};
 
 #[track_caller]
 fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {
@@ -108,7 +105,7 @@ fn accept() {
     );
 
     let mut mem = Memory::new();
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
@@ -132,7 +129,7 @@ fn reject() {
     );
 
     let mut mem = Memory::new();
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
@@ -155,7 +152,7 @@ fn if_else() {
     "
     );
     let mut mem = Memory::new();
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
@@ -178,7 +175,7 @@ fn react_to_rx() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for i in 0..6 {
@@ -211,7 +208,7 @@ fn variable() {
     );
 
     let mut mem = Memory::new();
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
     let pointer = mem.allocate(1);
     let ctx = IrValue::Pointer(mem.allocate(0));
@@ -239,7 +236,7 @@ fn calling_function() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for x in 0..30 {
@@ -272,7 +269,7 @@ fn anonymous_record() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for x in 0..30 {
@@ -312,7 +309,7 @@ fn typed_record() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for x in 0..1 {
@@ -348,7 +345,7 @@ fn nested_record() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for x in 20..21 {
@@ -379,7 +376,7 @@ fn enum_values() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for (variant, expected) in [
@@ -420,7 +417,13 @@ fn call_runtime_function() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::from_items(item! {
+        fn pow(x: u32, y: u32) -> u32 {
+            x.pow(y)
+        }
+    })
+    .unwrap();
+
     let program = compile(s, &rt);
 
     for (value, expected) in [(5, 1), (11, 0)] {
@@ -451,7 +454,7 @@ fn ip_addr_method() {
     "
     );
 
-    let rt = routecore_runtime().unwrap();
+    let rt = Runtime::new();
     let program = compile(s, &rt);
 
     for (value, expected) in [(5, 1), (6, 0)] {

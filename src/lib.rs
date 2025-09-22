@@ -36,7 +36,12 @@ pub use roto_macros::{
     roto_function, roto_method, roto_static_method, Context,
 };
 pub use runtime::{
-    context::Context, ty::Reflect, val::Val, verdict::Verdict, Runtime,
+    context::Context,
+    items::{Constant, Function, Module, Type},
+    ty::Reflect,
+    val::Val,
+    verdict::Verdict,
+    Runtime,
 };
 
 /// Items exported only for use in macros

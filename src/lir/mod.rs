@@ -32,7 +32,10 @@ use crate::{
     ast::Identifier,
     label::LabelRef,
     runtime::{self, layout::Layout},
-    typechecker::{self, scope::ScopeRef},
+    typechecker::{
+        self,
+        scope::{ResolvedName, ScopeRef},
+    },
 };
 pub use eval::Memory;
 pub use lower::lower_to_lir;
@@ -82,7 +85,7 @@ pub enum Instruction {
     Assign { to: Var, val: Operand, ty: IrType },
 
     /// Get the address of a constant
-    ConstantAddress { to: Var, name: Identifier },
+    ConstantAddress { to: Var, name: ResolvedName },
 
     /// Create string
     InitString {

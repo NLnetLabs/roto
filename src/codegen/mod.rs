@@ -22,7 +22,11 @@ use crate::{
         context::ContextDescription, ty::Reflect, ConstantValue,
         RuntimeConstant, RuntimeFunctionRef,
     },
-    typechecker::{info::TypeInfo, scope::ScopeRef, types},
+    typechecker::{
+        info::TypeInfo,
+        scope::{ResolvedName, ScopeRef},
+        types,
+    },
     Runtime,
 };
 use check::{
@@ -61,7 +65,7 @@ struct ModuleData {
     /// these constants are stored in this HashMap. So, as long as the function
     /// are around, we have to keep these constants around. That is why they
     /// need to be stored in this struct, even though this field is unused.
-    _constants: HashMap<Identifier, ConstantValue>,
+    _constants: HashMap<ResolvedName, ConstantValue>,
 
     /// The functions in this module can reference registerd function that
     /// might contain data (i.e. closures). We need to properly drop these.
@@ -71,7 +75,7 @@ struct ModuleData {
 impl ModuleData {
     fn new(
         cranelift_jit: JITModule,
-        constants: HashMap<Identifier, ConstantValue>,
+        constants: HashMap<ResolvedName, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self {
@@ -104,7 +108,7 @@ pub struct SharedModuleData(Arc<ModuleData>);
 impl SharedModuleData {
     fn new(
         cranelift_jit: JITModule,
-        constants: HashMap<Identifier, ConstantValue>,
+        constants: HashMap<ResolvedName, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self(Arc::new(ModuleData::new(
@@ -207,7 +211,7 @@ pub struct FunctionInfo {
 }
 
 struct ModuleBuilder {
-    constants: HashMap<Identifier, ConstantValue>,
+    constants: HashMap<ResolvedName, ConstantValue>,
 
     registered_fns: Vec<Arc<Box<dyn Any>>>,
 
@@ -401,8 +405,7 @@ impl ModuleBuilder {
         // before we call a Roto function. Therefore we clone the constants into
         // this hashmap which we pass to the ModuleData so that they will be
         // kept around.
-        self.constants
-            .insert(constant.name.as_str().into(), constant.value.clone());
+        self.constants.insert(constant.name, constant.value.clone());
     }
 
     /// Declare a function and its signature (without the body)

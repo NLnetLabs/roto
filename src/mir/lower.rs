@@ -19,7 +19,7 @@ use crate::{
     typechecker::{
         self,
         info::TypeInfo,
-        scope::{DeclarationKind, ScopeRef, ValueKind},
+        scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
         scoped_display::TypeDisplay,
         types::{
             EnumVariant, FunctionDefinition, FunctionKind, Signature, Type,
@@ -768,7 +768,7 @@ impl<'r> Lowerer<'r> {
         let type_id = TypeId::of::<Arc<str>>();
         match binop {
             ast::BinOp::Eq => self.desugared_binop(
-                runtime::FunctionKind::Method(type_id),
+                type_id,
                 "eq",
                 Type::bool(),
                 (l, Type::string()),
@@ -776,7 +776,7 @@ impl<'r> Lowerer<'r> {
             ),
             ast::BinOp::Ne => {
                 let val = self.desugared_binop(
-                    runtime::FunctionKind::Method(type_id),
+                    type_id,
                     "eq",
                     Type::bool(),
                     (l, Type::string()),
@@ -786,7 +786,7 @@ impl<'r> Lowerer<'r> {
                 Value::Not(var)
             }
             ast::BinOp::Add => self.desugared_binop(
-                runtime::FunctionKind::Method(type_id),
+                type_id,
                 "append",
                 Type::string(),
                 (l, Type::string()),
@@ -807,7 +807,7 @@ impl<'r> Lowerer<'r> {
         let type_id = TypeId::of::<IpAddr>();
         match binop {
             ast::BinOp::Eq => self.desugared_binop(
-                runtime::FunctionKind::Method(type_id),
+                type_id,
                 "eq",
                 Type::bool(),
                 (l, Type::ip_addr()),
@@ -815,7 +815,7 @@ impl<'r> Lowerer<'r> {
             ),
             ast::BinOp::Ne => {
                 let val = self.desugared_binop(
-                    runtime::FunctionKind::Method(type_id),
+                    type_id,
                     "eq",
                     Type::bool(),
                     (l, Type::ip_addr()),
@@ -827,7 +827,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Div => {
                 let type_id = TypeId::of::<Prefix>();
                 self.desugared_binop(
-                    runtime::FunctionKind::StaticMethod(type_id),
+                    type_id,
                     "new",
                     Type::prefix(),
                     (l, Type::ip_addr()),
@@ -898,14 +898,13 @@ impl<'r> Lowerer<'r> {
 
     fn desugared_binop(
         &mut self,
-        kind: runtime::FunctionKind,
+        kind: TypeId,
         name: &str,
         return_type: Type,
         (l, l_ty): (&Meta<ast::Expr>, Type),
         (r, r_ty): (&Meta<ast::Expr>, Type),
     ) -> Value {
-        let func = self.find_runtime_function(kind, name);
-        let func_ref = func.get_ref();
+        let func_ref = self.find_method(kind, name);
 
         let l = self.expr(l);
         let l = self.assign_to_var(l, l_ty);
@@ -1047,7 +1046,7 @@ impl<'r> Lowerer<'r> {
                 if !fields.is_empty() {
                     panic!("Getting fields of constants not supported yet")
                 }
-                Value::Constant(name.ident, root_ty.clone())
+                Value::Constant(*name, root_ty.clone())
             }
             ValueKind::Context(x) => Value::Context(*x),
         }
@@ -1073,12 +1072,41 @@ impl<'r> Lowerer<'r> {
         }
     }
 
-    fn find_runtime_function(
+    fn find_method(
         &self,
-        kind: runtime::FunctionKind,
-        name: &str,
-    ) -> &RuntimeFunction {
-        todo!()
+        type_id: TypeId,
+        ident: &str,
+    ) -> RuntimeFunctionRef {
+        let ty = self
+            .runtime
+            .types()
+            .into_iter()
+            .find(|t| t.type_id() == type_id)
+            .unwrap();
+
+        let name = ty.name();
+
+        let scope = self
+            .type_info
+            .scope_graph
+            .get_declaration(name)
+            .scope
+            .unwrap();
+
+        let dec = self.type_info.scope_graph.get_declaration(ResolvedName {
+            scope,
+            ident: ident.into(),
+        });
+
+        let DeclarationKind::Method(Some(f)) = dec.kind else {
+            ice!();
+        };
+
+        let FunctionDefinition::Runtime(r) = f.definition else {
+            ice!();
+        };
+
+        r
     }
 
     fn do_assign(&mut self, to: Place, ty: Type, val: Value) {
@@ -1097,11 +1125,7 @@ impl<'r> Lowerer<'r> {
         let string = self.assign_to_var(string_val, Type::string());
 
         let type_id = TypeId::of::<Arc<str>>();
-        let func = self.find_runtime_function(
-            runtime::FunctionKind::Method(type_id),
-            "append",
-        );
-        let func_ref = func.get_ref();
+        let func_ref = self.find_method(type_id, "append");
 
         for part in parts {
             let new_string = match part {

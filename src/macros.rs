@@ -1,129 +1,143 @@
-macro_rules! items {
-    ( $($tokens:tt)* ) => {{
-        let mut vec = Vec::<$crate::runtime::items::Item>::new();
-        $crate::macros::items_inner!(vec, $($tokens)*);
-        vec
-    }};
-}
-
-macro_rules! items_inner {
-    ( $vec:ident, ) => {};
+#[macro_export]
+macro_rules! item {
     (
-        $vec:ident,
-
         $(#[doc = $docstring:expr])*
         copy type $name:ident = $ty:ty;
-
-        $($rest:tt)*
     ) => {
-        $vec.push($crate::runtime::item::Item::from($crate::runtime::items::Type::copy::<$ty>(
-            stringify($name),
-            vec![$($docstring),*].join("\n"),
-        )));
-
-        $crate::macros::items_inner! {
-            $vec,
-            $($rest)*
-        }
-    };
-    (
-        $vec:ident,
-
-        $(#[doc = $docstring:expr])*
-        clone type $name:ident = $ty:ty;
-
-        $($rest:tt)*
-    ) => {
-        $vec.push($crate::runtime::item::Item::from($crate::runtime::items::Type::clone::<$ty>(
-            stringify($name),
-            vec![$($docstring),*].join("\n"),
-        )));
-
-        $crate::macros::items_inner! {
-            $vec,
-            $($rest)*
-        }
-    };
-    (
-        $vec:ident,
-
-        $(#[doc = $docstring:expr])*
-        value type $name:ident = $ty:ty;
-
-        $($rest:tt)*
-    ) => {
-        $vec.push($crate::runtime::item::Item::from($crate::runtime::items::Type::value::<$ty>(
-            stringify($name),
-            vec![$($docstring),*].join("\n"),
-        )));
-
-        $crate::macros::items_inner! {
-            $vec,
-            $($rest)*
-        }
-    };
-    (
-        $vec:ident,
-
-        $(#[doc = $docstring:expr])*
-        const $name:ident: $ty:ty = $val:expr;
-
-        $($rest:tt)*
-    ) => {
-        $vec.push($crate::runtime::items::Item::from($crate::runtime::items::Constant::new(
-            stringify!($name),
-            vec![$($docstring),*].join("\n"),
-            $val,
-        ).unwrap()));
-
-        $crate::macros::items_inner! {
-            $vec,
-            $($rest)*
-        }
-    };
-    (
-        $vec:ident,
-
-        $(#[doc = $docstring:expr])*
-        fn $name:ident($($arg:ident: $a:ty),*$(,)?) $(-> $r:ty)? $body:block
-
-        $($rest:tt)*
-    ) => {{
-        $vec.push({
-            fn $name($($arg: $a),*) $(-> $r)? $body
-
-            $crate::runtime::items::Item::from($crate::runtime::items::Function::new(
-                stringify!($name),
-                vec![$($docstring),*].join("\n"),
-                { let x: Vec<&'static str> = vec![$(stringify!($arg)),*]; x},
-                $name,
-            ).unwrap())
-        });
-
-        $crate::macros::items_inner! {
-            $vec,
-            $($rest)*
-        }
-    }};
-    (
-        $vec:ident,
-
-        $(#[doc = $docstring:expr])*
-        let $name:ident = |$($arg:ident: $a:ty),*$(,)?| $(-> $r:ty)? $body:block;
-
-        $($rest:tt)*
-    ) => {{
-        $vec.push($crate::runtime::items::Item::from($crate::runtime::items::Function::new(
+        $crate::Type::copy::<$ty>(
             stringify!($name),
             {
-                vec![$($docstring),*].join("\n")
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
             },
-            { let x: Vec<&'static str> = vec![$(stringify!($arg)),*]; x},
-            |$($arg: $a),*| $(-> $r)? { $body }
-        ).unwrap()));
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        clone type $name:ident = $ty:ty;
+    ) => {
+        $crate::Type::clone::<$ty>(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        value type $name:ident = $ty:ty;
+    ) => {
+        $crate::Type::value::<$ty>(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        const $name:ident: $ty:ty = $val:expr;
+    ) => {
+        $crate::Constant::new(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+            $val,
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        fn $name:ident($($args:tt)*) $(-> $r:ty)? $body:block
+    ) => {{
+        {
+            fn $name($($args)*) $(-> $r)? $body
 
-        $crate::macros::items_inner! { $vec, $($rest)* }
+            $crate::Function::new(
+                stringify!($name),
+                {
+                    let v: Vec<&'static str> = vec![$($docstring),*];
+                    v.join("\n")
+                },
+                $crate::args!($($args)*),
+                $name,
+            ).unwrap()
+        }
     }};
+    (
+        $(#[doc = $docstring:expr])*
+        let $name:ident = move || $(-> $r:ty)? $body:block;
+    ) => {
+        $crate::Function::new(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+            $crate::args!(),
+            move || $(-> $r)? { $body }
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        let $name:ident = || $(-> $r:ty)? $body:block;
+    ) => {
+        $crate::Function::new(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+            $crate::args!(),
+            move || $(-> $r)? { $body }
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        let $name:ident = move |$($args:ident: $t:ty),*| $(-> $r:ty)? $body:block;
+    ) => {
+        $crate::Function::new(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+            $crate::args!($($args: $t),*),
+            move |$($args: $t),*| $(-> $r)? { $body }
+        ).unwrap()
+    };
+    (
+        $(#[doc = $docstring:expr])*
+        let $name:ident = |$($args:ident: $t:ty),*| $(-> $r:ty)? $body:block;
+    ) => {
+        $crate::Function::new(
+            stringify!($name),
+            {
+                let v: Vec<&'static str> = vec![$($docstring),*];
+                v.join("\n")
+            },
+            $crate::args!($($args: $t),*),
+            |$($args: $t),*| $(-> $r)? { $body }
+        ).unwrap()
+    };
+}
+
+// Combining the rules here seems to lead to problems, not sure why.
+#[macro_export]
+macro_rules! args {
+    ($($arg:ident: $a:ty),*$(,)?) => {
+        {
+            { let x: Vec<&'static str> = vec![$(stringify!($arg)),*]; x}
+        }
+    };
+    ($(mut $arg:ident: $a:ty),*$(,)?) => {
+        {
+            { let x: Vec<&'static str> = vec![$(stringify!($arg)),*]; x}
+        }
+    };
 }
 
 #[cfg(test)]
@@ -132,17 +146,21 @@ mod test {
 
     #[test]
     fn register_with_macro() {
-        dbg!(items! {
+        dbg!(item! {
             /// This is a docstring for foo
             fn foo() {
                 println!("foo");
             }
+        });
 
+        dbg!(item! {
             /// This is a docstring for bar
             fn bar(a: i32) -> Arc<str> {
                 format!("bar: {a}").into()
             }
+        });
 
+        dbg!(item! {
             /// This is a docstring for baz
             let baz = |a: i32| -> Arc<str> {
                 let s = format!("baz: {a}");
@@ -153,6 +171,5 @@ mod test {
     }
 }
 
-pub(crate) use items;
-
-pub(crate) use items_inner;
+pub use args;
+pub use item;
