@@ -1027,7 +1027,9 @@ impl Parser<'_, '_> {
                     start: span.start,
                     end: span.end,
                 };
-                parts.push(FStringPart::String(unescape(s, span)?));
+                let s = unescape(s, span)?;
+                let s = s.replace("{{", "{").replace("}}", "}");
+                parts.push(FStringPart::String(s));
             }
 
             if matches!(part, FStringToken::StringEnd(_)) {

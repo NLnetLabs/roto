@@ -402,40 +402,47 @@ impl<'s> Lexer<'s> {
     pub fn f_string_part(
         &mut self,
     ) -> Option<(FStringToken<'s>, Range<usize>)> {
-        let mut last_is_backslash = false;
-        let mut last_is_curly = false;
-        for (i, c) in self.input.chars().enumerate() {
-            // If we currently have an escaped character, we just continue to the next one
-            if last_is_backslash {
-                last_is_backslash = false;
-                continue;
-            }
-
-            // Check for the end of the string, which is an unescaped quote
-            if c == '"' {
-                let (tok, span) = self.bump(i);
-                // Eat the `"`
-                self.bump(1);
-                return Some((FStringToken::StringEnd(tok), span));
-            }
-
-            // Check for the end of the part, which is when we find a character
-            // that's not a curly after an unescaped curly.
-            if c != '{' && last_is_curly {
-                // We bump to _before_ the curly
-                let (tok, span) = self.bump(i - 1);
-                return Some((FStringToken::StringIntermediate(tok), span));
-            }
-
-            // If we find a curly, we negate the value of last_is_curly, because
-            // "{{" is not a "single curly".
+        let mut chars = self.input.chars().enumerate();
+        'outer: while let Some((i, c)) = chars.next() {
             match c {
-                '{' => last_is_curly = !last_is_curly,
-                _ => last_is_curly = false,
-            }
-
-            if c == '\\' {
-                last_is_backslash = true;
+                '\\' => {
+                    let (_, c) = chars.next()?;
+                    if c == 'u' || c == 'U' {
+                        let (_, c) = chars.next()?;
+                        if c != '{' {
+                            // We need a `{` after `\u` and `\U`
+                            return None;
+                        }
+                        while let Some((_, c)) = chars.next() {
+                            if c == '}' {
+                                continue 'outer;
+                            }
+                        }
+                        return None;
+                    }
+                    continue 'outer;
+                }
+                '{' => {
+                    let (i, c) = chars.next()?;
+                    if c == '{' {
+                        continue 'outer;
+                    } else {
+                        // We bump to _before_ the curly
+                        let (tok, span) = self.bump(i - 1);
+                        return Some((
+                            FStringToken::StringIntermediate(tok),
+                            span,
+                        ));
+                    }
+                }
+                '"' => {
+                    // Check for the end of the string, which is an unescaped quote
+                    let (tok, span) = self.bump(i);
+                    // Eat the `"`
+                    self.bump(1);
+                    return Some((FStringToken::StringEnd(tok), span));
+                }
+                _ => {}
             }
         }
 
