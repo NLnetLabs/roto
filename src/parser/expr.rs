@@ -1035,7 +1035,7 @@ impl Parser<'_, '_> {
                 };
                 let s = unescape(s, span)?;
                 let s = s.replace("{{", "{").replace("}}", "}");
-                parts.push(FStringPart::String(s));
+                parts.push(self.spans.add(span, FStringPart::String(s)));
             }
 
             if matches!(part, FStringToken::StringEnd(_)) {
@@ -1045,7 +1045,12 @@ impl Parser<'_, '_> {
 
             self.take(Token::CurlyLeft)?;
             let expr = self.expr()?;
-            parts.push(FStringPart::Expr(expr));
+
+            // Do not use the same id as expr here. We need separate ids
+            // to associate the proper function data to it.
+            let span = self.spans.get(&expr);
+
+            parts.push(self.spans.add(span, FStringPart::Expr(expr)));
             self.take(Token::CurlyRight)?;
         }
 
