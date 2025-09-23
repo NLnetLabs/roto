@@ -1115,7 +1115,7 @@ impl<'r> Lowerer<'r> {
         self.emit_assign(to, ty, val);
     }
 
-    fn f_string(&mut self, parts: &[ast::FStringPart]) -> Value {
+    fn f_string(&mut self, parts: &[Meta<ast::FStringPart>]) -> Value {
         fn make_string(s: String) -> Value {
             Value::Const(Literal::String(s), Type::string())
         }
@@ -1127,7 +1127,8 @@ impl<'r> Lowerer<'r> {
         let func_ref = self.find_method(type_id, "append");
 
         for part in parts {
-            let new_string = match part {
+            let id = part.id;
+            let new_string = match &part.node {
                 ast::FStringPart::String(s) => make_string(s.clone()),
                 ast::FStringPart::Expr(expr) => {
                     let val = self.expr(expr);
@@ -1136,7 +1137,7 @@ impl<'r> Lowerer<'r> {
                     // Get the function that the type checker determined we
                     // should call, this will be the `to_string` method on
                     // the type.
-                    let func = self.type_info.function(expr).clone();
+                    let func = self.type_info.function(id).clone();
                     self.normalized_function_call(&func, Some((val, ty)), &[])
                 }
             };
