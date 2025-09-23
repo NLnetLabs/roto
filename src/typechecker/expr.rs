@@ -523,7 +523,7 @@ impl TypeChecker {
 
                 let mut diverges = false;
                 for part in parts {
-                    match part {
+                    match &part.node {
                         ast::FStringPart::String(_) => {
                             // always ok!
                         }
@@ -568,7 +568,7 @@ impl TypeChecker {
                                     }
                                     self.type_info
                                         .function_calls
-                                        .insert(expr.id, function);
+                                        .insert(part.id, function);
                                 }
                                 None => return Err(self.error_simple(
                                     "type does not have a `to_string` method",
