@@ -1278,6 +1278,40 @@ fn complex_f_string() {
 }
 
 #[test]
+fn escape_curly_in_f_string() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            f"Here is a single curly {{ and a closing one }}"
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "Here is a single curly { and a closing one }".into());
+}
+
+#[test]
+fn unicode_val_in_f_string() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            f"Here is an uppercase \u{41} and a lowercase \u{61}."
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "Here is an uppercase A and a lowercase a.".into());
+}
+
+#[test]
 fn arc_type() {
     use std::sync::atomic::Ordering;
 
