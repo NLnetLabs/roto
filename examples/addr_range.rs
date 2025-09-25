@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use roto::{item, Runtime, Val, Verdict};
+use roto::{items, Runtime, Val, Verdict};
 
 #[derive(Clone)]
 struct AddrRange {
@@ -10,20 +10,19 @@ struct AddrRange {
 
 fn main() {
     // Create the Roto types to register into the runtime
-    let mut ty = item! {
+    let lib = items! {
         /// A range of IP addresses
         clone type AddrRange = Val<AddrRange>;
+
+        impl Val<AddrRange> {
+            fn contains(range: Val<AddrRange>, addr: IpAddr) -> bool {
+                range.min <= addr && addr <= range.max
+            }
+        }
     };
 
-    // Add the contains method to the type.
-    ty.add(item! {
-        fn contains(range: Val<AddrRange>, addr: IpAddr) -> bool {
-            range.min <= addr && addr <= range.max
-        }
-    });
-
-    // Create the runtime with the type
-    let rt = Runtime::from_items(ty).unwrap();
+    // Create the runtime with the items
+    let rt = Runtime::from_items(lib).unwrap();
 
     // Compile the program with our runtime
     let mut program = rt.compile("examples/addr_range.roto").unwrap();

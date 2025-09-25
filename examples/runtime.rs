@@ -1,4 +1,4 @@
-use roto::{item, Runtime, Val, Verdict};
+use roto::{items, Runtime, Val, Verdict};
 
 #[derive(Clone, Copy)]
 struct Bla {
@@ -9,18 +9,18 @@ fn main() -> Result<(), roto::RotoReport> {
     #[cfg(feature = "logger")]
     env_logger::init();
 
-    let mut bla = item! {
+    let lib = items! {
         /// Some type I want to register
         copy type Bla = Val<Bla>;
+
+        impl Val<Bla> {
+            fn get_x(bla: Val<Bla>) -> u32 {
+                bla.x
+            }
+        }
     };
 
-    bla.add(item! {
-        fn get_x(bla: Val<Bla>) -> u32 {
-            bla.x
-        }
-    });
-
-    let runtime = Runtime::builder().add(bla).build().unwrap();
+    let runtime = Runtime::from_items(lib).unwrap();
 
     let mut compiled = runtime
         .compile("examples/runtime.roto")

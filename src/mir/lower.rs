@@ -15,15 +15,14 @@ use crate::{
     label::{LabelRef, LabelStore},
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
-    runtime::{self, RuntimeFunction, RuntimeFunctionRef},
+    runtime::RuntimeFunctionRef,
     typechecker::{
         self,
         info::TypeInfo,
         scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
         scoped_display::TypeDisplay,
         types::{
-            EnumVariant, FunctionDefinition, FunctionKind, Signature, Type,
-            TypeDefinition,
+            EnumVariant, FunctionDefinition, Signature, Type, TypeDefinition,
         },
         PathValue, ResolvedPath,
     },

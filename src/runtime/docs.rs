@@ -1,8 +1,8 @@
 use std::any::TypeId;
 
 use super::{
-    context::ContextDescription, FunctionKind, Runtime, RuntimeConstant,
-    RuntimeFunction, RuntimeType,
+    context::ContextDescription, Runtime, RuntimeConstant, RuntimeFunction,
+    RuntimeType,
 };
 
 impl Runtime {
@@ -22,7 +22,7 @@ impl Runtime {
             func,
             id: _,
             doc,
-            params,
+            params: _,
         } = f;
 
         let params = func
