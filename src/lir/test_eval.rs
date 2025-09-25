@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
-use crate::{item, pipeline::LoweredToLir, src, FileTree, Runtime};
+use crate::{items, pipeline::LoweredToLir, src, FileTree, Runtime};
 
 #[track_caller]
 fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {
@@ -417,7 +417,7 @@ fn call_runtime_function() {
     "
     );
 
-    let rt = Runtime::from_items(item! {
+    let rt = Runtime::from_items(items! {
         fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
@@ -441,7 +441,7 @@ fn call_runtime_function() {
 }
 
 #[test]
-fn ip_addr_method() {
+fn u32_method() {
     let s = src!(
         "
         filtermap main(x: u32) {
@@ -454,7 +454,14 @@ fn ip_addr_method() {
     "
     );
 
-    let rt = Runtime::new();
+    let rt = Runtime::from_items(items! {
+        impl u32 {
+            fn is_even(x: u32) -> bool {
+                x % 2 == 0
+            }
+        }
+    })
+    .unwrap();
     let program = compile(s, &rt);
 
     for (value, expected) in [(5, 1), (6, 0)] {
@@ -479,12 +486,12 @@ fn string_global() {
         }"#
     );
 
-    let mut runtime = Runtime::new();
+    let rt = Runtime::from_items(items! {
+        const FOO: Arc<str> = "BAR".into();
+    })
+    .unwrap();
 
-    let foo: Arc<str> = "BAR".into();
-    runtime.register_constant("FOO", "...", foo).unwrap();
-
-    let p = compile(s, &runtime);
+    let p = compile(s, &rt);
 
     let mut mem = Memory::new();
     let ctx = IrValue::Pointer(mem.allocate(0));

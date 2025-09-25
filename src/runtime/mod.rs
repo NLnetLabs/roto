@@ -27,17 +27,12 @@ use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 use crate::{
     ast::Identifier,
     file_tree::FileTree,
-    parser::{
-        meta::{Meta, MetaId},
-        token::{Lexer, Token},
-    },
-    runtime::{
-        func::RegisterableFn,
-        items::{Constant, Function, IntoItems, Item, Module, Type},
+    parser::token::{Lexer, Token},
+    runtime::items::{
+        Constant, Function, IntoItems, Item, Module, Type, Use,
     },
     typechecker::{
-        scope::{ResolvedName, ScopeGraph, ScopeRef},
-        types::{self, FunctionDefinition},
+        scope::{ResolvedName, ScopeRef},
         TypeChecker,
     },
     Context, Package, RotoReport,
@@ -164,6 +159,7 @@ impl Runtime {
         self.declare_types(root, &items)?;
         self.declare_functions(root, &items)?;
         self.declare_constants(root, &items)?;
+        self.declare_imports(root, &items)?;
         // rt.declare_context(root, &all_items)?;
         Ok(())
     }
@@ -348,6 +344,8 @@ impl Runtime {
                 Item::Function(_) => {}
                 Item::Type(_) => {}
                 Item::Constant(_) => {}
+                Item::Impl(_) => {}
+                Item::Use(_) => {}
                 Item::Module(module) => self.declare_module(scope, module)?,
             }
         }
@@ -451,7 +449,19 @@ impl Runtime {
                     self.declare_methods(scope, children)?;
                 }
                 Item::Function(f) => {
-                    self.declare_function(scope, f, false)?
+                    self.declare_function(scope, f, false)?;
+                }
+                Item::Impl(items::Impl { ty, children }) => {
+                    let ty = self
+                        .types
+                        .iter()
+                        .find(|t| t.type_id == *ty)
+                        .ok_or("Type not found")?;
+                    let scope = ty.name.scope;
+                    let ident = ty.name.ident;
+                    let scope =
+                        self.type_checker.get_scope_of(scope, ident).unwrap();
+                    self.declare_methods(scope, children)?;
                 }
                 _ => {}
             }
@@ -469,15 +479,20 @@ impl Runtime {
                 Item::Function(f) => {
                     self.declare_function(scope, f, true)?;
                 }
+                Item::Impl(_) => {
+                    return Err("Cannot nest an impl in an impl".into());
+                }
                 Item::Type(_) => {
-                    return Err("Cannot nest a type in a type".into())
+                    return Err("Cannot nest a type in an impl".into());
                 }
                 Item::Module(_) => {
                     return Err("Cannot nest a module in a type".into());
                 }
+                Item::Use(_) => {}
                 Item::Constant(_) => {}
             }
         }
+
         Ok(())
     }
 
@@ -494,10 +509,10 @@ impl Runtime {
             .parameter_types()
             .iter()
             .map(|ty| TypeChecker::rust_type_to_roto_type(self, *ty))
-            .collect();
+            .collect::<Result<_, _>>()?;
 
         let return_type =
-            TypeChecker::rust_type_to_roto_type(self, f.func.return_type());
+            TypeChecker::rust_type_to_roto_type(self, f.func.return_type())?;
 
         let id = self.functions.len();
         let func = RuntimeFunction {
@@ -550,7 +565,8 @@ impl Runtime {
         scope: ScopeRef,
         constant: &Constant,
     ) -> Result<(), String> {
-        let ty = TypeChecker::rust_type_to_roto_type(&self, constant.type_id);
+        let ty =
+            TypeChecker::rust_type_to_roto_type(&self, constant.type_id)?;
         self.type_checker.declare_runtime_constant(
             scope,
             constant.ident,
@@ -572,15 +588,55 @@ impl Runtime {
         Ok(())
     }
 
-    fn declare_context(
+    fn declare_imports(
         &mut self,
         scope: ScopeRef,
         items: &[Item],
     ) -> Result<(), String> {
-        todo!()
+        for item in items {
+            match item {
+                Item::Function(_) => {}
+                Item::Type(_) => {}
+                Item::Constant(_) => {}
+                Item::Impl(_) => {}
+                Item::Use(use_item) => {
+                    self.declare_import(scope, use_item)?
+                }
+                Item::Module(module) => {
+                    self.declare_imports(scope, &module.children)?
+                }
+            }
+        }
+        Ok(())
     }
 
-    fn extract_name<T: Reflect>() -> &'static str {
+    fn declare_import(
+        &mut self,
+        scope: ScopeRef,
+        use_item: &Use,
+    ) -> Result<(), String> {
+        for import in &use_item.imports {
+            let mut new_scope = scope;
+            let path = &import[..import.len() - 1];
+            let last = &import[import.len() - 1];
+            for part in path {
+                new_scope = self
+                    .type_checker
+                    .get_scope_of(scope, part.into())
+                    .ok_or("Could not get scope")?;
+            }
+            self.type_checker.declare_runtime_import(
+                scope,
+                ResolvedName {
+                    scope: new_scope,
+                    ident: last.into(),
+                },
+            )?;
+        }
+        Ok(())
+    }
+
+    fn _extract_name<T: Reflect>() -> &'static str {
         let mut name = T::name();
 
         if let Some((first, _)) = name.split_once('<') {
@@ -615,22 +671,6 @@ impl Runtime {
         self.context = Some(description);
 
         Ok(())
-    }
-
-    /// Register a new global constant
-    ///
-    /// Constants are shared between function functions. Since functions
-    /// can be send to other threads, the constants must be `Send` and `Sync`.
-    pub fn register_constant<T: Reflect>(
-        &mut self,
-        name: impl Into<String>,
-        docstring: &str,
-        x: T,
-    ) -> Result<(), String>
-    where
-        T::Transformed: Send + Sync + 'static,
-    {
-        todo!()
     }
 
     pub(crate) fn get_runtime_type(

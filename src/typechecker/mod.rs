@@ -101,7 +101,7 @@ use crate::{
     parser::meta::{Meta, MetaId},
     runtime::{
         ty::{TypeDescription, TypeRegistry},
-        FunctionKind, Runtime, RuntimeFunction, RuntimeFunctionRef,
+        Runtime, RuntimeFunctionRef,
     },
 };
 use cycle::detect_type_cycles;
@@ -155,7 +155,8 @@ pub fn typecheck(
     runtime: &Runtime,
     module_tree: &ModuleTree,
 ) -> TypeResult<TypeInfo> {
-    let type_checker = runtime.type_checker.clone();
+    let mut type_checker = runtime.type_checker.clone();
+    type_checker.declare_context(runtime)?;
     type_checker.check_module_tree(module_tree)
 }
 
@@ -256,40 +257,6 @@ impl TypeChecker {
 
             self.type_info.types.insert(name, ty);
         }
-        Ok(())
-    }
-
-    fn declare_runtime_items(&mut self, runtime: &Runtime) -> TypeResult<()> {
-        self.declare_context(runtime)?;
-
-        // Little hack to put Some and None in the global namespace until
-        // imports can be specified from the runtime.
-        let type_declaration = self
-            .type_info
-            .scope_graph
-            .resolve_name(
-                ScopeRef::GLOBAL,
-                &Meta {
-                    node: "Option".into(),
-                    id: MetaId(0),
-                },
-                false,
-            )
-            .unwrap();
-        for variant in ["Some", "None"] {
-            self.type_info
-                .scope_graph
-                .insert_import(
-                    ScopeRef::GLOBAL,
-                    MetaId(0),
-                    ResolvedName {
-                        scope: type_declaration.scope.unwrap(),
-                        ident: variant.into(),
-                    },
-                )
-                .unwrap();
-        }
-
         Ok(())
     }
 
@@ -409,36 +376,44 @@ impl TypeChecker {
     pub(crate) fn rust_type_to_roto_type(
         runtime: &Runtime,
         t: TypeId,
-    ) -> Type {
+    ) -> Result<Type, String> {
         let ty = TypeRegistry::get(t).unwrap();
 
         if ty.type_id == TypeId::of::<()>() {
-            return Type::Unit;
+            return Ok(Type::Unit);
         }
 
         match ty.description {
             TypeDescription::Leaf => {
-                let name =
-                    runtime.get_runtime_type(ty.type_id).unwrap().name();
-                Type::Name(TypeName {
+                let name = runtime
+                    .get_runtime_type(ty.type_id)
+                    .ok_or_else(|| {
+                        format!("unregistered type: {}", ty.rust_name)
+                    })?
+                    .name();
+                Ok(Type::Name(TypeName {
                     name,
                     arguments: Vec::new(),
-                })
+                }))
             }
             TypeDescription::Option(t) => {
-                Type::option(Self::rust_type_to_roto_type(runtime, t))
+                Ok(Type::option(Self::rust_type_to_roto_type(runtime, t)?))
             }
-            TypeDescription::Verdict(a, r) => Type::verdict(
-                Self::rust_type_to_roto_type(runtime, a),
-                Self::rust_type_to_roto_type(runtime, r),
-            ),
+            TypeDescription::Verdict(a, r) => Ok(Type::verdict(
+                Self::rust_type_to_roto_type(runtime, a)?,
+                Self::rust_type_to_roto_type(runtime, r)?,
+            )),
             TypeDescription::Val(_) => {
-                let name =
-                    runtime.get_runtime_type(ty.type_id).unwrap().name();
-                Type::Name(TypeName {
+                let name = runtime
+                    .get_runtime_type(ty.type_id)
+                    .ok_or_else(|| {
+                        format!("unregistered type: {}", ty.rust_name,)
+                    })?
+                    .name();
+                Ok(Type::Name(TypeName {
                     name,
                     arguments: Vec::new(),
-                })
+                }))
             }
         }
     }
@@ -457,6 +432,22 @@ impl TypeChecker {
             },
             &ty,
         ) {
+            // TODO: Improve error message
+            return Err("Name declared twice!".into());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn declare_runtime_import(
+        &mut self,
+        scope: ScopeRef,
+        name: ResolvedName,
+    ) -> Result<(), String> {
+        if let Err(_) =
+            self.type_info
+                .scope_graph
+                .insert_import(scope, MetaId(0), name)
+        {
             // TODO: Improve error message
             return Err("Name declared twice!".into());
         }

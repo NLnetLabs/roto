@@ -17,8 +17,8 @@ use super::{
         Declaration, ResolvedName, ScopeRef, ScopeType, TypeOrStub, ValueKind,
     },
     types::{
-        EnumVariant, Function, FunctionDefinition, FunctionKind, Signature,
-        Type, TypeDefinition, TypeName,
+        EnumVariant, Function, FunctionDefinition, Signature, Type,
+        TypeDefinition, TypeName,
     },
     TypeChecker, TypeResult,
 };

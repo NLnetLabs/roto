@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use roto::{item, Runtime, Val};
+use roto::{items, Runtime, Val};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -12,20 +12,20 @@ fn main() -> Result<(), roto::RotoReport> {
     #[cfg(feature = "logger")]
     env_logger::init();
 
-    let mut ty = item! {
+    let lib = items! {
         clone type NonEmptyString = Val<NonEmptyString>;
+
+        impl Val<NonEmptyString> {
+            fn new(s: Arc<str>) -> Option<Val<NonEmptyString>> {
+                if s.is_empty() {
+                    return None;
+                }
+                Some(Val(NonEmptyString { s }))
+            }
+        }
     };
 
-    ty.add(item! {
-        fn new(s: Arc<str>) -> Option<Val<NonEmptyString>> {
-            if s.is_empty() {
-                return None;
-            }
-            Some(Val(NonEmptyString { s }))
-        }
-    });
-
-    let rt = Runtime::from_items(ty).unwrap();
+    let rt = Runtime::from_items(lib).unwrap();
 
     let mut compiled = rt
         .compile("examples/optional.roto")

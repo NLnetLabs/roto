@@ -18,6 +18,8 @@ pub enum Item {
     Type(Type),
     Module(Module),
     Constant(Constant),
+    Impl(Impl),
+    Use(Use),
 }
 
 pub trait IntoItems {
@@ -279,5 +281,60 @@ impl IntoItems for Constant {
 impl From<Constant> for Item {
     fn from(value: Constant) -> Self {
         Item::Constant(value)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Impl {
+    pub(crate) ty: TypeId,
+    pub(crate) children: Vec<Item>,
+}
+
+impl Impl {
+    pub fn new<T: Reflect>() -> Self {
+        let ty = T::resolve();
+        Self {
+            ty: ty.type_id,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, items: impl IntoItems) {
+        self.children.extend(items.into_items())
+    }
+}
+
+impl IntoItems for Impl {
+    fn into_items(self) -> Vec<Item> {
+        vec![self.into()]
+    }
+}
+
+impl From<Impl> for Item {
+    fn from(value: Impl) -> Self {
+        Item::Impl(value)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Use {
+    pub(crate) imports: Vec<Vec<String>>,
+}
+
+impl Use {
+    pub fn new(imports: Vec<Vec<String>>) -> Self {
+        Self { imports }
+    }
+}
+
+impl IntoItems for Use {
+    fn into_items(self) -> Vec<Item> {
+        vec![self.into()]
+    }
+}
+
+impl From<Use> for Item {
+    fn from(value: Use) -> Self {
+        Item::Use(value)
     }
 }

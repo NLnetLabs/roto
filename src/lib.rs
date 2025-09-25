@@ -14,7 +14,6 @@ mod file_tree_tests;
 mod ir_printer;
 mod label;
 mod lir;
-mod macros;
 mod mir;
 mod module;
 pub(crate) mod parser;
@@ -33,11 +32,11 @@ pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub use pipeline::{Package, RotoError, RotoReport};
 pub use roto_macros::{
-    roto_function, roto_method, roto_static_method, Context,
+    items, roto_function, roto_method, roto_static_method, Context,
 };
 pub use runtime::{
     context::Context,
-    items::{Constant, Function, Module, Type},
+    items::{Constant, Function, Impl, Item, Module, Type, Use},
     ty::Reflect,
     val::Val,
     verdict::Verdict,
