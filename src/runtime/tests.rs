@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{items, runtime::items::IntoItems as _, Val};
+use crate::{library, runtime::items::IntoItems as _, Val};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
@@ -15,7 +15,7 @@ use routecore::bgp::{
 #[test]
 #[should_panic]
 fn invalid_function_name() {
-    items! {
+    library! {
         fn accept() -> bool {
             true
         }
@@ -25,7 +25,7 @@ fn invalid_function_name() {
 #[test]
 #[should_panic]
 fn invalid_method_name() {
-    items! {
+    library! {
         impl bool {
             fn accept(_x: bool) -> bool {
                 true
@@ -37,7 +37,7 @@ fn invalid_method_name() {
 #[test]
 #[should_panic]
 fn invalid_static_method_name() {
-    items! {
+    library! {
         impl bool {
             fn accept() -> bool {
                 true
@@ -52,7 +52,7 @@ fn invalid_clone_type_name() {
     #[derive(Clone)]
     struct Foo;
 
-    items! {
+    library! {
         clone type accept = Val<Foo>;
     };
 }
@@ -63,7 +63,7 @@ fn invalid_copy_type_name() {
     #[derive(Clone, Copy)]
     struct Foo;
 
-    items! {
+    library! {
         copy type accept = Val<Foo>;
     };
 }
@@ -71,14 +71,14 @@ fn invalid_copy_type_name() {
 #[test]
 #[should_panic]
 fn invalid_constant_name() {
-    items! {
+    library! {
         const accept: u32 = 0;
     };
 }
 
 #[test]
 fn constant_declared_twice() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         const FOO: u32 = 10;
         const FOO: u32 = 12;
     })
@@ -87,7 +87,7 @@ fn constant_declared_twice() {
 
 #[test]
 fn function_declared_twice() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         fn foo() {}
         fn foo() -> bool {
             false
@@ -98,7 +98,7 @@ fn function_declared_twice() {
 
 #[test]
 fn method_declared_twice() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         fn foo(_: bool) {}
         fn foo(_: bool) -> bool {
             false
@@ -109,7 +109,7 @@ fn method_declared_twice() {
 
 #[test]
 fn static_method_declared_twice() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         fn foo() {}
         fn foo() -> bool {
             false
@@ -120,7 +120,7 @@ fn static_method_declared_twice() {
 
 #[test]
 fn method_and_static_method_with_the_same_name() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         impl bool {
             fn foo(_: bool) {}
 
@@ -134,7 +134,7 @@ fn method_and_static_method_with_the_same_name() {
 
 #[test]
 fn function_and_method_with_the_same_name() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         fn foo(_: bool) {}
 
         impl bool {
@@ -146,7 +146,7 @@ fn function_and_method_with_the_same_name() {
 
 #[test]
 fn function_and_constant_with_the_same_name_1() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         fn foo(_: bool) {}
         const foo: bool = true;
     })
@@ -155,7 +155,7 @@ fn function_and_constant_with_the_same_name_1() {
 
 #[test]
 fn function_and_constant_with_the_same_name_2() {
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         const foo: bool = true;
         fn foo(_x: bool) {}
     })
@@ -166,7 +166,7 @@ fn function_and_constant_with_the_same_name_2() {
 #[should_panic]
 fn register_option_arc_str() {
     // Cannot register Option
-    items! {
+    library! {
         clone type OptStr = Option<Arc<str>>;
     };
 }
@@ -174,7 +174,7 @@ fn register_option_arc_str() {
 #[test]
 fn register_val_option_arc_str() {
     // But with Val it's fine
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         clone type OptStr = Val<Option<Arc<str>>>;
     })
     .unwrap();
@@ -182,7 +182,7 @@ fn register_val_option_arc_str() {
 
 #[test]
 fn unwrap_or_empty() {
-    let ty = items! {
+    let ty = library! {
         clone type OptStr = Val<Option<Arc<str>>>;
 
         impl Val<Option<Arc<str>>> {
@@ -193,4 +193,49 @@ fn unwrap_or_empty() {
     };
 
     Runtime::from_items(ty).unwrap_err();
+}
+
+#[allow(deprecated)]
+mod deprecated_api {
+    use roto_macros::roto_method;
+
+    use crate::{src, Runtime, Val};
+
+    #[test]
+    fn use_the_old_api() {
+        #[derive(Clone)]
+        struct Foo(u64);
+
+        let mut rt = Runtime::new();
+
+        rt.register_clone_type::<Val<Foo>>("...").unwrap();
+
+        #[roto_method(rt, Val<Foo>)]
+        fn double(Val(x): Val<Foo>) -> Val<Foo> {
+            Val(Foo(x.0 * 2))
+        }
+
+        let s = src!(
+            "
+            fn bar(x: Foo) -> Foo {
+                x.double()
+            }      
+        "
+        );
+
+        let mut pkg = s
+            .parse()
+            .and_then(|x| x.typecheck(&rt))
+            .map(|x| {
+                let x = x.lower_to_mir().lower_to_lir();
+                x.codegen()
+            })
+            .unwrap();
+
+        let bar = pkg
+            .get_function::<(), fn(Val<Foo>) -> Val<Foo>>("bar")
+            .unwrap();
+        let res = bar.call(&mut (), Val(Foo(5)));
+        assert_eq!(res.0 .0, 10);
+    }
 }

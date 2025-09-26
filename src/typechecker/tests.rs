@@ -1,6 +1,6 @@
 use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
-use crate::{items, source_file, src, Context, Runtime, Val};
+use crate::{library, source_file, src, Context, Runtime, Val};
 
 #[track_caller]
 fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
@@ -817,7 +817,7 @@ fn enum_match() {
 
 #[test]
 fn runtime_function() {
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
@@ -959,7 +959,7 @@ fn use_globals() {
         "
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
             clone type Community = Val<Community>;
 
             /// The well-known BLACKHOLE community

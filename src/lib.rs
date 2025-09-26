@@ -32,7 +32,7 @@ pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub use pipeline::{Package, RotoError, RotoReport};
 pub use roto_macros::{
-    items, roto_function, roto_method, roto_static_method, Context,
+    library, roto_function, roto_method, roto_static_method, Context,
 };
 pub use runtime::{
     context::Context,

@@ -8,8 +8,8 @@ use std::{
 };
 
 use crate::{
-    file_tree::FileSpec, items, pipeline::Package, source_file, src, Context,
-    FileTree, Runtime, Val, Verdict,
+    file_tree::FileSpec, library, pipeline::Package, source_file, src,
+    Context, FileTree, Runtime, Val, Verdict,
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -557,7 +557,7 @@ fn call_runtime_function() {
     "
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
@@ -591,7 +591,7 @@ fn call_runtime_method() {
     "
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         impl u32 {
             fn is_even(x: u32) -> bool {
                 x % 2 == 0
@@ -638,7 +638,7 @@ fn issue_52() {
         _x: i32,
     }
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         /// A Foo!
         clone type Foo = Val<Foo>;
 
@@ -669,7 +669,7 @@ fn register_with_non_registered_type() {
         _x: i32,
     }
 
-    Runtime::from_items(items! {
+    Runtime::from_items(library! {
         fn bar(_foo: Val<Foo>, _x: u32) {}
     })
     .unwrap_err();
@@ -1189,7 +1189,7 @@ fn construct_prefix() {
 
 #[test]
 fn function_returning_unit() {
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         fn unit_unit() {}
     })
     .unwrap();
@@ -1333,7 +1333,7 @@ fn arc_type() {
         }
     }
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         /// A special type for which we track the number of clones and drops
         clone type CloneDrop = Val<CloneDrop>;
     })
@@ -2719,7 +2719,7 @@ fn mutate() {
         i: i16,
     }
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         copy type MyType = Val<*mut MyType>;
 
         impl Val<*mut MyType> {
@@ -2768,7 +2768,7 @@ fn return_vec() {
         v: Vec<u8>,
     }
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         clone type MyType = Val<MyType>;
     })
     .unwrap();
@@ -2804,7 +2804,7 @@ fn name_collision() {
     }
 
     for _ in 0..100 {
-        let rt = Runtime::from_items(items! {
+        let rt = Runtime::from_items(library! {
             clone type A = Val<A>;
 
             impl Val<A> {
@@ -2852,7 +2852,7 @@ fn refcounting_in_a_recursive_function() {
     #[derive(Debug, Clone)]
     struct Foo;
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         clone type Foo = Val<Arc<Foo>>;
     })
     .unwrap();
@@ -3087,7 +3087,7 @@ fn sigill() {
         }
     }
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         clone type Arcane = Val<Arcane>;
 
         impl Val<Arcane> {
@@ -3131,7 +3131,7 @@ fn sigill() {
 /// type.
 #[test]
 fn rust_string_string() {
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         clone type RustString = Val<String>;
 
         impl Val<String> {
@@ -3173,7 +3173,7 @@ fn rust_string_string() {
 
 #[test]
 fn return_verdict_from_runtime_function() {
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         fn foo() -> Verdict<(), ()> {
             Verdict::Accept(())
         }
@@ -3204,7 +3204,7 @@ fn string_global() {
         }"
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         const FOO: Arc<str> = "BAR".into();
     })
     .unwrap();
@@ -3306,7 +3306,7 @@ fn bool_is_not_true() {
 
 #[test]
 fn register_on_optstr() {
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         clone type OptStr = Val<Option<Arc<str>>>;
 
         impl Val<Option<Arc<str>>> {
@@ -3341,7 +3341,7 @@ fn register_on_optstr() {
 fn register_closure() {
     let some_number = 10;
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         let get = move || { some_number };
     })
     .unwrap();
@@ -3367,7 +3367,7 @@ fn register_closure() {
 fn increment_via_closure() {
     static COUNTER: AtomicI32 = AtomicI32::new(0);
 
-    let runtime = Runtime::from_items(items! {
+    let runtime = Runtime::from_items(library! {
         let inc = || {
             COUNTER.fetch_add(1, Ordering::Relaxed)
         };

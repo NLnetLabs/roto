@@ -2,7 +2,7 @@ use std::error::Error;
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
-use roto::{items, Runtime, TypedFunc, Val, Verdict};
+use roto::{library, Runtime, TypedFunc, Val, Verdict};
 use routecore::bgp::aspath::{Hop, HopPath};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::workshop::route::RouteWorkshop;
@@ -73,7 +73,7 @@ type Func = TypedFunc<(), fn(Val<Log>, Val<RotondaRoute>) -> Verdict<(), ()>>;
 fn main() -> Result<(), Box<dyn Error>> {
     // Registering types and their methods
 
-    let lib = items! {
+    let lib = library! {
         /// A route
         clone type Route = Val<RotondaRoute>;
 

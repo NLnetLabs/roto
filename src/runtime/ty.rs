@@ -121,7 +121,7 @@ mod seal {
 ///
 /// The `Reflect::Transformed` type represents the type that this type will be
 /// converted into before being passed to Roto. For example, `Option` will be
-/// converted into [`RotoOption`] to ensure that it has a predictable layout.
+/// converted into a type with the same variants, but a fixed layout.
 ///
 /// The `Reflect::AsParam` then specifies how this value is passed to a Roto
 /// function. Most primitives are simply passed by value, but many other types

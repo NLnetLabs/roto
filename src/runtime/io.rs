@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{items, Runtime};
+use crate::{library, Runtime};
 
 impl Runtime {
     /// Add functions using I/O to the runtime.
@@ -11,7 +11,7 @@ impl Runtime {
     /// For now, this just adds the `print` function. More functions will be
     /// added in the future.
     pub fn add_io_functions(&mut self) {
-        self.add_items(items! {
+        self.add_items(library! {
             /// Print a string to stdout
             fn print(s: Arc<str>) {
                 println!("{s}");

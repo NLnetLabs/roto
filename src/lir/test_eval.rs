@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
-use crate::{items, pipeline::LoweredToLir, src, FileTree, Runtime};
+use crate::{library, pipeline::LoweredToLir, src, FileTree, Runtime};
 
 #[track_caller]
 fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {
@@ -417,7 +417,7 @@ fn call_runtime_function() {
     "
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         fn pow(x: u32, y: u32) -> u32 {
             x.pow(y)
         }
@@ -454,7 +454,7 @@ fn u32_method() {
     "
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         impl u32 {
             fn is_even(x: u32) -> bool {
                 x % 2 == 0
@@ -486,7 +486,7 @@ fn string_global() {
         }"#
     );
 
-    let rt = Runtime::from_items(items! {
+    let rt = Runtime::from_items(library! {
         const FOO: Arc<str> = "BAR".into();
     })
     .unwrap();
