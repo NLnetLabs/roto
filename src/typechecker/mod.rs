@@ -284,10 +284,13 @@ impl TypeChecker {
             node: ident,
             id: MetaId(0),
         };
+
         self.type_info
             .scope_graph
             .insert_module(scope, &ident, mod_scope)
-            .unwrap();
+            .map_err(|_| {
+                format!("An item with the name `{ident}` already exists")
+            })?;
 
         Ok(mod_scope)
     }
@@ -304,19 +307,28 @@ impl TypeChecker {
             id: MetaId(0),
         };
 
-        if self
-            .type_info
-            .scope_graph
-            .resolve_name(ScopeRef::GLOBAL, &ident, true)
-            .is_none()
+        // Small edge case: the primitives are already in the typechecker, so we
+        // skip them.
+        if let Some(other) =
+            self.type_info.scope_graph.resolve_name(scope, &ident, true)
         {
-            let ty = TypeDefinition::Runtime(name, type_id);
-            self.type_info
-                .scope_graph
-                .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
-                .map_err(|_id| String::new())?;
-            self.type_info.types.insert(name, ty);
+            if let DeclarationKind::Type(TypeOrStub::Type(
+                TypeDefinition::Primitive(_),
+            )) = other.kind
+            {
+                return Ok(());
+            }
         }
+
+        let ty = TypeDefinition::Runtime(name, type_id);
+        self.type_info
+            .scope_graph
+            .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
+            .map_err(|_id| {
+                format!("Item `{ident}` already exists in this scope")
+            })?;
+
+        self.type_info.types.insert(name, ty);
         Ok(())
     }
 

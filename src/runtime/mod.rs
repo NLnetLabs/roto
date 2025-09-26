@@ -36,7 +36,7 @@ use crate::{
         scope::{ResolvedName, ScopeRef},
         TypeChecker,
     },
-    Context, Package, RotoReport,
+    Context, Location, Package, RotoReport,
 };
 
 /// Provides the types and functions that Roto can access via FFI
@@ -123,13 +123,18 @@ impl Runtime {
         this
     }
 
-    pub fn from_items(items: impl IntoItems) -> Result<Self, String> {
+    pub fn from_items(
+        items: impl IntoItems,
+    ) -> Result<Self, RegistrationError> {
         let mut rt = Self::new();
         rt.add_items(items)?;
         Ok(rt)
     }
 
-    fn add_items(&mut self, items: impl IntoItems) -> Result<(), String> {
+    fn add_items(
+        &mut self,
+        items: impl IntoItems,
+    ) -> Result<(), RegistrationError> {
         let root = ScopeRef::GLOBAL;
         let items = items.into_items();
         self.declare_modules(None, &items)?;
@@ -296,6 +301,31 @@ impl ConstantValue {
     }
 }
 
+#[derive(Clone)]
+pub struct RegistrationError {
+    message: String,
+    location: Location,
+}
+
+impl std::fmt::Debug for RegistrationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!(
+            "Registration Error:\n\t{}\n\tdefined at: {}",
+            self.message, self.location
+        ))
+    }
+}
+
+impl std::fmt::Display for RegistrationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        format!(
+            "Registration Error:\n\t{}\n\tdefined at: {}",
+            self.message, self.location
+        )
+        .fmt(f)
+    }
+}
+
 impl Runtime {
     pub(crate) fn get_function(
         &self,
@@ -327,7 +357,9 @@ impl Runtime {
         docstring: &str,
     ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        self.add_items(items::Type::clone::<T>(name, docstring)?)
+        items::Type::clone::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add_items(l))
+            .map_err(|e| e.to_string())
     }
 
     /// Register a `Copy` type with a default name
@@ -339,7 +371,9 @@ impl Runtime {
         docstring: &str,
     ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        self.add_items(items::Type::copy::<T>(name, docstring)?)
+        items::Type::copy::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add_items(l))
+            .map_err(|e| e.to_string())
     }
 
     #[deprecated = "use items! and Runtime::add_items instead"]
@@ -348,7 +382,9 @@ impl Runtime {
         name: &str,
         docstring: &str,
     ) -> Result<(), String> {
-        self.add_items(items::Type::copy::<T>(name, docstring)?)
+        items::Type::copy::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add_items(l))
+            .map_err(|e| e.to_string())
     }
 
     /// Register a reference type with a given name
@@ -361,7 +397,9 @@ impl Runtime {
         name: &str,
         docstring: &str,
     ) -> Result<(), String> {
-        self.add_items(items::Type::clone::<T>(name, docstring)?)
+        items::Type::clone::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add_items(l))
+            .map_err(|e| e.to_string())
     }
 
     #[deprecated = "use items! and Runtime::add_items instead"]
@@ -373,12 +411,15 @@ impl Runtime {
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let argument_names = argument_names.into_iter().collect();
-        self.add_items(items::Function::new(
+        items::Function::new(
             name.as_ref(),
             docstring,
             argument_names,
             func,
-        )?)
+            roto::location!(),
+        )
+        .and_then(|l| self.add_items(l))
+        .map_err(|e| e.to_string())
     }
 
     #[deprecated = "use items! and Runtime::add_items instead"]
@@ -390,14 +431,20 @@ impl Runtime {
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let argument_names = argument_names.into_iter().collect();
-        let mut impl_block = items::Impl::new::<T>();
-        impl_block.add(items::Function::new(
+        let mut impl_block = items::Impl::new::<T>(roto::location!());
+
+        items::Function::new(
             name.as_ref(),
             docstring,
             argument_names,
             func,
-        )?);
-        self.add_items(impl_block)
+            roto::location!(),
+        )
+        .and_then(|i| {
+            impl_block.add(i);
+            self.add_items(impl_block)
+        })
+        .map_err(|e| e.to_string())
     }
 
     #[deprecated = "use items! and Runtime::add_items instead"]
@@ -426,14 +473,21 @@ impl Runtime {
     where
         T::Transformed: Send + Sync + 'static,
     {
-        self.add_items(items::Constant::new::<T>(name.into(), docstring, x)?)
+        items::Constant::new::<T>(
+            name.into(),
+            docstring,
+            x,
+            roto::location!(),
+        )
+        .and_then(|l| self.add_items(l))
+        .map_err(|e| e.to_string())
     }
 
     fn declare_modules(
         &mut self,
         scope: Option<ScopeRef>,
         items: &[Item],
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for item in items {
             match item {
                 Item::Function(_) => {}
@@ -451,10 +505,14 @@ impl Runtime {
         &mut self,
         scope: Option<ScopeRef>,
         module: &Module,
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         let scope = self
             .type_checker
-            .declare_runtime_module(scope, module.ident)?;
+            .declare_runtime_module(scope, module.ident)
+            .map_err(|e| RegistrationError {
+                message: e,
+                location: module.location.clone(),
+            })?;
 
         self.declare_modules(Some(scope), &module.children)?;
 
@@ -465,7 +523,7 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         items: &[Item],
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for item in items {
             match item {
                 Item::Module(module) => {
@@ -486,21 +544,28 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         ty: &Type,
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         if let Some(old_ty) = self
             .types
             .iter()
             .find(|old_ty| old_ty.type_id == ty.type_id)
         {
             // TODO: Print scope in this error message
-            return Err(format!(
-                "Type {} is already registered under a different name: {}`",
-                ty.rust_name, old_ty.name.ident,
-            ));
+            return Err(RegistrationError {
+                message: format!(
+                    "Type {} is already registered under a different name: {}`",
+                    ty.rust_name, old_ty.name.ident,
+                ),
+                location: ty.location.clone(),
+            });
         }
 
         self.type_checker
-            .declare_runtime_type(scope, ty.ident, ty.type_id)?;
+            .declare_runtime_type(scope, ty.ident, ty.type_id)
+            .map_err(|e| RegistrationError {
+                message: e,
+                location: ty.location.clone(),
+            })?;
 
         let name = ResolvedName {
             scope,
@@ -522,7 +587,7 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         items: &[Item],
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for item in items {
             match item {
                 Item::Module(Module {
@@ -546,12 +611,21 @@ impl Runtime {
                 Item::Function(f) => {
                     self.declare_function(scope, f, false)?;
                 }
-                Item::Impl(items::Impl { ty, children }) => {
+                Item::Impl(items::Impl {
+                    ty,
+                    children,
+                    location,
+                }) => {
                     let ty = self
                         .types
                         .iter()
                         .find(|t| t.type_id == *ty)
-                        .ok_or("Type not found")?;
+                        .ok_or_else(|| RegistrationError {
+                            message: "Impl block with unregistered type"
+                                .into(),
+                            location: location.clone(),
+                        })?;
+
                     let scope = ty.name.scope;
                     let ident = ty.name.ident;
                     let scope =
@@ -568,20 +642,29 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         items: &[Item],
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for item in items {
             match item {
                 Item::Function(f) => {
                     self.declare_function(scope, f, true)?;
                 }
-                Item::Impl(_) => {
-                    return Err("Cannot nest an impl in an impl".into());
+                Item::Impl(x) => {
+                    return Err(RegistrationError {
+                        message: "Cannot nest an impl in an impl".into(),
+                        location: x.location.clone(),
+                    });
                 }
-                Item::Type(_) => {
-                    return Err("Cannot nest a type in an impl".into());
+                Item::Type(x) => {
+                    return Err(RegistrationError {
+                        message: "Cannot nest a type in an impl".into(),
+                        location: x.location.clone(),
+                    });
                 }
-                Item::Module(_) => {
-                    return Err("Cannot nest a module in a type".into());
+                Item::Module(x) => {
+                    return Err(RegistrationError {
+                        message: "Cannot nest a module in an impl".into(),
+                        location: x.location.clone(),
+                    });
                 }
                 Item::Use(_) => {}
                 Item::Constant(_) => {}
@@ -596,18 +679,18 @@ impl Runtime {
         scope: ScopeRef,
         f: &Function,
         method: bool,
-    ) -> Result<(), String> {
-        Self::check_name(f.ident)?;
+    ) -> Result<(), RegistrationError> {
+        Self::check_name(&f.location, f.ident)?;
 
         let parameter_types: Vec<_> = f
             .func
             .parameter_types()
             .iter()
-            .map(|ty| TypeChecker::rust_type_to_roto_type(self, *ty))
+            .map(|ty| Self::rust_type_to_roto_type(self, &f.location, *ty))
             .collect::<Result<_, _>>()?;
 
         let return_type =
-            TypeChecker::rust_type_to_roto_type(self, f.func.return_type())?;
+            self.rust_type_to_roto_type(&f.location, f.func.return_type())?;
 
         let id = self.functions.len();
         let func = RuntimeFunction {
@@ -622,14 +705,19 @@ impl Runtime {
         };
         self.functions.push(func);
 
-        self.type_checker.declare_runtime_function(
-            scope,
-            f.ident,
-            RuntimeFunctionRef(id),
-            parameter_types,
-            return_type,
-            method,
-        )?;
+        self.type_checker
+            .declare_runtime_function(
+                scope,
+                f.ident,
+                RuntimeFunctionRef(id),
+                parameter_types,
+                return_type,
+                method,
+            )
+            .map_err(|e| RegistrationError {
+                message: e,
+                location: f.location.clone(),
+            })?;
 
         Ok(())
     }
@@ -638,7 +726,7 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         items: &[Item],
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for item in items {
             match item {
                 Item::Module(module) => {
@@ -659,17 +747,22 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         constant: &Constant,
-    ) -> Result<(), String> {
-        let ty = TypeChecker::rust_type_to_roto_type(self, constant.type_id)?;
-        self.type_checker.declare_runtime_constant(
-            scope,
-            constant.ident,
-            ty,
-        )?;
+    ) -> Result<(), RegistrationError> {
+        let ty = self
+            .rust_type_to_roto_type(&constant.location, constant.type_id)?;
+
+        self.type_checker
+            .declare_runtime_constant(scope, constant.ident, ty)
+            .map_err(|e| RegistrationError {
+                message: e,
+                location: constant.location.clone(),
+            })?;
+
         let name = ResolvedName {
             scope,
             ident: constant.ident,
         };
+
         self.constants.insert(
             name,
             RuntimeConstant {
@@ -679,6 +772,7 @@ impl Runtime {
                 value: constant.value.clone(),
             },
         );
+
         Ok(())
     }
 
@@ -686,7 +780,7 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         items: &[Item],
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for item in items {
             match item {
                 Item::Function(_) => {}
@@ -708,7 +802,7 @@ impl Runtime {
         &mut self,
         scope: ScopeRef,
         use_item: &Use,
-    ) -> Result<(), String> {
+    ) -> Result<(), RegistrationError> {
         for import in &use_item.imports {
             let mut new_scope = scope;
             let path = &import[..import.len() - 1];
@@ -717,17 +811,38 @@ impl Runtime {
                 new_scope = self
                     .type_checker
                     .get_scope_of(scope, part.into())
-                    .ok_or("Could not get scope")?;
+                    .ok_or_else(|| RegistrationError {
+                        message: format!("Could not get scope of {}", part),
+                        location: use_item.location.clone(),
+                    })?;
             }
-            self.type_checker.declare_runtime_import(
-                scope,
-                ResolvedName {
-                    scope: new_scope,
-                    ident: last.into(),
-                },
-            )?;
+            self.type_checker
+                .declare_runtime_import(
+                    scope,
+                    ResolvedName {
+                        scope: new_scope,
+                        ident: last.into(),
+                    },
+                )
+                .map_err(|e| RegistrationError {
+                    message: e,
+                    location: use_item.location.clone(),
+                })?;
         }
         Ok(())
+    }
+
+    fn rust_type_to_roto_type(
+        &self,
+        location: &Location,
+        type_id: TypeId,
+    ) -> Result<crate::typechecker::types::Type, RegistrationError> {
+        TypeChecker::rust_type_to_roto_type(self, type_id).map_err(|e| {
+            RegistrationError {
+                message: e,
+                location: location.clone(),
+            }
+        })
     }
 
     fn extract_name<T: Reflect>() -> &'static str {
@@ -775,7 +890,17 @@ impl Runtime {
     }
 
     /// Check that the given string is a valid Roto identifier
-    fn check_name(name: Identifier) -> Result<(), String> {
+    fn check_name(
+        location: &Location,
+        name: Identifier,
+    ) -> Result<(), RegistrationError> {
+        Self::check_name_internal(name).map_err(|e| RegistrationError {
+            message: e,
+            location: location.clone(),
+        })
+    }
+
+    fn check_name_internal(name: Identifier) -> Result<(), String> {
         let mut lexer = Lexer::new(name.as_str());
         let Some((Ok(tok), _)) = lexer.next() else {
             return Err(format!(

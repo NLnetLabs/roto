@@ -7,9 +7,9 @@ use crate::{
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
         ty::TypeDescription,
-        CloneDrop, ConstantValue, Movability,
+        CloneDrop, ConstantValue, Movability, RegistrationError,
     },
-    Reflect, Runtime,
+    Location, Reflect, Runtime,
 };
 
 #[derive(Clone, Debug)]
@@ -57,20 +57,23 @@ pub struct Module {
     pub(crate) ident: Identifier,
     pub(crate) _doc: String,
     pub(crate) children: Vec<Item>,
+    pub(crate) location: Location,
 }
 
 impl Module {
     pub fn new(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
-    ) -> Result<Self, String> {
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(name)?;
+        Runtime::check_name(&location, name)?;
 
         Ok(Self {
             ident: name,
             _doc: doc.as_ref().to_string(),
             children: Vec::new(),
+            location,
         })
     }
 
@@ -117,42 +120,47 @@ pub struct Type {
     pub(crate) layout: Layout,
     pub(crate) movability: Movability,
     pub(crate) children: Vec<Item>,
+    pub(crate) location: Location,
 }
 
 impl Type {
     pub fn clone<T: Reflect + Clone>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
-    ) -> Result<Self, String> {
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
         let movability = Movability::CloneDrop(CloneDrop {
             clone: extern_clone::<T> as _,
             drop: extern_drop::<T> as _,
         });
-        Self::new::<T>(name, doc, movability)
+        Self::new::<T>(name, doc, movability, location)
     }
 
     pub fn copy<T: Reflect + Copy>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
-    ) -> Result<Self, String> {
-        Self::new::<T>(name, doc, Movability::Copy)
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
+        Self::new::<T>(name, doc, Movability::Copy, location)
     }
 
     /// For internal use only, might lead to unexpected behaviour if used incorrectly
     pub(crate) fn value<T: Reflect + Copy>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
-    ) -> Result<Self, String> {
-        Self::new::<T>(name, doc, Movability::Value)
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
+        Self::new::<T>(name, doc, Movability::Value, location)
     }
 
     fn new<T: Reflect>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         movability: Movability,
-    ) -> Result<Self, String> {
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(name)?;
+        Runtime::check_name(&location, name)?;
 
         let ty = T::resolve();
 
@@ -164,10 +172,13 @@ impl Type {
         };
 
         if !is_allowed {
-            return Err(format!(
-                "Cannot register the type `{}`. Only `Val<T>` types can be registered",
-                ty.rust_name
-            ));
+            return Err(RegistrationError {
+                message: format!(
+                    "Cannot register the type `{}`. Only `Val<T>` types can be registered",
+                    ty.rust_name
+                ),
+                location,
+            });
         }
 
         Ok(Self {
@@ -178,6 +189,7 @@ impl Type {
             layout: ty.layout,
             movability,
             children: Vec::new(),
+            location,
         })
     }
 
@@ -204,6 +216,7 @@ pub struct Function {
     pub(crate) doc: String,
     pub(crate) params: Vec<Identifier>,
     pub(crate) func: FunctionDescription,
+    pub(crate) location: Location,
 }
 
 impl Function {
@@ -212,9 +225,10 @@ impl Function {
         doc: impl AsRef<str>,
         params: Vec<impl Into<Identifier>>,
         func: impl RegisterableFn<A, R>,
-    ) -> Result<Self, String> {
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(name)?;
+        Runtime::check_name(&location, name)?;
 
         let func = FunctionDescription::of(func);
 
@@ -223,6 +237,7 @@ impl Function {
             doc: doc.as_ref().into(),
             params: params.into_iter().map(|p| p.into()).collect(),
             func,
+            location,
         })
     }
 }
@@ -245,6 +260,7 @@ pub struct Constant {
     pub(crate) type_id: TypeId,
     pub(crate) doc: String,
     pub(crate) value: ConstantValue,
+    pub(crate) location: Location,
 }
 
 impl Constant {
@@ -252,12 +268,13 @@ impl Constant {
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         val: T,
-    ) -> Result<Self, String>
+        location: Location,
+    ) -> Result<Self, RegistrationError>
     where
         T::Transformed: Send + Sync + 'static,
     {
         let name = name.into();
-        Runtime::check_name(name)?;
+        Runtime::check_name(&location, name)?;
 
         let ty = T::resolve();
 
@@ -266,6 +283,7 @@ impl Constant {
             doc: doc.as_ref().into(),
             type_id: ty.type_id,
             value: ConstantValue::new(val.transform()),
+            location,
         })
     }
 }
@@ -286,14 +304,16 @@ impl From<Constant> for Item {
 pub struct Impl {
     pub(crate) ty: TypeId,
     pub(crate) children: Vec<Item>,
+    pub(crate) location: Location,
 }
 
 impl Impl {
-    pub fn new<T: Reflect>() -> Self {
+    pub fn new<T: Reflect>(location: Location) -> Self {
         let ty = T::resolve();
         Self {
             ty: ty.type_id,
             children: Vec::new(),
+            location,
         }
     }
 
@@ -317,11 +337,12 @@ impl From<Impl> for Item {
 #[derive(Clone, Debug)]
 pub struct Use {
     pub(crate) imports: Vec<Vec<String>>,
+    pub(crate) location: Location,
 }
 
 impl Use {
-    pub fn new(imports: Vec<Vec<String>>) -> Self {
-        Self { imports }
+    pub fn new(imports: Vec<Vec<String>>, location: Location) -> Self {
+        Self { imports, location }
     }
 }
 
