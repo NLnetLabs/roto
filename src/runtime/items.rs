@@ -55,7 +55,7 @@ impl<T: IntoItems> IntoItems for Vec<T> {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub(crate) ident: Identifier,
-    pub(crate) doc: String,
+    pub(crate) _doc: String,
     pub(crate) children: Vec<Item>,
 }
 
@@ -69,7 +69,7 @@ impl Module {
 
         Ok(Self {
             ident: name,
-            doc: doc.as_ref().to_string(),
+            _doc: doc.as_ref().to_string(),
             children: Vec::new(),
         })
     }
@@ -113,7 +113,6 @@ pub struct Type {
     pub(crate) ident: Identifier,
     pub(crate) rust_name: &'static str,
     pub(crate) doc: String,
-    pub(crate) description: TypeDescription,
     pub(crate) type_id: TypeId,
     pub(crate) layout: Layout,
     pub(crate) movability: Movability,
@@ -175,7 +174,6 @@ impl Type {
             ident: name,
             rust_name: std::any::type_name::<T>(),
             doc: doc.as_ref().into(),
-            description: ty.description,
             type_id: ty.type_id,
             layout: ty.layout,
             movability,

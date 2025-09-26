@@ -424,14 +424,19 @@ impl TypeChecker {
         ident: Identifier,
         ty: Type,
     ) -> Result<(), String> {
-        if let Err(_) = self.type_info.scope_graph.insert_constant(
-            scope,
-            &Meta {
-                id: MetaId(0),
-                node: ident,
-            },
-            &ty,
-        ) {
+        if self
+            .type_info
+            .scope_graph
+            .insert_constant(
+                scope,
+                &Meta {
+                    id: MetaId(0),
+                    node: ident,
+                },
+                &ty,
+            )
+            .is_err()
+        {
             // TODO: Improve error message
             return Err("Name declared twice!".into());
         }
@@ -443,10 +448,11 @@ impl TypeChecker {
         scope: ScopeRef,
         name: ResolvedName,
     ) -> Result<(), String> {
-        if let Err(_) =
-            self.type_info
-                .scope_graph
-                .insert_import(scope, MetaId(0), name)
+        if self
+            .type_info
+            .scope_graph
+            .insert_import(scope, MetaId(0), name)
+            .is_err()
         {
             // TODO: Improve error message
             return Err("Name declared twice!".into());
@@ -782,24 +788,6 @@ impl TypeChecker {
     ) -> TypeResult<()> {
         let ty = ty.borrow();
         match self.type_info.scope_graph.insert_context(&k, ty, offset) {
-            Ok(name) => {
-                self.type_info.resolved_names.insert(k.id, name);
-                self.type_info.expr_types.insert(k.id, ty.clone());
-                Ok(())
-            }
-            Err(()) => Err(self.error_declared_twice(&k, MetaId(0))),
-        }
-    }
-
-    /// Insert a constant into the global scope
-    fn insert_constant(
-        &mut self,
-        scope: ScopeRef,
-        k: Meta<Identifier>,
-        ty: impl Borrow<Type>,
-    ) -> TypeResult<()> {
-        let ty = ty.borrow();
-        match self.type_info.scope_graph.insert_constant(scope, &k, ty) {
             Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
                 self.type_info.expr_types.insert(k.id, ty.clone());

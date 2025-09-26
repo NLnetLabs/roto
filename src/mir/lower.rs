@@ -1079,7 +1079,7 @@ impl<'r> Lowerer<'r> {
         let ty = self
             .runtime
             .types()
-            .into_iter()
+            .iter()
             .find(|t| t.type_id() == type_id)
             .unwrap();
 

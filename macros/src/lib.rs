@@ -74,7 +74,7 @@ enum Item {
     Mod(syn::Ident, ListOrAssign),
     Impl(syn::Type, ListOrAssign),
     Const(syn::ItemConst),
-    Item(syn::Expr),
+    Include(syn::Expr),
     Use(syn::ItemUse),
 }
 
@@ -178,7 +178,7 @@ impl Parse for ItemList {
                 _ if input.peek(kw::item) => {
                     input.parse::<kw::item>()?;
                     let expr: syn::Expr = input.parse()?;
-                    Item::Item(expr)
+                    Item::Include(expr)
                 }
                 _ if input.peek(Token![use]) => {
                     let item = input.parse()?;
@@ -369,7 +369,7 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
                     roto::Constant::new::<#ty>(#ident_str, #doc, #expr).unwrap()
                 }
             }
-            Item::Item(item) => {
+            Item::Include(item) => {
                 quote! { #item }
             }
             Item::Use(item) => {
@@ -405,7 +405,7 @@ fn flatten_use_tree(tree: &syn::UseTree) -> Vec<Vec<String>> {
             vec![vec![name.ident.to_string()]]
         }
         syn::UseTree::Group(g) => {
-            g.items.iter().flat_map(|i| flatten_use_tree(i)).collect()
+            g.items.iter().flat_map(flatten_use_tree).collect()
         }
         syn::UseTree::Rename(_) => panic!(),
         syn::UseTree::Glob(_) => panic!(),
