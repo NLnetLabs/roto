@@ -218,7 +218,7 @@ pub struct RuntimeType {
 
 impl RuntimeType {
     pub fn name(&self) -> ResolvedName {
-        self.name.clone()
+        self.name
     }
 
     pub fn type_id(&self) -> TypeId {
@@ -232,13 +232,6 @@ impl RuntimeType {
     pub fn layout(&self) -> Layout {
         self.layout.clone()
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FunctionKind {
-    Free,
-    Method(TypeId),
-    StaticMethod(TypeId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -515,7 +508,7 @@ impl Runtime {
         };
 
         self.types.push(RuntimeType {
-            name: name,
+            name,
             type_id: ty.type_id,
             movability: ty.movability.clone(),
             layout: ty.layout.clone(),
@@ -667,8 +660,7 @@ impl Runtime {
         scope: ScopeRef,
         constant: &Constant,
     ) -> Result<(), String> {
-        let ty =
-            TypeChecker::rust_type_to_roto_type(&self, constant.type_id)?;
+        let ty = TypeChecker::rust_type_to_roto_type(self, constant.type_id)?;
         self.type_checker.declare_runtime_constant(
             scope,
             constant.ident,
@@ -681,7 +673,7 @@ impl Runtime {
         self.constants.insert(
             name,
             RuntimeConstant {
-                name: name,
+                name,
                 ty: constant.type_id,
                 docstring: constant.doc.clone(),
                 value: constant.value.clone(),
@@ -804,38 +796,6 @@ impl Runtime {
                 Err(format!("Name {name:?} is not a valid Roto identifier."))
             }
         }
-    }
-
-    fn check_description(
-        &self,
-        description: &FunctionDescription,
-    ) -> Result<(), String> {
-        let check_type = |id: &TypeId| {
-            self.get_runtime_type(*id).ok_or_else(|| {
-                let ty = TypeRegistry::get(*id).unwrap();
-                format!(
-                    "Registered a function using an unregistered type: `{}`",
-                    ty.rust_name
-                )
-            })
-        };
-
-        // TODO: This check needs to be done recursively
-        for type_id in description.parameter_types() {
-            let ty = TypeRegistry::get(*type_id).unwrap();
-            let runtime_ty = check_type(type_id)?;
-            if let Movability::Value = runtime_ty.movability {
-                if !matches!(ty.description, TypeDescription::Leaf) {
-                    let ty = TypeRegistry::get(ty.type_id).unwrap();
-                    return Err(format!(
-                        "Type `{}` should be passed by value. Try removing the `Val<T>` around `T`",
-                        ty.rust_name,
-                    ));
-                }
-            }
-        }
-
-        Ok(())
     }
 
     fn find_type(&self, id: TypeId, name: &str) -> Result<&Ty, String> {

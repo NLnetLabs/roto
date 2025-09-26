@@ -527,15 +527,6 @@ pub struct Function {
     pub definition: FunctionDefinition,
 }
 
-/// How a function should be called in Roto: as a free function or a
-/// (static) method.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FunctionKind {
-    Free,
-    Method(Type),
-    StaticMethod(Type),
-}
-
 impl Function {
     pub fn new(
         name: ResolvedName,
