@@ -7,18 +7,15 @@ use std::{
     },
 };
 
-use inetnum::{addr::Prefix, asn::Asn};
-use roto_macros::{roto_function, roto_method, roto_static_method};
-
 use crate::{
-    file_tree::FileSpec, pipeline::Package,
-    runtime::tests::routecore_runtime, source_file, src, Context, FileTree,
-    Runtime, Val, Verdict,
+    file_tree::FileSpec, library, pipeline::Package, source_file, src,
+    Context, FileTree, Runtime, Val, Verdict,
 };
+use inetnum::{addr::Prefix, asn::Asn};
 
 #[track_caller]
 fn compile(f: FileTree) -> Package {
-    let runtime = routecore_runtime().unwrap();
+    let runtime = Runtime::new();
     compile_with_runtime(f, runtime)
 }
 
@@ -560,7 +557,14 @@ fn call_runtime_function() {
     "
     );
 
-    let mut p = compile(s);
+    let rt = Runtime::from_items(library! {
+        fn pow(x: u32, y: u32) -> u32 {
+            x.pow(y)
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
@@ -587,7 +591,16 @@ fn call_runtime_method() {
     "
     );
 
-    let mut p = compile(s);
+    let rt = Runtime::from_items(library! {
+        impl u32 {
+            fn is_even(x: u32) -> bool {
+                x % 2 == 0
+            }
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
@@ -625,13 +638,17 @@ fn issue_52() {
         _x: i32,
     }
 
-    let mut rt = Runtime::new();
-    rt.register_clone_type::<Val<Foo>>("A Foo!").unwrap();
+    let rt = Runtime::from_items(library! {
+        /// A Foo!
+        clone type Foo = Val<Foo>;
 
-    #[roto_static_method(rt, Val<Foo>)]
-    fn bar(_x: u32) -> u32 {
-        2
-    }
+        impl Val<Foo> {
+            fn bar(_x: u32) -> u32 {
+                2
+            }
+        }
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -646,21 +663,16 @@ fn issue_52() {
 }
 
 #[test]
-#[should_panic]
-fn issue_54() {
-    let mut rt = Runtime::new();
-
+fn register_with_non_registered_type() {
     #[derive(Clone)]
     struct Foo {
         _x: i32,
     }
 
-    // We 'forget' to register type Foo:
-    // rt.register_type::<Foo>().unwrap();
-
-    // But we do register a method on it:
-    #[roto_method(rt, Val<Foo>)]
-    fn bar(_foo: Val<Foo>, _x: u32) {}
+    Runtime::from_items(library! {
+        fn bar(_foo: Val<Foo>, _x: u32) {}
+    })
+    .unwrap_err();
 }
 
 #[test]
@@ -1177,10 +1189,10 @@ fn construct_prefix() {
 
 #[test]
 fn function_returning_unit() {
-    let mut runtime = Runtime::new();
-
-    #[roto_function(runtime)]
-    fn unit_unit() {}
+    let rt = Runtime::from_items(library! {
+        fn unit_unit() {}
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -1190,7 +1202,7 @@ fn function_returning_unit() {
     "
     );
 
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
@@ -1321,10 +1333,11 @@ fn arc_type() {
         }
     }
 
-    let mut rt = Runtime::new();
-
-    rt.register_clone_type::<Val<CloneDrop>>("A CloneDrop type")
-        .unwrap();
+    let rt = Runtime::from_items(library! {
+        /// A special type for which we track the number of clones and drops
+        clone type CloneDrop = Val<CloneDrop>;
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -2701,23 +2714,23 @@ fn use_type_from_other_module_in_type() {
 
 #[test]
 fn mutate() {
-    let mut runtime = Runtime::new();
-
     #[derive(Copy, Clone, Debug)]
     struct MyType {
         i: i16,
     }
 
-    runtime
-        .register_copy_type::<Val<*mut MyType>>("my type")
-        .unwrap();
+    let rt = Runtime::from_items(library! {
+        copy type MyType = Val<*mut MyType>;
 
-    #[roto_method(runtime, Val<*mut MyType>)]
-    fn increase(mut t: Val<*mut MyType>) {
-        eprintln!("increase, pre: {}", unsafe { (**t).i });
-        unsafe { (**t).i += 1 };
-        eprintln!("increase, post: {}", unsafe { (**t).i });
-    }
+        impl Val<*mut MyType> {
+            fn increase(mut t: Val<*mut MyType>) {
+                eprintln!("increase, pre: {}", unsafe { (**t).i });
+                unsafe { (**t).i += 1 };
+                eprintln!("increase, post: {}", unsafe { (**t).i });
+            }
+        }
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -2728,7 +2741,7 @@ fn mutate() {
     "
     );
 
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(Val<*mut MyType>) -> Verdict<Val<*mut MyType>, ()>>("main")
         .expect("No function found (or mismatched types)");
@@ -2749,17 +2762,16 @@ fn mutate() {
 
 #[test]
 fn return_vec() {
-    let mut runtime = Runtime::new();
-
     #[derive(Clone, Debug, Default)]
     #[allow(dead_code)]
     struct MyType {
         v: Vec<u8>,
     }
 
-    runtime
-        .register_clone_type::<Val<MyType>>("my type")
-        .unwrap();
+    let rt = Runtime::from_items(library! {
+        clone type MyType = Val<MyType>;
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -2769,7 +2781,7 @@ fn return_vec() {
     "
     );
 
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(Val<MyType>) -> Val<MyType>>("main")
         .expect("No function found (or mismatched types)");
@@ -2777,32 +2789,6 @@ fn return_vec() {
     let t = MyType { v: vec![0x01] };
     let res = f.call(&mut (), roto::Val(t));
     println!("Returned with {:?}", res.0.v.as_ptr());
-}
-
-#[test]
-fn register_renamed_method() {
-    let mut runtime = Runtime::new();
-
-    #[roto_method(runtime, u32, foo)]
-    fn bar(x: u32) -> u32 {
-        2 * x
-    }
-
-    let s = src!(
-        "
-        fn main(x: u32) -> u32 {
-            x.foo()
-        }
-    "
-    );
-
-    let mut p = compile_with_runtime(s, runtime);
-    let f = p
-        .get_function::<(), fn(u32) -> u32>("main")
-        .expect("No function found (or mismatched types)");
-
-    let res = f.call(&mut (), 2);
-    assert_eq!(res, 4);
 }
 
 #[test]
@@ -2818,20 +2804,24 @@ fn name_collision() {
     }
 
     for _ in 0..100 {
-        let mut runtime = Runtime::new();
+        let rt = Runtime::from_items(library! {
+            clone type A = Val<A>;
 
-        runtime.register_clone_type::<Val<A>>("").unwrap();
-        runtime.register_clone_type::<Val<B>>("").unwrap();
+            impl Val<A> {
+                fn foo(_a: Val<A>) -> bool {
+                    true
+                }
+            }
 
-        #[roto_method(runtime, Val<A>, foo)]
-        fn foo_a(_: Val<A>) -> bool {
-            true
-        }
+            clone type B = Val<B>;
 
-        #[roto_method(runtime, Val<B>, foo)]
-        fn foo_b(_: Val<B>) -> bool {
-            unreachable!()
-        }
+            impl Val<B> {
+                fn foo(_b: Val<B>) -> bool {
+                    unreachable!()
+                }
+            }
+        })
+        .unwrap();
 
         let s = src!(
             "
@@ -2845,7 +2835,7 @@ fn name_collision() {
        "
         );
 
-        let mut p = compile_with_runtime(s, runtime);
+        let mut p = compile_with_runtime(s, rt);
         let f = p
             .get_function::<(), fn(Val<A>) -> Verdict<bool, ()>>("main")
             .expect("No function found (or mismatched types)");
@@ -2860,14 +2850,12 @@ fn name_collision() {
 #[test]
 fn refcounting_in_a_recursive_function() {
     #[derive(Debug, Clone)]
-    #[allow(unused)]
     struct Foo;
 
-    let mut runtime = Runtime::new();
-
-    runtime
-        .register_clone_type_with_name::<Val<Arc<Foo>>>("Foo", "...")
-        .unwrap();
+    let rt = Runtime::from_items(library! {
+        clone type Foo = Val<Arc<Foo>>;
+    })
+    .unwrap();
 
     let s = src!(
         r##"
@@ -2882,7 +2870,7 @@ fn refcounting_in_a_recursive_function() {
     "##
     );
 
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(Val<Arc<Foo>>) -> Verdict<i32, i32>>("main")
         .unwrap();
@@ -3084,10 +3072,7 @@ fn let_declaration_is_by_value() {
 
 #[test]
 fn sigill() {
-    let mut runtime = Runtime::new();
-
     struct Arcane(Arc<()>);
-    runtime.register_clone_type::<Val<Arcane>>("...").unwrap();
 
     impl Clone for Arcane {
         fn clone(&self) -> Self {
@@ -3102,15 +3087,20 @@ fn sigill() {
         }
     }
 
-    #[roto_method(runtime, Val<Arcane>)]
-    fn get(Val(a): Val<Arcane>) -> u64 {
-        Arc::strong_count(&a.0) as u64
-    }
+    let rt = Runtime::from_items(library! {
+        clone type Arcane = Val<Arcane>;
 
-    #[roto_function(runtime)]
-    fn make_arcane() -> Val<Arcane> {
-        Val(Arcane(Arc::new(())))
-    }
+        impl Val<Arcane> {
+            fn get(a: Val<Arcane>) -> u64 {
+                Arc::strong_count(&a.0.0) as u64
+            }
+        }
+
+        fn make_arcane() -> Val<Arcane> {
+            Val(Arcane(Arc::new(())))
+        }
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -3128,7 +3118,7 @@ fn sigill() {
     "
     );
 
-    let mut compiled = compile_with_runtime(s, runtime);
+    let mut compiled = compile_with_runtime(s, rt);
     let func = compiled
         .get_function::<(), fn() -> Val<Arcane>>("foo")
         .unwrap();
@@ -3136,21 +3126,21 @@ fn sigill() {
     assert_eq!(Arc::strong_count(&a.0), 1);
 }
 
-/// The normal Rust string type will fail more often than Arc<str>
+/// The normal Rust string type will fail more often than `Arc<str>`
 /// if we treat it wrong, so this test stress-tests Roto a bit with that
 /// type.
 #[test]
 fn rust_string_string() {
-    let mut runtime = Runtime::new();
+    let rt = Runtime::from_items(library! {
+        clone type RustString = Val<String>;
 
-    runtime
-        .register_clone_type_with_name::<Val<String>>("RustString", "...")
-        .unwrap();
-
-    #[roto_static_method(runtime, Val<String>)]
-    fn new(s: Arc<str>) -> Val<String> {
-        Val(s.as_ref().into())
-    }
+        impl Val<String> {
+            fn new(s: Arc<str>) -> Val<String> {
+                Val(s.as_ref().into())
+            }
+        }
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -3169,7 +3159,7 @@ fn rust_string_string() {
         "
     );
 
-    let mut compiled = compile_with_runtime(s, runtime);
+    let mut compiled = compile_with_runtime(s, rt);
     let func = compiled
         .get_function::<(), fn() -> Val<String>>("foo")
         .unwrap();
@@ -3183,12 +3173,12 @@ fn rust_string_string() {
 
 #[test]
 fn return_verdict_from_runtime_function() {
-    let mut runtime = Runtime::new();
-
-    #[roto_function(runtime)]
-    fn foo() -> Verdict<(), ()> {
-        Verdict::Accept(())
-    }
+    let rt = Runtime::from_items(library! {
+        fn foo() -> Verdict<(), ()> {
+            Verdict::Accept(())
+        }
+    })
+    .unwrap();
 
     let s = src!(
         "
@@ -3198,7 +3188,7 @@ fn return_verdict_from_runtime_function() {
     "
     );
 
-    let mut compiled = compile_with_runtime(s, runtime);
+    let mut compiled = compile_with_runtime(s, rt);
     let func = compiled
         .get_function::<(), fn() -> Verdict<(), ()>>("bar")
         .unwrap();
@@ -3214,12 +3204,12 @@ fn string_global() {
         }"
     );
 
-    let mut runtime = Runtime::new();
+    let rt = Runtime::from_items(library! {
+        const FOO: Arc<str> = "BAR".into();
+    })
+    .unwrap();
 
-    let foo: Arc<str> = "BAR".into();
-    runtime.register_constant("FOO", "...", foo).unwrap();
-
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p.get_function::<(), fn() -> Arc<str>>("use_foo").unwrap();
 
     assert_eq!(f.call(&mut ()), "BAR".into());
@@ -3316,16 +3306,16 @@ fn bool_is_not_true() {
 
 #[test]
 fn register_on_optstr() {
-    let mut runtime = Runtime::new();
+    let rt = Runtime::from_items(library! {
+        clone type OptStr = Val<Option<Arc<str>>>;
 
-    runtime
-        .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
-        .unwrap();
-
-    #[roto_method(runtime, Val<Option<Arc<str>>>)]
-    fn unwrap_or_empty(Val(x): Val<Option<Arc<str>>>) -> Arc<str> {
-        x.unwrap_or_default()
-    }
+        impl Val<Option<Arc<str>>> {
+            fn unwrap_or_empty(x: Val<Option<Arc<str>>>) -> Arc<str> {
+                x.0.unwrap_or_default()
+            }
+        }
+    })
+    .unwrap();
 
     let s = src!(
         r#"
@@ -3335,7 +3325,7 @@ fn register_on_optstr() {
     "#
     );
 
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn(Val<Option<Arc<str>>>) -> Arc<str>>("foo")
         .expect("No function found (or mismatched types)");
@@ -3351,10 +3341,10 @@ fn register_on_optstr() {
 fn register_closure() {
     let some_number = 10;
 
-    let mut runtime = Runtime::new();
-    runtime
-        .register_fn("get", "", [], move || some_number)
-        .unwrap();
+    let rt = Runtime::from_items(library! {
+        let get = move || { some_number };
+    })
+    .unwrap();
 
     let s = src!(
         r#"
@@ -3364,7 +3354,7 @@ fn register_closure() {
         "#
     );
 
-    let mut p = compile_with_runtime(s, runtime);
+    let mut p = compile_with_runtime(s, rt);
     let f = p
         .get_function::<(), fn() -> i32>("foo")
         .expect("No function found (or mismatched types)");
@@ -3377,12 +3367,12 @@ fn register_closure() {
 fn increment_via_closure() {
     static COUNTER: AtomicI32 = AtomicI32::new(0);
 
-    let mut runtime = Runtime::new();
-    runtime
-        .register_fn("inc", "", [], || {
-            COUNTER.fetch_add(1, Ordering::Relaxed);
-        })
-        .unwrap();
+    let runtime = Runtime::from_items(library! {
+        let inc = || {
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        };
+    })
+    .unwrap();
 
     let s = src!(
         r#"

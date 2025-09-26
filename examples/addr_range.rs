@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use roto::{roto_method, Runtime, Val, Verdict};
+use roto::{library, Runtime, Val, Verdict};
 
 #[derive(Clone)]
 struct AddrRange {
@@ -9,22 +9,23 @@ struct AddrRange {
 }
 
 fn main() {
-    // Create a runtime
-    let mut runtime = Runtime::new();
+    // Create the Roto types to register into the runtime
+    let lib = library! {
+        /// A range of IP addresses
+        clone type AddrRange = Val<AddrRange>;
 
-    // Register the AddrRange type into Roto with a docstring
-    runtime
-        .register_clone_type::<Val<AddrRange>>("A range of IP addresses")
-        .unwrap();
+        impl Val<AddrRange> {
+            fn contains(range: Val<AddrRange>, addr: IpAddr) -> bool {
+                range.min <= addr && addr <= range.max
+            }
+        }
+    };
 
-    // Register the contains method with a docstring
-    #[roto_method(runtime, Val<AddrRange>)]
-    fn contains(range: Val<AddrRange>, addr: Val<IpAddr>) -> bool {
-        range.min <= *addr && *addr <= range.max
-    }
+    // Create the runtime with the items
+    let rt = Runtime::from_items(lib).unwrap();
 
     // Compile the program with our runtime
-    let mut program = runtime.compile("examples/addr_range.roto").unwrap();
+    let mut program = rt.compile("examples/addr_range.roto").unwrap();
 
     // Extract the function
     let function = program

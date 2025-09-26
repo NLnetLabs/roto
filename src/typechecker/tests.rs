@@ -1,11 +1,10 @@
 use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
-use crate::runtime::tests::routecore_runtime;
-use crate::{source_file, src, Context, Runtime};
+use crate::{library, source_file, src, Context, Runtime, Val};
 
 #[track_caller]
 fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
-    typecheck_with_runtime(loaded, routecore_runtime().unwrap())
+    typecheck_with_runtime(loaded, Runtime::new())
 }
 
 #[track_caller]
@@ -818,6 +817,13 @@ fn enum_match() {
 
 #[test]
 fn runtime_function() {
+    let rt = Runtime::from_items(library! {
+        fn pow(x: u32, y: u32) -> u32 {
+            x.pow(y)
+        }
+    })
+    .unwrap();
+
     let s = src!(
         "
         filtermap main(x: u32) {
@@ -829,7 +835,7 @@ fn runtime_function() {
         }
     "
     );
-    typecheck(s).unwrap();
+    typecheck_with_runtime(s, rt.clone()).unwrap();
 
     let s = src!(
         "
@@ -843,7 +849,7 @@ fn runtime_function() {
         }
     "
     );
-    typecheck(s).unwrap_err();
+    typecheck_with_runtime(s, rt).unwrap_err();
 }
 
 #[test]
@@ -943,6 +949,8 @@ fn shadow_variable() {
 
 #[test]
 fn use_globals() {
+    use routecore::bgp::communities::{Community, Wellknown};
+
     let s = src!(
         "
         filtermap main() {
@@ -951,7 +959,14 @@ fn use_globals() {
         "
     );
 
-    typecheck(s).unwrap();
+    let rt = Runtime::from_items(library! {
+            clone type Community = Val<Community>;
+
+            /// The well-known BLACKHOLE community
+            const BLACKHOLE: Val<Community> = Val(Community::from(Wellknown::Blackhole));
+    }).unwrap();
+
+    typecheck_with_runtime(s, rt).unwrap();
 }
 
 #[test]

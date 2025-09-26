@@ -1,6 +1,8 @@
+#![allow(unused_imports)]
+
 use std::sync::Arc;
 
-use crate::Val;
+use crate::{library, runtime::items::IntoItems as _, Val};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
@@ -10,244 +12,230 @@ use routecore::bgp::{
     types::{LocalPref, OriginType},
 };
 
-pub fn routecore_runtime() -> Result<Runtime, String> {
-    let mut rt = Runtime::new();
-
-    rt.register_clone_type::<Val<OriginType>>("TODO")?;
-    rt.register_clone_type::<Val<LocalPref>>("TODO")?;
-    rt.register_clone_type::<Val<Community>>("TODO")?;
-    rt.register_clone_type::<Val<HopPath>>("TODO")?;
-    rt.register_clone_type::<Val<AsPath<Vec<u8>>>>("TODO")?;
-
-    #[roto_function(rt)]
-    fn pow(x: u32, y: u32) -> u32 {
-        x.pow(y)
-    }
-
-    #[roto_method(rt, u32)]
-    fn is_even(x: u32) -> bool {
-        x % 2 == 0
-    }
-
-    rt.register_constant(
-        "BLACKHOLE",
-        "The well-known BLACKHOLE community.",
-        Val(Community::from(Wellknown::Blackhole)),
-    )
-    .unwrap();
-
-    Ok(rt)
-}
-
-#[test]
-pub fn default_runtime() {
-    let rt = routecore_runtime().unwrap();
-
-    let names: Vec<_> = rt.types.iter().map(|ty| &ty.name).collect();
-    assert_eq!(
-        names,
-        &[
-            "bool",
-            "u8",
-            "u16",
-            "u32",
-            "u64",
-            "i8",
-            "i16",
-            "i32",
-            "i64",
-            "f32",
-            "f64",
-            "Asn",
-            "IpAddr",
-            "Prefix",
-            "String",
-            "OriginType",
-            "LocalPref",
-            "Community",
-            "HopPath",
-            "AsPath"
-        ]
-    );
-}
-
 #[test]
 #[should_panic]
 fn invalid_function_name() {
-    let mut rt = Runtime::new();
-
-    #[roto_function(rt)]
-    fn accept() -> bool {
-        true
-    }
+    library! {
+        fn accept() -> bool {
+            true
+        }
+    };
 }
 
 #[test]
 #[should_panic]
 fn invalid_method_name() {
-    let mut rt = Runtime::new();
-
-    #[roto_method(rt, bool)]
-    fn accept(_x: bool) -> bool {
-        true
-    }
+    library! {
+        impl bool {
+            fn accept(_x: bool) -> bool {
+                true
+            }
+        }
+    };
 }
 
 #[test]
 #[should_panic]
 fn invalid_static_method_name() {
-    let mut rt = Runtime::new();
-
-    #[roto_static_method(rt, bool)]
-    fn accept() -> bool {
-        true
-    }
+    library! {
+        impl bool {
+            fn accept() -> bool {
+                true
+            }
+        }
+    };
 }
 
 #[test]
-fn invalid_type_name() {
-    let mut rt = Runtime::new();
+#[should_panic]
+fn invalid_clone_type_name() {
+    #[derive(Clone)]
+    struct Foo;
 
-    #[allow(non_camel_case_types)]
+    library! {
+        clone type accept = Val<Foo>;
+    };
+}
+
+#[test]
+#[should_panic]
+fn invalid_copy_type_name() {
     #[derive(Clone, Copy)]
-    struct accept;
+    struct Foo;
 
-    rt.register_clone_type::<Val<accept>>("").unwrap_err();
-    rt.register_copy_type::<Val<accept>>("").unwrap_err();
+    library! {
+        copy type accept = Val<Foo>;
+    };
 }
 
 #[test]
+#[should_panic]
 fn invalid_constant_name() {
-    let mut rt = Runtime::new();
-
-    rt.register_constant("FOO$BAR", "...", 10u32).unwrap_err();
+    library! {
+        const accept: u32 = 0;
+    };
 }
 
 #[test]
 fn constant_declared_twice() {
-    let mut rt = Runtime::new();
-
-    rt.register_constant("FOO", "...", 10u32).unwrap();
-    rt.register_constant("FOO", "...", 10u32).unwrap_err();
+    Runtime::from_items(library! {
+        const FOO: u32 = 10;
+        const FOO: u32 = 12;
+    })
+    .unwrap_err();
 }
 
 #[test]
-#[should_panic]
 fn function_declared_twice() {
-    let mut rt = Runtime::new();
-
-    #[roto_function(rt)]
-    fn foo() {}
-
-    #[roto_function(rt, foo)]
-    fn foo2() -> bool {
-        false
-    }
+    Runtime::from_items(library! {
+        fn foo() {}
+        fn foo() -> bool {
+            false
+        }
+    })
+    .unwrap_err();
 }
 
 #[test]
-#[should_panic]
 fn method_declared_twice() {
-    let mut rt = Runtime::new();
-
-    #[roto_method(rt, bool, foo)]
-    fn foo1(_: bool) {}
-
-    #[roto_method(rt, bool, foo)]
-    fn foo2(_: bool) -> bool {
-        false
-    }
+    Runtime::from_items(library! {
+        fn foo(_: bool) {}
+        fn foo(_: bool) -> bool {
+            false
+        }
+    })
+    .unwrap_err();
 }
 
 #[test]
-#[should_panic]
 fn static_method_declared_twice() {
-    let mut rt = Runtime::new();
-
-    #[roto_static_method(rt, bool, foo)]
-    fn foo1() {}
-
-    #[roto_static_method(rt, bool, foo)]
-    fn foo2() -> bool {
-        false
-    }
+    Runtime::from_items(library! {
+        fn foo() {}
+        fn foo() -> bool {
+            false
+        }
+    })
+    .unwrap_err();
 }
 
 #[test]
-#[should_panic]
 fn method_and_static_method_with_the_same_name() {
-    let mut rt = Runtime::new();
+    Runtime::from_items(library! {
+        impl bool {
+            fn foo(_: bool) {}
 
-    #[roto_method(rt, bool, foo)]
-    fn foo1(_: bool) {}
-
-    #[roto_static_method(rt, bool, foo)]
-    fn foo2() -> bool {
-        false
-    }
+            fn foo() -> bool {
+                false
+            }
+        }
+    })
+    .unwrap_err();
 }
 
 #[test]
 fn function_and_method_with_the_same_name() {
-    let mut rt = Runtime::new();
+    Runtime::from_items(library! {
+        fn foo(_: bool) {}
 
-    #[roto_function(rt, foo)]
-    fn foo1(_: bool) {}
-
-    #[roto_method(rt, bool, foo)]
-    fn foo2(_: bool) -> bool {
-        false
-    }
+        impl bool {
+            fn foo(_: bool) -> bool { false }
+        }
+    })
+    .unwrap();
 }
 
 #[test]
 fn function_and_constant_with_the_same_name_1() {
-    let mut rt = Runtime::new();
-
-    #[roto_function(rt, foo)]
-    fn foo1(_: bool) {}
-
-    rt.register_constant("foo", "...", true).unwrap_err();
+    Runtime::from_items(library! {
+        fn foo(_: bool) {}
+        const foo: bool = true;
+    })
+    .unwrap_err();
 }
 
 #[test]
-#[should_panic]
 fn function_and_constant_with_the_same_name_2() {
-    let mut rt = Runtime::new();
-
-    rt.register_constant("foo", "...", true).unwrap();
-
-    #[roto_function(rt, foo)]
-    fn foo1(_: bool) {}
-}
-
-#[test]
-fn register_option_arc_str() {
-    let mut runtime = Runtime::new();
-
-    // Cannot register Option
-    runtime
-        .register_clone_type_with_name::<Option<Arc<str>>>("OptStr", "")
-        .unwrap_err();
-
-    // But with Val it's fine
-    runtime
-        .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
-        .unwrap();
+    Runtime::from_items(library! {
+        const foo: bool = true;
+        fn foo(_x: bool) {}
+    })
+    .unwrap_err();
 }
 
 #[test]
 #[should_panic]
+fn register_option_arc_str() {
+    // Cannot register Option
+    library! {
+        clone type OptStr = Option<Arc<str>>;
+    };
+}
+
+#[test]
+fn register_val_option_arc_str() {
+    // But with Val it's fine
+    Runtime::from_items(library! {
+        clone type OptStr = Val<Option<Arc<str>>>;
+    })
+    .unwrap();
+}
+
+#[test]
 fn unwrap_or_empty() {
-    let mut runtime = Runtime::new();
+    let ty = library! {
+        clone type OptStr = Val<Option<Arc<str>>>;
 
-    runtime
-        .register_clone_type_with_name::<Val<Option<Arc<str>>>>("OptStr", "")
-        .unwrap();
+        impl Val<Option<Arc<str>>> {
+            fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
+                x.unwrap_or_default()
+            }
+        }
+    };
 
-    // This should panic because the argument is missing `Val<_>`
-    #[roto_method(runtime, Val<Option<Arc<str>>>)]
-    fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
-        x.unwrap_or_default()
+    Runtime::from_items(ty).unwrap_err();
+}
+
+#[allow(deprecated)]
+mod deprecated_api {
+    use roto_macros::roto_method;
+
+    use crate::{src, Runtime, Val};
+
+    #[test]
+    fn use_the_old_api() {
+        #[derive(Clone)]
+        struct Foo(u64);
+
+        let mut rt = Runtime::new();
+
+        rt.register_clone_type::<Val<Foo>>("...").unwrap();
+
+        #[roto_method(rt, Val<Foo>)]
+        fn double(Val(x): Val<Foo>) -> Val<Foo> {
+            Val(Foo(x.0 * 2))
+        }
+
+        let s = src!(
+            "
+            fn bar(x: Foo) -> Foo {
+                x.double()
+            }      
+        "
+        );
+
+        let mut pkg = s
+            .parse()
+            .and_then(|x| x.typecheck(&rt))
+            .map(|x| {
+                let x = x.lower_to_mir().lower_to_lir();
+                x.codegen()
+            })
+            .unwrap();
+
+        let bar = pkg
+            .get_function::<(), fn(Val<Foo>) -> Val<Foo>>("bar")
+            .unwrap();
+        let res = bar.call(&mut (), Val(Foo(5)));
+        assert_eq!(res.0 .0, 10);
     }
 }

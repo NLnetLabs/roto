@@ -999,7 +999,7 @@ impl Lowerer<'_, '_> {
         self.emit(Instruction::Return(var))
     }
 
-    fn emit_constant_address(&mut self, to: Var, name: Identifier) {
+    fn emit_constant_address(&mut self, to: Var, name: ResolvedName) {
         self.emit(Instruction::ConstantAddress { to, name })
     }
 }

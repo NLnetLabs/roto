@@ -443,7 +443,6 @@ impl TypeDefinition {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
-    pub kind: FunctionKind,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
 }
@@ -526,15 +525,6 @@ pub struct Function {
 
     /// The source of this function
     pub definition: FunctionDefinition,
-}
-
-/// How a function should be called in Roto: as a free function or a
-/// (static) method.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FunctionKind {
-    Free,
-    Method(Type),
-    StaticMethod(Type),
 }
 
 impl Function {

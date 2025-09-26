@@ -236,15 +236,13 @@ impl ScopeGraph {
         }
     }
 
-    pub fn insert_global_constant(
+    pub fn insert_constant(
         &mut self,
+        scope: ScopeRef,
         v: &Meta<Identifier>,
         ty: &Type,
     ) -> Result<ResolvedName, ()> {
-        let name = ResolvedName {
-            scope: ScopeRef::GLOBAL,
-            ident: **v,
-        };
+        let name = ResolvedName { scope, ident: **v };
         let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
         let id = v.id;
 

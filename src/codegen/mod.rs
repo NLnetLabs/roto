@@ -19,10 +19,14 @@ use crate::{
         self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
     },
     runtime::{
-        context::ContextDescription, ty::Reflect, Constant, RuntimeConstant,
-        RuntimeFunctionRef,
+        context::ContextDescription, ty::Reflect, ConstantValue,
+        RuntimeConstant, RuntimeFunctionRef,
     },
-    typechecker::{info::TypeInfo, scope::ScopeRef, types},
+    typechecker::{
+        info::TypeInfo,
+        scope::{ResolvedName, ScopeRef},
+        types,
+    },
     Runtime,
 };
 use check::{
@@ -61,7 +65,7 @@ struct ModuleData {
     /// these constants are stored in this HashMap. So, as long as the function
     /// are around, we have to keep these constants around. That is why they
     /// need to be stored in this struct, even though this field is unused.
-    _constants: HashMap<Identifier, Constant>,
+    _constants: HashMap<ResolvedName, ConstantValue>,
 
     /// The functions in this module can reference registerd function that
     /// might contain data (i.e. closures). We need to properly drop these.
@@ -71,7 +75,7 @@ struct ModuleData {
 impl ModuleData {
     fn new(
         cranelift_jit: JITModule,
-        constants: HashMap<Identifier, Constant>,
+        constants: HashMap<ResolvedName, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self {
@@ -104,7 +108,7 @@ pub struct SharedModuleData(Arc<ModuleData>);
 impl SharedModuleData {
     fn new(
         cranelift_jit: JITModule,
-        constants: HashMap<Identifier, Constant>,
+        constants: HashMap<ResolvedName, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self(Arc::new(ModuleData::new(
@@ -142,7 +146,7 @@ pub struct Module {
 /// A function extracted from Roto
 ///
 /// A [`TypedFunc`] can be retrieved from a compiled script using
-/// [`Compiled::get_function`](crate::Compiled::get_function).
+/// [`Package::get_function`](crate::Package::get_function).
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone, Debug)]
@@ -207,7 +211,7 @@ pub struct FunctionInfo {
 }
 
 struct ModuleBuilder {
-    constants: HashMap<Identifier, Constant>,
+    constants: HashMap<ResolvedName, ConstantValue>,
 
     registered_fns: Vec<Arc<Box<dyn Any>>>,
 
@@ -301,7 +305,7 @@ pub fn codegen(
         let f = runtime.get_function(*func_ref);
         builder.symbol(
             format!("runtime_function_trampoline_{}", f.id),
-            f.description.trampoline(),
+            f.func.trampoline(),
         );
     }
 
@@ -373,7 +377,7 @@ pub fn codegen(
             panic!()
         };
 
-        let arc_box = f.description.pointer();
+        let arc_box = f.func.pointer();
         let ptr = &raw const **arc_box as *const u8;
         module.registered_fns.push(arc_box);
         module.runtime_functions.insert(*func_ref, (ptr, func_id));
@@ -401,8 +405,7 @@ impl ModuleBuilder {
         // before we call a Roto function. Therefore we clone the constants into
         // this hashmap which we pass to the ModuleData so that they will be
         // kept around.
-        self.constants
-            .insert(constant.name.as_str().into(), constant.value.clone());
+        self.constants.insert(constant.name, constant.value.clone());
     }
 
     /// Declare a function and its signature (without the body)

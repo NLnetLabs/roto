@@ -4,9 +4,8 @@ use std::{
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
-use roto_macros::{roto_method, roto_static_method};
 
-use crate::Runtime;
+use crate::{library, runtime::items::Item};
 
 macro_rules! int_docs {
     ($t:ty) => {&{
@@ -20,13 +19,14 @@ macro_rules! int_docs {
 }
 
 macro_rules! to_string_impl {
-    ($rt:ident, $t:ty) => {{
-        /// Convert this value into a `String`
-        #[roto_method($rt, $t, to_string)]
-        fn to_string(x: $t) -> Arc<str> {
-            x.to_string().into()
+    ($t:ty) => {
+        library! {
+            /// Convert this value into a `String`
+            fn to_string(x: $t) -> Arc<str> {
+                x.to_string().into()
+            }
         }
-    }};
+    };
 }
 
 macro_rules! float_docs {
@@ -40,189 +40,58 @@ macro_rules! float_docs {
 }
 
 macro_rules! float_impl {
-    ($rt:ident, $t:ty) => {{
-        $rt.register_method::<$t, _, _>(
-            "floor",
-            "Returns the largest integer less than or equal to self",
-            ["x"],
-            <$t>::floor,
-        ).unwrap();
+    ($t:ty) => {
+        library! {
+            /// Returns the smallest integer greater than or equal to self.
+            fn floor(x: $t) -> $t {
+                x.floor()
+            }
 
-        $rt.register_method::<$t, _, _>(
-            "ceil",
-            "Returns the smallest integer greater than or equal to self.",
-            ["x"],
-            <$t>::ceil,
-        ).unwrap();
+            /// Returns the smallest integer greater than or equal to self.
+            fn ceil(x: $t) -> $t {
+                x.ceil()
+            }
 
-        /// Returns the nearest integer to self. If a value is half-way between two integers, round away from 0.0.
-        #[roto_method($rt, $t, round)]
-        fn round(x: $t) -> $t {
-            x.round()
+            /// Returns the nearest integer to self. If a value is half-way between two integers, round away from 0.0.
+            fn round(x: $t) -> $t {
+                x.round()
+            }
+
+            /// Computes the absolute value of self.
+            fn abs(x: $t) -> $t {
+                x.abs()
+            }
+
+            /// Returns the square root of a number.
+            fn sqrt(x: $t) -> $t {
+                x.sqrt()
+            }
+
+            /// Raises a number to a floating point power.
+            fn pow(x: $t, y: $t) -> $t {
+                x.powf(y)
+            }
+
+            /// Returns true if this value is NaN.
+            fn is_nan(x: $t) -> bool {
+                x.is_nan()
+            }
+
+            /// Returns true if this value is positive infinity or negative infinity, and false otherwise.
+            fn is_infinite(x: $t) -> bool {
+                x.is_infinite()
+            }
+
+            /// Returns true if this number is neither infinite nor NaN.
+            fn is_finite(x: $t) -> bool {
+                x.is_finite()
+            }
         }
-
-        /// Computes the absolute value of self.
-        #[roto_method($rt, $t, abs)]
-        fn abs(x: $t) -> $t {
-            x.abs()
-        }
-
-        /// Returns the square root of a number.
-        #[roto_method($rt, $t, sqrt)]
-        fn sqrt(x: $t) -> $t {
-            x.sqrt()
-        }
-
-        /// Raises a number to a floating point power.
-        #[roto_method($rt, $t, pow)]
-        fn pow(x: $t, y: $t) -> $t {
-            x.powf(y)
-        }
-
-        /// Returns true if this value is NaN.
-        #[roto_method($rt, $t, is_nan)]
-        fn is_nan(x: $t) -> bool {
-            x.is_nan()
-        }
-
-        /// Returns true if this value is positive infinity or negative infinity, and false otherwise.
-        #[roto_method($rt, $t, is_infinite)]
-        fn is_infinite(x: $t) -> bool {
-            x.is_infinite()
-        }
-
-        /// Returns true if this number is neither infinite nor NaN.
-        #[roto_method($rt, $t, is_finite)]
-        fn is_finite(x: $t) -> bool {
-            x.is_finite()
-        }
-    }};
+    };
 }
 
-impl Runtime {
-    /// A Runtime that is as empty as possible.
-    ///
-    /// This contains only type information for Roto primitives.
-    pub fn new() -> Self {
-        let mut rt = Runtime {
-            context: None,
-            types: Default::default(),
-            functions: Default::default(),
-            constants: Default::default(),
-        };
-
-        rt.register_value_type::<bool>(
-            "The boolean type\n\n\
-            This type has two possible values: `true` and `false`. Several \
-            boolean operations can be used with booleans, such as `&&` (\
-            logical and), `||` (logical or) and `not`.",
-        )
-        .unwrap();
-
-        // All the integer types
-        rt.register_value_type::<u8>(int_docs!(u8)).unwrap();
-        rt.register_value_type::<u16>(int_docs!(u16)).unwrap();
-        rt.register_value_type::<u32>(int_docs!(u32)).unwrap();
-        rt.register_value_type::<u64>(int_docs!(u64)).unwrap();
-        rt.register_value_type::<i8>(int_docs!(i8)).unwrap();
-        rt.register_value_type::<i16>(int_docs!(i16)).unwrap();
-        rt.register_value_type::<i32>(int_docs!(i32)).unwrap();
-        rt.register_value_type::<i64>(int_docs!(i64)).unwrap();
-        rt.register_value_type::<f32>(float_docs!(f32)).unwrap();
-        rt.register_value_type::<f64>(float_docs!(f64)).unwrap();
-
-        rt.register_value_type::<Asn>(
-            "An ASN: an Autonomous System Number\n\
-            \n\
-            An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32). \
-            However, AS numbers cannot be manipulated with arithmetic operations. An AS number \
-            is constructed with the `AS` prefix followed by a number.\n\
-            \n\
-            ```roto\n\
-            AS0\n\
-            AS1010\n\
-            AS4294967295\n\
-            ```\n\
-            ").unwrap();
-
-        rt.register_copy_type::<IpAddr>(
-            "An IP address\n\nCan be either IPv4 or IPv6.\n\
-            \n\
-            For IPv4, only dot-separated quad notation is supported.\n\
-            \n\
-            ```roto\n\
-            # IPv4 examples\n\
-            127.0.0.1\n\
-            0.0.0.0\n\
-            255.255.255.255\n\
-            \n\
-            # IPv6 examples\n\
-            0:0:0:0:0:0:0:1\n\
-            ::1\n\
-            ::\n\
-            ```\n\
-            ",
-        )
-        .unwrap();
-
-        rt.register_copy_type::<Prefix>(
-            "An IP address prefix: the combination of an IP address and a prefix length\n\n\
-            A prefix can be constructed with the `/` operator or with the \
-            [`Prefix.new`](Prefix.new) function. This operator takes an [`IpAddr`](IpAddr) \
-            and a [`u8`](u8) as operands.\n
-            \n\
-            ```roto\n\
-            1.1.1.0 / 8\n\
-            192.0.0.0.0 / 24\n\
-            ```\n\
-            ",
-        ).unwrap();
-
-        rt.register_clone_type_with_name::<Arc<str>>(
-            "String",
-            "The string type",
-        )
-        .unwrap();
-
-        to_string_impl!(rt, bool);
-        to_string_impl!(rt, u8);
-        to_string_impl!(rt, u16);
-        to_string_impl!(rt, u32);
-        to_string_impl!(rt, u64);
-        to_string_impl!(rt, i8);
-        to_string_impl!(rt, i16);
-        to_string_impl!(rt, i32);
-        to_string_impl!(rt, i64);
-        to_string_impl!(rt, f32);
-        to_string_impl!(rt, f64);
-        to_string_impl!(rt, IpAddr);
-        to_string_impl!(rt, Prefix);
-        to_string_impl!(rt, Asn);
-
-        /// Convert this value into a `String`
-        #[roto_method(rt, Arc<str>, to_string)]
-        fn to_string(x: Arc<str>) -> Arc<str> {
-            x
-        }
-
-        float_impl!(rt, f32);
-        float_impl!(rt, f64);
-
-        /// Construct a new prefix
-        ///
-        /// A prefix can also be constructed with the `/` operator.
-        ///
-        /// ```roto
-        /// Prefix.new(192.169.0.0, 16)
-        ///
-        /// # or equivalently
-        /// 192.169.0.0 / 16
-        /// ```
-        #[roto_static_method(rt, Prefix, new)]
-        fn prefix_new(ip: IpAddr, len: u8) -> Prefix {
-            Prefix::new(ip, len).unwrap()
-        }
-
+fn ip_addr_methods() -> [Item; 4] {
+    library! {
         /// Check whether two IP addresses are equal
         ///
         /// A more convenient but equivalent method for checking equality is via the `==` operator.
@@ -239,8 +108,7 @@ impl Runtime {
         /// # or equivalently:
         /// 192.0.0.0.eq(192.0.0.0)  # -> true
         /// ```
-        #[roto_method(rt, IpAddr, eq)]
-        fn ipaddr_eq(a: IpAddr, b: IpAddr) -> bool {
+        fn eq(a: IpAddr, b: IpAddr) -> bool {
             a == b
         }
 
@@ -250,7 +118,6 @@ impl Runtime {
         /// 1.1.1.1.is_ipv4() # -> true
         /// ::.is_ipv4()      # -> false
         /// ```
-        #[roto_method(rt, IpAddr)]
         fn is_ipv4(ip: IpAddr) -> bool {
             ip.is_ipv4()
         }
@@ -261,37 +128,24 @@ impl Runtime {
         /// 1.1.1.1.is_ipv6() # -> false
         /// ::.is_ipv6()      # -> true
         /// ```
-        #[roto_method(rt, IpAddr)]
         fn is_ipv6(ip: IpAddr) -> bool {
             ip.is_ipv6()
         }
 
         /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address, otherwise it returns self as-is.
-        #[roto_method(rt, IpAddr)]
         fn to_canonical(ip: IpAddr) -> IpAddr {
             ip.to_canonical()
         }
+    }
+}
 
-        rt.register_constant(
-            "LOCALHOSTV4",
-            "The IPv4 address pointing to localhost: `127.0.0.1`",
-            IpAddr::from(Ipv4Addr::LOCALHOST),
-        )
-        .unwrap();
-
-        rt.register_constant(
-            "LOCALHOSTV6",
-            "The IPv6 address pointing to localhost: `::1`",
-            IpAddr::from(Ipv6Addr::LOCALHOST),
-        )
-        .unwrap();
-
+fn string_methods() -> [Item; 8] {
+    library! {
         /// Append a string to another, creating a new string
         ///
         /// ```roto
         /// "hello".append(" ").append("world") # -> "hello world"
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn append(a: Arc<str>, b: Arc<str>) -> Arc<str> {
             format!("{a}{b}").into()
         }
@@ -302,7 +156,6 @@ impl Runtime {
         /// "haystack".contains("hay")  # -> true
         /// "haystack".contains("corn") # -> false
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn contains(haystack: Arc<str>, needle: Arc<str>) -> bool {
             haystack.contains(needle.as_ref())
         }
@@ -313,7 +166,6 @@ impl Runtime {
         /// "haystack".starts_with("hay")   # -> true
         /// "haystack".starts_with("trees") # -> false
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn starts_with(s: Arc<str>, prefix: Arc<str>) -> bool {
             s.starts_with(prefix.as_ref())
         }
@@ -324,7 +176,6 @@ impl Runtime {
         /// "haystack".ends_with("stack") # -> true
         /// "haystack".ends_with("black") # -> false
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn ends_with(s: Arc<str>, suffix: Arc<str>) -> bool {
             s.ends_with(suffix.as_ref())
         }
@@ -334,7 +185,6 @@ impl Runtime {
         /// ```roto
         /// "LOUD".to_lowercase() # -> "loud"
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn to_lowercase(s: Arc<str>) -> Arc<str> {
             s.to_lowercase().into()
         }
@@ -344,7 +194,6 @@ impl Runtime {
         /// ```roto
         /// "quiet".to_uppercase() # -> "QUIET"
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn to_uppercase(s: Arc<str>) -> Arc<str> {
             s.to_uppercase().into()
         }
@@ -354,17 +203,153 @@ impl Runtime {
         /// ```roto
         /// "ha".repeat(6) # -> "hahahahahaha"
         /// ```
-        #[roto_method(rt, Arc<str>)]
         fn repeat(s: Arc<str>, n: u32) -> Arc<str> {
             s.repeat(n as usize).into()
         }
 
         /// Check for string equality
-        #[roto_method(rt, Arc<str>)]
         fn eq(s: Arc<str>, other: Arc<str>) -> bool {
             s == other
         }
+    }
+}
 
-        rt
+pub fn built_ins() -> [Item; 38] {
+    library! {
+        use Option::{Some, None};
+
+        /// The boolean type
+        ///
+        /// This type has two possible values: `true` and `false`. Several
+        /// boolean operations can be used with booleans, such as `&&` (
+        /// logical and), `||` (logical or) and `not`.
+        value type bool = bool;
+
+        #[doc = int_docs!(u8)]
+        value type u8 = u8;
+
+        #[doc = int_docs!(u16)]
+        value type u16 = u16;
+
+        #[doc = int_docs!(u32)]
+        value type u32 = u32;
+
+        #[doc = int_docs!(u64)]
+        value type u64 = u64;
+
+        #[doc = int_docs!(i8)]
+        value type i8 = i8;
+
+        #[doc = int_docs!(i16)]
+        value type i16 = i16;
+
+        #[doc = int_docs!(i32)]
+        value type i32 = i32;
+
+        #[doc = int_docs!(i64)]
+        value type i64 = i64;
+
+        #[doc = float_docs!(f32)]
+        value type f32 = f32;
+
+        #[doc = float_docs!(f64)]
+        value type f64 = f64;
+
+        /// An ASN: an Autonomous System Number
+        ///
+        /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32)
+        /// However, AS numbers cannot be manipulated with arithmetic operations. An AS number
+        /// is constructed with the `AS` prefix followed by a number.
+        ///
+        /// ```roto
+        /// AS0
+        /// AS1010
+        /// AS4294967295
+        /// ```
+        value type Asn = Asn;
+
+        /// An IP address
+        ///
+        /// Can be either IPv4 or IPv6.
+        ///
+        /// For IPv4, only dot-separated quad notation is supported.
+        ///
+        /// ```roto
+        /// # IPv4 examples
+        /// 127.0.0.1
+        /// 0.0.0.0
+        /// 255.255.255.255
+        ///
+        /// # IPv6 examples
+        /// 0:0:0:0:0:0:0:1
+        /// ::1
+        /// ::
+        /// ```
+        copy type IpAddr = IpAddr;
+
+        /// An IP address prefix: the combination of an IP address and a prefix length
+        ///
+        /// A prefix can be constructed with the `/` operator or with the
+        /// [`Prefix.new`](Prefix.new) function. This operator takes an [`IpAddr`](IpAddr)
+        /// and a [`u8`](u8) as operands.
+        ///
+        /// ```roto
+        /// 1.1.1.0 / 8
+        /// 192.0.0.0.0 / 24
+        /// ```
+        copy type Prefix = Prefix;
+
+        /// The string type
+        clone type String = Arc<str>;
+
+        impl Arc<str> {
+            /// Convert this value into a `String`
+            fn to_string(x: Arc<str>) -> Arc<str> {
+                x
+            }
+        }
+
+        impl bool = to_string_impl!(bool);
+        impl u8 = to_string_impl!(u8);
+        impl u16 = to_string_impl!(u16);
+        impl u32 = to_string_impl!(u32);
+        impl u64 = to_string_impl!(u64);
+        impl i8 = to_string_impl!(i8);
+        impl i16 = to_string_impl!(i16);
+        impl i32 = to_string_impl!(i32);
+        impl i64 = to_string_impl!(i64);
+        impl f32 = to_string_impl!(f32);
+        impl f64 = to_string_impl!(f64);
+        impl IpAddr = to_string_impl!(IpAddr);
+        impl Prefix = to_string_impl!(Prefix);
+        impl Asn = to_string_impl!(Asn);
+
+        impl f32 = float_impl!(f32);
+        impl f64 = float_impl!(f64);
+
+        impl Prefix {
+            /// Construct a new prefix
+            ///
+            /// A prefix can also be constructed with the `/` operator.
+            ///
+            /// ```roto
+            /// Prefix.new(192.169.0.0, 16)
+            ///
+            /// # or equivalently
+            /// 192.169.0.0 / 16
+            /// ```
+            fn new(ip: IpAddr, len: u8) -> Prefix {
+                Prefix::new(ip, len).unwrap()
+            }
+        }
+
+        impl IpAddr = ip_addr_methods();
+        impl Arc<str> = string_methods();
+
+        /// The IPv4 address pointing to localhost: `127.0.0.1`
+        const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);
+
+        /// The IPv6 address pointing to localhost: `::1`
+        const LOCALHOSTV6: IpAddr = IpAddr::from(Ipv6Addr::LOCALHOST);
     }
 }

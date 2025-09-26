@@ -97,7 +97,7 @@ pub enum Projection {
 #[must_use]
 pub enum Value {
     Const(Literal, Type),
-    Constant(Identifier, Type),
+    Constant(ResolvedName, Type),
     Context(usize),
     Clone(Place),
     Discriminant(Var),
