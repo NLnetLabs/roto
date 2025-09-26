@@ -28,8 +28,9 @@ use crate::{
     ast::Identifier,
     file_tree::FileTree,
     parser::token::{Lexer, Token},
-    runtime::items::{
-        Constant, Function, IntoItems, Item, Module, Type, Use,
+    runtime::{
+        func::RegisterableFn,
+        items::{Constant, Function, IntoItems, Item, Module, Type, Use},
     },
     typechecker::{
         scope::{ResolvedName, ScopeRef},
@@ -93,10 +94,6 @@ impl std::fmt::Debug for Runtime {
 }
 
 impl Runtime {
-    pub fn builder() -> RuntimeBuilder {
-        RuntimeBuilder::new()
-    }
-
     /// Compile a script from a path and return the result.
     ///
     /// If the path is a file, then that file will be loaded. If the path is a
@@ -106,26 +103,6 @@ impl Runtime {
         path: impl AsRef<Path>,
     ) -> Result<Package, RotoReport> {
         FileTree::read(path)?.compile(self)
-    }
-}
-
-#[derive(Clone)]
-pub struct RuntimeBuilder {
-    items: Vec<Item>,
-}
-
-impl RuntimeBuilder {
-    pub fn new() -> Self {
-        Self { items: Vec::new() }
-    }
-
-    pub fn add(mut self, items: impl IntoItems) -> Self {
-        self.items.extend(items.into_items());
-        self
-    }
-
-    pub fn build(self) -> Result<Runtime, String> {
-        Runtime::from_items(self.items)
     }
 }
 
@@ -332,6 +309,131 @@ impl Runtime {
         f: RuntimeFunctionRef,
     ) -> &RuntimeFunction {
         &self.functions[f.0]
+    }
+
+    /// Register a type with a default name
+    ///
+    /// This type will be cloned and dropped many times, so make sure to have
+    /// a cheap [`Clone`] and [`Drop`] implementations, for example an
+    /// [`Rc`](std::rc::Rc) or an [`Arc`](std::sync::Arc).
+    ///
+    /// The default type name is based on [`std::any::type_name`]. The string
+    /// returned from that consists of a path with possibly some generics.
+    /// Neither full paths and generics make sense in Roto, so we just want
+    /// the last part of the path just before any generics. So, we determine
+    /// the name with the following procedure:
+    ///
+    ///  - Split at the first `<` (if any) and take the first part
+    ///  - Then split at the last `::` and take the last part.
+    ///
+    /// If that doesn't work for the type you want, use
+    /// [`Runtime::register_clone_type_with_name`] instead.
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_clone_type<T: Reflect + Clone>(
+        &mut self,
+        docstring: &str,
+    ) -> Result<(), String> {
+        let name = Self::extract_name::<T>();
+        self.add_items(items::Type::clone::<T>(name, docstring)?)
+    }
+
+    /// Register a `Copy` type with a default name
+    ///
+    /// See [`Runtime::register_clone_type`]
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_copy_type<T: Reflect + Copy>(
+        &mut self,
+        docstring: &str,
+    ) -> Result<(), String> {
+        let name = Self::extract_name::<T>();
+        self.add_items(items::Type::copy::<T>(name, docstring)?)
+    }
+
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_copy_type_with_name<T: Reflect + Copy>(
+        &mut self,
+        name: &str,
+        docstring: &str,
+    ) -> Result<(), String> {
+        self.add_items(items::Type::copy::<T>(name, docstring)?)
+    }
+
+    /// Register a reference type with a given name
+    ///
+    /// This makes the type available for use in Roto. However, Roto will
+    /// only store pointers to this type.
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_clone_type_with_name<T: Reflect + Clone>(
+        &mut self,
+        name: &str,
+        docstring: &str,
+    ) -> Result<(), String> {
+        self.add_items(items::Type::clone::<T>(name, docstring)?)
+    }
+
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_fn<'a, A, R>(
+        &mut self,
+        name: impl AsRef<str>,
+        docstring: impl AsRef<str>,
+        argument_names: impl IntoIterator<Item = &'a str>,
+        func: impl RegisterableFn<A, R>,
+    ) -> Result<(), String> {
+        let argument_names = argument_names.into_iter().collect();
+        self.add_items(items::Function::new(
+            name.as_ref(),
+            docstring,
+            argument_names,
+            func,
+        )?)
+    }
+
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_method<'a, T: Reflect, A, R>(
+        &mut self,
+        name: impl AsRef<str>,
+        docstring: impl AsRef<str>,
+        argument_names: impl IntoIterator<Item = &'a str>,
+        func: impl RegisterableFn<A, R>,
+    ) -> Result<(), String> {
+        let argument_names = argument_names.into_iter().collect();
+        let mut impl_block = items::Impl::new::<T>();
+        impl_block.add(items::Function::new(
+            name.as_ref(),
+            docstring,
+            argument_names,
+            func,
+        )?);
+        self.add_items(impl_block)
+    }
+
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_static_method<'a, T: Reflect, A, R>(
+        &mut self,
+        name: impl AsRef<str>,
+        docstring: impl AsRef<str>,
+        argument_names: impl IntoIterator<Item = &'a str>,
+        func: impl RegisterableFn<A, R>,
+    ) -> Result<(), String> {
+        #[allow(deprecated)]
+        self.register_method::<T, _, _>(name, docstring, argument_names, func)
+    }
+
+    /// Register a new global constant
+    ///
+    /// Constants are shared between function functions. Since functions
+    /// can be send to other threads, the constants must be `Send` and `Sync`.
+    #[deprecated = "use items! and Runtime::add_items instead"]
+    pub fn register_constant<T: Reflect>(
+        &mut self,
+        name: impl Into<String>,
+        docstring: &str,
+        x: T,
+    ) -> Result<(), String>
+    where
+        T::Transformed: Send + Sync + 'static,
+    {
+        self.add_items(items::Constant::new::<T>(name.into(), docstring, x)?)
     }
 
     fn declare_modules(
@@ -636,7 +738,7 @@ impl Runtime {
         Ok(())
     }
 
-    fn _extract_name<T: Reflect>() -> &'static str {
+    fn extract_name<T: Reflect>() -> &'static str {
         let mut name = T::name();
 
         if let Some((first, _)) = name.split_once('<') {

@@ -249,7 +249,7 @@ impl Parse for ItemList {
 /// use Option::{Some, None};
 /// ```
 #[proc_macro]
-pub fn items(input: TokenStream) -> TokenStream {
+pub fn library(input: TokenStream) -> TokenStream {
     let parsed_items: ItemList = syn::parse_macro_input!(input);
 
     let expanded = to_tokens(parsed_items);

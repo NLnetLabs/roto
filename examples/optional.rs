@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use roto::{items, Runtime, Val};
+use roto::{library, Runtime, Val};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -12,7 +12,7 @@ fn main() -> Result<(), roto::RotoReport> {
     #[cfg(feature = "logger")]
     env_logger::init();
 
-    let lib = items! {
+    let lib = library! {
         clone type NonEmptyString = Val<NonEmptyString>;
 
         impl Val<NonEmptyString> {

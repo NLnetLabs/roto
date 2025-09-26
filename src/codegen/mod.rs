@@ -146,7 +146,7 @@ pub struct Module {
 /// A function extracted from Roto
 ///
 /// A [`TypedFunc`] can be retrieved from a compiled script using
-/// [`Compiled::get_function`](crate::Compiled::get_function).
+/// [`Package::get_function`](crate::Package::get_function).
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone, Debug)]

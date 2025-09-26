@@ -5,7 +5,7 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{items, runtime::items::Item};
+use crate::{library, runtime::items::Item};
 
 macro_rules! int_docs {
     ($t:ty) => {&{
@@ -20,7 +20,7 @@ macro_rules! int_docs {
 
 macro_rules! to_string_impl {
     ($t:ty) => {
-        items! {
+        library! {
             /// Convert this value into a `String`
             fn to_string(x: $t) -> Arc<str> {
                 x.to_string().into()
@@ -41,7 +41,7 @@ macro_rules! float_docs {
 
 macro_rules! float_impl {
     ($t:ty) => {
-        items! {
+        library! {
             /// Returns the smallest integer greater than or equal to self.
             fn floor(x: $t) -> $t {
                 x.floor()
@@ -91,7 +91,7 @@ macro_rules! float_impl {
 }
 
 fn ip_addr_methods() -> [Item; 4] {
-    items! {
+    library! {
         /// Check whether two IP addresses are equal
         ///
         /// A more convenient but equivalent method for checking equality is via the `==` operator.
@@ -140,7 +140,7 @@ fn ip_addr_methods() -> [Item; 4] {
 }
 
 fn string_methods() -> [Item; 8] {
-    items! {
+    library! {
         /// Append a string to another, creating a new string
         ///
         /// ```roto
@@ -215,7 +215,7 @@ fn string_methods() -> [Item; 8] {
 }
 
 pub fn built_ins() -> [Item; 38] {
-    items! {
+    library! {
         use Option::{Some, None};
 
         /// The boolean type

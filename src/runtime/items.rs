@@ -95,7 +95,7 @@ impl From<Module> for Item {
 ///
 /// This type will be cloned and dropped many times, so make sure to have
 /// a cheap [`Clone`] and [`Drop`] implementations, for example an
-/// [`Rc`](std::rc::Rc) or an [`Arc`].
+/// [`Rc`](std::rc::Rc) or an [`Arc`](std::sync::Arc).
 ///
 /// The default type name is based on [`std::any::type_name`]. The string
 /// returned from that consists of a path with possibly some generics.

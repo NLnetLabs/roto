@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use roto::{items, Runtime, Val, Verdict};
+use roto::{library, Runtime, Val, Verdict};
 
 #[derive(Clone)]
 struct AddrRange {
@@ -10,7 +10,7 @@ struct AddrRange {
 
 fn main() {
     // Create the Roto types to register into the runtime
-    let lib = items! {
+    let lib = library! {
         /// A range of IP addresses
         clone type AddrRange = Val<AddrRange>;
 
