@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, Token};
+use syn::{parse::Parse, parse_macro_input, spanned::Spanned, Token};
 
 #[proc_macro_derive(Context)]
 pub fn roto_context(item: TokenStream) -> TokenStream {
@@ -72,7 +72,7 @@ enum Item {
     Let(syn::ExprLet),
     Fn(syn::ItemFn),
     Mod(syn::Ident, ListOrAssign),
-    Impl(syn::Type, ListOrAssign),
+    Impl(proc_macro2::Span, syn::Type, ListOrAssign),
     Const(syn::ItemConst),
     Include(syn::Expr),
     Use(syn::ItemUse),
@@ -133,19 +133,23 @@ impl Parse for ItemList {
                 }
                 // Case 4: An impl block
                 _ if input.peek(Token![impl]) => {
-                    input.parse::<Token![impl]>()?;
+                    let tok = input.parse::<Token![impl]>()?;
                     let ty: syn::Type = input.parse()?;
 
                     if input.peek(Token![=]) {
                         input.parse::<Token![=]>()?;
                         let expr = input.parse()?;
                         input.parse::<Token![;]>()?;
-                        Item::Impl(ty, ListOrAssign::Assign(expr))
+                        Item::Impl(tok.span, ty, ListOrAssign::Assign(expr))
                     } else {
                         let content;
                         syn::braced!(content in input);
                         let item_list: ItemList = content.parse()?;
-                        Item::Impl(ty, ListOrAssign::List(item_list))
+                        Item::Impl(
+                            tok.span,
+                            ty,
+                            ListOrAssign::List(item_list),
+                        )
                     }
                 }
                 // Case 5: A constant
@@ -257,32 +261,60 @@ pub fn library(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+fn location(s: proc_macro2::Span) -> proc_macro2::TokenStream {
+    let start = s.end();
+    let line = start.line as u32;
+    let column = start.column as u32;
+    quote! {
+        roto::Location {
+            file: file!(),
+            line: #line,
+            column: #column,
+        }
+    }
+}
+
 fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
     let mut items = Vec::new();
     for ItemWithDocs { doc, item } in item_list.items {
         let new = match item {
             Item::CopyType(item) => {
                 let ident = item.ident;
+                let location = location(ident.span());
                 let ident_str = ident.to_string();
                 let ty = item.ty;
                 quote! {
-                    roto::Type::copy::<#ty>(#ident_str, #doc).unwrap()
+                    roto::Type::copy::<#ty>(
+                        #ident_str,
+                        #doc,
+                        #location,
+                    ).unwrap()
                 }
             }
             Item::CloneType(item) => {
+                let location = location(item.span());
                 let ident = item.ident;
                 let ident_str = ident.to_string();
                 let ty = item.ty;
                 quote! {
-                    roto::Type::clone::<#ty>(#ident_str, #doc).unwrap()
+                    roto::Type::clone::<#ty>(
+                        #ident_str,
+                        #doc,
+                        #location,
+                    ).unwrap()
                 }
             }
             Item::ValueType(item) => {
                 let ident = item.ident;
+                let location = location(ident.span());
                 let ident_str = ident.to_string();
                 let ty = item.ty;
                 quote! {
-                    roto::Type::value::<#ty>(#ident_str, #doc).unwrap()
+                    roto::Type::value::<#ty>(
+                        #ident_str,
+                        #doc,
+                        #location,
+                    ).unwrap()
                 }
             }
             Item::Let(item) => {
@@ -291,6 +323,7 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
                 let syn::Pat::Ident(ident) = &*pat else {
                     todo!("good error message");
                 };
+                let location = location(ident.ident.span());
                 let ident_str = ident.ident.to_string();
 
                 let expr = item.expr;
@@ -310,11 +343,13 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
                         #doc,
                         { let x: Vec<&'static str> = vec![#(#params),*]; x },
                         #expr,
+                        #location,
                     ).unwrap()
                 }
             }
             Item::Fn(item) => {
                 let ident = &item.sig.ident;
+                let location = location(ident.span());
                 let ident_str = ident.to_string();
                 let params: Vec<_> = item
                     .sig
@@ -334,39 +369,53 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
                         #doc,
                         { let x: Vec<&'static str> = vec![#(#params),*]; x },
                         { #item #ident },
+                        #location,
                     ).unwrap()
                 }
             }
             Item::Mod(ident, items) => {
                 let ident_str = ident.to_string();
+                let location = location(ident.span());
                 let items = match items {
                     ListOrAssign::List(item_list) => to_tokens(item_list),
                     ListOrAssign::Assign(expr) => quote! { #expr },
                 };
                 quote! {{
-                    let mut module = roto::Module::new(#ident_str, #doc).unwrap();
+                    let mut module = roto::Module::new(
+                        #ident_str,
+                        #doc,
+                        #location,
+                    ).unwrap();
                     module.add(#items);
                     module
                 }}
             }
-            Item::Impl(ty, items) => {
+            Item::Impl(span, ty, items) => {
                 let items = match items {
                     ListOrAssign::List(item_list) => to_tokens(item_list),
                     ListOrAssign::Assign(expr) => quote! { #expr },
                 };
+
+                let location = location(span);
                 quote! {{
-                    let mut impl_block = roto::Impl::new::<#ty>();
+                    let mut impl_block = roto::Impl::new::<#ty>(#location);
                     impl_block.add(#items);
                     impl_block
                 }}
             }
             Item::Const(item) => {
                 let ident = item.ident;
+                let location = location(ident.span());
                 let ident_str = ident.to_string();
                 let ty = item.ty;
                 let expr = item.expr;
                 quote! {
-                    roto::Constant::new::<#ty>(#ident_str, #doc, #expr).unwrap()
+                    roto::Constant::new::<#ty>(
+                        #ident_str,
+                        #doc,
+                        #expr,
+                        #location,
+                    ).unwrap()
                 }
             }
             Item::Include(item) => {
@@ -375,7 +424,10 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
             Item::Use(item) => {
                 let imports = flatten_use_tree(&item.tree);
                 quote! {
-                    roto::Use::new(vec![#(vec![#(#imports.to_string()),*]),*])
+                    roto::Use::new(
+                        vec![#(vec![#(#imports.to_string()),*]),*],
+                        roto::location!(),
+                    )
                 }
             }
         };
@@ -383,9 +435,10 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
         items.push(quote! { #new });
     }
 
-    quote! {
-        [ #(roto::Item::from(#items)),* ]
-    }
+    quote! {{
+        let x: [roto::Item; _] = [ #(roto::Item::from(#items)),* ];
+        x
+    }}
 }
 
 fn flatten_use_tree(tree: &syn::UseTree) -> Vec<Vec<String>> {

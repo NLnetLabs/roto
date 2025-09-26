@@ -13,8 +13,10 @@ fn main() -> Result<(), roto::RotoReport> {
         /// Some type I want to register
         copy type Bla = Val<Bla>;
 
+        clone type Bla = Val<u32>;
+
         impl Val<Bla> {
-            fn get_x(bla: Val<Bla>) -> u32 {
+            fn x(bla: Val<Bla>) -> u32 {
                 bla.x
             }
         }

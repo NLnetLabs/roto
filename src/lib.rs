@@ -68,3 +68,38 @@ macro_rules! ice {
 }
 
 pub(crate) use ice;
+
+#[derive(Debug, Clone)]
+pub struct Location {
+    pub file: &'static str,
+    pub line: u32,
+    pub column: u32,
+}
+
+impl Location {
+    fn with_offset(self, line: u32, column: u32) -> Self {
+        Self {
+            file: self.file,
+            line: self.line + line,
+            column: self.column + column,
+        }
+    }
+}
+
+impl std::fmt::Display for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        format!("{}:{}:{}", self.file, self.line, self.column).fmt(f)
+    }
+}
+
+/// Rust source code location
+#[macro_export]
+macro_rules! location {
+    () => {
+        $crate::Location {
+            file: file!(),
+            line: line!(),
+            column: column!(),
+        }
+    };
+}

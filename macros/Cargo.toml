@@ -17,6 +17,6 @@ readme.workspace = true
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.86"
+proc-macro2 = { version = "1.0.101", features = ["span-locations"] }
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }
