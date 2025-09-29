@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{library, runtime::items::IntoItems as _, Val};
+use crate::{library, runtime::items::Registerable as _, Val};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
@@ -15,7 +15,7 @@ use routecore::bgp::{
 #[test]
 #[should_panic]
 fn invalid_function_name() {
-    library! {
+    let _ = library! {
         fn accept() -> bool {
             true
         }
@@ -25,7 +25,7 @@ fn invalid_function_name() {
 #[test]
 #[should_panic]
 fn invalid_method_name() {
-    library! {
+    let _ = library! {
         impl bool {
             fn accept(_x: bool) -> bool {
                 true
@@ -37,7 +37,7 @@ fn invalid_method_name() {
 #[test]
 #[should_panic]
 fn invalid_static_method_name() {
-    library! {
+    let _ = library! {
         impl bool {
             fn accept() -> bool {
                 true
@@ -52,7 +52,7 @@ fn invalid_clone_type_name() {
     #[derive(Clone)]
     struct Foo;
 
-    library! {
+    let _ = library! {
         clone type accept = Val<Foo>;
     };
 }
@@ -63,7 +63,7 @@ fn invalid_copy_type_name() {
     #[derive(Clone, Copy)]
     struct Foo;
 
-    library! {
+    let _ = library! {
         copy type accept = Val<Foo>;
     };
 }
@@ -71,14 +71,14 @@ fn invalid_copy_type_name() {
 #[test]
 #[should_panic]
 fn invalid_constant_name() {
-    library! {
+    let _ = library! {
         const accept: u32 = 0;
     };
 }
 
 #[test]
 fn constant_declared_twice() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         const FOO: u32 = 10;
         const FOO: u32 = 12;
     })
@@ -87,7 +87,7 @@ fn constant_declared_twice() {
 
 #[test]
 fn function_declared_twice() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         fn foo() {}
         fn foo() -> bool {
             false
@@ -98,7 +98,7 @@ fn function_declared_twice() {
 
 #[test]
 fn method_declared_twice() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         fn foo(_: bool) {}
         fn foo(_: bool) -> bool {
             false
@@ -109,7 +109,7 @@ fn method_declared_twice() {
 
 #[test]
 fn static_method_declared_twice() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         fn foo() {}
         fn foo() -> bool {
             false
@@ -120,7 +120,7 @@ fn static_method_declared_twice() {
 
 #[test]
 fn method_and_static_method_with_the_same_name() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         impl bool {
             fn foo(_: bool) {}
 
@@ -134,7 +134,7 @@ fn method_and_static_method_with_the_same_name() {
 
 #[test]
 fn function_and_method_with_the_same_name() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         fn foo(_: bool) {}
 
         impl bool {
@@ -146,7 +146,7 @@ fn function_and_method_with_the_same_name() {
 
 #[test]
 fn function_and_constant_with_the_same_name_1() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         fn foo(_: bool) {}
         const foo: bool = true;
     })
@@ -155,7 +155,7 @@ fn function_and_constant_with_the_same_name_1() {
 
 #[test]
 fn function_and_constant_with_the_same_name_2() {
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         const foo: bool = true;
         fn foo(_x: bool) {}
     })
@@ -166,7 +166,7 @@ fn function_and_constant_with_the_same_name_2() {
 #[should_panic]
 fn register_option_arc_str() {
     // Cannot register Option
-    library! {
+    let _ = library! {
         clone type OptStr = Option<Arc<str>>;
     };
 }
@@ -174,12 +174,15 @@ fn register_option_arc_str() {
 #[test]
 fn register_val_option_arc_str() {
     // But with Val it's fine
-    Runtime::from_items(library! {
+    Runtime::from_lib(library! {
         clone type OptStr = Val<Option<Arc<str>>>;
     })
     .unwrap();
 }
 
+// This is a bit of a weird case, it should probably at least warn, but
+// at the moment, this is perfectly valid (where unwrap_or_empty is a
+// static method and not a method).
 #[test]
 fn unwrap_or_empty() {
     let ty = library! {
@@ -192,7 +195,7 @@ fn unwrap_or_empty() {
         }
     };
 
-    Runtime::from_items(ty).unwrap_err();
+    Runtime::from_lib(ty).unwrap();
 }
 
 #[allow(deprecated)]

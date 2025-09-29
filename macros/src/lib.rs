@@ -78,6 +78,7 @@ enum Item {
     Use(syn::ItemUse),
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ListOrAssign {
     Assign(syn::Expr),
     List(ItemList),
@@ -200,58 +201,6 @@ impl Parse for ItemList {
     }
 }
 
-/// Create a list of items to be registered
-///
-/// The syntax is as follows:
-///
-/// ```rust,ignore
-/// /// A `Clone` type `Val<Foo>` registered as `Foo`
-/// clone type Foo = Val<Foo>;
-///
-/// /// A `Copy` type `Val<Foo>` registered as `Foo`
-/// copy type Foo = Val<Foo>;
-///
-/// /// A function
-/// fn foo(a: i32, b: Val<Foo>) -> Val<Bar> {
-///     todo!()
-/// }
-///
-/// /// A closure
-/// let foo = |a: i32, b: Val<Foo>| -> Val<Bar> {
-///     todo!()
-/// }
-///
-/// /// A closure with `move`
-/// let foo = |a: i32, b: Val<Foo>| -> Val<Bar> {
-///     todo!()
-/// }
-///
-/// /// A constant `BAR` of type `Val<Foo>`
-/// const BAR: Val<Foo> = todo!();
-///
-/// /// Make a new module with items
-/// mod foo {
-///     // More items
-/// }
-///
-/// /// A module from a list of items
-/// mod foo = some_item_list;
-///
-/// /// Add methods to the `Val<Foo>`
-/// ///
-/// /// Note that you have to use the Rust type, not the Roto name.
-/// impl Val<Foo> {
-///     // More items
-/// }
-///
-/// impl Val<Foo> = some_item_list;
-///
-/// /// Include some item
-/// item some_item;
-///
-/// /// Add imports, note that this uses Roto names for types
-/// use Option::{Some, None};
-/// ```
 #[proc_macro]
 pub fn library(input: TokenStream) -> TokenStream {
     let parsed_items: ItemList = syn::parse_macro_input!(input);
@@ -435,10 +384,9 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
         items.push(quote! { #new });
     }
 
-    quote! {{
-        let x: [roto::Item; _] = [ #(roto::Item::from(#items)),* ];
-        x
-    }}
+    quote! {
+        roto::Library::from(vec![ #(roto::Item::from(#items)),* ])
+    }
 }
 
 fn flatten_use_tree(tree: &syn::UseTree) -> Vec<Vec<String>> {

@@ -1,6 +1,6 @@
-filtermap main(bla: Bla) {
-    if bla.x() > 10 {
-        accept 2 * bla.x()
+filtermap main(v: Vec2) {
+    if v.x() > 10 {
+        accept 2 * v.x()
     } else {
         reject
     }

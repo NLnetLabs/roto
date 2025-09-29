@@ -30,7 +30,9 @@ use crate::{
     parser::token::{Lexer, Token},
     runtime::{
         func::RegisterableFn,
-        items::{Constant, Function, IntoItems, Item, Module, Type, Use},
+        items::{
+            Constant, Function, Impl, Item, Module, Registerable, Type, Use,
+        },
     },
     typechecker::{
         scope::{ResolvedName, ScopeRef},
@@ -54,22 +56,9 @@ use crate::{
 ///
 /// - [`Runtime::compile`]
 ///
-/// ## Registering Types
+/// ## Registering types, functions and constants.
 ///
-/// - [`Runtime::register_copy_type`]
-/// - [`Runtime::register_clone_type`]
-/// - [`Runtime::register_copy_type_with_name`]
-/// - [`Runtime::register_clone_type_with_name`]
-///
-/// ## Registering functions and methods
-///
-/// - [`Runtime::register_fn`]
-/// - [`Runtime::register_method`]
-/// - [`Runtime::register_static_method`]
-///
-/// ## Registering contstants
-///
-/// - [`Runtime::register_constant`]
+/// - [`Runtime::add`]
 ///
 /// ## Registering context type
 ///
@@ -119,30 +108,105 @@ impl Runtime {
             functions: Default::default(),
             constants: Default::default(),
         };
-        this.add_items(basic::built_ins()).unwrap();
+        this.add(basic::built_ins()).unwrap();
         this
     }
 
-    pub fn from_items(
-        items: impl IntoItems,
+    /// Create a new [`Runtime`] with a given library.
+    ///
+    /// This is nothing more than a convenience function around
+    /// [`Runtime::new`] followed by [`Runtime::add`].
+    pub fn from_lib(
+        items: impl Registerable,
     ) -> Result<Self, RegistrationError> {
         let mut rt = Self::new();
-        rt.add_items(items)?;
+        rt.add(items)?;
         Ok(rt)
     }
 
-    fn add_items(
+    /// Add a library of items to this [`Runtime`]
+    ///
+    /// Typically, one would use the [`library!`](crate::library) macro to
+    /// register items. This would look something like this:
+    ///
+    /// ```rust
+    /// use roto::{Runtime, library};
+    ///
+    /// let mut rt = Runtime::new();
+    /// rt.add(library! {
+    ///     /* define items here */
+    /// }).unwrap();
+    /// ```
+    ///
+    /// See the documentation on the `library!` macro for more information.
+    ///
+    /// However, it is -- with a bit of extra boilerplate -- also possible to
+    /// register items without using the macro. You can directly register one
+    /// of the item types:
+    ///
+    ///  - [`Module`]
+    ///  - [`Type`]
+    ///  - [`Function`]
+    ///  - [`Constant`]
+    ///  - [`Impl`]
+    ///  - [`Use`]
+    ///
+    /// Or you can register an [`Item`] which combines all the above.
+    /// Additionally, you can register collections of these types, such
+    /// as `Vec<Item>` or `[Item; N]`.
+    ///
+    /// For example:
+    ///
+    /// ```rust
+    /// use roto::{Runtime, Constant, Function, Impl, location, Item};
+    ///
+    /// let mut rt = Runtime::new();
+    ///
+    /// // Add a single constant
+    /// rt.add(
+    ///     Constant::new(
+    ///         "U32_MAX",
+    ///         "The maximum value of a `u32`.",
+    ///         u32::MAX,
+    ///         location!(),
+    ///     ).unwrap()
+    /// ).unwrap();
+    ///
+    /// // Add a constant and a method:
+    ///
+    /// let mut impl_block = Impl::new::<i32>(location!());
+    /// impl_block.add(Function::new(
+    ///     "max",
+    ///     "The maximum value of an `i32`",
+    ///     vec![],
+    ///     || i32::MAX,
+    ///         location!(),
+    /// ).unwrap());
+    ///
+    /// rt.add([
+    ///     Item::Impl(impl_block),
+    ///     Item::Constant(Constant::new(
+    ///         "I32_MAX",
+    ///         "The maximum value of an `i32`",
+    ///         i32::MAX,
+    ///         location!(),
+    ///     ).unwrap())
+    /// ]).unwrap();
+    /// ```
+    ///
+    /// See also [`Runtime::from_lib`], which combines [`Runtime::new`] and
+    /// [`Runtime::add`] into a single function.
+    pub fn add(
         &mut self,
-        items: impl IntoItems,
+        items: impl Registerable,
     ) -> Result<(), RegistrationError> {
         let root = ScopeRef::GLOBAL;
-        let items = items.into_items();
+        let items = items.into_lib().items;
         self.declare_modules(None, &items)?;
         self.declare_types(root, &items)?;
         self.declare_functions(root, &items)?;
         self.declare_constants(root, &items)?;
         self.declare_imports(root, &items)?;
-        // rt.declare_context(root, &all_items)?;
         Ok(())
     }
 
@@ -351,39 +415,39 @@ impl Runtime {
     ///
     /// If that doesn't work for the type you want, use
     /// [`Runtime::register_clone_type_with_name`] instead.
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_clone_type<T: Reflect + Clone>(
         &mut self,
         docstring: &str,
     ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        items::Type::clone::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add_items(l))
+        Type::clone::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add(l))
             .map_err(|e| e.to_string())
     }
 
     /// Register a `Copy` type with a default name
     ///
     /// See [`Runtime::register_clone_type`]
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_copy_type<T: Reflect + Copy>(
         &mut self,
         docstring: &str,
     ) -> Result<(), String> {
         let name = Self::extract_name::<T>();
-        items::Type::copy::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add_items(l))
+        Type::copy::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add(l))
             .map_err(|e| e.to_string())
     }
 
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_copy_type_with_name<T: Reflect + Copy>(
         &mut self,
         name: &str,
         docstring: &str,
     ) -> Result<(), String> {
-        items::Type::copy::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add_items(l))
+        Type::copy::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add(l))
             .map_err(|e| e.to_string())
     }
 
@@ -391,18 +455,18 @@ impl Runtime {
     ///
     /// This makes the type available for use in Roto. However, Roto will
     /// only store pointers to this type.
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_clone_type_with_name<T: Reflect + Clone>(
         &mut self,
         name: &str,
         docstring: &str,
     ) -> Result<(), String> {
-        items::Type::clone::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add_items(l))
+        Type::clone::<T>(name, docstring, roto::location!())
+            .and_then(|l| self.add(l))
             .map_err(|e| e.to_string())
     }
 
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_fn<'a, A, R>(
         &mut self,
         name: impl AsRef<str>,
@@ -411,18 +475,18 @@ impl Runtime {
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let argument_names = argument_names.into_iter().collect();
-        items::Function::new(
+        Function::new(
             name.as_ref(),
             docstring,
             argument_names,
             func,
             roto::location!(),
         )
-        .and_then(|l| self.add_items(l))
+        .and_then(|l| self.add(l))
         .map_err(|e| e.to_string())
     }
 
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_method<'a, T: Reflect, A, R>(
         &mut self,
         name: impl AsRef<str>,
@@ -431,9 +495,9 @@ impl Runtime {
         func: impl RegisterableFn<A, R>,
     ) -> Result<(), String> {
         let argument_names = argument_names.into_iter().collect();
-        let mut impl_block = items::Impl::new::<T>(roto::location!());
+        let mut impl_block = Impl::new::<T>(roto::location!());
 
-        items::Function::new(
+        Function::new(
             name.as_ref(),
             docstring,
             argument_names,
@@ -442,12 +506,12 @@ impl Runtime {
         )
         .and_then(|i| {
             impl_block.add(i);
-            self.add_items(impl_block)
+            self.add(impl_block)
         })
         .map_err(|e| e.to_string())
     }
 
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_static_method<'a, T: Reflect, A, R>(
         &mut self,
         name: impl AsRef<str>,
@@ -463,7 +527,7 @@ impl Runtime {
     ///
     /// Constants are shared between function functions. Since functions
     /// can be send to other threads, the constants must be `Send` and `Sync`.
-    #[deprecated = "use items! and Runtime::add_items instead"]
+    #[deprecated = "use `library!` and `Runtime::add` instead"]
     pub fn register_constant<T: Reflect>(
         &mut self,
         name: impl Into<String>,
@@ -473,14 +537,9 @@ impl Runtime {
     where
         T::Transformed: Send + Sync + 'static,
     {
-        items::Constant::new::<T>(
-            name.into(),
-            docstring,
-            x,
-            roto::location!(),
-        )
-        .and_then(|l| self.add_items(l))
-        .map_err(|e| e.to_string())
+        Constant::new::<T>(name.into(), docstring, x, roto::location!())
+            .and_then(|l| self.add(l))
+            .map_err(|e| e.to_string())
     }
 
     fn declare_modules(
@@ -599,15 +658,6 @@ impl Runtime {
                         .unwrap();
                     self.declare_functions(scope, children)?;
                 }
-                Item::Type(Type {
-                    ident, children, ..
-                }) => {
-                    let scope = self
-                        .type_checker
-                        .get_scope_of(scope, *ident)
-                        .unwrap();
-                    self.declare_methods(scope, children)?;
-                }
                 Item::Function(f) => {
                     self.declare_function(scope, f, false)?;
                 }
@@ -686,7 +736,7 @@ impl Runtime {
             .func
             .parameter_types()
             .iter()
-            .map(|ty| Self::rust_type_to_roto_type(self, &f.location, *ty))
+            .map(|ty| self.rust_type_to_roto_type(&f.location, *ty))
             .collect::<Result<_, _>>()?;
 
         let return_type =

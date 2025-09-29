@@ -419,7 +419,7 @@ impl TypeChecker {
                 let name = runtime
                     .get_runtime_type(ty.type_id)
                     .ok_or_else(|| {
-                        format!("unregistered type: {}", ty.rust_name,)
+                        format!("unregistered type: {}", ty.rust_name)
                     })?
                     .name();
                 Ok(Type::Name(TypeName {

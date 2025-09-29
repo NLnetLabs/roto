@@ -25,7 +25,7 @@ fn main() -> Result<(), roto::RotoReport> {
         }
     };
 
-    let rt = Runtime::from_items(lib).unwrap();
+    let rt = Runtime::from_lib(lib).unwrap();
 
     let mut compiled = rt
         .compile("examples/optional.roto")

@@ -294,7 +294,7 @@ impl<T: 'static + Clone> Reflect for Val<T> {
     }
 
     fn resolve() -> Ty {
-        let t = TypeRegistry::store::<T>(TypeDescription::Leaf).type_id;
+        let t = TypeId::of::<T>();
 
         let desc = TypeDescription::Val(t);
         TypeRegistry::store::<Self>(desc)
