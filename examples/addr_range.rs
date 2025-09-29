@@ -22,7 +22,7 @@ fn main() {
     };
 
     // Create the runtime with the items
-    let rt = Runtime::from_items(lib).unwrap();
+    let rt = Runtime::from_lib(lib).unwrap();
 
     // Compile the program with our runtime
     let mut program = rt.compile("examples/addr_range.roto").unwrap();

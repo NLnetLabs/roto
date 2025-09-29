@@ -5,7 +5,7 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{library, runtime::items::Item};
+use crate::{library, Library};
 
 macro_rules! int_docs {
     ($t:ty) => {&{
@@ -90,7 +90,7 @@ macro_rules! float_impl {
     };
 }
 
-fn ip_addr_methods() -> [Item; 4] {
+fn ip_addr_methods() -> Library {
     library! {
         /// Check whether two IP addresses are equal
         ///
@@ -139,7 +139,7 @@ fn ip_addr_methods() -> [Item; 4] {
     }
 }
 
-fn string_methods() -> [Item; 8] {
+fn string_methods() -> Library {
     library! {
         /// Append a string to another, creating a new string
         ///
@@ -214,7 +214,7 @@ fn string_methods() -> [Item; 8] {
     }
 }
 
-pub fn built_ins() -> [Item; 38] {
+pub fn built_ins() -> Library {
     library! {
         use Option::{Some, None};
 
