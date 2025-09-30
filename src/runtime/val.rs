@@ -11,12 +11,15 @@ use std::ops::{Deref, DerefMut};
 /// the inner value.
 ///
 /// ```rust,ignore
+/// #[derive(Clone)]
 /// struct Foo {
 ///     a: i32,
 ///     b: i32,
 /// }
 ///
-/// runtime.register_type::<Foo>("..").unwrap();
+/// let rt = Runtime::from_lib(library! {
+///     #[clone] type Foo = Val<Foo>;
+/// }).unwrap();
 ///
 /// // compile a script...
 ///
