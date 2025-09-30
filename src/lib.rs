@@ -37,7 +37,10 @@ pub use roto_macros::{
 pub use runtime::{
     context::Context,
     func::RegisterableFn,
-    items::{Constant, Function, Impl, Item, Library, Module, Type, Use},
+    items::{
+        Constant, Function, Impl, Item, Library, Module, Registerable, Type,
+        Use,
+    },
     ty::Reflect,
     val::Val,
     verdict::Verdict,
@@ -60,17 +63,28 @@ pub use runtime::{
 ///
 /// ## Types
 ///
-/// ```rust,ignore
+/// ```rust
+/// # #[derive(Clone, Copy)]
+/// # struct Foo;
+/// # use roto::Val;
+/// # roto::library! {
 /// /// A `Clone` type `Val<Foo>` registered as `Foo`
-/// clone type Foo = Val<Foo>;
+/// #[clone] type Foo = Val<Foo>;
 ///
 /// /// A `Copy` type `Val<Foo>` registered as `Foo`
-/// copy type Foo = Val<Foo>;
+/// #[copy] type Foo = Val<Foo>;
+/// # };
 /// ```
 ///
 /// ## Functions
 ///
-/// ```rust,ignore
+/// ```rust
+/// # #[derive(Clone)]
+/// # struct Foo;
+/// # #[derive(Clone)]
+/// # struct Bar;
+/// # use roto::Val;
+/// # roto::library! {
 /// /// A function
 /// fn foo(a: i32, b: Val<Foo>) -> Val<Bar> {
 ///     todo!()
@@ -79,60 +93,79 @@ pub use runtime::{
 /// /// A closure
 /// let foo = |a: i32, b: Val<Foo>| -> Val<Bar> {
 ///     todo!()
-/// }
+/// };
 ///
 /// /// A closure with `move`
 /// let foo = move |a: i32, b: Val<Foo>| -> Val<Bar> {
 ///     todo!()
-/// }
+/// };
+/// # };
 /// ```
 ///
 /// ## Constants
 ///
-/// ```rust,ignore
-/// /// A constant `BAR` of type `Val<Foo>`
-/// const BAR: Val<Foo> = todo!();
+/// ```rust
+/// # #[derive(Clone)]
+/// # struct Foo;
+/// # use roto::Val;
+/// # roto::library! {
+/// /// A constant `BAR` of type `u32`
+/// const BAR: u32 = 42;
+/// # };
 /// ```
 ///
 /// ## Modules
 ///
-/// ```rust,ignore
+/// ```rust
+/// # roto::library! {
 /// /// Make a new module with some items
 /// mod foo {
 ///     // Add items here (with the same syntax)
 /// }
-///
-/// /// A module created from a Library
-/// mod foo = some_library;
+/// # };
 /// ```
 ///
 /// ## Impl blocks
 ///
-/// ```rust,ignore
+/// ```rust
+/// # #[derive(Clone)]
+/// # struct Foo;
+/// # use roto::Val;
+/// # roto::library! {
 /// /// Add (static) methods to the `Val<Foo>`
 /// ///
 /// /// Note that you have to use the Rust type, not the Roto name.
 /// impl Val<Foo> {
 ///     // Add items here (with the same syntax)
 /// }
-///
-/// impl Val<Foo> = some_item_list;
+/// # };
 /// ```
 ///
 /// ## Use
 ///
 /// Note that renaming items is not supported yet.
 ///
-/// ```rust,ignore
+/// ```rust
+/// # roto::library! {
 /// /// Add imports, note that this uses Roto names for types
 /// use Option::{Some, None};
+/// # };
 /// ```
 ///
 /// ## Including other library items
 ///
-/// ```rust,ignore
-/// /// Include some registerable
-/// item some_registerable;
+/// ```rust
+/// # let some_registerable = roto::library!{};
+/// # roto::library! {
+/// /// Include some registerable, including libraries
+/// include!(some_registerable);
+/// # };
+///
+/// # let some_registerable = roto::library!{};
+/// # roto::library! {
+/// // This is especially useful in combination with `impl` and `mod`:
+/// mod foo { include!(some_registerable); }
+/// # };
 /// ```
 pub use roto_macros::library;
 

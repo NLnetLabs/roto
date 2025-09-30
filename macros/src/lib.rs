@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, spanned::Spanned, Token};
+use syn::{parse::Parse, parse_macro_input, spanned::Spanned, Error, Token};
 
 #[proc_macro_derive(Context)]
 pub fn roto_context(item: TokenStream) -> TokenStream {
@@ -66,29 +66,18 @@ struct ItemWithDocs {
 }
 
 enum Item {
-    CopyType(syn::ItemType),
-    CloneType(syn::ItemType),
-    ValueType(syn::ItemType),
+    Type(syn::ItemType),
     Let(syn::ExprLet),
     Fn(syn::ItemFn),
-    Mod(syn::Ident, ListOrAssign),
-    Impl(proc_macro2::Span, syn::Type, ListOrAssign),
+    Mod(syn::Ident, ItemList),
+    Impl(proc_macro2::Span, syn::Type, ItemList),
     Const(syn::ItemConst),
-    Include(syn::Expr),
+    Include(proc_macro2::TokenStream),
     Use(syn::ItemUse),
 }
 
-#[allow(clippy::large_enum_variant)]
-enum ListOrAssign {
-    Assign(syn::Expr),
-    List(ItemList),
-}
-
 mod kw {
-    syn::custom_keyword!(clone);
-    syn::custom_keyword!(copy);
-    syn::custom_keyword!(value);
-    syn::custom_keyword!(item);
+    syn::custom_keyword!(include);
 }
 
 impl Parse for ItemList {
@@ -102,96 +91,62 @@ impl Parse for ItemList {
             let attributes = syn::Attribute::parse_outer(input)?;
             let doc = gather_docstring(&attributes);
 
+            let look = input.lookahead1();
             let item = match () {
                 // Case 1: A normal function
-                _ if input.peek(Token![fn]) => {
+                _ if look.peek(Token![fn]) => {
                     let mut item: syn::ItemFn = input.parse()?;
                     item.attrs = attributes;
                     Item::Fn(item)
                 }
                 // Case 2: A module
-                _ if input.peek(Token![mod]) => {
+                _ if look.peek(Token![mod]) => {
                     input.parse::<Token![mod]>()?;
                     let ident: syn::Ident = input.parse()?;
-                    if input.peek(Token![=]) {
-                        input.parse::<Token![=]>()?;
-                        let expr = input.parse()?;
-                        input.parse::<Token![;]>()?;
-                        Item::Mod(ident, ListOrAssign::Assign(expr))
-                    } else {
-                        let content;
-                        syn::braced!(content in input);
-                        let item_list: ItemList = content.parse()?;
-                        Item::Mod(ident, ListOrAssign::List(item_list))
-                    }
+                    let content;
+                    syn::braced!(content in input);
+                    let item_list: ItemList = content.parse()?;
+                    Item::Mod(ident, item_list)
                 }
                 // Case 3: A let binding with a closure
-                _ if input.peek(Token![let]) => {
+                _ if look.peek(Token![let]) => {
                     let mut item: syn::ExprLet = input.parse()?;
                     input.parse::<Token![;]>()?;
                     item.attrs = attributes;
                     Item::Let(item)
                 }
                 // Case 4: An impl block
-                _ if input.peek(Token![impl]) => {
+                _ if look.peek(Token![impl]) => {
                     let tok = input.parse::<Token![impl]>()?;
                     let ty: syn::Type = input.parse()?;
 
-                    if input.peek(Token![=]) {
-                        input.parse::<Token![=]>()?;
-                        let expr = input.parse()?;
-                        input.parse::<Token![;]>()?;
-                        Item::Impl(tok.span, ty, ListOrAssign::Assign(expr))
-                    } else {
-                        let content;
-                        syn::braced!(content in input);
-                        let item_list: ItemList = content.parse()?;
-                        Item::Impl(
-                            tok.span,
-                            ty,
-                            ListOrAssign::List(item_list),
-                        )
-                    }
+                    let content;
+                    syn::braced!(content in input);
+                    let item_list: ItemList = content.parse()?;
+                    Item::Impl(tok.span, ty, item_list)
                 }
                 // Case 5: A constant
-                _ if input.peek(Token![const]) => {
+                _ if look.peek(Token![const]) => {
                     let mut item: syn::ItemConst = input.parse()?;
                     item.attrs = attributes;
                     Item::Const(item)
                 }
                 // Case 6: A clone type
-                _ if input.peek(kw::clone) => {
-                    input.parse::<kw::clone>()?;
+                _ if look.peek(Token![type]) => {
                     let mut item: syn::ItemType = input.parse()?;
                     item.attrs = attributes;
-                    Item::CloneType(item)
+                    Item::Type(item)
                 }
-                // Case 7: A copy type
-                _ if input.peek(kw::copy) => {
-                    input.parse::<kw::copy>()?;
-                    let mut item: syn::ItemType = input.parse()?;
-                    item.attrs = attributes;
-                    Item::CopyType(item)
-                }
-                // Case 8: A value type
-                _ if input.peek(kw::value) => {
-                    input.parse::<kw::value>()?;
-                    let mut item: syn::ItemType = input.parse()?;
-                    item.attrs = attributes;
-                    Item::ValueType(item)
-                }
-                _ if input.peek(kw::item) => {
-                    input.parse::<kw::item>()?;
-                    let expr: syn::Expr = input.parse()?;
-                    Item::Include(expr)
-                }
-                _ if input.peek(Token![use]) => {
+                _ if look.peek(Token![use]) => {
                     let item = input.parse()?;
                     Item::Use(item)
                 }
-                _ => {
-                    todo!("good error message");
+                _ if look.peek(kw::include) => {
+                    let m: syn::Macro = input.parse()?;
+                    input.parse::<Token![;]>()?;
+                    Item::Include(m.tokens)
                 }
+                _ => return Err(look.error()),
             };
 
             items.push(ItemWithDocs { doc, item });
@@ -205,7 +160,8 @@ impl Parse for ItemList {
 pub fn library(input: TokenStream) -> TokenStream {
     let parsed_items: ItemList = syn::parse_macro_input!(input);
 
-    let expanded = to_tokens(parsed_items);
+    let expanded =
+        to_tokens(parsed_items).unwrap_or_else(Error::into_compile_error);
 
     TokenStream::from(expanded)
 }
@@ -223,43 +179,18 @@ fn location(s: proc_macro2::Span) -> proc_macro2::TokenStream {
     }
 }
 
-fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
+fn to_tokens(item_list: ItemList) -> syn::Result<proc_macro2::TokenStream> {
     let mut items = Vec::new();
     for ItemWithDocs { doc, item } in item_list.items {
         let new = match item {
-            Item::CopyType(item) => {
-                let ident = item.ident;
+            Item::Type(item) => {
+                let ident = &item.ident;
                 let location = location(ident.span());
                 let ident_str = ident.to_string();
-                let ty = item.ty;
+                let ty = &item.ty;
+                let movability = get_movability(item.span(), &item.attrs)?;
                 quote! {
-                    roto::Type::copy::<#ty>(
-                        #ident_str,
-                        #doc,
-                        #location,
-                    ).unwrap()
-                }
-            }
-            Item::CloneType(item) => {
-                let location = location(item.span());
-                let ident = item.ident;
-                let ident_str = ident.to_string();
-                let ty = item.ty;
-                quote! {
-                    roto::Type::clone::<#ty>(
-                        #ident_str,
-                        #doc,
-                        #location,
-                    ).unwrap()
-                }
-            }
-            Item::ValueType(item) => {
-                let ident = item.ident;
-                let location = location(ident.span());
-                let ident_str = ident.to_string();
-                let ty = item.ty;
-                quote! {
-                    roto::Type::value::<#ty>(
+                    roto::Type::#movability::<#ty>(
                         #ident_str,
                         #doc,
                         #location,
@@ -325,10 +256,7 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
             Item::Mod(ident, items) => {
                 let ident_str = ident.to_string();
                 let location = location(ident.span());
-                let items = match items {
-                    ListOrAssign::List(item_list) => to_tokens(item_list),
-                    ListOrAssign::Assign(expr) => quote! { #expr },
-                };
+                let items = to_tokens(items)?;
                 quote! {{
                     let mut module = roto::Module::new(
                         #ident_str,
@@ -340,11 +268,7 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
                 }}
             }
             Item::Impl(span, ty, items) => {
-                let items = match items {
-                    ListOrAssign::List(item_list) => to_tokens(item_list),
-                    ListOrAssign::Assign(expr) => quote! { #expr },
-                };
-
+                let items = to_tokens(items)?;
                 let location = location(span);
                 quote! {{
                     let mut impl_block = roto::Impl::new::<#ty>(#location);
@@ -384,9 +308,49 @@ fn to_tokens(item_list: ItemList) -> proc_macro2::TokenStream {
         items.push(quote! { #new });
     }
 
-    quote! {
-        roto::Library::from(vec![ #(roto::Item::from(#items)),* ])
+    Ok(quote! {{
+        let mut lib = roto::Library::new();
+        #(roto::Registerable::add_to_lib(#items, &mut lib);)*
+        lib
+    }})
+}
+
+fn get_movability(
+    span: proc_macro2::Span,
+    attrs: &[syn::Attribute],
+) -> syn::Result<syn::Ident> {
+    let mut clone = 0;
+    let mut copy = 0;
+    let mut value = 0;
+    let mut ident_span = None;
+
+    for attr in attrs {
+        if let syn::Meta::Path(p) = &attr.meta {
+            if p.is_ident("clone") {
+                clone += 1;
+                ident_span = Some(p.span());
+            } else if p.is_ident("copy") {
+                copy += 1;
+                ident_span = Some(p.span());
+            } else if p.is_ident("value") {
+                value += 1;
+                ident_span = Some(p.span());
+            }
+        }
     }
+
+    let s =
+        match (clone, copy, value) {
+            (1, 0, 0) => "clone",
+            (0, 1, 0) => "copy",
+            (0, 0, 1) => "value",
+            _ => return Err(syn::Error::new(
+                span,
+                "specify exactly 1 of `#[clone]`, `#[copy]` or `#[value]`",
+            )),
+        };
+
+    Ok(syn::Ident::new(s, ident_span.unwrap()))
 }
 
 fn flatten_use_tree(tree: &syn::UseTree) -> Vec<Vec<String>> {

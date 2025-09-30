@@ -53,7 +53,7 @@ fn invalid_clone_type_name() {
     struct Foo;
 
     let _ = library! {
-        clone type accept = Val<Foo>;
+        #[clone] type accept = Val<Foo>;
     };
 }
 
@@ -64,7 +64,7 @@ fn invalid_copy_type_name() {
     struct Foo;
 
     let _ = library! {
-        copy type accept = Val<Foo>;
+        #[copy] type accept = Val<Foo>;
     };
 }
 
@@ -167,7 +167,7 @@ fn function_and_constant_with_the_same_name_2() {
 fn register_option_arc_str() {
     // Cannot register Option
     let _ = library! {
-        clone type OptStr = Option<Arc<str>>;
+        #[clone] type OptStr = Option<Arc<str>>;
     };
 }
 
@@ -175,7 +175,7 @@ fn register_option_arc_str() {
 fn register_val_option_arc_str() {
     // But with Val it's fine
     Runtime::from_lib(library! {
-        clone type OptStr = Val<Option<Arc<str>>>;
+        #[clone] type OptStr = Val<Option<Arc<str>>>;
     })
     .unwrap();
 }
@@ -186,7 +186,7 @@ fn register_val_option_arc_str() {
 #[test]
 fn unwrap_or_empty() {
     let ty = library! {
-        clone type OptStr = Val<Option<Arc<str>>>;
+        #[clone] type OptStr = Val<Option<Arc<str>>>;
 
         impl Val<Option<Arc<str>>> {
             fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
