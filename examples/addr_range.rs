@@ -12,7 +12,7 @@ fn main() {
     // Create the Roto types to register into the runtime
     let lib = library! {
         /// A range of IP addresses
-        clone type AddrRange = Val<AddrRange>;
+        #[clone] type AddrRange = Val<AddrRange>;
 
         impl Val<AddrRange> {
             fn contains(range: Val<AddrRange>, addr: IpAddr) -> bool {

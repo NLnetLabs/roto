@@ -640,7 +640,7 @@ fn issue_52() {
 
     let rt = Runtime::from_lib(library! {
         /// A Foo!
-        clone type Foo = Val<Foo>;
+        #[clone] type Foo = Val<Foo>;
 
         impl Val<Foo> {
             fn bar(_x: u32) -> u32 {
@@ -1335,7 +1335,7 @@ fn arc_type() {
 
     let rt = Runtime::from_lib(library! {
         /// A special type for which we track the number of clones and drops
-        clone type CloneDrop = Val<CloneDrop>;
+        #[clone] type CloneDrop = Val<CloneDrop>;
     })
     .unwrap();
 
@@ -2720,7 +2720,7 @@ fn mutate() {
     }
 
     let rt = Runtime::from_lib(library! {
-        copy type MyType = Val<*mut MyType>;
+        #[copy] type MyType = Val<*mut MyType>;
 
         impl Val<*mut MyType> {
             fn increase(mut t: Val<*mut MyType>) {
@@ -2769,7 +2769,7 @@ fn return_vec() {
     }
 
     let rt = Runtime::from_lib(library! {
-        clone type MyType = Val<MyType>;
+        #[clone] type MyType = Val<MyType>;
     })
     .unwrap();
 
@@ -2805,7 +2805,7 @@ fn name_collision() {
 
     for _ in 0..100 {
         let rt = Runtime::from_lib(library! {
-            clone type A = Val<A>;
+            #[clone] type A = Val<A>;
 
             impl Val<A> {
                 fn foo(_a: Val<A>) -> bool {
@@ -2813,7 +2813,7 @@ fn name_collision() {
                 }
             }
 
-            clone type B = Val<B>;
+            #[clone] type B = Val<B>;
 
             impl Val<B> {
                 fn foo(_b: Val<B>) -> bool {
@@ -2853,7 +2853,7 @@ fn refcounting_in_a_recursive_function() {
     struct Foo;
 
     let rt = Runtime::from_lib(library! {
-        clone type Foo = Val<Arc<Foo>>;
+        #[clone] type Foo = Val<Arc<Foo>>;
     })
     .unwrap();
 
@@ -3088,7 +3088,7 @@ fn sigill() {
     }
 
     let rt = Runtime::from_lib(library! {
-        clone type Arcane = Val<Arcane>;
+        #[clone] type Arcane = Val<Arcane>;
 
         impl Val<Arcane> {
             fn get(a: Val<Arcane>) -> u64 {
@@ -3132,7 +3132,7 @@ fn sigill() {
 #[test]
 fn rust_string_string() {
     let rt = Runtime::from_lib(library! {
-        clone type RustString = Val<String>;
+        #[clone] type RustString = Val<String>;
 
         impl Val<String> {
             fn new(s: Arc<str>) -> Val<String> {
@@ -3307,7 +3307,7 @@ fn bool_is_not_true() {
 #[test]
 fn register_on_optstr() {
     let rt = Runtime::from_lib(library! {
-        clone type OptStr = Val<Option<Arc<str>>>;
+        #[clone] type OptStr = Val<Option<Arc<str>>>;
 
         impl Val<Option<Arc<str>>> {
             fn unwrap_or_empty(x: Val<Option<Arc<str>>>) -> Arc<str> {

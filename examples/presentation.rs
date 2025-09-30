@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let lib = library! {
         /// A route
-        clone type Route = Val<RotondaRoute>;
+        #[clone] type Route = Val<RotondaRoute>;
 
         impl Val<RotondaRoute> {
             fn prefix_matches(rr: Val<RotondaRoute>, to_match: Prefix) -> bool {
@@ -101,7 +101,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         /// A thing to log to
-        clone type Log = Val<Log>;
+        #[clone] type Log = Val<Log>;
 
         impl Val<Log> {
             fn log_prefix(stream: Val<Log>, prefix: Prefix) {

@@ -12,7 +12,7 @@ fn main() -> Result<(), roto::RotoReport> {
 
     let lib = library! {
         /// Some type I want to register
-        copy type Vec2 = Val<Vec2>;
+        #[copy] type Vec2 = Val<Vec2>;
 
         const ZERO: Val<Vec2> = Val(Vec2 {
             x: 0,

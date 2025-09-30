@@ -960,10 +960,10 @@ fn use_globals() {
     );
 
     let rt = Runtime::from_lib(library! {
-            clone type Community = Val<Community>;
+        #[clone] type Community = Val<Community>;
 
-            /// The well-known BLACKHOLE community
-            const BLACKHOLE: Val<Community> = Val(Community::from(Wellknown::Blackhole));
+        /// The well-known BLACKHOLE community
+        const BLACKHOLE: Val<Community> = Val(Community::from(Wellknown::Blackhole));
     }).unwrap();
 
     typecheck_with_runtime(s, rt).unwrap();

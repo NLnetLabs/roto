@@ -43,6 +43,7 @@ pub trait Registerable: Sized {
 ///
 /// This type can be constructed manually via [`Library::new`] and
 /// [`Library::add`] or via the [`library!`](crate::library) macro.
+#[derive(Clone, Debug)]
 pub struct Library {
     pub(crate) items: Vec<Item>,
 }

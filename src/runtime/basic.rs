@@ -223,37 +223,48 @@ pub fn built_ins() -> Library {
         /// This type has two possible values: `true` and `false`. Several
         /// boolean operations can be used with booleans, such as `&&` (
         /// logical and), `||` (logical or) and `not`.
-        value type bool = bool;
+        #[value]
+        type bool = bool;
 
         #[doc = int_docs!(u8)]
-        value type u8 = u8;
+        #[value]
+        type u8 = u8;
 
         #[doc = int_docs!(u16)]
-        value type u16 = u16;
+        #[value]
+        type u16 = u16;
 
         #[doc = int_docs!(u32)]
-        value type u32 = u32;
+        #[value]
+        type u32 = u32;
 
         #[doc = int_docs!(u64)]
-        value type u64 = u64;
+        #[value]
+        type u64 = u64;
 
         #[doc = int_docs!(i8)]
-        value type i8 = i8;
+        #[value]
+        type i8 = i8;
 
         #[doc = int_docs!(i16)]
-        value type i16 = i16;
+        #[value]
+        type i16 = i16;
 
         #[doc = int_docs!(i32)]
-        value type i32 = i32;
+        #[value]
+        type i32 = i32;
 
         #[doc = int_docs!(i64)]
-        value type i64 = i64;
+        #[value]
+        type i64 = i64;
 
         #[doc = float_docs!(f32)]
-        value type f32 = f32;
+        #[value]
+        type f32 = f32;
 
         #[doc = float_docs!(f64)]
-        value type f64 = f64;
+        #[value]
+        type f64 = f64;
 
         /// An ASN: an Autonomous System Number
         ///
@@ -266,7 +277,7 @@ pub fn built_ins() -> Library {
         /// AS1010
         /// AS4294967295
         /// ```
-        value type Asn = Asn;
+        #[value] type Asn = Asn;
 
         /// An IP address
         ///
@@ -285,7 +296,7 @@ pub fn built_ins() -> Library {
         /// ::1
         /// ::
         /// ```
-        copy type IpAddr = IpAddr;
+        #[copy] type IpAddr = IpAddr;
 
         /// An IP address prefix: the combination of an IP address and a prefix length
         ///
@@ -297,10 +308,10 @@ pub fn built_ins() -> Library {
         /// 1.1.1.0 / 8
         /// 192.0.0.0.0 / 24
         /// ```
-        copy type Prefix = Prefix;
+        #[copy] type Prefix = Prefix;
 
         /// The string type
-        clone type String = Arc<str>;
+        #[clone] type String = Arc<str>;
 
         impl Arc<str> {
             /// Convert this value into a `String`
@@ -309,23 +320,23 @@ pub fn built_ins() -> Library {
             }
         }
 
-        impl bool = to_string_impl!(bool);
-        impl u8 = to_string_impl!(u8);
-        impl u16 = to_string_impl!(u16);
-        impl u32 = to_string_impl!(u32);
-        impl u64 = to_string_impl!(u64);
-        impl i8 = to_string_impl!(i8);
-        impl i16 = to_string_impl!(i16);
-        impl i32 = to_string_impl!(i32);
-        impl i64 = to_string_impl!(i64);
-        impl f32 = to_string_impl!(f32);
-        impl f64 = to_string_impl!(f64);
-        impl IpAddr = to_string_impl!(IpAddr);
-        impl Prefix = to_string_impl!(Prefix);
-        impl Asn = to_string_impl!(Asn);
+        impl bool { include!(to_string_impl!(bool)); }
+        impl u8 { include!(to_string_impl!(u8)); }
+        impl u16 { include!(to_string_impl!(u16)); }
+        impl u32 { include!(to_string_impl!(u32)); }
+        impl u64 { include!(to_string_impl!(u64)); }
+        impl i8 { include!(to_string_impl!(i8)); }
+        impl i16 { include!(to_string_impl!(i16)); }
+        impl i32 { include!(to_string_impl!(i32)); }
+        impl i64 { include!(to_string_impl!(i64)); }
+        impl f32 { include!(to_string_impl!(f32)); }
+        impl f64 { include!(to_string_impl!(f64)); }
+        impl IpAddr { include!(to_string_impl!(IpAddr)); }
+        impl Prefix { include!(to_string_impl!(Prefix)); }
+        impl Asn { include!(to_string_impl!(Asn)); }
 
-        impl f32 = float_impl!(f32);
-        impl f64 = float_impl!(f64);
+        impl f32 { include!(float_impl!(f32)); }
+        impl f64 { include!(float_impl!(f64)); }
 
         impl Prefix {
             /// Construct a new prefix
@@ -343,8 +354,8 @@ pub fn built_ins() -> Library {
             }
         }
 
-        impl IpAddr = ip_addr_methods();
-        impl Arc<str> = string_methods();
+        impl IpAddr { include!(ip_addr_methods()); }
+        impl Arc<str> { include!(string_methods()); }
 
         /// The IPv4 address pointing to localhost: `127.0.0.1`
         const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);

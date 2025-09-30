@@ -13,7 +13,7 @@ fn main() -> Result<(), roto::RotoReport> {
     env_logger::init();
 
     let lib = library! {
-        clone type NonEmptyString = Val<NonEmptyString>;
+        #[clone] type NonEmptyString = Val<NonEmptyString>;
 
         impl Val<NonEmptyString> {
             fn new(s: Arc<str>) -> Option<Val<NonEmptyString>> {
