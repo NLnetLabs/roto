@@ -56,6 +56,7 @@ pub struct Declaration {
     pub kind: DeclarationKind,
     pub id: MetaId,
     pub scope: Option<ScopeRef>,
+    pub doc: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -71,6 +72,7 @@ pub enum DeclarationKind {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FunctionDeclaration {
     pub definition: FunctionDefinition,
+    pub parameter_names: Vec<Identifier>,
     pub ty: Type,
 }
 
@@ -154,6 +156,16 @@ impl ScopeGraph {
         ScopeRef(idx)
     }
 
+    pub fn declarations_in(
+        &self,
+        scope: ScopeRef,
+    ) -> impl Iterator<Item = &Declaration> {
+        self.declarations
+            .iter()
+            .filter(move |(n, _)| n.scope == scope)
+            .map(|(_, d)| d)
+    }
+
     pub fn parent(&self, scope: ScopeRef) -> Option<ScopeRef> {
         self.scopes[scope.0].parent
     }
@@ -190,6 +202,16 @@ impl ScopeGraph {
             ice!("Could not get declaration: {}", name.ident);
         };
         dec.clone()
+    }
+
+    pub fn get_declaration_mut(
+        &mut self,
+        name: ResolvedName,
+    ) -> &mut Declaration {
+        let Some(dec) = self.declarations.get_mut(&name) else {
+            ice!("Could not get declaration: {}", name.ident);
+        };
+        dec
     }
 
     pub fn insert_import(
@@ -229,6 +251,7 @@ impl ScopeGraph {
                     name,
                     kind,
                     id,
+                    doc: String::new(),
                     scope: None,
                 });
                 Ok(name)
@@ -241,6 +264,7 @@ impl ScopeGraph {
         scope: ScopeRef,
         v: &Meta<Identifier>,
         ty: &Type,
+        doc: String,
     ) -> Result<ResolvedName, ()> {
         let name = ResolvedName { scope, ident: **v };
         let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
@@ -253,6 +277,7 @@ impl ScopeGraph {
                     name,
                     kind,
                     id,
+                    doc,
                     scope: None,
                 });
                 Ok(name)
@@ -267,7 +292,13 @@ impl ScopeGraph {
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
         let kind = DeclarationKind::Value(ValueKind::Local, ty.clone());
-        let dec = self.insert_declaration(scope, ident, kind, |_| false)?;
+        let dec = self.insert_declaration(
+            scope,
+            ident,
+            kind,
+            String::new(),
+            |_| false,
+        )?;
         Ok(dec.name)
     }
 
@@ -275,19 +306,22 @@ impl ScopeGraph {
         &mut self,
         scope: ScopeRef,
         ident: &Meta<Identifier>,
+        doc: String,
         ty: TypeDefinition,
     ) -> Result<(), MetaId> {
         let kind = DeclarationKind::Type(TypeOrStub::Type(ty.clone()));
         let new_scope = self.wrap(scope, ScopeType::Type(**ident));
-        let dec = self.insert_declaration(scope, ident, kind, |kind| {
-            if let DeclarationKind::Type(TypeOrStub::Stub { num_params }) =
-                kind
-            {
-                *num_params == ty.type_name().arguments.len()
-            } else {
-                false
-            }
-        })?;
+        let dec =
+            self.insert_declaration(scope, ident, kind, doc, |kind| {
+                if let DeclarationKind::Type(TypeOrStub::Stub {
+                    num_params,
+                }) = kind
+                {
+                    *num_params == ty.type_name().arguments.len()
+                } else {
+                    false
+                }
+            })?;
 
         dec.scope = Some(new_scope);
         Ok(())
@@ -297,10 +331,12 @@ impl ScopeGraph {
         &mut self,
         scope: ScopeRef,
         ident: &Meta<Identifier>,
+        doc: String,
         mod_scope: ScopeRef,
     ) -> Result<(), MetaId> {
         let kind = DeclarationKind::Module;
-        let dec = self.insert_declaration(scope, ident, kind, |_| false)?;
+        let dec =
+            self.insert_declaration(scope, ident, kind, doc, |_| false)?;
         dec.scope = Some(mod_scope);
         Ok(())
     }
@@ -310,15 +346,19 @@ impl ScopeGraph {
         scope: ScopeRef,
         ident: &Meta<Identifier>,
         definition: FunctionDefinition,
+        parameter_names: Vec<Identifier>,
+        doc: String,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
         let kind = DeclarationKind::Function(Some(FunctionDeclaration {
             definition,
+            parameter_names,
             ty: ty.clone(),
         }));
-        let dec = self.insert_declaration(scope, ident, kind, |kind| {
-            matches!(kind, DeclarationKind::Function(None))
-        })?;
+        let dec =
+            self.insert_declaration(scope, ident, kind, doc, |kind| {
+                matches!(kind, DeclarationKind::Function(None))
+            })?;
         Ok(dec.name)
     }
 
@@ -327,15 +367,19 @@ impl ScopeGraph {
         scope: ScopeRef,
         ident: &Meta<Identifier>,
         definition: FunctionDefinition,
+        parameter_names: Vec<Identifier>,
+        doc: String,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
         let kind = DeclarationKind::Method(Some(FunctionDeclaration {
             definition,
+            parameter_names,
             ty: ty.clone(),
         }));
-        let dec = self.insert_declaration(scope, ident, kind, |kind| {
-            matches!(kind, DeclarationKind::Method(None))
-        })?;
+        let dec =
+            self.insert_declaration(scope, ident, kind, doc, |kind| {
+                matches!(kind, DeclarationKind::Method(None))
+            })?;
         Ok(dec.name)
     }
 
@@ -344,6 +388,7 @@ impl ScopeGraph {
         scope: ScopeRef,
         ident: &Meta<Identifier>,
         kind: DeclarationKind,
+        doc: String,
         update_if: impl Fn(&DeclarationKind) -> bool,
     ) -> Result<&mut Declaration, MetaId> {
         let name = ResolvedName {
@@ -357,6 +402,7 @@ impl ScopeGraph {
                     kind,
                     id: ident.id,
                     scope: None,
+                    doc,
                 };
                 Ok(entry.insert(new))
             }

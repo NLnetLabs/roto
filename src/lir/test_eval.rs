@@ -363,47 +363,6 @@ fn nested_record() {
 }
 
 #[test]
-fn enum_values() {
-    let s = src!(
-        "
-        filtermap main(x: Afi) {
-            if x == Afi.IpV4 {
-                accept
-            } else {
-                reject
-            }
-        }
-    "
-    );
-
-    let rt = Runtime::new();
-    let program = compile(s, &rt);
-
-    for (variant, expected) in [
-        // IpV4 -> accepted
-        (0, 0),
-        // // IpV6 -> rejected
-        (1, 1),
-    ] {
-        let mut mem = Memory::new();
-        let verdict_pointer = mem.allocate(1);
-        let afi_pointer = mem.allocate(1);
-        mem.write(afi_pointer, &[variant]);
-        let ctx = IrValue::Pointer(mem.allocate(0));
-        program.eval(
-            &mut mem,
-            ctx,
-            vec![
-                IrValue::Pointer(verdict_pointer),
-                IrValue::Pointer(afi_pointer),
-            ],
-        );
-        let res = mem.read_array::<1>(verdict_pointer);
-        assert_eq!(expected, u8::from_ne_bytes(res));
-    }
-}
-
-#[test]
 fn call_runtime_function() {
     let s = src!(
         "

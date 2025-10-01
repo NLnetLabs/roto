@@ -110,6 +110,8 @@ impl TypeChecker {
             scope,
             name.clone(),
             super::types::FunctionDefinition::Roto,
+            Vec::new(),
+            String::new(),
             Type::Function(
                 Vec::new(),
                 Box::new(Type::verdict(Type::unit(), Type::unit())),

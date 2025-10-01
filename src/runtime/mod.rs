@@ -282,7 +282,7 @@ pub struct RuntimeType {
     layout: Layout,
 
     /// Docstring of the type to display in documentation
-    docstring: String,
+    _docstring: String,
 }
 
 impl RuntimeType {
@@ -567,7 +567,7 @@ impl Runtime {
     ) -> Result<(), RegistrationError> {
         let scope = self
             .type_checker
-            .declare_runtime_module(scope, module.ident)
+            .declare_runtime_module(scope, module.ident, module.doc.clone())
             .map_err(|e| RegistrationError {
                 message: e,
                 location: module.location.clone(),
@@ -620,7 +620,7 @@ impl Runtime {
         }
 
         self.type_checker
-            .declare_runtime_type(scope, ty.ident, ty.type_id)
+            .declare_runtime_type(scope, ty.ident, ty.type_id, ty.doc.clone())
             .map_err(|e| RegistrationError {
                 message: e,
                 location: ty.location.clone(),
@@ -636,7 +636,7 @@ impl Runtime {
             type_id: ty.type_id,
             movability: ty.movability.clone(),
             layout: ty.layout.clone(),
-            docstring: ty.doc.clone(),
+            _docstring: ty.doc.clone(),
         });
 
         Ok(())
@@ -760,8 +760,10 @@ impl Runtime {
                 scope,
                 f.ident,
                 RuntimeFunctionRef(id),
+                f.params.clone(),
                 parameter_types,
                 return_type,
+                f.doc.clone(),
                 method,
             )
             .map_err(|e| RegistrationError {
@@ -784,7 +786,7 @@ impl Runtime {
                         .type_checker
                         .get_scope_of(scope, module.ident)
                         .unwrap();
-                    self.declare_types(scope, &module.children)?;
+                    self.declare_constants(scope, &module.children)?;
                 }
                 Item::Constant(c) => self.declare_constant(scope, c)?,
                 _ => {}
@@ -802,7 +804,12 @@ impl Runtime {
             .rust_type_to_roto_type(&constant.location, constant.type_id)?;
 
         self.type_checker
-            .declare_runtime_constant(scope, constant.ident, ty)
+            .declare_runtime_constant(
+                scope,
+                constant.ident,
+                ty,
+                constant.doc.clone(),
+            )
             .map_err(|e| RegistrationError {
                 message: e,
                 location: constant.location.clone(),

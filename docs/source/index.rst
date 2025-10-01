@@ -101,7 +101,7 @@ Roto is distributed under the terms of the BSD-3-clause license. See
    :name: toc-reference
 
    reference/language_reference
-   reference/std
+   reference/std/index
    reference/rust_interoperability
    reference/command_line
    API documentation (docs.rs) <https://docs.rs/roto>

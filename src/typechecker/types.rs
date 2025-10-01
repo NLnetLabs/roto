@@ -544,7 +544,7 @@ impl Function {
 }
 
 /// The list of built-in Roto types
-pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
+pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     use Primitive::*;
 
     let primitives = vec![
@@ -569,11 +569,12 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
 
     for (n, p) in primitives {
         let name = Identifier::from(n);
-        types.push((name, TypeDefinition::Primitive(p)))
+        types.push((name, "".into(), TypeDefinition::Primitive(p)))
     }
 
     struct Enum {
         name: &'static str,
+        doc: &'static str,
         params: Vec<&'static str>,
         variants: Vec<(&'static str, Vec<Type>)>,
     }
@@ -581,6 +582,7 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
     let compound_types = vec![
         Enum {
             name: "Option",
+            doc: "An optional value.",
             params: vec!["T"],
             variants: vec![
                 ("Some", vec![Type::ExplicitVar("T".into())]),
@@ -589,31 +591,18 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
         },
         Enum {
             name: "Verdict",
+            doc: "The verdict that a filter reaches about a value, that is, whether to accept or reject it.",
             params: vec!["A", "R"],
             variants: vec![
                 ("Accept", vec![Type::ExplicitVar("A".into())]),
                 ("Reject", vec![Type::ExplicitVar("R".into())]),
             ],
         },
-        Enum {
-            name: "Afi",
-            params: vec![],
-            variants: vec![
-                ("IpV4", vec![]),
-                ("IpV6", vec![]),
-                ("VpnV4", vec![]),
-                ("VpnV6", vec![]),
-            ],
-        },
-        Enum {
-            name: "Safi",
-            params: vec![],
-            variants: vec![("Unicast", vec![]), ("Multicast", vec![])],
-        },
     ];
 
     for Enum {
         name,
+        doc,
         params,
         variants,
     } in compound_types
@@ -643,7 +632,11 @@ pub fn default_types() -> Vec<(Identifier, TypeDefinition)> {
             arguments: param_types,
         };
 
-        types.push((ident, TypeDefinition::Enum(type_name, variants)))
+        types.push((
+            ident,
+            doc.into(),
+            TypeDefinition::Enum(type_name, variants),
+        ))
     }
 
     types

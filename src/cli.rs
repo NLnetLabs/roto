@@ -17,7 +17,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Generate documentation for the runtime
-    Doc,
+    Doc {
+        #[arg()]
+        path: PathBuf,
+    },
     /// Type check a script
     Check {
         #[arg()]
@@ -64,8 +67,8 @@ fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Command::Doc => {
-            rt.print_documentation();
+        Command::Doc { path } => {
+            rt.print_documentation(path).unwrap();
         }
         Command::Check { file } => {
             FileTree::read(file)?.parse()?.typecheck(rt)?;

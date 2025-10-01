@@ -142,7 +142,7 @@ use info::TypeInfo;
 pub struct TypeChecker {
     /// The list of built-in functions, methods and static methods.
     functions: Vec<Function>,
-    type_info: TypeInfo,
+    pub(crate) type_info: TypeInfo,
     match_counter: usize,
     if_else_counter: usize,
     while_counter: usize,
@@ -172,6 +172,11 @@ impl TypeChecker {
         checker.declare_builtin_types().unwrap();
         checker
     }
+
+    pub fn get_scope_graph(&self) -> &scope::ScopeGraph {
+        &self.type_info.scope_graph
+    }
+
     /// Perform type checking for a module tree (i.e. the entire program)
     pub fn check_module_tree(
         mut self,
@@ -214,7 +219,7 @@ impl TypeChecker {
     }
 
     fn declare_builtin_types(&mut self) -> TypeResult<()> {
-        for (ident, ty) in default_types() {
+        for (ident, doc, ty) in default_types() {
             let ident = Meta {
                 node: ident,
                 id: MetaId(0),
@@ -225,7 +230,7 @@ impl TypeChecker {
             };
             self.type_info
                 .scope_graph
-                .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
+                .insert_type(ScopeRef::GLOBAL, &ident, doc, ty.clone())
                 .map_err(|id| self.error_declared_twice(&ident, id))?;
 
             if let TypeDefinition::Enum(_, variants) = &ty {
@@ -249,6 +254,7 @@ impl TypeChecker {
                                 type_def.clone(),
                                 variant.clone(),
                             ),
+                            String::new(),
                             |_| false,
                         )
                         .unwrap();
@@ -264,6 +270,7 @@ impl TypeChecker {
         &mut self,
         parent: Option<ScopeRef>,
         ident: Identifier,
+        doc: String,
     ) -> Result<ScopeRef, String> {
         let mod_scope = ModuleScope {
             name: ResolvedName {
@@ -287,7 +294,7 @@ impl TypeChecker {
 
         self.type_info
             .scope_graph
-            .insert_module(scope, &ident, mod_scope)
+            .insert_module(scope, &ident, doc, mod_scope)
             .map_err(|_| {
                 format!("An item with the name `{ident}` already exists")
             })?;
@@ -300,6 +307,7 @@ impl TypeChecker {
         scope: ScopeRef,
         ident: Identifier,
         type_id: TypeId,
+        doc: String,
     ) -> Result<(), String> {
         let name = ResolvedName { scope, ident };
         let ident = Meta {
@@ -308,7 +316,7 @@ impl TypeChecker {
         };
 
         // Small edge case: the primitives are already in the typechecker, so we
-        // skip them.
+        // skip them, but we should override the documentation.
         if let Some(other) =
             self.type_info.scope_graph.resolve_name(scope, &ident, true)
         {
@@ -316,6 +324,11 @@ impl TypeChecker {
                 TypeDefinition::Primitive(_),
             )) = other.kind
             {
+                let dec = self
+                    .type_info
+                    .scope_graph
+                    .get_declaration_mut(other.name);
+                dec.doc = doc;
                 return Ok(());
             }
         }
@@ -323,7 +336,7 @@ impl TypeChecker {
         let ty = TypeDefinition::Runtime(name, type_id);
         self.type_info
             .scope_graph
-            .insert_type(ScopeRef::GLOBAL, &ident, ty.clone())
+            .insert_type(ScopeRef::GLOBAL, &ident, doc, ty.clone())
             .map_err(|_id| {
                 format!("Item `{ident}` already exists in this scope")
             })?;
@@ -332,13 +345,16 @@ impl TypeChecker {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn declare_runtime_function(
         &mut self,
         scope: ScopeRef,
         ident: Identifier,
         id: RuntimeFunctionRef,
+        parameter_names: Vec<Identifier>,
         parameter_types: Vec<Type>,
         return_type: Type,
+        doc: String,
         method: bool,
     ) -> Result<(), String> {
         let ty = Type::Function(
@@ -357,12 +373,19 @@ impl TypeChecker {
         let name = if method {
             self.type_info
                 .scope_graph
-                .insert_method(scope, &ident, def, &ty)
+                .insert_method(scope, &ident, def, parameter_names, doc, &ty)
                 .map_err(|_| "name is declared twice")?
         } else {
             self.type_info
                 .scope_graph
-                .insert_function(scope, &ident, def, &ty)
+                .insert_function(
+                    scope,
+                    &ident,
+                    def,
+                    parameter_names,
+                    doc,
+                    &ty,
+                )
                 .map_err(|_| "name is declared twice")?
         };
 
@@ -435,6 +458,7 @@ impl TypeChecker {
         scope: ScopeRef,
         ident: Identifier,
         ty: Type,
+        doc: String,
     ) -> Result<(), String> {
         if self
             .type_info
@@ -446,6 +470,7 @@ impl TypeChecker {
                     node: ident,
                 },
                 &ty,
+                doc,
             )
             .is_err()
         {
@@ -520,9 +545,14 @@ impl TypeChecker {
                 .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
 
             if let Some(p) = parent_module {
-                self.insert_module(p, ident, scope)?;
+                self.insert_module(p, ident, String::new(), scope)?;
             } else {
-                self.insert_module(ScopeRef::GLOBAL, ident, scope)?;
+                self.insert_module(
+                    ScopeRef::GLOBAL,
+                    ident,
+                    String::new(),
+                    scope,
+                )?;
             }
 
             for d in &ast.declarations {
@@ -547,6 +577,7 @@ impl TypeChecker {
                     scope,
                     &ident,
                     kind,
+                    String::new(),
                     |_| false,
                 );
                 if let Err(e) = res {
@@ -604,7 +635,12 @@ impl TypeChecker {
                         );
                         self.type_info
                             .scope_graph
-                            .insert_type(scope, ident, ty.clone())
+                            .insert_type(
+                                scope,
+                                ident,
+                                String::new(),
+                                ty.clone(),
+                            )
                             .map_err(|e| {
                                 self.error_declared_twice(ident, e)
                             })?;
@@ -631,6 +667,8 @@ impl TypeChecker {
                             scope,
                             x.ident.clone(),
                             FunctionDefinition::Roto,
+                            x.params.0.iter().map(|(i, _)| i.node).collect(),
+                            String::new(),
                             &ty,
                         )?;
                     }
@@ -640,6 +678,8 @@ impl TypeChecker {
                             scope,
                             x.ident.clone(),
                             FunctionDefinition::Roto,
+                            x.params.0.iter().map(|(i, _)| i.node).collect(),
+                            String::new(),
                             &ty,
                         )?;
                     }
@@ -815,14 +855,19 @@ impl TypeChecker {
         scope: ScopeRef,
         k: Meta<Identifier>,
         definition: FunctionDefinition,
+        parameter_names: Vec<Identifier>,
+        doc: String,
         ty: impl Borrow<Type>,
     ) -> TypeResult<()> {
         let ty = ty.borrow();
-        match self
-            .type_info
-            .scope_graph
-            .insert_function(scope, &k, definition, ty)
-        {
+        match self.type_info.scope_graph.insert_function(
+            scope,
+            &k,
+            definition,
+            parameter_names,
+            doc,
+            ty,
+        ) {
             Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
                 self.type_info.expr_types.insert(k.id, ty.clone());
@@ -855,12 +900,13 @@ impl TypeChecker {
         &mut self,
         scope: ScopeRef,
         k: &Meta<Identifier>,
+        doc: String,
         mod_scope: ScopeRef,
     ) -> TypeResult<()> {
         match self
             .type_info
             .scope_graph
-            .insert_module(scope, k, mod_scope)
+            .insert_module(scope, k, doc, mod_scope)
         {
             Ok(()) => Ok(()),
             Err(old) => Err(self.error_declared_twice(k, old)),
