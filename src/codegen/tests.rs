@@ -3424,3 +3424,30 @@ fn call_runtime_function_in_f_string() {
     let res = f.call(&mut ());
     assert_eq!(res, "fooAS2bar".into());
 }
+
+#[test]
+fn f32_issue() {
+    let s = src!(
+        r#"
+       fn foo() {
+           let x = 5.0;
+           let y: f32 = 2.0;
+           let z: f32 = x * y;
+       }
+    "#
+    );
+
+    let rt = Runtime::from_lib(library! {
+        fn rand() -> f32 {
+            10.0
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
+    let f = p
+        .get_function::<(), fn()>("foo")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+}

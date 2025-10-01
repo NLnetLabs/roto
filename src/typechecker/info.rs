@@ -410,7 +410,11 @@ impl TypeInfo {
     pub fn resolve(&mut self, t: &Type) -> Type {
         let mut t = t.clone();
 
-        if let Type::Var(x) | Type::IntVar(x, _) | Type::RecordVar(x, _) = t {
+        if let Type::Var(x)
+        | Type::IntVar(x, _)
+        | Type::RecordVar(x, _)
+        | Type::FloatVar(x) = t
+        {
             t = self.unionfind.find(x).clone();
         }
 
