@@ -62,6 +62,8 @@ pub use runtime::{
 /// # Usage
 ///
 /// ```
+/// use roto::{library, Runtime};
+///
 /// let lib = library! {
 ///     /// Double the argument
 ///     fn double(x: i32) -> i32 {
@@ -71,9 +73,16 @@ pub use runtime::{
 ///
 /// let rt = Runtime::from_lib(lib).unwrap();
 /// // or
+/// # let lib = library! {
+/// #     /// Double the argument
+/// #     fn double(x: i32) -> i32 {
+/// #         2 * x
+/// #     }
+/// # };
 /// let mut rt = Runtime::new();
 /// rt.add(lib).unwrap();
 /// ```
+///
 /// # Syntax
 ///
 /// ## Types

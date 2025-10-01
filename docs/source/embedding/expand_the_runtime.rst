@@ -13,11 +13,17 @@ method ``add_io_functions`` on ``Runtime`` to add the ``print`` function.
 .. code-block:: rust
 
     use roto::Runtime;
-    let mut runtime = Runtime::new();
-    runtime.add_io_functions();
+    let mut rt = Runtime::new();
+    rt.add_io_functions();
 
 However, Roto truly starts shining when you add your own functionality to it
 that makes your application scriptable.
+
+We support this via ``Runtime::from_lib`` and ``Runtime::add`` in combination
+with the ``library!`` macro. You construct a library with that macro and then
+add it to your runtime by calling one of those methods. ``Runtime::from_lib``
+is simply a convenience method for creating a new runtime and adding the library
+directly.
 
 Add functions
 -------------
@@ -34,21 +40,24 @@ scripts you compile.
     use std::fs::OpenOptions;
     use std::io::Write;
     use roto::{Runtime, roto_function};
-    let mut runtime = Runtime::new();
 
     // Note: we use Arc<str> because that's the Rust type corresponding to a
     // Roto string.
-    #[roto_function(runtime)]
-    fn print(s: Arc<str>) {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(true)
-            .open("log.txt")
-            .unwrap();
+    let lib = library!{
+        /// Print to the log file.
+        fn print(s: Arc<str>) {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .append(true)
+                .open("log.txt")
+                .unwrap();
 
-        let _ = writeln!(file, "{s}");
-    }
+            let _ = writeln!(file, "{s}");
+        }
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
 
 Scripts compiled with this runtime can then use this custom ``print`` function.
 The registered functions can have any any name you want, as long as its a valid
@@ -58,25 +67,11 @@ Here is another example which returns a value:
 
 .. code-block:: rust
 
-    #[roto_function(runtime)]
-    fn factorial(n: u32) -> u32 {
-        (1..=n).fold(1, |a, i| a * i)
-    }
-
-.. note::
-    Note that it is only possible to register functions using types you've already
-    registered. You should probably register all your types before registering
-    functions.
-
-You can also give the function a custom name by passing that to the macro.
-
-.. code-block:: rust
-
-    // This function will be available as "factorial", not "my_factorial_function"
-    #[roto_function(runtime, factorial)]
-    fn my_factorial_function(n: u32) -> u32 {
-        (1..=n).fold(1, |a, i| a * i)
-    }
+    let lib = library! {
+        fn factorial(n: u32) -> u32 {
+            (1..=n).fold(1, |a, i| a * i)
+        }
+    };
 
 Add types
 ---------
@@ -86,14 +81,20 @@ type. All registered types must implement ``Clone``.
 
 .. code-block:: rust
 
+    use roto::{library, Runtime, Val};
+
     #[derive(Clone, Copy, Debug)]
     struct Range {
         low: i64,
         high: i64,
     }
 
-    // Or register_clone_type if the type doesn't implement Copy.
-    runtime.register_copy_type::<Range>("A range of i64").unwrap();
+    let lib = library! {
+        /// A range of i64 numbers
+        #[copy] type Range = Val<Range>;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
 
 The argument to that method is the docstring for this type. We can now pass this
 type to Roto and return it from Roto:
@@ -110,7 +111,7 @@ Not very useful yet, of course, but let's see it in action anyway:
 
     use roto::Val;
 
-    let mut pkg = runtime.compile("script.roto").unwrap();
+    let mut pkg = rt.compile("script.roto").unwrap();
     let f = pkg
         .get_function::<_, fn(Val<Range>) -> Val<Range>>("passthrough")
         .unwrap();
@@ -121,17 +122,10 @@ Not very useful yet, of course, but let's see it in action anyway:
 Note that every custom type has to be wrapped in ``Val`` when it's passed to
 Roto, but otherwise it works exactly like before.
 
-There are 4 methods you can choose from to register a type:
-
-- ``Runtime::register_copy_type``
-- ``Runtime::register_clone_type``
-- ``Runtime::register_copy_type_with_name``
-- ``Runtime::register_clone_type_with_name``
-
-The first two will attempt to guess the name of the type from the type name in
-Rust. If you want a custom name, you can use one of the bottom two methods. If
-your type implements ``Copy`` you should use `register_copy_type`, because that
-will allow Roto to generate slightly more performant code.
+The ``#[copy]`` attribute above specifies that the Rust type implements
+``Copy``. If the type does not implement ``Copy``, you can instead annotate the
+declaration with ``#[clone]``. However, you should prefer ``#[copy]`` to allow
+Roto to generate slightly more performant code. 
 
 Add methods
 -----------
@@ -141,14 +135,17 @@ expose methods on it to Roto.
 
 .. code-block:: rust
 
-    use roto::roto_method;
+    let lib = library! {
+        impl Val<Range> {
+            fn contains(range: Val<Range>, x: i64) -> bool {
+                range.low <= x && x < range.high
+            }
+        }  
+    };
 
-    #[roto_method(runtime, Range)]
-    fn contains(range: Val<Range>, x: i64) -> bool {
-        range.low <= x && x < range.high
-    }
+    let rt = Runtime::from_lib(lib);
 
-    let mut pkg = runtime.compile("script.roto").unwrap();
+    let mut pkg = rt.compile("script.roto").unwrap();
     let f = pkg
         .get_function::<_, fn(Val<Range>, x: i64) -> bool>("in_range")
         .unwrap();
@@ -165,19 +162,28 @@ And then in Roto:
         r.contains(x)
     }
 
-Related to methods, there are static methods. These are methods that are called
-without an instance of the type.
+The first argument of a function in an ``impl`` block does not need to be of
+the same type as the one specified by the ``impl`` block. If that is the case,
+this function can only be called with the full path and not as a method. In the
+example below ``new`` is such a method.
 
 .. code-block:: rust
 
-    use roto::roto_static_method;
+    let lib = library! {
+        impl Val<Range> {
+            fn new(low: i64, high: i64) -> Val<Range> {
+                Val(Range { low, high })
+            }
+            
+            fn contains(range: Val<Range>, x: i64) -> bool {
+                range.low <= x && x < range.high
+            }
+        }
+    };
 
-    #[roto_static_method(runtime, Range)]
-    fn new(low: i64, high: i64) -> Val<Range> {
-        Val(Range { low, high })
-    }
+    let rt = Runtime::from_lib(lib).unwrap();
 
-Which can be used in Roto like this:
+The registered ``new`` function can be used in Roto like this:
 
 .. code-block:: roto
 
@@ -194,11 +200,12 @@ documentation generated for this runtime.
 
 .. code-block:: rust
 
-    runtime.register_constant(
-        "ONE_HUNDRED",
-        "A range from 0 to 100",
-        Val(Range { low: 0, high: 100 }),
-    ).unwrap();
+    let lib = library! {
+        /// A range from 0 to 100
+        const ONE_HUNDRED: Val<Range> = Val(Range { low: 0, high: 100 });
+    };
+    
+    let rt = Runtime::from_lib(lib).unwrap();
 
 The name ``ONE_HUNDRED`` will then be available in Roto scripts.
 
@@ -235,9 +242,9 @@ then create and register the following type.
         pub last_name: Arc<str>,
     }
 
-    runtime.register_context_type::<Ctx>().unwrap();
+    rt.register_context_type::<Ctx>().unwrap();
 
-    let mut pkg = runtime.compile("script.roto").unwrap();
+    let mut pkg = rt.compile("script.roto").unwrap();
 
     //                         We need to use the correct context type here
     //                         |
@@ -245,7 +252,7 @@ then create and register the following type.
     let f = pkg.get_function::<Ctx, fn() -> Arc<str>>("greeting").unwrap();
 
     let mut ctx = Ctx {
-        first_name: "John".into(),  
+        first_name: "John".into(),
         last_name: "Doe".into(),  
     };
     let greeting = f.call(&mut ctx);
@@ -264,3 +271,9 @@ give to this invocation. The script can then use the names of the fields of
 
 Other use-cases of context are log files, unique ids per invocation or just to
 provide easy access to some common data.
+
+See also
+--------
+
+For more information, see the documentation for the `library!
+<https://docs.rs/roto/latest/roto/macro.library.html>`__ macro.

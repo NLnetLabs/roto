@@ -710,4 +710,4 @@ Next steps
 ----------
 
 You can learn more about Roto by looking at the documentation for the
-:doc:`std`.
+:doc:`std/index`.

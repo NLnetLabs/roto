@@ -21,10 +21,10 @@ parameter ``4``.
 
     fn main() {
         // Step 1: Create a runtime
-        let runtime = Runtime::new();
+        let rt = Runtime::new();
 
         // Step 2: Compile the script and check for type errors
-        let result = runtime.compile("script.roto");
+        let result = rt.compile("script.roto");
         let mut pkg = match result {
             Ok(pkg) => pkg,
             Err(err) => {
