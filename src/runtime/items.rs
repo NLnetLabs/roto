@@ -110,7 +110,7 @@ impl<T: Registerable> Registerable for Vec<T> {
 #[derive(Clone, Debug)]
 pub struct Module {
     pub(crate) ident: Identifier,
-    pub(crate) _doc: String,
+    pub(crate) doc: String,
     pub(crate) children: Vec<Item>,
     pub(crate) location: Location,
 }
@@ -135,7 +135,7 @@ impl Module {
 
         Ok(Self {
             ident: name,
-            _doc: doc.as_ref().to_string(),
+            doc: doc.as_ref().to_string(),
             children: Vec::new(),
             location,
         })

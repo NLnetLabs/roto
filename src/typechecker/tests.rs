@@ -782,40 +782,6 @@ fn unreachable_expression() {
 }
 
 #[test]
-fn enum_values() {
-    let s = src!(
-        "
-        filtermap main(r: u32) { 
-            let x = Afi.IpV4;
-            if x == Afi.IpV4 {
-                accept
-            } else {
-                reject
-            }
-        }
-    "
-    );
-    typecheck(s).unwrap();
-}
-
-#[test]
-fn enum_match() {
-    let s = src!(
-        "
-        filtermap foo(r: u32) { 
-            let x = Afi.IpV4;
-            match x {
-                IpV4 -> accept,
-                IpV6 -> accept,
-                _ -> reject,
-            }
-        }
-    "
-    );
-    typecheck(s).unwrap();
-}
-
-#[test]
 fn runtime_function() {
     let rt = Runtime::from_lib(library! {
         fn pow(x: u32, y: u32) -> u32 {

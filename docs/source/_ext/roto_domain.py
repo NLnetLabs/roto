@@ -57,27 +57,33 @@ class RotoFunctionLike(ObjectDescription):
         signode += addnodes.desc_sig_punctuation(')')
         
         ret = ret.strip().removeprefix('->').strip()
-        sig_ret = addnodes.desc_returns()
-        sig_ret += addnodes.pending_xref(
-            "",
-            addnodes.desc_type(text=ret),
-            refdomain="roto",
-            reftype="ref",
-            reftarget=ret,
-        )
+        if ret:
+            sig_ret = addnodes.desc_returns()
+            sig_ret += addnodes.pending_xref(
+                "",
+                addnodes.desc_type(text=ret),
+                refdomain="roto",
+                reftype="ref",
+                reftarget=ret,
+            )
 
-        signode += sig_ret
+            signode += sig_ret
 
         signode['path'] = sig
         signode['fullname'] = fullname = f"{receiver}.{name}"
+        signode['name'] = name
     
         return fullname
 
     def needs_arglist(self):
         return False
 
-    def add_self(self, signature):
-        raise NotImplemented
+    def _toc_entry_name(self, signode):
+        print(signode['name'])
+        return signode['name']
+
+    # def add_self(self, signature):
+    #     raise NotImplemented
 
     def add_target_and_index(self, name_cls, sig, signode):
         signode['ids'].append('roto' + '-' + name_cls)
@@ -91,9 +97,9 @@ class RotoType(ObjectDescription):
         signode += addnodes.desc_name(text=sig)
         return sig
     
-    def _toc_entry_name(self, signode):
-        text = signode.children[1].children[0]
-        return str(text)
+    # def _toc_entry_name(self, signode):
+    #     text = signode.children[1].children[0]
+    #     return str(text)
     
     def add_target_and_index(self, name_cls, sig, signode):
         signode['ids'].append('roto' + '-' + sig)

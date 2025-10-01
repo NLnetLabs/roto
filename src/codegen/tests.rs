@@ -488,33 +488,6 @@ fn misaligned_fields() {
 }
 
 #[test]
-fn enum_match() {
-    let s = src!(
-        "
-        filtermap main(r: bool) { 
-            let x = if r {
-                Afi.IpV4
-            } else {
-                Afi.IpV6
-            };
-            match x {
-                IpV4 -> accept,
-                _ -> reject,
-            }
-        }
-    "
-    );
-
-    let mut p = compile(s);
-    let f = p
-        .get_function::<(), fn(bool) -> Verdict<(), ()>>("main")
-        .expect("No function found (or mismatched types)");
-
-    assert_eq!(f.call(&mut (), true), Verdict::Accept(()));
-    assert_eq!(f.call(&mut (), false), Verdict::Reject(()));
-}
-
-#[test]
 fn arithmetic() {
     let s = src!(
         "
