@@ -413,7 +413,7 @@ impl<'s> Lexer<'s> {
                             // We need a `{` after `\u` and `\U`
                             return None;
                         }
-                        while let Some((_, c)) = chars.next() {
+                        for (_, c) in chars.by_ref() {
                             if c == '}' {
                                 continue 'outer;
                             }

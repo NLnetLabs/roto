@@ -3409,12 +3409,12 @@ fn call_runtime_function_in_f_string() {
     "#
     );
 
-    let mut rt = Runtime::new();
-
-    #[roto_function(rt)]
-    fn gimme_an_asn() -> Asn {
-        Asn::from_u32(2)
-    }
+    let rt = Runtime::from_lib(library! {
+        fn gimme_an_asn() -> Asn {
+            Asn::from_u32(2)
+        }
+    })
+    .unwrap();
 
     let mut p = compile_with_runtime(s, rt);
     let f = p
