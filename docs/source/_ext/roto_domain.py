@@ -79,7 +79,6 @@ class RotoFunctionLike(ObjectDescription):
         return False
 
     def _toc_entry_name(self, signode):
-        print(signode['name'])
         return signode['name']
 
     # def add_self(self, signature):

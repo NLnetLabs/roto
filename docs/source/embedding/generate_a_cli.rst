@@ -10,11 +10,11 @@ To get a better CLI for your usecase, you can generate a CLI from your runtime.
 
 .. code-block:: rust
 
-    let runtime = Runtime::new();
+    let rt = Runtime::new();
 
     // add all your custom types, methods and constants here
     
-    runtime.cli();
+    rt.cli();
 
 The CLI helps with testing and type checking your scripts without running your
 entire application. To start the CLI, just call the ``cli`` method on the 
