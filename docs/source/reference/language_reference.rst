@@ -31,7 +31,7 @@ Roto supports literals for primitive types:
 - ``0``, ``1``, ``34``, ``-10``, ``0xFF`` etc. for integers
 - ``0.0``, ``10.``, ``10e5``, ``5E-5`` etc. for floating point numbers
 - ``true`` and ``false`` for booleans
-- ``0.0.0.0``, ``2345:0425:2CA1:0000:0000:0567:5673:23b5``, ``0::``, etc.
+- ``0.0.0.0``, ``2001:DB8:2CA1:0000:0000:0567:5673:23b5``, ``::``, etc.
   for IP addresses
 - ``0.0.0.0/10`` for prefixes
 - ``AS1234`` for AS numbers
