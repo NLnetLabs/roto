@@ -54,7 +54,7 @@ enum Command {
 ///  - `doc`: generate documentation
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
-///  - `run`: run the a function of a script
+///  - `run`: run a function of a script
 pub fn cli(rt: &Runtime) {
     match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
