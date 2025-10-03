@@ -13,7 +13,7 @@ Commands
 ``test``
     Test a script
 ``run``
-    Run a script
+    Run a script's function. ``main`` by default, but a function name can be provided.
 ``print``
     Print a Roto file with syntax highlighting
 ``help``
