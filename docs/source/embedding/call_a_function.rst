@@ -39,11 +39,11 @@ parameter ``4``.
 
         // Step 4: Call the function
         let result = func.call(&mut (), 4);
-        println!("main(4) = {result}");
+        println!("times_two(4) = {result}");
     }
 
 Now we can create roto script that can be loaded by this Rust application. In
-the Rust application, we ask for a function called ``main`` with the type
+the Rust application, we ask for a function called ``times_two`` with the type
 ``fn(i32) -> i32``, so that's what we have to write in Roto, too. Let's make it
 a function that doubles its input.
 
@@ -59,7 +59,7 @@ following output then everything works as expected!
 .. code-block:: console
 
     $ cargo run
-    main(4) = 8
+    times_two(4) = 8
 
 You can write functions with multiple arguments and other types as well, as long
 as the types in Rust match the types in Roto.
