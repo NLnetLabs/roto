@@ -37,6 +37,7 @@ scripts you compile.
 
 .. code-block:: rust
 
+    use std::sync::Arc;
     use std::fs::OpenOptions;
     use std::io::Write;
     use roto::{Runtime, roto_function};
@@ -234,6 +235,7 @@ then create and register the following type.
 
 .. code-block:: rust
 
+    use std::sync::Arc;
     use roto::Context;
 
     #[derive(Context)]
