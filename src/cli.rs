@@ -31,10 +31,12 @@ enum Command {
         #[arg()]
         file: PathBuf,
     },
-    /// Run a script
+    /// Run a script's function
     Run {
         #[arg()]
         file: PathBuf,
+        #[arg(default_value = "main")]
+        function: String,
     },
     /// Print a Roto file with syntax highlighting
     Print {
@@ -52,7 +54,7 @@ enum Command {
 ///  - `doc`: generate documentation
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
-///  - `run`: run the main function of a script
+///  - `run`: run a function of a script
 pub fn cli(rt: &Runtime) {
     match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
@@ -89,7 +91,7 @@ fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
                 });
             }
         }
-        Command::Run { file } => {
+        Command::Run { file, function } => {
             let mut p = FileTree::read(file)?
                 .parse()?
                 .typecheck(rt)?
@@ -97,7 +99,7 @@ fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
                 .lower_to_lir()
                 .codegen();
 
-            let f = p.get_function::<(), fn()>("main").map_err(|e| {
+            let f = p.get_function::<(), fn()>(function).map_err(|e| {
                 RotoReport {
                     errors: vec![RotoError::CouldNotRetrieveFunction(e)],
                     ..Default::default()
