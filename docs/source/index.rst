@@ -100,6 +100,7 @@ Roto is distributed under the terms of the BSD-3-clause license. See
    :caption: Reference
    :name: toc-reference
 
+   reference/syntax_overview
    reference/language_reference
    reference/std/index
    reference/rust_interoperability
