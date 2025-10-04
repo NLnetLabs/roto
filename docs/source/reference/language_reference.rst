@@ -5,6 +5,8 @@ This section describes the basic syntax of Roto scripts. This is written in
 a reference-style. It is mostly meant as a cheatsheet, not as an introduction to
 the language.
 
+.. _lang_comments:
+
 Comments
 --------
 
@@ -73,6 +75,15 @@ The never type ``!`` is an *uninhabited* type, meaning that it cannot be
 constructed. It appears in code paths that are unreachable. For example, it
 is the type of a ``return`` expression. It can be unified with any other type.
 
+.. _lang_booleans:
+
+Booleans
+--------
+
+TODO
+
+.. _lang_integers:
+
 Integers
 --------
 
@@ -106,6 +117,8 @@ Below is a table of all available integer types.
 | :roto:ref:`i64` |   64 |    Yes | -9,223,372,036,854,775,808 |  9,223,372,036,854,775,807 |
 +-----------------+------+--------+----------------------------+----------------------------+
 
+.. _lang_floats:
+
 Floating point numbers
 ----------------------
 
@@ -119,6 +132,8 @@ respectively.
 +-----------------+------+
 | :roto:ref:`f64` |   64 |
 +-----------------+------+
+
+.. _lang_arithmetic:
 
 Arithmetic operators
 --------------------
@@ -227,6 +242,8 @@ The ``&&`` and ``||`` are short-circuiting, meaning that if the left-hand operan
 of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
 ``true``, the right hand side won't be evaluated.
 
+.. _lang_strings:
+
 Strings
 -------
 
@@ -275,6 +292,8 @@ the `...` is a hexadecimal number.
 
 Finally, Roto will ignore any whitespace after a ``\`` followed by a newline.
 
+.. _lang_if_else:
+
 If-else
 -------
 
@@ -318,10 +337,14 @@ If-else expressions can be chained without additional braces.
         print("x is zero!");
     }
 
+.. _lang_match:
+
 Match
 -----
 
 TODO
+
+.. _lang_while:
 
 While loops
 -----------
@@ -338,6 +361,8 @@ until the condition evaluates to ``false``.
 
 A while loop is an expression of the type ``()``. Like with ``if``, ``while``
 does not require parentheses around the condition.
+
+.. _lang_functions:
 
 Functions
 ---------
@@ -416,6 +441,8 @@ A let-binding can take an optional type annotation for clarity.
 
     let x: u32 = 0;
 
+.. _lang_filtermap:
+
 Filtermap
 ---------
 
@@ -481,6 +508,8 @@ On the Rust side, a filtermap is a function that returns a ``Verdict<A, R>``.
 The type parameters of a ``Verdict`` specify the types of the values given in
 the ``accept`` and ``reject`` cases, respectively.
 
+.. _lang_anonymous_records:
+
 Anonymous records
 -----------------
 
@@ -521,6 +550,8 @@ Fields can also be updated with an assignment.
 
     let x = { foo: 5 };
     x.foo = 6;
+
+.. _lang_named_records:
 
 Named records
 -------------
@@ -628,6 +659,8 @@ and automatically make the path an absolute path:
 - ``std`` for the Roto standard library
 - ``dep`` for dependencies (not implemented yet, but the identifier is reserved)
 
+.. _lang_imports:
+
 Imports
 -------
 
@@ -673,6 +706,8 @@ either module ``A`` or ``B``, depending on a boolean flag.
             foo(x)
         }
     }
+
+.. _lang_optionals:
 
 Optional values
 ---------------
