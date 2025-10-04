@@ -26,7 +26,7 @@ Prefix.new(192.169.0.0, 16)
 ```
 ````
 
-````{roto:function} to_string(x: Prefix) -> String
+````{roto:function} to_string(self: Prefix) -> String
 Convert this value into a `String`
 ````
 

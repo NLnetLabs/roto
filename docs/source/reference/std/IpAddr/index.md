@@ -20,7 +20,7 @@ For IPv4, only dot-separated quad notation is supported.
 `````
 
 
-````{roto:function} eq(a: IpAddr, b: IpAddr) -> bool
+````{roto:function} eq(self: IpAddr, other: IpAddr) -> bool
 Check whether two IP addresses are equal
 
 A more convenient but equivalent method for checking equality is via the `==` operator.
@@ -39,7 +39,7 @@ all their bits are equal.
 ```
 ````
 
-````{roto:function} is_ipv4(ip: IpAddr) -> bool
+````{roto:function} is_ipv4(self: IpAddr) -> bool
 Returns true if this address is an IPv4 address, and false otherwise.
 
 ```roto
@@ -48,7 +48,7 @@ Returns true if this address is an IPv4 address, and false otherwise.
 ```
 ````
 
-````{roto:function} is_ipv6(ip: IpAddr) -> bool
+````{roto:function} is_ipv6(self: IpAddr) -> bool
 Returns true if this address is an IPv6 address, and false otherwise.
 
 ```roto
@@ -57,11 +57,11 @@ Returns true if this address is an IPv6 address, and false otherwise.
 ```
 ````
 
-````{roto:function} to_canonical(ip: IpAddr) -> IpAddr
+````{roto:function} to_canonical(self: IpAddr) -> IpAddr
 Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise, it returns self as-is.
 ````
 
-````{roto:function} to_string(x: IpAddr) -> String
+````{roto:function} to_string(self: IpAddr) -> String
 Convert this value into a `String`
 ````
 

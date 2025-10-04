@@ -21,9 +21,11 @@ macro_rules! int_docs {
 macro_rules! to_string_impl {
     ($t:ty) => {
         library! {
-            /// Convert this value into a `String`
-            fn to_string(x: $t) -> Arc<str> {
-                x.to_string().into()
+            impl $t {
+                /// Convert this value into a `String`
+                fn to_string(self) -> Arc<str> {
+                    self.to_string().into()
+                }
             }
         }
     };
@@ -42,49 +44,51 @@ macro_rules! float_docs {
 macro_rules! float_impl {
     ($t:ty) => {
         library! {
-            /// Returns the smallest integer greater than or equal to self.
-            fn floor(x: $t) -> $t {
-                x.floor()
-            }
+            impl $t {
+                /// Returns the smallest integer greater than or equal to self.
+                fn floor(self) -> Self {
+                    self.floor()
+                }
 
-            /// Returns the smallest integer greater than or equal to self.
-            fn ceil(x: $t) -> $t {
-                x.ceil()
-            }
+                /// Returns the smallest integer greater than or equal to self.
+                fn ceil(self) -> Self {
+                    self.ceil()
+                }
 
-            /// Returns the nearest integer to self. If a value is half-way between two integers, round away from 0.0.
-            fn round(x: $t) -> $t {
-                x.round()
-            }
+                /// Returns the nearest integer to self. If a value is half-way between two integers, round away from 0.0.
+                fn round(self) -> Self {
+                    self.round()
+                }
 
-            /// Computes the absolute value of self.
-            fn abs(x: $t) -> $t {
-                x.abs()
-            }
+                /// Computes the absolute value of self.
+                fn abs(self) -> Self {
+                    self.abs()
+                }
 
-            /// Returns the square root of a number.
-            fn sqrt(x: $t) -> $t {
-                x.sqrt()
-            }
+                /// Returns the square root of a number.
+                fn sqrt(self) -> Self {
+                    self.sqrt()
+                }
 
-            /// Raises a number to a floating point power.
-            fn pow(x: $t, y: $t) -> $t {
-                x.powf(y)
-            }
+                /// Raises a number to a floating point power.
+                fn pow(self, exp: Self) -> Self {
+                    self.powf(exp)
+                }
 
-            /// Returns true if this value is NaN.
-            fn is_nan(x: $t) -> bool {
-                x.is_nan()
-            }
+                /// Returns true if this value is NaN.
+                fn is_nan(self) -> bool {
+                    self.is_nan()
+                }
 
-            /// Returns true if this value is positive infinity or negative infinity, and false otherwise.
-            fn is_infinite(x: $t) -> bool {
-                x.is_infinite()
-            }
+                /// Returns true if this value is positive infinity or negative infinity, and false otherwise.
+                fn is_infinite(self) -> bool {
+                    self.is_infinite()
+                }
 
-            /// Returns true if this number is neither infinite nor NaN.
-            fn is_finite(x: $t) -> bool {
-                x.is_finite()
+                /// Returns true if this number is neither infinite nor NaN.
+                fn is_finite(self) -> bool {
+                    self.is_finite()
+                }
             }
         }
     };
@@ -92,124 +96,128 @@ macro_rules! float_impl {
 
 fn ip_addr_methods() -> Library {
     library! {
-        /// Check whether two IP addresses are equal
-        ///
-        /// A more convenient but equivalent method for checking equality is via the `==` operator.
-        ///
-        /// An IPv4 address is never equal to an IPv6 address. IP addresses are considered equal if
-        /// all their bits are equal.
-        ///
-        /// ```roto
-        /// 192.0.0.0 == 192.0.0.0   # -> true
-        /// ::0 == ::0               # -> true
-        /// 192.0.0.0 == 192.0.0.1   # -> false
-        /// 0.0.0.0 == 0::0          # -> false
-        ///
-        /// # or equivalently:
-        /// 192.0.0.0.eq(192.0.0.0)  # -> true
-        /// ```
-        fn eq(a: IpAddr, b: IpAddr) -> bool {
-            a == b
-        }
+        impl IpAddr {
+            /// Check whether two IP addresses are equal
+            ///
+            /// A more convenient but equivalent method for checking equality is via the `==` operator.
+            ///
+            /// An IPv4 address is never equal to an IPv6 address. IP addresses are considered equal if
+            /// all their bits are equal.
+            ///
+            /// ```roto
+            /// 192.0.0.0 == 192.0.0.0   # -> true
+            /// ::0 == ::0               # -> true
+            /// 192.0.0.0 == 192.0.0.1   # -> false
+            /// 0.0.0.0 == 0::0          # -> false
+            ///
+            /// # or equivalently:
+            /// 192.0.0.0.eq(192.0.0.0)  # -> true
+            /// ```
+            fn eq(self, other: IpAddr) -> bool {
+                self == other
+            }
 
-        /// Returns true if this address is an IPv4 address, and false otherwise.
-        ///
-        /// ```roto
-        /// 1.1.1.1.is_ipv4() # -> true
-        /// ::.is_ipv4()      # -> false
-        /// ```
-        fn is_ipv4(ip: IpAddr) -> bool {
-            ip.is_ipv4()
-        }
+            /// Returns true if this address is an IPv4 address, and false otherwise.
+            ///
+            /// ```roto
+            /// 1.1.1.1.is_ipv4() # -> true
+            /// ::.is_ipv4()      # -> false
+            /// ```
+            fn is_ipv4(self) -> bool {
+                self.is_ipv4()
+            }
 
-        /// Returns true if this address is an IPv6 address, and false otherwise.
-        ///
-        /// ```roto
-        /// 1.1.1.1.is_ipv6() # -> false
-        /// ::.is_ipv6()      # -> true
-        /// ```
-        fn is_ipv6(ip: IpAddr) -> bool {
-            ip.is_ipv6()
-        }
+            /// Returns true if this address is an IPv6 address, and false otherwise.
+            ///
+            /// ```roto
+            /// 1.1.1.1.is_ipv6() # -> false
+            /// ::.is_ipv6()      # -> true
+            /// ```
+            fn is_ipv6(self) -> bool {
+                self.is_ipv6()
+            }
 
-        /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise, it returns self as-is.
-        fn to_canonical(ip: IpAddr) -> IpAddr {
-            ip.to_canonical()
+            /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise, it returns self as-is.
+            fn to_canonical(self) -> IpAddr {
+                self.to_canonical()
+            }
         }
     }
 }
 
 fn string_methods() -> Library {
     library! {
-        /// Append a string to another, creating a new string
-        ///
-        /// ```roto
-        /// "hello".append(" ").append("world") # -> "hello world"
-        /// ```
-        fn append(a: Arc<str>, b: Arc<str>) -> Arc<str> {
-            format!("{a}{b}").into()
-        }
+        impl Arc<str> {
+            /// Append a string to another, creating a new string
+            ///
+            /// ```roto
+            /// "hello".append(" ").append("world") # -> "hello world"
+            /// ```
+            fn append(self, other: Self) -> Self {
+                format!("{self}{other}").into()
+            }
 
-        /// Check whether a string contains another string
-        ///
-        /// ```roto
-        /// "haystack".contains("hay")  # -> true
-        /// "haystack".contains("corn") # -> false
-        /// ```
-        fn contains(haystack: Arc<str>, needle: Arc<str>) -> bool {
-            haystack.contains(needle.as_ref())
-        }
+            /// Check whether a string contains another string
+            ///
+            /// ```roto
+            /// "haystack".contains("hay")  # -> true
+            /// "haystack".contains("corn") # -> false
+            /// ```
+            fn contains(self, needle: Self) -> bool {
+                self.contains(needle.as_ref())
+            }
 
-        /// Check whether a string starts with a given prefix
-        ///
-        /// ```roto
-        /// "haystack".starts_with("hay")   # -> true
-        /// "haystack".starts_with("trees") # -> false
-        /// ```
-        fn starts_with(s: Arc<str>, prefix: Arc<str>) -> bool {
-            s.starts_with(prefix.as_ref())
-        }
+            /// Check whether a string starts with a given prefix
+            ///
+            /// ```roto
+            /// "haystack".starts_with("hay")   # -> true
+            /// "haystack".starts_with("trees") # -> false
+            /// ```
+            fn starts_with(self, prefix: Self) -> bool {
+                self.starts_with(prefix.as_ref())
+            }
 
-        /// Check whether a string end with a given suffix
-        ///
-        /// ```roto
-        /// "haystack".ends_with("stack") # -> true
-        /// "haystack".ends_with("black") # -> false
-        /// ```
-        fn ends_with(s: Arc<str>, suffix: Arc<str>) -> bool {
-            s.ends_with(suffix.as_ref())
-        }
+            /// Check whether a string end with a given suffix
+            ///
+            /// ```roto
+            /// "haystack".ends_with("stack") # -> true
+            /// "haystack".ends_with("black") # -> false
+            /// ```
+            fn ends_with(self, suffix: Self) -> bool {
+                self.ends_with(suffix.as_ref())
+            }
 
-        /// Create a new string with all characters converted to lowercase
-        ///
-        /// ```roto
-        /// "LOUD".to_lowercase() # -> "loud"
-        /// ```
-        fn to_lowercase(s: Arc<str>) -> Arc<str> {
-            s.to_lowercase().into()
-        }
+            /// Create a new string with all characters converted to lowercase
+            ///
+            /// ```roto
+            /// "LOUD".to_lowercase() # -> "loud"
+            /// ```
+            fn to_lowercase(self) -> Self {
+                self.to_lowercase().into()
+            }
 
-        /// Create a new string with all characters converted to uppercase
-        ///
-        /// ```roto
-        /// "quiet".to_uppercase() # -> "QUIET"
-        /// ```
-        fn to_uppercase(s: Arc<str>) -> Arc<str> {
-            s.to_uppercase().into()
-        }
+            /// Create a new string with all characters converted to uppercase
+            ///
+            /// ```roto
+            /// "quiet".to_uppercase() # -> "QUIET"
+            /// ```
+            fn to_uppercase(self) -> Self {
+                self.to_uppercase().into()
+            }
 
-        /// Repeat a string `n` times and join them
-        ///
-        /// ```roto
-        /// "ha".repeat(6) # -> "hahahahahaha"
-        /// ```
-        fn repeat(s: Arc<str>, n: u32) -> Arc<str> {
-            s.repeat(n as usize).into()
-        }
+            /// Repeat a string `n` times and join them
+            ///
+            /// ```roto
+            /// "ha".repeat(6) # -> "hahahahahaha"
+            /// ```
+            fn repeat(self, n: u32) -> Self {
+                self.repeat(n as usize).into()
+            }
 
-        /// Check for string equality
-        fn eq(s: Arc<str>, other: Arc<str>) -> bool {
-            s == other
+            /// Check for string equality
+            fn eq(self, other: Self) -> bool {
+                self == other
+            }
         }
     }
 }
@@ -315,28 +323,28 @@ pub fn built_ins() -> Library {
 
         impl Arc<str> {
             /// Convert this value into a `String`
-            fn to_string(x: Arc<str>) -> Arc<str> {
-                x
+            fn to_string(self) -> Self {
+                self
             }
         }
 
-        impl bool { include!(to_string_impl!(bool)); }
-        impl u8 { include!(to_string_impl!(u8)); }
-        impl u16 { include!(to_string_impl!(u16)); }
-        impl u32 { include!(to_string_impl!(u32)); }
-        impl u64 { include!(to_string_impl!(u64)); }
-        impl i8 { include!(to_string_impl!(i8)); }
-        impl i16 { include!(to_string_impl!(i16)); }
-        impl i32 { include!(to_string_impl!(i32)); }
-        impl i64 { include!(to_string_impl!(i64)); }
-        impl f32 { include!(to_string_impl!(f32)); }
-        impl f64 { include!(to_string_impl!(f64)); }
-        impl IpAddr { include!(to_string_impl!(IpAddr)); }
-        impl Prefix { include!(to_string_impl!(Prefix)); }
-        impl Asn { include!(to_string_impl!(Asn)); }
+        include!(to_string_impl!(bool));
+        include!(to_string_impl!(u8));
+        include!(to_string_impl!(u16));
+        include!(to_string_impl!(u32));
+        include!(to_string_impl!(u64));
+        include!(to_string_impl!(i8));
+        include!(to_string_impl!(i16));
+        include!(to_string_impl!(i32));
+        include!(to_string_impl!(i64));
+        include!(to_string_impl!(f32));
+        include!(to_string_impl!(f64));
+        include!(to_string_impl!(IpAddr));
+        include!(to_string_impl!(Prefix));
+        include!(to_string_impl!(Asn));
 
-        impl f32 { include!(float_impl!(f32)); }
-        impl f64 { include!(float_impl!(f64)); }
+        include!(float_impl!(f32));
+        include!(float_impl!(f64));
 
         impl Prefix {
             /// Construct a new prefix
@@ -354,8 +362,8 @@ pub fn built_ins() -> Library {
             }
         }
 
-        impl IpAddr { include!(ip_addr_methods()); }
-        impl Arc<str> { include!(string_methods()); }
+        include!(ip_addr_methods());
+        include!(string_methods());
 
         /// The IPv4 address pointing to localhost: `127.0.0.1`
         const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);

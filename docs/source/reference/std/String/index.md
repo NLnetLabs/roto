@@ -4,7 +4,7 @@ The string type
 `````
 
 
-````{roto:function} append(a: String, b: String) -> String
+````{roto:function} append(self: String, other: String) -> String
 Append a string to another, creating a new string
 
 ```roto
@@ -12,7 +12,7 @@ Append a string to another, creating a new string
 ```
 ````
 
-````{roto:function} contains(haystack: String, needle: String) -> bool
+````{roto:function} contains(self: String, needle: String) -> bool
 Check whether a string contains another string
 
 ```roto
@@ -21,7 +21,7 @@ Check whether a string contains another string
 ```
 ````
 
-````{roto:function} ends_with(s: String, suffix: String) -> bool
+````{roto:function} ends_with(self: String, suffix: String) -> bool
 Check whether a string end with a given suffix
 
 ```roto
@@ -30,11 +30,11 @@ Check whether a string end with a given suffix
 ```
 ````
 
-````{roto:function} eq(s: String, other: String) -> bool
+````{roto:function} eq(self: String, other: String) -> bool
 Check for string equality
 ````
 
-````{roto:function} repeat(s: String, n: u32) -> String
+````{roto:function} repeat(self: String, n: u32) -> String
 Repeat a string `n` times and join them
 
 ```roto
@@ -42,7 +42,7 @@ Repeat a string `n` times and join them
 ```
 ````
 
-````{roto:function} starts_with(s: String, prefix: String) -> bool
+````{roto:function} starts_with(self: String, prefix: String) -> bool
 Check whether a string starts with a given prefix
 
 ```roto
@@ -51,7 +51,7 @@ Check whether a string starts with a given prefix
 ```
 ````
 
-````{roto:function} to_lowercase(s: String) -> String
+````{roto:function} to_lowercase(self: String) -> String
 Create a new string with all characters converted to lowercase
 
 ```roto
@@ -59,11 +59,11 @@ Create a new string with all characters converted to lowercase
 ```
 ````
 
-````{roto:function} to_string(x: String) -> String
+````{roto:function} to_string(self: String) -> String
 Convert this value into a `String`
 ````
 
-````{roto:function} to_uppercase(s: String) -> String
+````{roto:function} to_uppercase(self: String) -> String
 Create a new string with all characters converted to uppercase
 
 ```roto
