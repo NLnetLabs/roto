@@ -10,7 +10,7 @@ fn source_file_try_read_empty_file() {
 
 #[test]
 fn source_file_try_read_nonexistent_file() {
-    let source = SourceFile::read(Path::new("/non-existent/file/pkg.roto"));
+    let source = SourceFile::read(Path::new("/nonexistent/file/pkg.roto"));
     let _err = source.unwrap_err();
 }
 
