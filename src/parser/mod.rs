@@ -100,7 +100,7 @@ impl<'source> Parser<'source, '_> {
     ///
     /// Assuming that `{`, `}` and `,` are the opening, closing and separating
     /// tokens, respectively. And the given parser passes `FOO`, then this
-    /// function corrsponds to the following grammar rule:
+    /// function corresponds to the following grammar rule:
     ///
     /// ```ebnf
     /// '{' (FOO (',' FOO)* ',')? '}'
