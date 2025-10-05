@@ -80,7 +80,9 @@ is the type of a ``return`` expression. It can be unified with any other type.
 Booleans
 --------
 
-TODO
+The boolean type in Roto is called :roto:ref:`bool` and it has two possible
+values: `true` and `false`. Booleans can be manipulated via several operators
+such as `&&` (logical and), `||` (locical or) and `not` (logical negation).
 
 .. _lang_integers:
 
