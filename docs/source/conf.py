@@ -247,7 +247,7 @@ def setup(app):
     app.add_css_file('css/dark.css')
     app.add_css_file('css/light.css')
     
-# -- Options for copybutton extenstion ---------------------------------------
+# -- Options for copybutton extension ----------------------------------------
 
 # Configure this so the prompt will not be copied to the clipboard. Also
 # prevents output lines (lines not starting with the prompt) to be copied.
