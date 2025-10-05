@@ -210,7 +210,7 @@ Roto:
 | ``not`` | Negation                       |
 +---------+--------------------------------+
 
-Now that we have all the rules for precendence, here is an example using all types of
+Now that we have all the rules for precedence, here is an example using all types of
 operators (arithmetic, comparison and logical):
 
 .. code-block:: roto
