@@ -421,7 +421,7 @@ impl TypeChecker {
                 }
 
                 if self.type_info.is_numeric_type(&operand_ty) {
-                    // If we get a int var, we need to store the fact that this
+                    // If we get an int var, we need to store the fact that this
                     // var must be signed so that we can give an error if this
                     // is later unified with an unsigned integer.
                     if let Type::IntVar(i, MustBeSigned::No) = &operand_ty {
