@@ -61,7 +61,7 @@ scripts you compile.
     let rt = Runtime::from_lib(lib).unwrap();
 
 Scripts compiled with this runtime can then use this custom ``print`` function.
-The registered functions can have any any name you want, as long as its a valid
+The registered functions can have any name you want, as long as its a valid
 Roto identifier.
 
 Here is another example which returns a value:
