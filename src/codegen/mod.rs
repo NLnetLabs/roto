@@ -67,7 +67,7 @@ struct ModuleData {
     /// need to be stored in this struct, even though this field is unused.
     _constants: HashMap<ResolvedName, ConstantValue>,
 
-    /// The functions in this module can reference registerd function that
+    /// The functions in this module can reference registered function that
     /// might contain data (i.e. closures). We need to properly drop these.
     _registered_fns: Vec<Arc<Box<dyn Any>>>,
 }

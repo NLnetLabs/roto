@@ -331,7 +331,7 @@ impl Runtime {
         (fs, cs, ts, ms)
     }
 
-    /// Print documentation for all the types registerd into this runtime.
+    /// Print documentation for all the types registered into this runtime.
     ///
     /// The format for the documentation is markdown that can be passed to Sphinx.
     pub fn print_documentation(&self, path: &Path) -> io::Result<()> {
