@@ -56,7 +56,7 @@ There are several types at Roto's core, which can be expressed as literals.
 - :roto:ref:`Asn`: AS number
 
 There are many more types available that have more to do with BGP. These are
-described elsewhere. Note that Roto is case sensitive; writing the ``String`` type as
+described elsewhere. Note that Roto is case-sensitive; writing the ``String`` type as
 ``STRING`` or ``string`` won't work.
 
 Unit type
