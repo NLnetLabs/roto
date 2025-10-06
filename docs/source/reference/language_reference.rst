@@ -61,12 +61,16 @@ There are many more types available that have more to do with BGP. These are
 described elsewhere. Note that Roto is case-sensitive; writing the ``String`` type as
 ``STRING`` or ``string`` won't work.
 
+.. _lang_unit:
+
 Unit type
 ---------
 
 The unit type is a special type written as ``()`` with only one value: ``()``.
 It is the type of expressions that do not have meaningful value to evaluate to.
 For functions, returning ``()`` is equivalent to returning nothing.
+
+.. _lang_never:
 
 Never type
 ----------
