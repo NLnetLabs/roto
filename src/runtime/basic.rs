@@ -372,20 +372,5 @@ pub fn built_ins() -> Library {
 
         /// The IPv6 address pointing to localhost: `::1`
         const LOCALHOSTV6: IpAddr = IpAddr::from(Ipv6Addr::LOCALHOST);
-
-        /// Mathematical constants and functions
-        mod math {
-            const PI: f64 = std::f64::consts::PI;
-
-            /// The sine of the radian argument x.
-            fn sin(x: f64) -> f64 {
-                x.sin()
-            }
-
-            /// The cosine of the radian argument x.
-            fn cos(x: f64) -> f64 {
-                x.cos()
-            }
-        }
     }
 }
