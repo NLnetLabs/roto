@@ -281,6 +281,7 @@ pub fn built_ins() -> Library {
         /// is constructed with the `AS` prefix followed by a number.
         ///
         /// Can be used to store both 2-byte and 4-byte ASNs.
+        ///
         /// ```roto
         /// AS0
         /// AS1010

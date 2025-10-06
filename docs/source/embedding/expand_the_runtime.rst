@@ -5,7 +5,7 @@ By default, Roto's standard library is minimal. The idea behind that is that
 each application should supply the functionality that they allow the scripts to
 use.
 
-The standard runtime doesn't even have a way to print to ``stdout```, because
+The standard runtime doesn't even have a way to print to ``stdout``, because
 the host application may not want to allow the scripts to do that. But it is
 possible to add some standard modules to the runtime. For example, there is a
 method ``add_io_functions`` on ``Runtime`` to add the ``print`` function.
