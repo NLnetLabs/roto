@@ -294,6 +294,51 @@ the `...` is a hexadecimal number.
 
 Finally, Roto will ignore any whitespace after a ``\`` followed by a newline.
 
+.. _lang_locals:
+
+Local variables
+---------------
+
+Local variables are declared with a ``let`` statement.
+
+.. code-block:: roto
+
+    fn greater_than_square(x: i32, y: i32) {
+        let y_squared = y * y;
+        x > y_squared
+    }
+
+Any local variable can be overwritten with an assignment, which is expressed as ``=``
+without ``let``:
+
+.. code-block:: roto
+
+    let x = 0;
+    x = x + 1;
+
+A let-binding can take an optional type annotation for readability or to help
+with type inference. In the example below, ``0`` has an unknown type as it can
+be any integer type, so the type annotation forces it to be ``u32``.
+
+.. code-block:: roto
+
+    let x: u32 = 0;
+
+Local variables are dropped (i.e. deleted) at the end of the scope where they
+are declared. A new scope is created with ``{}``, including when that is part of
+the syntax. For example, the body of an ``if`` expression creates a new scope.
+
+.. code-block:: roto
+
+    let x = true;
+    if x {
+        let y = false;
+        print(f"{y}"); # ok!
+        # y is implicitly dropped here
+    }
+    print(f"{x}"); # ok!
+    print(f"{y}"); # this is not possible: y has been dropped!
+
 .. _lang_if_else:
 
 If-else
@@ -453,29 +498,6 @@ This function does not return anything:
 The ``return`` keyword can still be used in functions that don't return a value to
 exit the function early.
 
-When a function becomes more complex, intermediate results can be stored in local
-variables with ``let``.
-
-.. code-block:: roto
-
-    fn greater_than_square(x: i32, y: i32) {
-        let y_squared = y * y;
-        x > y_squared
-    }
-
-Any local variable can be overwritten with an assignment, which is expressed as ``=``
-without ``let``:
-
-.. code-block:: roto
-
-    let x = 0;
-    x = x + 1;
-
-A let-binding can take an optional type annotation for clarity.
-
-.. code-block:: roto
-
-    let x: u32 = 0;
 
 .. _lang_filtermap:
 
