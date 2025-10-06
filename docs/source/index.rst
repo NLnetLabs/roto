@@ -14,8 +14,7 @@ Roto is an embedded scripting language for Rust applications that is fast, safe
 and easy to use.
 
 The language is primarily used by `Rotonda
-<https://github.com/NLnetLabs/rotonda>`__, the composable, programmable routing
-BGP engine. It is made to integrate especially well with Rotonda, so that
+<https://github.com/NLnetLabs/rotonda>`__, the composable, programmable BGP routing engine. It is made to integrate especially well with Rotonda, so that
 writing filters is as simple as possible. In addition, Roto can be easily
 embedded into any Rust application for general purpose scripting.
 
@@ -100,6 +99,7 @@ Roto is distributed under the terms of the BSD-3-clause license. See
    :caption: Reference
    :name: toc-reference
 
+   reference/syntax_overview
    reference/language_reference
    reference/std/index
    reference/rust_interoperability

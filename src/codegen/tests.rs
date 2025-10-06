@@ -3451,3 +3451,41 @@ fn f32_issue() {
 
     let _res = f.call(&mut ());
 }
+
+#[test]
+fn register_module() {
+    let s = src!(
+        r#"
+       import math.{PI, sin, cos};
+
+       fn foo() -> f32 {
+           cos(PI) + sin(PI)
+       }
+    "#
+    );
+
+    let rt = Runtime::from_lib(library! {
+        mod math {
+            const PI: f32 = std::f32::consts::PI;
+
+            /// The sine of the radian argument x.
+            fn sin(x: f32) -> f32 {
+                x.sin()
+            }
+
+            /// The cosine of the radian argument x.
+            fn cos(x: f32) -> f32 {
+                x.cos()
+            }
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
+    let f = p
+        .get_function::<(), fn() -> f32>("foo")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(&mut ());
+    assert!(-1.1 < res && res < -0.9);
+}

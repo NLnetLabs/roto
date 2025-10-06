@@ -5,6 +5,8 @@ This section describes the basic syntax of Roto scripts. This is written in
 a reference-style. It is mostly meant as a cheatsheet, not as an introduction to
 the language.
 
+.. _lang_comments:
+
 Comments
 --------
 
@@ -41,30 +43,73 @@ Roto supports literals for primitive types:
     Floating point literals need either a ``.``, ``e`` or ``E`` to distinguish
     them from integer literals.
 
+Identifiers
+-----------
+
+Identifiers in Roto can consist of any character from Unicode's ``XID_Start``
+character set or an ``_`` followed by characters from ``XID_Continue``. In
+practice, this means that identifiers can use ASCII, numbers, diacritics and
+other alphabets, with the restriction that they cannot *start* with a number.
+Keywords are also not valid identifiers.
+
+Identifiers are case-sensitive, so ``foo`` is not considered to be equal to
+``Foo`` or ``FOO``. Every character in the identifier is significant.
+
+Here are some examples of valid identifiers:
+
+- ``foo``
+- ``_bar``
+- ``foo_bar``
+- ``foo1234``
+- ``Straße``
+- ``Москва``
+- ``東京``
+
+The following strings are **not** valid identifiers:
+
+- ``12foo`` (cannot start with a number)
+- ``foo.bar`` (cannot contain ``.``)
+- ``filter`` (cannot be a keyword)
+
+Additionally, we have the following conventions:
+
+- The names of local variables, modules, functions and function arguments
+  should use ``snake_case``, i.e. should be all lowercase with words separated by ``_``.
+- The names of types and enum variants should use ``PascalCase``, i.e. should
+  have each word capitalized. The exceptions are the primitive boolean, integer
+  and floating point types.
+- The names of constants should use ``SCREAMING_SNAKE_CASE``, i.e. should be all uppercase
+  with words separated by ``_``.
+- A leading underscore can be used to signal that a value is unused.
+
 Primitive types
 ---------------
 
 There are several types at Roto's core, which can be expressed as literals.
 
-- :roto:ref:`bool`: booleans
-- :roto:ref:`u8`, :roto:ref:`u16`, :roto:ref:`u32`, :roto:ref:`u64`: unsigned integers of 8, 16, 32 and 64 bits, respectively
-- :roto:ref:`i8`, :roto:ref:`i16`, :roto:ref:`i32`, :roto:ref:`i64`: signed integers of 8, 16, 32 and 64 bits, respectively
+- :roto:ref:`bool`: boolean
+- :roto:ref:`u8`, :roto:ref:`u16`, :roto:ref:`u32`, :roto:ref:`u64`: unsigned integer of 8, 16, 32 and 64 bits, respectively
+- :roto:ref:`i8`, :roto:ref:`i16`, :roto:ref:`i32`, :roto:ref:`i64`: signed integer of 8, 16, 32 and 64 bits, respectively
 - :roto:ref:`f32`, :roto:ref:`f64`: floating point numbers of 32 and 64 bits, respectively
-- :roto:ref:`String`: Strings
+- :roto:ref:`String`: string
 - :roto:ref:`IpAddr`: IP address
-- :roto:ref:`Prefix`: prefixes
+- :roto:ref:`Prefix`: IP prefix
 - :roto:ref:`Asn`: AS number
 
 There are many more types available that have more to do with BGP. These are
 described elsewhere. Note that Roto is case-sensitive; writing the ``String`` type as
 ``STRING`` or ``string`` won't work.
 
+.. _lang_unit:
+
 Unit type
 ---------
 
 The unit type is a special type written as ``()`` with only one value: ``()``.
-It is the type of expressions that do not have meaningful value to evaluate to.
+It is the type of expressions that do not have meaningful values to evaluate to.
 For functions, returning ``()`` is equivalent to returning nothing.
+
+.. _lang_never:
 
 Never type
 ----------
@@ -72,6 +117,17 @@ Never type
 The never type ``!`` is an *uninhabited* type, meaning that it cannot be
 constructed. It appears in code paths that are unreachable. For example, it
 is the type of a ``return`` expression. It can be unified with any other type.
+
+.. _lang_booleans:
+
+Booleans
+--------
+
+The boolean type in Roto is called :roto:ref:`bool` and it has two possible
+values: `true` and `false`. Booleans can be manipulated via several operators
+such as `&&` (logical and), `||` (locical or) and `not` (logical negation).
+
+.. _lang_integers:
 
 Integers
 --------
@@ -106,11 +162,13 @@ Below is a table of all available integer types.
 | :roto:ref:`i64` |   64 |    Yes | -9,223,372,036,854,775,808 |  9,223,372,036,854,775,807 |
 +-----------------+------+--------+----------------------------+----------------------------+
 
+.. _lang_floats:
+
 Floating point numbers
 ----------------------
 
-There are two floating point types: ``f32`` and ``f64``, of 32 and 64 bits,
-respectively.
+There are two floating point types: ``f32`` and ``f64``, of 32 and 64 bits
+length, respectively.
 
 +-----------------+------+
 | Type            | Bits |
@@ -119,6 +177,8 @@ respectively.
 +-----------------+------+
 | :roto:ref:`f64` |   64 |
 +-----------------+------+
+
+.. _lang_arithmetic:
 
 Arithmetic operators
 --------------------
@@ -227,6 +287,8 @@ The ``&&`` and ``||`` are short-circuiting, meaning that if the left-hand operan
 of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
 ``true``, the right hand side won't be evaluated.
 
+.. _lang_strings:
+
 Strings
 -------
 
@@ -275,6 +337,95 @@ the `...` is a hexadecimal number.
 
 Finally, Roto will ignore any whitespace after a ``\`` followed by a newline.
 
+.. _lang_string_formatting:
+
+String formatting
+-----------------
+
+Roto supports a Python-like syntax for string formatting. Any string literal
+prefixed with `f` will become a format string (or "f-string"), that interpolates
+the expressions between ``{`` and ``}``. The f-string will insert a call to the
+``to_string`` method for displaying the value. Therefore, any type with a
+``to_string`` method can be put in an f-string, including registered types.
+
+.. code-block:: roto
+
+    let x = 10;
+    print(f"x is {x}"); # will print "x is 10"
+
+Arbitrary expressions are allowed to appear in format strings, including other
+strings and format strings.
+
+.. code-block:: roto
+
+    let x = 10;
+    print(f"Twice x is {2 * x});
+
+    print(f"x is {if x > 100 {
+        "big"
+    } else {
+        "small"
+    }}");
+
+The ``{`` and ``}`` characters need to be escaped to be used in an f-string by
+duplicating them: ``{{``, ``}}``.
+
+.. code-block:: roto
+
+    print(f"x is {{ x }}")
+    # will print the string "x is { x }"
+
+.. note::
+    There are some minor issues around type inference with format strings. See
+    `issue 244 <https://github.com/NLnetLabs/roto/issues/244>`_.
+
+.. _lang_locals:
+
+Local variables
+---------------
+
+Local variables are declared with a ``let`` statement.
+
+.. code-block:: roto
+
+    fn greater_than_square(x: i32, y: i32) {
+        let y_squared = y * y;
+        x > y_squared
+    }
+
+Any local variable can be overwritten with an assignment, which is expressed as ``=``
+without ``let``:
+
+.. code-block:: roto
+
+    let x = 0;
+    x = x + 1;
+
+A let-binding can take an optional type annotation for readability or to help
+with type inference. In the example below, ``0`` has an unknown type as it can
+be any integer type, so the type annotation forces it to be ``u32``.
+
+.. code-block:: roto
+
+    let x: u32 = 0;
+
+Local variables are dropped (i.e., deleted) at the end of the scope where they
+are declared. A new scope is created with ``{}``, including when that is part of
+the syntax. For example, the body of an ``if`` expression creates a new scope.
+
+.. code-block:: roto
+
+    let x = true;
+    if x {
+        let y = false;
+        print(f"{y}"); # ok!
+        # y is implicitly dropped here
+    }
+    print(f"{x}"); # ok!
+    print(f"{y}"); # this is not possible: y has been dropped!
+
+.. _lang_if_else:
+
 If-else
 -------
 
@@ -300,7 +451,8 @@ construct is an expression and therefore evaluates to a value.
     }
 
 The if-else is an expression, not a statement, which means that it evaluates to
-a value. This means that it can be used in the place of a ternary operator.
+a value. This means that it can be used as a replacement for a ternary
+operator.
 
 .. code-block:: roto
 
@@ -318,10 +470,48 @@ If-else expressions can be chained without additional braces.
         print("x is zero!");
     }
 
+.. _lang_match:
+
 Match
 -----
 
-TODO
+Pattern matching in Roto is supported via ``match`` expressions. These take a
+value and a set of patterns to check against, with an expression associated with
+each of the patterns.
+
+The pattern is separated from the associated expression with ``->``. The arms
+should be separated with commas, unless the expression is a block, i.e., when
+it is wrapped in ``{}``.
+
+The current implementation of this feature is very limited: you can only
+match against ``enum`` types and only match against the variant, not against
+the contents of the variant. Since you can't create your own ``enum``
+types, matching is limited to ``Option`` and ``Verdict``. See `issue 124
+<https://github.com/NLnetLabs/roto/issues/124>`_ for the status on these
+limitations.
+
+.. code-block:: roto
+
+    let x = Some(10);
+    match x {
+        None -> print("x is None"),
+        Some(i) -> {
+            print("x is Some");
+            print(f"x is {i}");
+        }
+    }
+
+.. note::
+    If you are used to Rust, be aware that Roto uses ``->`` instead of ``=>`` to
+    separate the pattern from the expression.
+
+    Another difference to be aware of is that Roto currently doesn't use the
+    full path to the ``enum`` variant, but only the name. So ``Option.None`` is not
+    allowed as a pattern, but ``None`` is. This will probably change once ``match``
+    expressions become more general.
+    
+
+.. _lang_while:
 
 While loops
 -----------
@@ -338,6 +528,8 @@ until the condition evaluates to ``false``.
 
 A while loop is an expression of the type ``()``. Like with ``if``, ``while``
 does not require parentheses around the condition.
+
+.. _lang_functions:
 
 Functions
 ---------
@@ -392,29 +584,8 @@ This function does not return anything:
 The ``return`` keyword can still be used in functions that don't return a value to
 exit the function early.
 
-When a function becomes more complex, intermediate results can be stored in local
-variables with ``let``.
 
-.. code-block:: roto
-
-    fn greater_than_square(x: i32, y: i32) {
-        let y_squared = y * y;
-        x > y_squared
-    }
-
-Any local variable can be overwritten with an assignment, which is expressed as ``=``
-without ``let``:
-
-.. code-block:: roto
-
-    let x = 0;
-    x = x + 1;
-
-A let-binding can take an optional type annotation for clarity.
-
-.. code-block:: roto
-
-    let x: u32 = 0;
+.. _lang_filtermap:
 
 Filtermap
 ---------
@@ -481,6 +652,8 @@ On the Rust side, a filtermap is a function that returns a ``Verdict<A, R>``.
 The type parameters of a ``Verdict`` specify the types of the values given in
 the ``accept`` and ``reject`` cases, respectively.
 
+.. _lang_anonymous_records:
+
 Anonymous records
 -----------------
 
@@ -522,6 +695,8 @@ Fields can also be updated with an assignment.
     let x = { foo: 5 };
     x.foo = 6;
 
+.. _lang_named_records:
+
 Named records
 -------------
 
@@ -558,10 +733,10 @@ called ``pkg.roto``. This file is the root of our script. The contents of
 ``pkg.roto`` will form the ``pkg`` module. No other files in the directory 
 can be called ``pkg.roto``.
 
-Files adjacent to ``pkg.roto`` are submodules of ``pkg``. For example, a file
+Files adjacent to ``pkg.roto`` are sub-modules of ``pkg``. For example, a file
 called ``foo.roto`` will define the module ``pkg.foo``.
 
-A directory next to ``pkg.roto`` will also be a submodule if it contains a file
+A directory next to ``pkg.roto`` will also be a sub-module if it contains a file
 called ``lib.roto``. A file ``foo/lib.roto`` is therefore equivalent to ``foo.roto``
 and defines the module called ``pkg.foo``. We can do this recursively, so we can
 define the module ``pkg.foo.bar`` with either a file called ``foo/bar.roto`` or
@@ -628,6 +803,8 @@ and automatically make the path an absolute path:
 - ``std`` for the Roto standard library
 - ``dep`` for dependencies (not implemented yet, but the identifier is reserved)
 
+.. _lang_imports:
+
 Imports
 -------
 
@@ -673,6 +850,8 @@ either module ``A`` or ``B``, depending on a boolean flag.
             foo(x)
         }
     }
+
+.. _lang_optionals:
 
 Optional values
 ---------------
