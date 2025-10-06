@@ -947,7 +947,7 @@ impl TypeChecker {
         Some(match (a, b) {
             // Evidently, if two types are identical, they trivially unify
             (a, b) if a == b => a,
-            // Explitcit type variables need to be replaced with fresh type
+            // Explicit type variables need to be replaced with fresh type
             // variable. If they appear here, something has gone wrong.
             (a @ ExplicitVar(_), b) => {
                 ice!(

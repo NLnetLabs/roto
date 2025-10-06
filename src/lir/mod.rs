@@ -312,7 +312,7 @@ pub struct Function {
 pub struct Signature {
     pub parameters: Vec<(Identifier, IrType)>,
 
-    /// Whether this function takes a pointer for for the return value
+    /// Whether this function takes a pointer for the return value
     /// passed as an argument
     pub return_ptr: bool,
 

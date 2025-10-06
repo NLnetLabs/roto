@@ -47,8 +47,8 @@ enum Command {
 
 /// Run a basic CLI for a given runtime
 ///
-/// This is useful for providing users to check their scripts or run their tests
-/// with the runtime the host application provides.
+/// This is useful for providing to users to check their scripts or run their tests
+/// with the runtime that the host application provides.
 ///
 /// This CLI provides the following subcommands:
 ///  - `doc`: generate documentation

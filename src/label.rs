@@ -3,7 +3,7 @@
 //! These labels are designed to be unique, but still have some structure.
 //! Technically, a unique number for each label would suffice, but that would
 //! make the generated code harder to debug. Therefore, the labels follow
-//! a hierachical scheme, where labels have a name, a counter and optionally
+//! a hierarchical scheme, where labels have a name, a counter and optionally
 //! a parent. When they are displayed, we join the linked list formed by the
 //! parent labels as separated by `::`.
 

@@ -698,7 +698,7 @@ fn mismatched_types() {
 }
 
 #[test]
-fn multply() {
+fn multiply() {
     let s = src!(
         "
         filtermap main(x: u8) {

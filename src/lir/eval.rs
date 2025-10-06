@@ -78,10 +78,10 @@ pub struct LocalPointer {
     /// Where in the stack the pointee lives
     stack_index: usize,
 
-    /// Id of the stack frame where the pointee lives
+    /// ID of the stack frame where the pointee lives
     stack_id: usize,
 
-    /// Alloctation within the stack frame this pointer was created with
+    /// Allocation within the stack frame this pointer was created with
     allocation_index: usize,
 
     /// Offset within the allocation this pointer refers to

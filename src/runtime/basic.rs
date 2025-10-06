@@ -132,7 +132,7 @@ fn ip_addr_methods() -> Library {
             ip.is_ipv6()
         }
 
-        /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address, otherwise it returns self as-is.
+        /// Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise, it returns self as-is.
         fn to_canonical(ip: IpAddr) -> IpAddr {
             ip.to_canonical()
         }

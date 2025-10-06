@@ -225,7 +225,7 @@ impl Parser<'_, '_> {
     /// To avoid confusion, we don't allow `&&` and `||` to be chained together.
     ///
     /// ```ebnf
-    /// LogicalExpr ::= Comparison ( ('&&' Comparison )* | ('||' Comparsion)* )
+    /// LogicalExpr ::= Comparison ( ('&&' Comparison )* | ('||' Comparison)* )
     /// ```
     fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let expr = self.comparison(r)?;

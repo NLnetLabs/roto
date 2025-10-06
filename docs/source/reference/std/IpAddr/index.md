@@ -58,7 +58,7 @@ Returns true if this address is an IPv6 address, and false otherwise.
 ````
 
 ````{roto:function} to_canonical(ip: IpAddr) -> IpAddr
-Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address, otherwise it returns self as-is.
+Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise, it returns self as-is.
 ````
 
 ````{roto:function} to_string(x: IpAddr) -> String

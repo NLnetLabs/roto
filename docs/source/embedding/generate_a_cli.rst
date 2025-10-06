@@ -6,7 +6,7 @@ Generate a CLI
 
 The default Roto CLI introduced in :doc:`../overview/hello_world` is nice, but
 does not know anything about custom types and functions added to the runtime.
-To get a better CLI for your usecase, you can generate a CLI from your runtime.
+To get a better CLI for your use case, you can generate a CLI from your runtime.
 
 .. code-block:: rust
 

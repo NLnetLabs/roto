@@ -210,7 +210,7 @@ impl TypeDefinition {
         self.type_name().instantiate(fresh_var)
     }
 
-    /// Get the match patterns for this type definition instantatiated with the
+    /// Get the match patterns for this type definition instantiated with the
     /// given type arguments.
     pub fn match_patterns(
         &self,
