@@ -566,8 +566,8 @@ fn call_runtime_method() {
 
     let rt = Runtime::from_lib(library! {
         impl u32 {
-            fn is_even(x: u32) -> bool {
-                x % 2 == 0
+            fn is_even(self) -> bool {
+                self % 2 == 0
             }
         }
     })
@@ -2730,10 +2730,10 @@ fn mutate() {
         #[copy] type MyType = Val<*mut MyType>;
 
         impl Val<*mut MyType> {
-            fn increase(mut t: Val<*mut MyType>) {
-                eprintln!("increase, pre: {}", unsafe { (**t).i });
-                unsafe { (**t).i += 1 };
-                eprintln!("increase, post: {}", unsafe { (**t).i });
+            fn increase(mut self) {
+                eprintln!("increase, pre: {}", unsafe { (**self).i });
+                unsafe { (**self).i += 1 };
+                eprintln!("increase, post: {}", unsafe { (**self).i });
             }
         }
     })
@@ -2815,7 +2815,7 @@ fn name_collision() {
             #[clone] type A = Val<A>;
 
             impl Val<A> {
-                fn foo(_a: Val<A>) -> bool {
+                fn foo(self) -> bool {
                     true
                 }
             }
@@ -2823,7 +2823,7 @@ fn name_collision() {
             #[clone] type B = Val<B>;
 
             impl Val<B> {
-                fn foo(_b: Val<B>) -> bool {
+                fn foo(self) -> bool {
                     unreachable!()
                 }
             }
@@ -3098,8 +3098,8 @@ fn sigill() {
         #[clone] type Arcane = Val<Arcane>;
 
         impl Val<Arcane> {
-            fn get(a: Val<Arcane>) -> u64 {
-                Arc::strong_count(&a.0.0) as u64
+            fn get(self) -> u64 {
+                Arc::strong_count(&self.0.0) as u64
             }
         }
 
@@ -3317,8 +3317,8 @@ fn register_on_optstr() {
         #[clone] type OptStr = Val<Option<Arc<str>>>;
 
         impl Val<Option<Arc<str>>> {
-            fn unwrap_or_empty(x: Val<Option<Arc<str>>>) -> Arc<str> {
-                x.0.unwrap_or_default()
+            fn unwrap_or_empty(self) -> Arc<str> {
+                self.0.unwrap_or_default()
             }
         }
     })
@@ -3449,5 +3449,5 @@ fn f32_issue() {
         .get_function::<(), fn()>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(&mut ());
+    let _res = f.call(&mut ());
 }

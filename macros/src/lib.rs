@@ -160,8 +160,8 @@ impl Parse for ItemList {
 pub fn library(input: TokenStream) -> TokenStream {
     let parsed_items: ItemList = syn::parse_macro_input!(input);
 
-    let expanded =
-        to_tokens(parsed_items).unwrap_or_else(Error::into_compile_error);
+    let expanded = to_tokens(parsed_items, None)
+        .unwrap_or_else(Error::into_compile_error);
 
     TokenStream::from(expanded)
 }
@@ -179,7 +179,10 @@ fn location(s: proc_macro2::Span) -> proc_macro2::TokenStream {
     }
 }
 
-fn to_tokens(item_list: ItemList) -> syn::Result<proc_macro2::TokenStream> {
+fn to_tokens(
+    item_list: ItemList,
+    ty: Option<&syn::Type>,
+) -> syn::Result<proc_macro2::TokenStream> {
     let mut items = Vec::new();
     for ItemWithDocs { doc, item } in item_list.items {
         let new = match item {
@@ -228,27 +231,89 @@ fn to_tokens(item_list: ItemList) -> syn::Result<proc_macro2::TokenStream> {
                 }
             }
             Item::Fn(item) => {
-                let ident = &item.sig.ident;
+                let sig = &item.sig;
+                let ident = &sig.ident;
                 let location = location(ident.span());
                 let ident_str = ident.to_string();
                 let params: Vec<_> = item
                     .sig
                     .inputs
                     .iter()
-                    .map(|arg| {
-                        let syn::FnArg::Typed(pat) = arg else {
-                            panic!();
-                        };
-                        param_name(&pat.pat).unwrap()
+                    .map(|arg| match arg {
+                        syn::FnArg::Receiver(_) => "self".into(),
+                        syn::FnArg::Typed(pat) => {
+                            param_name(&pat.pat).unwrap()
+                        }
                     })
                     .collect();
+
+                let expr = if let Some(ty) = ty {
+                    // This is a trick to allow method syntax:
+                    //  - We define a private extension trait in a const block.
+                    //  - Then we implement that trait, which won't conflict
+                    //    with anything.
+                    //  - Then we export that method as a free function.
+                    //
+                    // We do need to map each pattern to `_` because patterns
+                    // are not allowed to appear in trait definitions.
+                    let new_inputs = sig
+                        .inputs
+                        .iter()
+                        .map(|arg| match arg {
+                            syn::FnArg::Receiver(rec) => {
+                                syn::FnArg::Receiver(syn::Receiver {
+                                    mutability: None,
+                                    ..rec.clone()
+                                })
+                            }
+                            syn::FnArg::Typed(pat_type) => {
+                                syn::FnArg::Typed(syn::PatType {
+                                    pat: Box::new(syn::Pat::Wild(
+                                        syn::PatWild {
+                                            attrs: Vec::new(),
+                                            underscore_token:
+                                                syn::token::Underscore {
+                                                    spans: [pat_type.span()],
+                                                },
+                                        },
+                                    )),
+                                    ..pat_type.clone()
+                                })
+                            }
+                        })
+                        .collect();
+
+                    let new_sig = syn::Signature {
+                        inputs: new_inputs,
+                        ident: syn::Ident::new("__ext__", sig.ident.span()),
+                        ..sig.clone()
+                    };
+
+                    let mut new_item = item.clone();
+                    new_item.sig.ident =
+                        syn::Ident::new("__ext__", sig.ident.span());
+
+                    quote!(const {
+                        trait Ext {
+                            #new_sig;
+                        }
+
+                        impl Ext for #ty {
+                            #new_item
+                        }
+
+                        <#ty as Ext>::__ext__
+                    })
+                } else {
+                    quote!({ #item #ident })
+                };
 
                 quote! {
                     roto::Function::new(
                         #ident_str,
                         #doc,
                         { let x: Vec<&'static str> = vec![#(#params),*]; x },
-                        { #item #ident },
+                        #expr,
                         #location,
                     ).unwrap()
                 }
@@ -256,7 +321,7 @@ fn to_tokens(item_list: ItemList) -> syn::Result<proc_macro2::TokenStream> {
             Item::Mod(ident, items) => {
                 let ident_str = ident.to_string();
                 let location = location(ident.span());
-                let items = to_tokens(items)?;
+                let items = to_tokens(items, None)?;
                 quote! {{
                     let mut module = roto::Module::new(
                         #ident_str,
@@ -268,7 +333,7 @@ fn to_tokens(item_list: ItemList) -> syn::Result<proc_macro2::TokenStream> {
                 }}
             }
             Item::Impl(span, ty, items) => {
-                let items = to_tokens(items)?;
+                let items = to_tokens(items, Some(&ty))?;
                 let location = location(span);
                 quote! {{
                     let mut impl_block = roto::Impl::new::<#ty>(#location);
