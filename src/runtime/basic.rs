@@ -177,7 +177,7 @@ fn string_methods() -> Library {
                 self.starts_with(prefix.as_ref())
             }
 
-            /// Check whether a string end with a given suffix
+            /// Check whether a string ends with a given suffix
             ///
             /// ```roto
             /// "haystack".ends_with("stack") # -> true
@@ -276,10 +276,11 @@ pub fn built_ins() -> Library {
 
         /// An ASN: an Autonomous System Number
         ///
-        /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32)
+        /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32).
         /// However, AS numbers cannot be manipulated with arithmetic operations. An AS number
         /// is constructed with the `AS` prefix followed by a number.
         ///
+        /// Can be used to store both 2-byte and 4-byte ASNs.
         /// ```roto
         /// AS0
         /// AS1010

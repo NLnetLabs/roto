@@ -5,7 +5,7 @@ By default, Roto's standard library is minimal. The idea behind that is that
 each application should supply the functionality that they allow the scripts to
 use.
 
-The standard runtime doesn't even have a way to print to stdout, because
+The standard runtime doesn't even have a way to print to ``stdout```, because
 the host application may not want to allow the scripts to do that. But it is
 possible to add some standard modules to the runtime. For example, there is a
 method ``add_io_functions`` on ``Runtime`` to add the ``print`` function.
@@ -16,8 +16,7 @@ method ``add_io_functions`` on ``Runtime`` to add the ``print`` function.
     let mut rt = Runtime::new();
     rt.add_io_functions();
 
-However, Roto truly starts shining when you add your own functionality to it
-that makes your application scriptable.
+However, Roto truly starts shining when you add your own functionality, so that your application becomes scriptable.
 
 We support this via ``Runtime::from_lib`` and ``Runtime::add`` in combination
 with the ``library!`` macro. You construct a library with that macro and then
@@ -61,7 +60,7 @@ scripts you compile.
     let rt = Runtime::from_lib(lib).unwrap();
 
 Scripts compiled with this runtime can then use this custom ``print`` function.
-The registered functions can have any name you want, as long as its a valid
+The registered functions can have any name you want, as long as it's a valid
 Roto identifier.
 
 Here is another example which returns a value:
@@ -126,7 +125,7 @@ Roto, but otherwise it works exactly like before.
 The ``#[copy]`` attribute above specifies that the Rust type implements
 ``Copy``. If the type does not implement ``Copy``, you can instead annotate the
 declaration with ``#[clone]``. However, you should prefer ``#[copy]`` to allow
-Roto to generate slightly more performant code. 
+Roto to generate code that performs slightly better. 
 
 Add methods
 -----------
@@ -221,7 +220,7 @@ want to keep constant *throughout a single invocation* of a function. Or, to
 phrase it another way, we might want to pass in some implicit arguments that
 the script has access to.
 
-Adding context is a bit more difficult because we need a single way to pass
+Adding context is a bit more difficult, because we need a single way to pass
 all those implicit arguments. So, instead of registering each context variable
 one by one, you have to create a context type by deriving the ``Context``
 trait. You can then register that type as the context you want to use.
@@ -229,7 +228,7 @@ trait. You can then register that type as the context you want to use.
 .. note::
     You can only register one context type per runtime.
 
-Imagine that we same some script that operates on the data of some user. We
+Imagine that we save some script that operates on the data of some user. We
 might then expose the name of that user to all scripts implicitly. We would
 then create and register the following type.
 
