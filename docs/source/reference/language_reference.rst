@@ -294,6 +294,48 @@ the `...` is a hexadecimal number.
 
 Finally, Roto will ignore any whitespace after a ``\`` followed by a newline.
 
+.. _lang_string_formatting:
+
+String formatting
+-----------------
+
+Roto supports a Python-like syntax for string formatting. Any string literal
+prefixed with `f` will become a format string (or "f-string"), that interpolates
+the expressions between ``{`` and ``}``. The f-string will insert a call to the
+``to_string`` method for displaying the value. Therefore, any type with a
+``to_string`` method can be put in an f-string, including registered types.
+
+.. code-block:: roto
+
+    let x = 10;
+    print(f"x is {x}"); # will print "x is 10"
+
+Arbitrary expressions are allowed to appear in format strings, including other
+strings and format strings.
+
+.. code-block:: roto
+
+    let x = 10;
+    print(f"Twice x is {2 * x});
+
+    print(f"x is {if x > 100 {
+        "big"
+    } else {
+        "small"
+    }}");
+
+The ``{`` and ``}`` characters need to be escaped to be used in an f-string by
+duplicating them: ``{{``, ``}}``.
+
+.. code-block:: roto
+
+    print(f"x is {{ x }}")
+    # will print the string "x is { x }"
+
+.. note::
+    There are some minor issues around type inference with format strings. See
+    `issue 244 <https://github.com/NLnetLabs/roto/issues/244>`_.
+
 .. _lang_locals:
 
 Local variables
