@@ -344,7 +344,41 @@ If-else expressions can be chained without additional braces.
 Match
 -----
 
-TODO
+Pattern matching in Roto is supported via ``match`` expressions. These take a
+value and a set of patterns to check against with an expression associated with
+each of the patterns.
+
+The pattern is separated from the associated expression with ``->``. The arms
+should be separated with commas, unless the expression is a block, that is, when
+it is wrapped in ``{}``.
+
+The current implementation of this feature is very limited: you can only
+match against ``enum`` types and only match against the variant, not
+the contents of the variant. Since you can't create your own ``enum``
+types, matching is limited to ``Option`` and ``Verdict``. See `issue 124
+<https://github.com/NLnetLabs/roto/issues/124>`_ for the status on these
+limitations.
+
+.. code-block:: roto
+
+    let x = Some(10);
+    match x {
+        None -> print("x is None"),
+        Some(i) -> {
+            print("x is Some");
+            print(f"x is {i}");
+        }
+    }
+
+.. note::
+    If you are used to Rust, be aware that Roto uses ``->`` instead of ``=>`` to
+    separate the pattern from the expression.
+
+    Another difference to be aware of is that Roto currently doesn't use the
+    full path to the ``enum`` variant, but only the name. So ``Option.None`` is not
+    allowed as a pattern, but ``None`` is. This will probably change once ``match``
+    expressions become more general.
+    
 
 .. _lang_while:
 
