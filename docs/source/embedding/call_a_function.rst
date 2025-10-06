@@ -42,7 +42,7 @@ parameter ``4``.
         println!("times_two(4) = {result}");
     }
 
-Now we can create roto script that can be loaded by this Rust application. In
+Now we can create the roto script to be loaded by this Rust application. In
 the Rust application, we ask for a function called ``times_two`` with the type
 ``fn(i32) -> i32``, so that's what we have to write in Roto, too. Let's make it
 a function that doubles its input.

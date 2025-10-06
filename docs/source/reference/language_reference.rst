@@ -87,13 +87,13 @@ Primitive types
 
 There are several types at Roto's core, which can be expressed as literals.
 
-- :roto:ref:`bool`: booleans
-- :roto:ref:`u8`, :roto:ref:`u16`, :roto:ref:`u32`, :roto:ref:`u64`: unsigned integers of 8, 16, 32 and 64 bits, respectively
-- :roto:ref:`i8`, :roto:ref:`i16`, :roto:ref:`i32`, :roto:ref:`i64`: signed integers of 8, 16, 32 and 64 bits, respectively
+- :roto:ref:`bool`: boolean
+- :roto:ref:`u8`, :roto:ref:`u16`, :roto:ref:`u32`, :roto:ref:`u64`: unsigned integer of 8, 16, 32 and 64 bits, respectively
+- :roto:ref:`i8`, :roto:ref:`i16`, :roto:ref:`i32`, :roto:ref:`i64`: signed integer of 8, 16, 32 and 64 bits, respectively
 - :roto:ref:`f32`, :roto:ref:`f64`: floating point numbers of 32 and 64 bits, respectively
-- :roto:ref:`String`: Strings
+- :roto:ref:`String`: string
 - :roto:ref:`IpAddr`: IP address
-- :roto:ref:`Prefix`: prefixes
+- :roto:ref:`Prefix`: IP prefix
 - :roto:ref:`Asn`: AS number
 
 There are many more types available that have more to do with BGP. These are
@@ -106,7 +106,7 @@ Unit type
 ---------
 
 The unit type is a special type written as ``()`` with only one value: ``()``.
-It is the type of expressions that do not have meaningful value to evaluate to.
+It is the type of expressions that do not have meaningful values to evaluate to.
 For functions, returning ``()`` is equivalent to returning nothing.
 
 .. _lang_never:
@@ -167,8 +167,8 @@ Below is a table of all available integer types.
 Floating point numbers
 ----------------------
 
-There are two floating point types: ``f32`` and ``f64``, of 32 and 64 bits,
-respectively.
+There are two floating point types: ``f32`` and ``f64``, of 32 and 64 bits
+length, respectively.
 
 +-----------------+------+
 | Type            | Bits |
@@ -409,7 +409,7 @@ be any integer type, so the type annotation forces it to be ``u32``.
 
     let x: u32 = 0;
 
-Local variables are dropped (i.e. deleted) at the end of the scope where they
+Local variables are dropped (i.e., deleted) at the end of the scope where they
 are declared. A new scope is created with ``{}``, including when that is part of
 the syntax. For example, the body of an ``if`` expression creates a new scope.
 
@@ -451,7 +451,8 @@ construct is an expression and therefore evaluates to a value.
     }
 
 The if-else is an expression, not a statement, which means that it evaluates to
-a value. This means that it can be used in the place of a ternary operator.
+a value. This means that it can be used as a replacement for a ternary
+operator.
 
 .. code-block:: roto
 
@@ -475,15 +476,15 @@ Match
 -----
 
 Pattern matching in Roto is supported via ``match`` expressions. These take a
-value and a set of patterns to check against with an expression associated with
+value and a set of patterns to check against, with an expression associated with
 each of the patterns.
 
 The pattern is separated from the associated expression with ``->``. The arms
-should be separated with commas, unless the expression is a block, that is, when
+should be separated with commas, unless the expression is a block, i.e., when
 it is wrapped in ``{}``.
 
 The current implementation of this feature is very limited: you can only
-match against ``enum`` types and only match against the variant, not
+match against ``enum`` types and only match against the variant, not against
 the contents of the variant. Since you can't create your own ``enum``
 types, matching is limited to ``Option`` and ``Verdict``. See `issue 124
 <https://github.com/NLnetLabs/roto/issues/124>`_ for the status on these
@@ -732,10 +733,10 @@ called ``pkg.roto``. This file is the root of our script. The contents of
 ``pkg.roto`` will form the ``pkg`` module. No other files in the directory 
 can be called ``pkg.roto``.
 
-Files adjacent to ``pkg.roto`` are submodules of ``pkg``. For example, a file
+Files adjacent to ``pkg.roto`` are sub-modules of ``pkg``. For example, a file
 called ``foo.roto`` will define the module ``pkg.foo``.
 
-A directory next to ``pkg.roto`` will also be a submodule if it contains a file
+A directory next to ``pkg.roto`` will also be a sub-module if it contains a file
 called ``lib.roto``. A file ``foo/lib.roto`` is therefore equivalent to ``foo.roto``
 and defines the module called ``pkg.foo``. We can do this recursively, so we can
 define the module ``pkg.foo.bar`` with either a file called ``foo/bar.roto`` or
