@@ -1,8 +1,106 @@
 # Changelog
 
+## 0.8.0
+
+Released 2025-10-06.
+
+### Language
+
+#### Bug fixes
+
+- The trailing comma of match arms is now optional, as it was supposed to be. (#253)
+
+- Fix an issue where the types of float literals weren't properly resolved. (#258)
+
+### Crate
+
+#### Breaking changes
+
+- The functions `SourceFile::read`, `FileTree::read`, `FileTree::single_file`
+  and `FileTree::directory` now return `Result` and will no longer panic on
+  I/O errors. Thanks @algernon! (#250)
+
+- All custom registered types now _always_ need to wrapped in `Val`. This fixes
+  some bugs around registered types and should make it easier to understand when
+  `Val` has to be used. Below is a diff illustrating how to migrate. (#247)
+
+```diff
+ runtime
+-    .register_clone_type::<AddrRange>("A range of IP addresses")
++    .register_clone_type::<Val<AddrRange>>("A range of IP addresses")
+     .unwrap();
+
+ // Register the contains method with a docstring
+-#[roto_method(runtime, AddrRange)]
++#[roto_method(runtime, Val<AddrRange>)]
+ fn contains(range: Val<AddrRange>, addr: Val<IpAddr>) -> bool {
+     range.min <= *addr && *addr <= range.max
+ }
+```
+
+#### New
+
+- The CLI can now run other functions than `main`. Thanks @pieterlexis! (#261)
+
+- It is now possible to register closures. (#248)
+
+- There is an entirely new registration API using the new `library!` macro.
+  The previous `Runtime::register_*` methods are all still available, but
+  deprecated. (#254 and #262)
+
+```rust
+use roto::{Runtime, Val, library};
+
+let lib = library! {
+     /// A vector with `x`, `y` and `z` components
+     #[clone] type Vec3 = Val<Vec3>;
+
+    impl Val<Vec3> {
+        /// Scale this `Vec3` by `r` and return the result
+        fn scale(self, r: f32) -> Self {
+            Val(self.0 * r)
+        }
+    }
+
+    /// A vector with all zeroes.
+    const ZERO: Val<Vec3> = Val(Vec3 { x: 0.0, y: 0.0, z: 0.0 });
+};
+
+let rt = Runtime::from_lib(lib).unwrap();
+```
+
+### Documentation
+
+#### New
+
+- The generated documentation is now spread out over multiple pages. It
+  generates a page per module and per type. (#254)
+- There is a new "Syntax Overview" page in the documentation. (#263)
+- Added the following concepts to the language reference: identifiers, booleans,
+  `match`, local variables and string formatting. (#263)
+
+#### Bug fixes
+
+- Fixed some examples so that they are consistent with the text and ensure that
+  they compile. Thanks @pieterlexis! (#260)
+- Fixed many spelling errors in the manual, API docs and the rest of the
+  codebase. Thanks @jsoref! (#264)
+
+## 0.7.1
+
+Released 2025-09-26.
+
+## Language
+
+### Bug fixes
+
+- `{{` and `}}` are now unescaped in f-strings. (#257)
+- `\u{xxxx}` and `\U{xxxx}` are now properly parsed in f-strings. (#257)
+- Fix an issue where function calls could not be used directly in f-strings. (#257)
+
 ## 0.7.0
 
-Released 2026-08-25.
+Released 2025-08-25.
 
 This release features a new documentation website available at
 <https://roto.docs.nlnetlabs.nl>. If you're new to Roto, it is a great place
