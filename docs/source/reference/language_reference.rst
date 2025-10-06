@@ -43,6 +43,45 @@ Roto supports literals for primitive types:
     Floating point literals need either a ``.``, ``e`` or ``E`` to distinguish
     them from integer literals.
 
+Identifiers
+-----------
+
+Identifiers in Roto can consist of any character from Unicode's ``XID_Start``
+character set or an ``_`` followed by characters from ``XID_Continue``. In
+practice, this means that identifiers can use ASCII, numbers, diacritics and
+other alphabets, with the restriction that they cannot *start* with a number.
+Keywords are also not valid identifiers.
+
+Identifiers are case-sensitive, so ``foo`` is not considered to be equal to
+``Foo`` or ``FOO``. Every character in the identifier is significant.
+
+Here are some examples of valid identifiers:
+
+- ``foo``
+- ``_bar``
+- ``foo_bar``
+- ``foo1234``
+- ``Straße``
+- ``Москва``
+- ``東京``
+
+The following strings are **not** valid identifiers:
+
+- ``12foo`` (cannot start with a number)
+- ``foo.bar`` (cannot contain ``.``)
+- ``filter`` (cannot be a keyword)
+
+Additionally, we have the following conventions:
+
+- The names of local variables, modules, functions and function arguments
+  should use ``snake_case``, i.e. should be all lowercase with words separated by ``_``.
+- The names of types and enum variants should use ``PascalCase``, i.e. should
+  have each word capitalized. The exceptions are the primitive boolean, integer
+  and floating point types.
+- The names of constants should use ``SCREAMING_SNAKE_CASE``, i.e. should be all uppercase
+  with words separated by ``_``.
+- A leading underscore can be used to signal that a value is unused.
+
 Primitive types
 ---------------
 
