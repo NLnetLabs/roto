@@ -5,6 +5,7 @@ Roto
 [![docs.rs](https://img.shields.io/docsrs/roto?label=docs.rs)](https://docs.rs/roto)
 [![Documentation Status](https://app.readthedocs.org/projects/roto/badge/?version=latest)](https://roto.docs.nlnetlabs.nl/)
 [![Mastodon Follow](https://img.shields.io/mastodon/follow/114692612288811644?domain=social.nlnetlabs.nl&style=social)](https://social.nlnetlabs.nl/@nlnetlabs)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/NLnetLabs/roto)
 
 Roto is an embedded scripting language for Rust applications that is fast, safe
 and easy to use. 
