@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1
+
+Released 2025-10-11.
+
+### Crate
+
+#### Bug fixes
+
+- Make the `RegistrationError` type public
+
 ## 0.8.0
 
 Released 2025-10-06.
