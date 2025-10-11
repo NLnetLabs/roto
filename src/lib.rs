@@ -114,9 +114,12 @@ pub use runtime::{
 /// ```rust
 /// # #[derive(Clone)]
 /// # struct Foo;
+/// #
 /// # #[derive(Clone)]
 /// # struct Bar;
+/// #
 /// # use roto::Val;
+/// # fn main() {
 /// # roto::library! {
 /// /// A function
 /// fn foo(a: i32, b: Val<Foo>) -> Val<Bar> {
@@ -133,6 +136,7 @@ pub use runtime::{
 ///     todo!()
 /// };
 /// # };
+/// # }
 /// ```
 ///
 /// ## Constants

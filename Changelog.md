@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.1
+
+Released 2025-10-13.
+
+### Crate
+
+#### Bug fixes
+
+- Make the `RegistrationError` type public. (#271)
+- Implement `std::error::Error` for `FunctionRetrievalError`,
+  `RegistrationError`. Thanks @you-win! (#270)
+- Make `RotoError` a private type. Thanks @you-win! This is technically a
+  breaking change, but this error was never returned on its own and useless
+  without the span information, so that hopefully isn't an issue. (#270)
+
 ## 0.8.0
 
 Released 2025-10-06.
