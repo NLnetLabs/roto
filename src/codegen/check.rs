@@ -58,6 +58,8 @@ impl Display for FunctionRetrievalError {
     }
 }
 
+impl std::error::Error for FunctionRetrievalError {}
+
 pub fn check_roto_type_reflect<T: Reflect>(
     type_info: &mut TypeInfo,
     roto_ty: &Type,

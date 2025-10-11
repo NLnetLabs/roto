@@ -390,6 +390,8 @@ impl std::fmt::Display for RegistrationError {
     }
 }
 
+impl std::error::Error for RegistrationError {}
+
 impl Runtime {
     pub(crate) fn get_function(
         &self,
