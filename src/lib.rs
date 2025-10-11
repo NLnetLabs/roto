@@ -44,7 +44,7 @@ pub use runtime::{
     ty::Reflect,
     val::Val,
     verdict::Verdict,
-    Runtime,
+    RegistrationError, Runtime,
 };
 
 /// Create a list of items to be registered.
