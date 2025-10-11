@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.9.0
+
+Released 2025-10-15.
+
+### Language
+
+#### Breaking changes
+
+- Enums and records can no longer be compared with `==` and `!=`. This was
+  previously allowed, but the generated code might have been wrong. This
+  feature might be brought back with a proper implementation later. (#289)
+
+#### Added
+
+- Added `addr`, `min_addr`, `max_addr`, `len` and `eq` methods to `Prefix`. (#289)
+
+#### Bug fixes
+
+- Fixed a case where we dropped an uninitialized value that occurred when an
+  expression that might return was assigned to a variable. (#280)
+- Fixed some miscompilations around using the `==` and `!=` operators on
+`Prefix`. (#289)
+- The `to_string` method of expressions in f-strings are now resolved later, which
+  avoids some cryptic error messages. (#281)
+
+### Crate
+
+#### Breaking changes
+
+- Make `RotoError` a private type. Thanks @you-win! (#270)
+
+#### Added
+
+- Make the `RegistrationError` type public. (#271)
+- Implement `std::error::Error` for `FunctionRetrievalError`,
+  `RegistrationError`. Thanks @you-win! (#270)
+
+#### Bug fixes
+
+- Roto now works correctly again when it is compiled with static linking (such
+  as with the musl target). (#286)
+
 ## 0.8.0
 
 Released 2025-10-06.
