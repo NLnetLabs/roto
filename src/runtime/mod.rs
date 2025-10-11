@@ -365,6 +365,7 @@ impl ConstantValue {
     }
 }
 
+/// An error that arose while registering items from a library
 #[derive(Clone)]
 pub struct RegistrationError {
     message: String,
