@@ -7,9 +7,9 @@ use crate::{
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
         ty::TypeDescription,
-        CloneDrop, ConstantValue, Movability, RegistrationError,
+        CloneDrop, ConstantValue, Movability, RegistrationError, Rt,
     },
-    Location, Reflect, Runtime,
+    Location, Reflect,
 };
 
 /// A registerable item
@@ -131,7 +131,7 @@ impl Module {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         Ok(Self {
             ident: name,
@@ -247,7 +247,7 @@ impl Type {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let ty = T::resolve();
 
@@ -341,7 +341,7 @@ impl Function {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let func = FunctionDescription::of(func);
 
@@ -411,7 +411,7 @@ impl Constant {
         T::Transformed: Send + Sync + 'static,
     {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let ty = T::resolve();
 

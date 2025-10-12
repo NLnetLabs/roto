@@ -11,7 +11,7 @@ use crate::{
     runtime::{
         init_string,
         layout::{Layout, LayoutBuilder},
-        RuntimeFunctionRef,
+        Rt, RuntimeFunctionRef,
     },
     typechecker::{
         info::TypeInfo,
@@ -22,7 +22,6 @@ use crate::{
             TypeDefinition,
         },
     },
-    Runtime,
 };
 
 use super::{
@@ -35,7 +34,7 @@ pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
 }
 
 pub struct LowerCtx<'c> {
-    pub runtime: &'c Runtime,
+    pub runtime: &'c Rt,
     pub type_info: &'c mut TypeInfo,
     pub label_store: &'c mut LabelStore,
     pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,

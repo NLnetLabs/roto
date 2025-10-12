@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use crate::{
-    tools::print::print_highlighted, FileTree, RotoError, RotoReport, Runtime,
+    runtime::OptionCtx, tools::print::print_highlighted, FileTree, RotoError,
+    RotoReport, Runtime,
 };
 
 #[derive(Parser)]
@@ -55,7 +56,7 @@ enum Command {
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
 ///  - `run`: run a function of a script
-pub fn cli(rt: &Runtime) {
+pub fn cli(rt: &Runtime<impl OptionCtx>) {
     match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
@@ -65,12 +66,12 @@ pub fn cli(rt: &Runtime) {
     }
 }
 
-fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
+fn cli_inner(rt: &Runtime<impl OptionCtx>) -> Result<(), RotoReport> {
     let cli = Cli::parse();
 
     match &cli.command {
         Command::Doc { path } => {
-            rt.print_documentation(path).unwrap();
+            rt.rt.print_documentation(path).unwrap();
         }
         Command::Check { file } => {
             FileTree::read(file)?.parse()?.typecheck(rt)?;
