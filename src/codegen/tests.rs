@@ -8,8 +8,8 @@ use std::{
 };
 
 use crate::{
-    file_tree::FileSpec, library, pipeline::Package, source_file, src,
-    Context, FileTree, Runtime, Val, Verdict,
+    file_tree::FileSpec, library, pipeline::Package, runtime::OptionCtx,
+    source_file, src, Context, FileTree, Runtime, Val, Verdict,
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -20,7 +20,10 @@ fn compile(f: FileTree) -> Package {
 }
 
 #[track_caller]
-fn compile_with_runtime(f: FileTree, runtime: Runtime) -> Package {
+fn compile_with_runtime<Ctx: OptionCtx>(
+    f: FileTree,
+    runtime: Runtime<Ctx>,
+) -> Package {
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
@@ -1413,8 +1416,7 @@ fn use_context() {
         pub bar: bool,
     }
 
-    let mut rt = Runtime::new();
-    rt.register_context_type::<Ctx>().unwrap();
+    let rt = Runtime::new().with_context_type::<Ctx>().unwrap();
 
     let s = src!(
         "

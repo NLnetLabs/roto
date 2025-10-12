@@ -19,7 +19,7 @@ use crate::{
         self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
     },
     runtime::{
-        context::ContextDescription, ty::Reflect, ConstantValue,
+        context::ContextDescription, ty::Reflect, ConstantValue, OptionCtx,
         RuntimeConstant, RuntimeFunctionRef,
     },
     typechecker::{
@@ -279,14 +279,16 @@ struct FuncGen<'c> {
 // point, or at least be configurable.
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
-pub fn codegen(
-    runtime: &Runtime,
+pub fn codegen<Ctx: OptionCtx>(
+    runtime: &Runtime<Ctx>,
     ir: &[lir::Function],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
     context_description: ContextDescription,
 ) -> Module {
+    let runtime = &runtime.rt;
+
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
     // for the current system. We enable building for speed only. Size is

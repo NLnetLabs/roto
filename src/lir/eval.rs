@@ -12,9 +12,8 @@ use crate::{
         value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
         ValueOrSlot, Var, VarKind,
     },
-    runtime::{ConstantValue, RuntimeFunctionRef},
+    runtime::{ConstantValue, Rt, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
-    Runtime,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -282,7 +281,7 @@ impl Allocation {
 /// fairly slow. This is because all variables at this point are identified
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
-    rt: &Runtime,
+    rt: &Rt,
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
@@ -738,7 +737,7 @@ pub fn eval(
 }
 
 fn call_runtime_function(
-    rt: &Runtime,
+    rt: &Rt,
     mem: &mut Memory,
     func: RuntimeFunctionRef,
     args: Vec<IrValue>,

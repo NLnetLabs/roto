@@ -8,10 +8,8 @@ use crate::{
     parser::meta::MetaId,
     runtime::{
         layout::{Layout, LayoutBuilder},
-        RuntimeFunctionRef,
+        Rt, RuntimeFunctionRef,
     },
-    typechecker::scoped_display::TypeDisplay,
-    Runtime,
 };
 
 use super::{
@@ -207,10 +205,10 @@ impl TypeInfo {
     /// reference types. Integers, floats, booleans and AS numbers are not.
     ///
     /// This returns `None` if the type is uninhabited (e.g. `!`)
-    pub fn is_reference_type(
+    pub(crate) fn is_reference_type(
         &mut self,
         ty: &Type,
-        rt: &Runtime,
+        rt: &Rt,
     ) -> Option<bool> {
         let ty = self.resolve(ty);
         if self.layout_of(&ty, rt)?.size() == 0 {
@@ -246,43 +244,6 @@ impl TypeInfo {
         ty
     }
 
-    pub fn offset_of(
-        &mut self,
-        record: &Type,
-        field: Identifier,
-        rt: &Runtime,
-    ) -> (Type, u32) {
-        let record = self.resolve(record);
-
-        let type_def;
-        let fields = match &record {
-            Type::Record(fields) | Type::RecordVar(_, fields) => fields,
-            Type::Name(type_name) => {
-                type_def = self.resolve_type_name(type_name);
-                let TypeDefinition::Record(_, fields) = &type_def else {
-                    panic!("Can't get offsets in a type that's not a record, but {}", record.display(self))
-                };
-                fields
-            }
-            _ => {
-                panic!(
-                    "Can't get offsets in a type that's not a record, but {}",
-                    record.display(self)
-                )
-            }
-        };
-
-        let mut builder = LayoutBuilder::new();
-        for (name, ty) in fields {
-            let offset = builder.add(&self.layout_of(ty, rt).unwrap());
-            if name.node == field {
-                return (ty.clone(), offset as u32);
-            }
-        }
-
-        panic!("Field not found")
-    }
-
     /// Compute the layout of a Roto type
     ///
     /// The layout of Roto types match the C representation of Rust types,
@@ -309,7 +270,7 @@ impl TypeInfo {
     /// This function returns `None` if the type is uninhabited.
     ///
     /// [Rust reference]: https://doc.rust-lang.org/reference/type-layout.html
-    pub fn layout_of(&mut self, ty: &Type, rt: &Runtime) -> Option<Layout> {
+    pub(crate) fn layout_of(&mut self, ty: &Type, rt: &Rt) -> Option<Layout> {
         let ty = self.resolve(ty);
         let layout = match ty {
             Type::ExplicitVar(_) => {
