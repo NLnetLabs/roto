@@ -21,7 +21,7 @@ use crate::{
         meta::{Span, Spans},
     },
     runtime::{
-        Runtime, RuntimeFunctionRef,
+        OptionCtx, Runtime, RuntimeFunctionRef,
         context::{Context, ContextDescription},
     },
     typechecker::{
@@ -57,16 +57,16 @@ pub struct RotoReport {
 }
 
 /// Compiler stage: loaded, parsed and type checked
-pub struct TypeChecked<'r> {
+pub struct TypeChecked<'r, Ctx: OptionCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
-    runtime: &'r Runtime,
+    runtime: &'r Runtime<Ctx>,
     context_type: ContextDescription,
 }
 
 /// Compiler stage: MIR
-pub struct LoweredToMir<'r> {
-    runtime: &'r Runtime,
+pub struct LoweredToMir<'r, Ctx: OptionCtx> {
+    runtime: &'r Runtime<Ctx>,
     ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -74,8 +74,8 @@ pub struct LoweredToMir<'r> {
 }
 
 /// Compiler stage: LIR
-pub struct LoweredToLir<'r> {
-    runtime: &'r Runtime,
+pub struct LoweredToLir<'r, Ctx: OptionCtx> {
+    runtime: &'r Runtime<Ctx>,
     ir: lir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -242,10 +242,10 @@ macro_rules! source_file {
 pub(crate) use source_file;
 
 impl Parsed {
-    pub fn typecheck<'r>(
+    pub fn typecheck<'r, Ctx: OptionCtx>(
         self,
-        runtime: &'r Runtime,
-    ) -> Result<TypeChecked<'r>, RotoReport> {
+        runtime: &'r Runtime<Ctx>,
+    ) -> Result<TypeChecked<'r, Ctx>, RotoReport> {
         let Parsed {
             file_tree,
             module_tree,
@@ -255,7 +255,7 @@ impl Parsed {
         let context_type =
             runtime.context().clone().unwrap_or_else(<()>::description);
 
-        let result = crate::typechecker::typecheck(runtime, &module_tree);
+        let result = crate::typechecker::typecheck(&runtime.rt, &module_tree);
 
         let type_info = match result {
             Ok(type_info) => type_info,
@@ -277,8 +277,8 @@ impl Parsed {
     }
 }
 
-impl<'r> TypeChecked<'r> {
-    pub fn lower_to_mir(&self) -> LoweredToMir<'r> {
+impl<'r, Ctx: OptionCtx> TypeChecked<'r, Ctx> {
+    pub fn lower_to_mir(&self) -> LoweredToMir<'r, Ctx> {
         let TypeChecked {
             module_tree,
             type_info,
@@ -290,7 +290,7 @@ impl<'r> TypeChecked<'r> {
         let mut label_store = LabelStore::default();
         let ir = mir::lower_to_mir(
             module_tree,
-            runtime,
+            &runtime.rt,
             &mut type_info,
             &mut label_store,
         );
@@ -318,8 +318,8 @@ impl<'r> TypeChecked<'r> {
     }
 }
 
-impl<'r> LoweredToMir<'r> {
-    pub fn lower_to_lir(self) -> LoweredToLir<'r> {
+impl<'r, Ctx: OptionCtx> LoweredToMir<'r, Ctx> {
+    pub fn lower_to_lir(self) -> LoweredToLir<'r, Ctx> {
         let LoweredToMir {
             runtime,
             ir,
@@ -330,7 +330,7 @@ impl<'r> LoweredToMir<'r> {
 
         let mut runtime_functions = HashMap::new();
         let mut ctx = lir::lower::LowerCtx {
-            runtime,
+            runtime: &runtime.rt,
             type_info: &mut type_info,
             label_store: &mut label_store,
             runtime_functions: &mut runtime_functions,
@@ -361,14 +361,21 @@ impl<'r> LoweredToMir<'r> {
     }
 }
 
-impl LoweredToLir<'_> {
+impl<Ctx: OptionCtx> LoweredToLir<'_, Ctx> {
     pub fn eval(
         &self,
         mem: &mut Memory,
         ctx: IrValue,
         args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(self.runtime, &self.ir.functions, "main", mem, ctx, args)
+        eval::eval(
+            &self.runtime.rt,
+            &self.ir.functions,
+            "main",
+            mem,
+            ctx,
+            args,
+        )
     }
 
     pub fn codegen(self) -> Package {

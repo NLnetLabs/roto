@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{Package, RotoError, RotoReport, Runtime};
+use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptionCtx};
 
 fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
     RotoReport {
@@ -68,7 +68,10 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    pub fn compile(self, rt: &Runtime) -> Result<Package, RotoReport> {
+    pub fn compile<Ctx: OptionCtx>(
+        self,
+        rt: &Runtime<Ctx>,
+    ) -> Result<Package, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
         let pkg = checked.lower_to_mir().lower_to_lir().codegen();
         Ok(pkg)

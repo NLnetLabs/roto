@@ -1,10 +1,10 @@
 use std::any::TypeId;
 
 use crate::{
-    Location, Reflect, Runtime,
+    Location, Reflect,
     ast::Identifier,
     runtime::{
-        CloneDrop, ConstantValue, Movability, RegistrationError,
+        CloneDrop, ConstantValue, Movability, RegistrationError, Rt,
         extern_clone, extern_drop,
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
@@ -131,7 +131,7 @@ impl Module {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         Ok(Self {
             ident: name,
@@ -247,7 +247,7 @@ impl Type {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let ty = T::resolve();
 
@@ -341,7 +341,7 @@ impl Function {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let func = FunctionDescription::of(func);
 
@@ -411,7 +411,7 @@ impl Constant {
         T::Transformed: Send + Sync + 'static,
     {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let ty = T::resolve();
 
