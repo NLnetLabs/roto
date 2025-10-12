@@ -9,8 +9,7 @@ struct Ctx {
 }
 
 fn main() {
-    let mut runtime = Runtime::new();
-    runtime.register_context_type::<Ctx>().unwrap();
+    let runtime = Runtime::new().with_context_type::<Ctx>().unwrap();
 
     let mut pkg = runtime.compile("examples/context.roto").unwrap();
 

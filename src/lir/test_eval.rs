@@ -1,10 +1,16 @@
 use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
-use crate::{FileTree, Runtime, library, pipeline::LoweredToLir, src};
+use crate::{
+    FileTree, Runtime, library, pipeline::LoweredToLir, runtime::OptionCtx,
+    src,
+};
 
 #[track_caller]
-fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {
+fn compile<Ctx: OptionCtx>(
+    s: FileTree,
+    rt: &Runtime<Ctx>,
+) -> LoweredToLir<'_, Ctx> {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     #[cfg(feature = "logger")]
