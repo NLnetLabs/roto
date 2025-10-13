@@ -2,7 +2,7 @@ use std::error::Error;
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
-use roto::{library, Runtime, TypedFunc, Val, Verdict};
+use roto::{library, NoCtx, Runtime, TypedFunc, Val, Verdict};
 use routecore::bgp::aspath::{Hop, HopPath};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::workshop::route::RouteWorkshop;
@@ -68,7 +68,8 @@ mod hidden {
 use hidden::*;
 
 type Log = *mut OutputStream<Output>;
-type Func = TypedFunc<(), fn(Val<Log>, Val<RotondaRoute>) -> Verdict<(), ()>>;
+type Func =
+    TypedFunc<NoCtx, fn(Val<Log>, Val<RotondaRoute>) -> Verdict<(), ()>>;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Registering types and their methods
@@ -141,7 +142,7 @@ fn run_with_prefix(
     let mut output = OutputStream::default();
     let log = &mut output as *mut _;
 
-    let verdict = function.call(&mut (), Val(log), Val(route));
+    let verdict = function.call(Val(log), Val(route));
 
     println!("Input: {prefix}");
     println!("Verdict: {verdict:?}");

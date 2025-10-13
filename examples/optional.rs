@@ -32,16 +32,14 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(), fn(Arc<str>) -> Option<Val<NonEmptyString>>>(
-            "main",
-        )
+        .get_function::<fn(Arc<str>) -> Option<Val<NonEmptyString>>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
-    let res = func.call(&mut (), "".into());
+    let res = func.call("".into());
     println!("main(\"\") = {res:?}");
 
-    let res = func.call(&mut (), "foo".into());
+    let res = func.call("foo".into());
     println!("main(\"foo\") = {res:?}");
 
     Ok(())

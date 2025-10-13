@@ -4,11 +4,8 @@
 //! then does the rest.
 
 use std::{
-    any::{type_name, Any, TypeId},
-    collections::HashMap,
-    marker::PhantomData,
-    mem::ManuallyDrop,
-    sync::Arc,
+    any::Any, collections::HashMap, fmt::Debug, marker::PhantomData,
+    mem::ManuallyDrop, sync::Arc,
 };
 
 use crate::{
@@ -19,19 +16,17 @@ use crate::{
         self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
     },
     runtime::{
-        context::ContextDescription, ty::Reflect, ConstantValue, OptionCtx,
-        RuntimeConstant, RuntimeFunctionRef,
+        ty::Reflect, ConstantValue, Ctx, NoCtx, OptionCtx, RuntimeConstant,
+        RuntimeFunctionRef,
     },
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         types,
     },
-    Runtime,
+    Context, Runtime,
 };
-use check::{
-    check_roto_type_reflect, FunctionRetrievalError, RotoFunc, TypeMismatch,
-};
+use check::{check_roto_type_reflect, FunctionRetrievalError, RotoFunc};
 use cranelift::{
     codegen::{
         entity::EntityRef,
@@ -120,7 +115,7 @@ impl SharedModuleData {
 }
 
 // Just a simple debug to print _something_.
-impl std::fmt::Debug for SharedModuleData {
+impl Debug for SharedModuleData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("SharedModuleData").finish()
     }
@@ -130,17 +125,17 @@ unsafe impl Send for ModuleData {}
 unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
-pub struct Module {
+pub struct Module<C: OptionCtx> {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
-
-    context_description: ContextDescription,
 
     /// The inner cranelift module
     inner: SharedModuleData,
 
     /// Info from the typechecker for checking types against Rust types
     type_info: TypeInfo,
+
+    _ctx: PhantomData<C>,
 }
 
 /// A function extracted from Roto
@@ -149,7 +144,7 @@ pub struct Module {
 /// [`Package::get_function`](crate::Package::get_function).
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TypedFunc<Ctx, F> {
     func: *const u8,
     return_by_ref: bool,
@@ -162,47 +157,75 @@ pub struct TypedFunc<Ctx, F> {
     _ty: PhantomData<(Ctx, F)>,
 }
 
+impl<Ctx, F> Debug for TypedFunc<Ctx, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypedFunc")
+            .field("func", &self.func)
+            .finish()
+    }
+}
+
 /// SAFETY: These implementations are safe because we don't modify anything
 /// the pointer points to and the pointer will stay valid as long as we hold
 /// on to the `ModuleData`, which is stored in the `TypedFunc`.
 unsafe impl<Ctx, F> Send for TypedFunc<Ctx, F> {}
 unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 
-impl<Ctx: 'static, F: RotoFunc> TypedFunc<Ctx, F> {
-    pub fn call_tuple(&self, ctx: &mut Ctx, args: F::Args) -> F::Return {
-        unsafe { F::invoke::<Ctx>(ctx, args, self.func, self.return_by_ref) }
+impl<C: OptionCtx, F: RotoFunc> TypedFunc<C, F> {
+    pub fn call_tuple(&self, ctx: &mut C::Ctx, args: F::Args) -> F::Return {
+        unsafe {
+            F::invoke::<C::Ctx>(ctx, args, self.func, self.return_by_ref)
+        }
     }
 }
 
 macro_rules! call_impl {
     ($($ty:ident),*) => {
-        impl<Ctx: 'static, $($ty,)* Return> TypedFunc<Ctx, fn($($ty,)*) -> Return>
+        impl<$($ty,)* Return> TypedFunc<NoCtx, fn($($ty,)*) -> Return>
         where
             $($ty: Reflect,)*
             Return: Reflect
         {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
-            pub fn call(&self, ctx: &mut Ctx, $($ty: $ty,)*) -> Return {
+            pub fn call(&self, $($ty: $ty,)*) -> Return {
+                self.call_tuple(&mut NoCtx, ($($ty,)*))
+            }
+
+            #[allow(non_snake_case)]
+            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
+                move |$($ty,)*| self.call($($ty,)*)
+            }
+        }
+
+        impl<C: Context, $($ty,)* Return> TypedFunc<Ctx<C>, fn($($ty,)*) -> Return>
+        where
+            $($ty: Reflect,)*
+            Return: Reflect
+        {
+            #[allow(non_snake_case)]
+            #[allow(clippy::too_many_arguments)]
+            pub fn call(&self, ctx: &mut C, $($ty: $ty,)*) -> Return {
                 self.call_tuple(ctx, ($($ty,)*))
             }
 
             #[allow(non_snake_case)]
-            pub fn into_func(self) -> impl Fn(&mut Ctx, $($ty,)*) -> Return {
+            pub fn into_func(self) -> impl Fn(&mut C, $($ty,)*) -> Return {
                 move |ctx, $($ty,)*| self.call(ctx, $($ty,)*)
             }
         }
-    }
+
+     }
 }
 
 call_impl!();
-call_impl!(A);
-call_impl!(A, B);
-call_impl!(A, B, C);
-call_impl!(A, B, C, D);
-call_impl!(A, B, C, D, E);
-call_impl!(A, B, C, D, E, F);
-call_impl!(A, B, C, D, E, F, G);
+call_impl!(A1);
+call_impl!(A1, A2);
+call_impl!(A1, A2, A3);
+call_impl!(A1, A2, A3, A4);
+call_impl!(A1, A2, A3, A4, A5);
+call_impl!(A1, A2, A3, A4, A5, A6);
+call_impl!(A1, A2, A3, A4, A5, A7, A8);
 
 pub struct FunctionInfo {
     id: FuncId,
@@ -248,8 +271,6 @@ struct ModuleBuilder {
 
     /// Signature to use for calls to `init_string`
     init_string_signature: Signature,
-
-    context_description: ContextDescription,
 }
 
 struct FuncGen<'c> {
@@ -285,8 +306,7 @@ pub fn codegen<Ctx: OptionCtx>(
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
-    context_description: ContextDescription,
-) -> Module {
+) -> Module<Ctx> {
     let runtime = &runtime.rt;
 
     // The ISA is the Instruction Set Architecture. We always compile for
@@ -350,7 +370,6 @@ pub fn codegen<Ctx: OptionCtx>(
         drop_signature,
         clone_signature,
         init_string_signature,
-        context_description,
     };
 
     for constant in runtime.constants().values() {
@@ -571,7 +590,7 @@ impl ModuleBuilder {
         self.inner.clear_context(&mut ctx);
     }
 
-    fn finalize(mut self) -> Module {
+    fn finalize<Ctx: OptionCtx>(mut self) -> Module<Ctx> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
@@ -581,7 +600,7 @@ impl ModuleBuilder {
                 self.registered_fns,
             ),
             type_info: self.type_info,
-            context_description: self.context_description,
+            _ctx: PhantomData,
         }
     }
 
@@ -1199,8 +1218,8 @@ impl<'c> FuncGen<'c> {
     }
 }
 
-impl Module {
-    pub fn get_function<Ctx: 'static, F: RotoFunc>(
+impl<Ctx: OptionCtx> Module<Ctx> {
+    pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
@@ -1214,16 +1233,6 @@ impl Module {
 
         let sig = &function_info.signature;
         let id = function_info.id;
-
-        if self.context_description.type_id != TypeId::of::<Ctx>() {
-            return Err(FunctionRetrievalError::TypeMismatch(
-                "context type".into(),
-                TypeMismatch {
-                    rust_ty: type_name::<Ctx>().into(),
-                    roto_ty: self.context_description.type_name.into(),
-                },
-            ));
-        }
 
         F::check_args(&mut self.type_info, &sig.parameter_types)?;
 
