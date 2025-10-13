@@ -30,7 +30,8 @@ pub(crate) use pipeline::{source_file, src};
 
 pub use codegen::TypedFunc;
 pub use file_tree::{FileSpec, FileTree, SourceFile};
-pub use pipeline::{Package, RotoError, RotoReport};
+pub(crate) use pipeline::RotoError;
+pub use pipeline::{Package, RotoReport};
 pub use roto_macros::{
     roto_function, roto_method, roto_static_method, Context,
 };

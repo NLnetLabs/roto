@@ -39,7 +39,7 @@ use log::info;
 
 /// An error from a compilation of a Roto script.
 #[derive(Debug)]
-pub enum RotoError {
+pub(crate) enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
     Type(TypeError),
@@ -49,11 +49,11 @@ pub enum RotoError {
 
 /// An error report containing a set of Roto errors.
 ///
-/// The errors can be printed with the regular [`std::fmt::Display`].
+/// The report can be printed with the regular [`std::fmt::Display`].
 #[derive(Default)]
 pub struct RotoReport {
     pub files: Vec<SourceFile>,
-    pub errors: Vec<RotoError>,
+    pub(crate) errors: Vec<RotoError>,
     pub spans: Spans,
 }
 
