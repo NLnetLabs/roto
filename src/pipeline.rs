@@ -21,8 +21,7 @@ use crate::{
         meta::{Span, Spans},
     },
     runtime::{
-        OptionCtx, Runtime, RuntimeFunctionRef,
-        context::{Context, ContextDescription},
+        Ctx, NoCtx, OptionCtx, Runtime, RuntimeFunctionRef, context::Context,
     },
     typechecker::{
         error::{Level, TypeError},
@@ -44,6 +43,7 @@ pub(crate) enum RotoError {
     Type(TypeError),
     TestsFailed(),
     CouldNotRetrieveFunction(FunctionRetrievalError),
+    Custom(String),
 }
 
 /// An error report containing a set of Roto errors.
@@ -61,7 +61,6 @@ pub struct TypeChecked<'r, Ctx: OptionCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
     runtime: &'r Runtime<Ctx>,
-    context_type: ContextDescription,
 }
 
 /// Compiler stage: MIR
@@ -70,7 +69,6 @@ pub struct LoweredToMir<'r, Ctx: OptionCtx> {
     ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
-    context_type: ContextDescription,
 }
 
 /// Compiler stage: LIR
@@ -80,14 +78,13 @@ pub struct LoweredToLir<'r, Ctx: OptionCtx> {
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
-    context_type: ContextDescription,
 }
 
 /// The final compiled package of script.
 ///
 /// Functions can be extracted from this package using [`Package::get_function`].
-pub struct Package {
-    module: Module,
+pub struct Package<Ctx: OptionCtx> {
+    module: Module<Ctx>,
 }
 
 impl RotoReport {
@@ -188,6 +185,9 @@ impl RotoReport {
                 RotoError::CouldNotRetrieveFunction(e) => {
                     write!(f, "Could not retrieve function: {e}")?;
                 }
+                RotoError::Custom(s) => {
+                    write!(f, "{s}")?;
+                }
             }
         }
 
@@ -252,9 +252,6 @@ impl Parsed {
             spans,
         } = self;
 
-        let context_type =
-            runtime.context().clone().unwrap_or_else(<()>::description);
-
         let result = crate::typechecker::typecheck(&runtime.rt, &module_tree);
 
         let type_info = match result {
@@ -272,7 +269,6 @@ impl Parsed {
             module_tree,
             type_info,
             runtime,
-            context_type,
         })
     }
 }
@@ -283,7 +279,6 @@ impl<'r, Ctx: OptionCtx> TypeChecked<'r, Ctx> {
             module_tree,
             type_info,
             runtime,
-            context_type,
         } = self;
 
         let mut type_info = type_info.clone();
@@ -312,7 +307,6 @@ impl<'r, Ctx: OptionCtx> TypeChecked<'r, Ctx> {
             ir,
             runtime,
             label_store,
-            context_type: context_type.clone(),
             type_info,
         }
     }
@@ -325,7 +319,6 @@ impl<'r, Ctx: OptionCtx> LoweredToMir<'r, Ctx> {
             ir,
             mut label_store,
             mut type_info,
-            context_type,
         } = self;
 
         let mut runtime_functions = HashMap::new();
@@ -355,7 +348,6 @@ impl<'r, Ctx: OptionCtx> LoweredToMir<'r, Ctx> {
             ir,
             label_store,
             type_info,
-            context_type,
             runtime_functions,
         }
     }
@@ -378,36 +370,44 @@ impl<Ctx: OptionCtx> LoweredToLir<'_, Ctx> {
         )
     }
 
-    pub fn codegen(self) -> Package {
+    pub fn codegen(self) -> Package<Ctx> {
         let module = codegen::codegen(
             self.runtime,
             &self.ir.functions,
             &self.runtime_functions,
             self.label_store,
             self.type_info,
-            self.context_type,
         );
         Package { module }
     }
 }
 
-impl Package {
-    pub fn get_tests<Ctx: 'static>(
+impl<Ctx: OptionCtx> Package<Ctx> {
+    pub fn get_tests(
         &mut self,
     ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
     {
         codegen::testing::get_tests(&mut self.module)
     }
 
-    #[allow(clippy::result_unit_err)]
-    pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
-        codegen::testing::run_tests(&mut self.module, ctx)
-    }
-
-    pub fn get_function<Ctx: 'static, F: RotoFunc>(
+    pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         self.module.get_function(name)
+    }
+}
+
+impl Package<NoCtx> {
+    #[allow(clippy::result_unit_err)]
+    pub fn run_tests(&mut self) -> Result<(), ()> {
+        codegen::testing::run_tests(&mut self.module, NoCtx)
+    }
+}
+
+impl<C: Context> Package<Ctx<C>> {
+    #[allow(clippy::result_unit_err)]
+    pub fn run_tests(&mut self, ctx: C) -> Result<(), ()> {
+        codegen::testing::run_tests(&mut self.module, Ctx(ctx))
     }
 }

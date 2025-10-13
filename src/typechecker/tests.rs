@@ -934,7 +934,7 @@ fn use_globals() {
 
 #[test]
 fn use_context() {
-    #[derive(Context)]
+    #[derive(Clone, Context)]
     struct Ctx {
         /// boop
         pub foo: u8,
