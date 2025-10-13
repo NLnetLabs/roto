@@ -16,6 +16,7 @@ use std::{
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
+use sealed::sealed;
 
 use crate::{
     lir::{IrValue, Memory},
@@ -101,19 +102,6 @@ impl TypeRegistry {
     }
 }
 
-/// A type that can register itself into the global type registry.
-mod seal {
-    /// A trait that can be used to seal other traits if added as a trait bound.
-    ///
-    /// It lives in a private module, but the name is public. Hence, we can use
-    /// it a bound, but downstream crates can't implement it.
-    ///
-    /// Based on a [blog post] by Predrag Gruevski
-    ///
-    /// [blog post]: https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/#sealing-traits-with-a-supertrait
-    pub trait Sealed {}
-}
-
 /// A type that can be passed to Roto.
 ///
 /// This trait is _sealed_, meaning that it cannot be implemented by downstream
@@ -126,7 +114,8 @@ mod seal {
 /// The `Reflect::AsParam` then specifies how this value is passed to a Roto
 /// function. Most primitives are simply passed by value, but many other types
 /// are passed by `*mut Reflect::Transformed`.
-pub trait Reflect: Sized + seal::Sealed + 'static {
+#[sealed]
+pub trait Reflect: Sized + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed;
 
@@ -198,8 +187,7 @@ impl<T> Param<T> for *mut T {
     }
 }
 
-impl<A: Reflect, R: Reflect> seal::Sealed for Verdict<A, R> {}
-
+#[sealed]
 impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R>
 where
     A::Transformed: Clone,
@@ -231,8 +219,7 @@ where
     }
 }
 
-impl<T: Reflect> seal::Sealed for Option<T> {}
-
+#[sealed]
 impl<T: Reflect> Reflect for Option<T> {
     type Transformed = RotoOption<T::Transformed>;
     type AsParam = *mut Self::Transformed;
@@ -279,8 +266,7 @@ impl<T> Param<Val<T>> for *mut T {
     }
 }
 
-impl<T: 'static + Clone> seal::Sealed for Val<T> {}
-
+#[sealed]
 impl<T: 'static + Clone> Reflect for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
@@ -305,8 +291,7 @@ impl<T: 'static + Clone> Reflect for Val<T> {
     }
 }
 
-impl seal::Sealed for IpAddr {}
-
+#[sealed]
 impl Reflect for IpAddr {
     type Transformed = Self;
     type AsParam = *mut Self;
@@ -324,8 +309,7 @@ impl Reflect for IpAddr {
     }
 }
 
-impl seal::Sealed for Prefix {}
-
+#[sealed]
 impl Reflect for Prefix {
     type Transformed = Self;
     type AsParam = *mut Self;
@@ -343,8 +327,7 @@ impl Reflect for Prefix {
     }
 }
 
-impl seal::Sealed for Arc<str> {}
-
+#[sealed]
 impl Reflect for Arc<str> {
     type Transformed = Self;
     type AsParam = *mut Self;
@@ -383,8 +366,7 @@ impl Param<()> for () {
     }
 }
 
-impl seal::Sealed for () {}
-
+#[sealed]
 impl Reflect for () {
     type Transformed = Self;
     type AsParam = Self;
@@ -441,8 +423,7 @@ macro_rules! simple_reflect {
             }
         }
 
-        impl seal::Sealed for $t {}
-
+        #[sealed]
         impl Reflect for $t {
             type Transformed = Self;
             type AsParam = Self;
