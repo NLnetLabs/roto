@@ -71,7 +71,7 @@ impl FileTree {
     pub fn compile<Ctx: OptionCtx>(
         self,
         rt: &Runtime<Ctx>,
-    ) -> Result<Package, RotoReport> {
+    ) -> Result<Package<Ctx>, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
         let pkg = checked.lower_to_mir().lower_to_lir().codegen();
         Ok(pkg)

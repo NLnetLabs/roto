@@ -1,5 +1,7 @@
 use std::any::{type_name, TypeId};
 
+use crate::runtime::NoCtx;
+
 /// The context or environment that a Roto script runs in
 ///
 /// This declares a set of global variables that are initialized just before
@@ -10,7 +12,7 @@ use std::any::{type_name, TypeId};
 /// This trait is unsafe because it tell Roto about the offsets and types of
 /// each field. It is crucial that this information is correct. Therefore,
 /// you should only ever derive this trait and not implement it manually.
-pub unsafe trait Context: 'static {
+pub unsafe trait Context: 'static + Clone {
     /// Return the fields of this struct, their offsets and their types
     fn fields() -> Vec<ContextField>;
 
@@ -39,7 +41,7 @@ pub struct ContextField {
     pub docstring: String,
 }
 
-unsafe impl Context for () {
+unsafe impl Context for NoCtx {
     fn fields() -> Vec<ContextField> {
         Vec::new()
     }
