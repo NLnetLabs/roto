@@ -1,4 +1,5 @@
 use inetnum::{addr::Prefix, asn::Asn};
+use sealed::sealed;
 
 use crate::{
     runtime::ty::{Reflect, TypeDescription, TypeRegistry},
@@ -210,18 +211,6 @@ fn check_roto_type(
     }
 }
 
-mod seal {
-    /// A trait that can be used to seal other traits if added as a trait bound.
-    ///
-    /// It lives in a private module, but the name is public. Hence, we can use
-    /// it a bound, but downstream crates can't implement it.
-    ///
-    /// Based on a [blog post] by Predrag Gruevski
-    ///
-    /// [blog post]: https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/#sealing-traits-with-a-supertrait
-    pub trait Sealed {}
-}
-
 /// Parameters of a Roto function
 ///
 /// This trait allows for checking the types against Roto types and converting
@@ -234,7 +223,8 @@ mod seal {
 ///
 /// This trait is _sealed_, meaning that it cannot be implemented by downstream
 /// crates.
-pub trait RotoFunc: seal::Sealed {
+#[sealed]
+pub trait RotoFunc {
     /// Argument types of this function
     type Args;
 
@@ -279,11 +269,10 @@ macro_rules! unit {
 /// Implement the [`RotoParams`] trait for a tuple with some type parameters.
 macro_rules! func {
     (fn($($a:ident),*) -> $r:ident) => {
-        impl<$($a,)* $r> seal::Sealed for fn($($a,)*) -> $r {}
-
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         #[allow(unused_mut)]
+        #[sealed]
         impl<$($a,)* $r> RotoFunc for fn($($a,)*) -> $r
         where $($a: Reflect,)* $r: Reflect {
             type Args = ($($a,)*);
