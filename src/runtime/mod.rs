@@ -87,17 +87,42 @@ impl<Ctx: OptionCtx> std::fmt::Debug for Runtime<Ctx> {
     }
 }
 
-pub trait OptionCtx {}
+pub trait OptionCtx: 'static + Clone {
+    type Ctx: Context;
+    fn get_context(&mut self) -> &mut Self::Ctx;
+
+    fn try_to_no_ctx() -> Option<NoCtx>;
+}
 
 #[derive(Clone)]
-pub struct Ctx<T>(T);
+pub struct Ctx<T>(pub T);
 
-impl<T> OptionCtx for Ctx<T> {}
+impl<T: Context> OptionCtx for Ctx<T> {
+    type Ctx = T;
+
+    fn try_to_no_ctx() -> Option<NoCtx> {
+        None
+    }
+
+    fn get_context(&mut self) -> &mut Self::Ctx {
+        &mut self.0
+    }
+}
 
 #[derive(Clone)]
 pub struct NoCtx;
 
-impl OptionCtx for NoCtx {}
+impl OptionCtx for NoCtx {
+    type Ctx = Self;
+
+    fn try_to_no_ctx() -> Option<NoCtx> {
+        Some(NoCtx)
+    }
+
+    fn get_context(&mut self) -> &mut Self::Ctx {
+        self
+    }
+}
 
 /// Compiling a script
 impl<Ctx: OptionCtx> Runtime<Ctx> {
@@ -108,7 +133,7 @@ impl<Ctx: OptionCtx> Runtime<Ctx> {
     pub fn compile(
         &self,
         path: impl AsRef<Path>,
-    ) -> Result<Package, RotoReport> {
+    ) -> Result<Package<Ctx>, RotoReport> {
         FileTree::read(path)?.compile(self)
     }
 }
@@ -260,6 +285,13 @@ impl<C: OptionCtx> Runtime<C> {
     #[cfg(feature = "cli")]
     pub fn cli(&self) {
         crate::cli(self)
+    }
+
+    pub fn try_without_ctx(self) -> Option<Runtime<NoCtx>> {
+        C::try_to_no_ctx().map(|_| Runtime {
+            rt: self.rt,
+            _ctx: PhantomData,
+        })
     }
 }
 

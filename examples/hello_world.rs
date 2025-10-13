@@ -9,11 +9,11 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(), fn() -> ()>("main")
+        .get_function::<fn() -> ()>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
-    func.call(&mut ());
+    func.call();
 
     Ok(())
 }

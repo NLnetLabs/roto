@@ -78,14 +78,22 @@ fn cli_inner(rt: &Runtime<impl OptionCtx>) -> Result<(), RotoReport> {
             println!("All ok!")
         }
         Command::Test { file } => {
+            let Some(rt) = rt.clone().try_without_ctx() else {
+                eprintln!("Can only run tests on a Runtime without Context");
+                return Err(RotoReport {
+                    errors: vec![RotoError::TestsFailed()],
+                    ..Default::default()
+                });
+            };
+
             let mut p = FileTree::read(file)?
                 .parse()?
-                .typecheck(rt)?
+                .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
                 .codegen();
 
-            if let Err(()) = p.run_tests(()) {
+            if let Err(()) = p.run_tests() {
                 return Err(RotoReport {
                     errors: vec![RotoError::TestsFailed()],
                     ..Default::default()
@@ -93,21 +101,27 @@ fn cli_inner(rt: &Runtime<impl OptionCtx>) -> Result<(), RotoReport> {
             }
         }
         Command::Run { file, function } => {
+            let Some(rt) = rt.clone().try_without_ctx() else {
+                return Err(RotoReport {
+                    errors: vec![RotoError::Custom("Can only run a script with a Runtime without Context".into())],
+                    ..Default::default()
+                });
+            };
+
             let mut p = FileTree::read(file)?
                 .parse()?
-                .typecheck(rt)?
+                .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
                 .codegen();
 
-            let f = p.get_function::<(), fn()>(function).map_err(|e| {
-                RotoReport {
+            let f =
+                p.get_function::<fn()>(function).map_err(|e| RotoReport {
                     errors: vec![RotoError::CouldNotRetrieveFunction(e)],
                     ..Default::default()
-                }
-            })?;
+                })?;
 
-            f.call(&mut ())
+            f.call()
         }
         Command::Print { file } => {
             let s = std::fs::read_to_string(file).unwrap();
