@@ -23,6 +23,7 @@ use std::{
 use context::ContextDescription;
 use func::FunctionDescription;
 use layout::Layout;
+use sealed::sealed;
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 use crate::{
@@ -87,6 +88,9 @@ impl<Ctx: OptionCtx> std::fmt::Debug for Runtime<Ctx> {
     }
 }
 
+/// This trait is _sealed_, meaning that it cannot be implemented by downstream
+/// crates.
+#[sealed]
 pub trait OptionCtx: 'static + Clone {
     type Ctx: Context;
     fn get_context(&mut self) -> &mut Self::Ctx;
@@ -97,6 +101,7 @@ pub trait OptionCtx: 'static + Clone {
 #[derive(Clone)]
 pub struct Ctx<T>(pub T);
 
+#[sealed]
 impl<T: Context> OptionCtx for Ctx<T> {
     type Ctx = T;
 
@@ -112,6 +117,7 @@ impl<T: Context> OptionCtx for Ctx<T> {
 #[derive(Clone)]
 pub struct NoCtx;
 
+#[sealed]
 impl OptionCtx for NoCtx {
     type Ctx = Self;
 
