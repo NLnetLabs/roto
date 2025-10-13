@@ -113,10 +113,10 @@ Not very useful yet, of course, but let's see it in action anyway:
 
     let mut pkg = rt.compile("script.roto").unwrap();
     let f = pkg
-        .get_function::<_, fn(Val<Range>) -> Val<Range>>("passthrough")
+        .get_function::<fn(Val<Range>) -> Val<Range>>("passthrough")
         .unwrap();
 
-    let res = f.call(&mut (), Val(Range { low: 0, high: 99 }));
+    let res = f.call(Val(Range { low: 0, high: 99 }));
     println!("{res:?}")
 
 Note that every custom type has to be wrapped in ``Val`` when it's passed to
@@ -151,7 +151,7 @@ expose methods on it to Roto.
         .unwrap();
 
     let range = Range { low: 0, high: 99 };
-    let res = f.call(&mut (), Val(range), 50);
+    let res = f.call(Val(range), 50);
     println!("{res:?}");
 
 And then in Roto:
@@ -243,14 +243,10 @@ then create and register the following type.
         pub last_name: Arc<str>,
     }
 
-    rt.register_context_type::<Ctx>().unwrap();
+    let rt = rt.with_context_type::<Ctx>().unwrap();
 
     let mut pkg = rt.compile("script.roto").unwrap();
-
-    //                         We need to use the correct context type here
-    //                         |
-    //                         v
-    let f = pkg.get_function::<Ctx, fn() -> Arc<str>>("greeting").unwrap();
+    let f = pkg.get_function::<fn() -> Arc<str>>("greeting").unwrap();
 
     let mut ctx = Ctx {
         first_name: "John".into(),
