@@ -135,6 +135,17 @@ mod unionfind;
 pub use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
 
+#[derive(Clone)]
+enum Obligation {
+    ResolveMethod {
+        id: MetaId,
+        receiver: Type,
+        ident: Identifier,
+        parameter_types: Vec<Type>,
+        return_type: Type,
+    },
+}
+
 /// Holds the state for type checking
 ///
 /// Most type checking steps are methods on this type.
@@ -146,6 +157,9 @@ pub struct TypeChecker {
     match_counter: usize,
     if_else_counter: usize,
     while_counter: usize,
+    /// Set of obligations that we have to satisfy at the end of type checking
+    /// a function
+    obligations: Vec<Obligation>,
 }
 
 /// Result of type checking
@@ -168,6 +182,7 @@ impl TypeChecker {
             match_counter: 0,
             if_else_counter: 0,
             while_counter: 0,
+            obligations: Vec::new(),
         };
         checker.declare_builtin_types().unwrap();
         checker
@@ -706,6 +721,73 @@ impl TypeChecker {
                         self.test(scope, x)?;
                     }
                     _ => {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn resolve_obligations(&mut self) -> TypeResult<()> {
+        let mut obligations = Vec::new();
+        std::mem::swap(&mut obligations, &mut self.obligations);
+        for obligation in obligations {
+            match obligation {
+                Obligation::ResolveMethod {
+                    id,
+                    receiver,
+                    ident,
+                    parameter_types,
+                    return_type,
+                } => {
+                    let receiver_ty = self.type_info.resolve(&receiver);
+                    match receiver_ty {
+                        Type::IntVar(_, _) => {
+                            self.unify(&receiver_ty, &Type::i32(), id, None)
+                                .unwrap();
+                        }
+                        Type::FloatVar(_) => {
+                            self.unify(&receiver_ty, &Type::f64(), id, None)
+                                .unwrap();
+                        }
+                        _ => {}
+                    }
+                    let ident = Meta { id, node: ident };
+                    let Some(f) = self.get_method(&receiver, &ident) else {
+                        return Err(
+                            self.error_no_method_on_type(&receiver, &ident)
+                        );
+                    };
+
+                    let sig = &f.signature;
+
+                    let mut correct = true;
+                    correct &=
+                        sig.parameter_types.len() == parameter_types.len();
+
+                    for (a, b) in
+                        sig.parameter_types.iter().zip(&parameter_types)
+                    {
+                        correct &= self.unify(&a, &b, id, None).is_ok();
+                    }
+
+                    correct &= self
+                        .unify(&sig.return_type, &return_type, id, None)
+                        .is_ok();
+
+                    if !correct {
+                        return Err(self.error_simple(
+                            format!(
+                                "the `{}` method of type `{}` does not have the right signature",
+                                ident,
+                                receiver_ty.display(&self.type_info),
+                            ),
+                            format!("does not have a valid `{}` method", ident),
+                            id,
+                        ));
+                    }
+
+                    self.type_info.function_calls.insert(id, f);
                 }
             }
         }

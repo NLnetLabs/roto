@@ -1312,6 +1312,82 @@ fn unicode_val_in_f_string() {
 }
 
 #[test]
+fn f_string_and_int_var_1() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let x = 10;
+            f"This should just work: {x}"
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "This should just work: 10".into());
+}
+
+#[test]
+fn f_string_and_int_var_2() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let x = 10;
+            let s = f"This should just work: {x}";
+            let y: u8 = x;
+            s
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "This should just work: 10".into());
+}
+
+#[test]
+fn f_string_and_float_var_1() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let x = 10.0;
+            f"This should just work: {x}"
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "This should just work: 10".into());
+}
+
+#[test]
+fn f_string_and_float_var_2() {
+    let s = src!(
+        r#"
+        fn foo() -> String {
+            let x = 10.0;
+            let s = f"This should just work: {x}";
+            let y: f32 = x;
+            s
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+    let f = p.get_function::<(), fn() -> Arc<str>>("foo").unwrap();
+
+    let res = f.call(&mut ());
+    assert_eq!(res, "This should just work: 10".into());
+}
+
+#[test]
 fn arc_type() {
     use std::sync::atomic::Ordering;
 
