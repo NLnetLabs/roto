@@ -198,6 +198,33 @@ macro_rules! call_impl {
             }
         }
 
+        // See https://github.com/dtolnay/case-studies/tree/master/callable-types
+        #[allow(non_snake_case)]
+        impl<$($ty,)* Return> std::ops::Deref for TypedFunc<NoCtx,  fn($($ty,)*) -> Return>
+        where
+            $($ty: Reflect,)*
+            Return: Reflect
+        {
+            type Target = dyn Fn($($ty,)*) -> Return;
+
+            fn deref(&self) -> &Self::Target {
+                let uninit_callable = std::mem::MaybeUninit::<Self>::uninit();
+                let uninit_closure = move |$($ty: $ty,)*| Self::call(
+                    unsafe { &*uninit_callable.as_ptr() },
+                    $($ty,)*
+                );
+                let size_of_closure = std::mem::size_of_val(&uninit_closure);
+                fn second<'a, T>(_a: &T, b: &'a T) -> &'a T {
+                    b
+                }
+                let reference_to_closure = second(&uninit_closure, unsafe { std::mem::transmute(self) });
+                std::mem::forget(uninit_closure);
+                assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+                let reference_to_trait_object = reference_to_closure as &dyn Fn($($ty,)*) -> Return;
+                reference_to_trait_object
+            }
+        }
+
         impl<C: Context, $($ty,)* Return> TypedFunc<Ctx<C>, fn($($ty,)*) -> Return>
         where
             $($ty: Reflect,)*
@@ -215,6 +242,32 @@ macro_rules! call_impl {
             }
         }
 
+        // See https://github.com/dtolnay/case-studies/tree/master/callable-types
+        #[allow(non_snake_case)]
+        impl<C: Context, $($ty,)* Return> std::ops::Deref for TypedFunc<Ctx<C>,  fn($($ty,)*) -> Return>
+        where
+            $($ty: Reflect,)*
+            Return: Reflect
+        {
+            type Target = dyn Fn(&mut C, $($ty,)*) -> Return;
+
+            fn deref(&self) -> &Self::Target {
+                let uninit_callable = std::mem::MaybeUninit::<Self>::uninit();
+                let uninit_closure = move |ctx: &mut C, $($ty: $ty,)*| Self::call(
+                    unsafe { &*uninit_callable.as_ptr() },
+                    ctx, $($ty,)*
+                );
+                let size_of_closure = std::mem::size_of_val(&uninit_closure);
+                fn second<'a, T>(_a: &T, b: &'a T) -> &'a T {
+                    b
+                }
+                let reference_to_closure = second(&uninit_closure, unsafe { std::mem::transmute(self) });
+                std::mem::forget(uninit_closure);
+                assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+                let reference_to_trait_object = reference_to_closure as &dyn Fn(&mut C, $($ty,)*) -> Return;
+                reference_to_trait_object
+            }
+        }
      }
 }
 
