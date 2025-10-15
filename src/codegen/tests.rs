@@ -3565,3 +3565,20 @@ fn register_module() {
     let res = f.call(&mut ());
     assert!(-1.1 < res && res < -0.9);
 }
+
+#[test]
+fn assignment_with_question_mark() {
+    let s = src!(
+        r#"
+        fn foo() -> ()? {
+            let x: String? = None;
+            let y = "hello";
+            y = x?;
+            Some(())
+        }
+    "#
+    );
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn() -> Option<()>>("foo").unwrap();
+    f.call(&mut ());
+}

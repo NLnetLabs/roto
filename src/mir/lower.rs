@@ -693,7 +693,6 @@ impl<'r> Lowerer<'r> {
         };
 
         let ty = self.type_info.type_of(expr);
-        let tmp = self.tmp(ty.clone());
 
         let to = Var {
             scope: name.scope,
@@ -710,6 +709,7 @@ impl<'r> Lowerer<'r> {
         };
 
         let val = self.expr(expr);
+        let tmp = self.tmp(ty.clone());
         self.do_assign(Place::new(tmp.clone(), ty.clone()), ty.clone(), val);
 
         self.emit_drop(place.clone(), ty.clone());
