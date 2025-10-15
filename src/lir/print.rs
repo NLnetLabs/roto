@@ -345,20 +345,6 @@ impl Printable for Instruction {
                     from.print(printer),
                 )
             }
-            MemCmp {
-                to,
-                size,
-                left,
-                right,
-            } => {
-                format!(
-                    "{} = mem::cmp({}, {}, {})",
-                    to.print(printer),
-                    left.print(printer),
-                    right.print(printer),
-                    size.print(printer),
-                )
-            }
             Drop {
                 var,
                 drop: Some(drop),

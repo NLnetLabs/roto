@@ -205,7 +205,6 @@ fn negation_on_string() {
 }
 
 #[test]
-#[ignore = "prefixes not supported yet"]
 fn filter_map() {
     let s = src!(
         r#"
@@ -471,7 +470,6 @@ fn ip_addr_method() {
 }
 
 #[test]
-#[ignore = "to_canonical doesn't work for now"]
 fn ip_addr_method_of_method_return_type() {
     let s = src!(
         "
@@ -497,13 +495,12 @@ fn ip_addr_method_of_method_return_type() {
 }
 
 #[test]
-#[ignore = "prefixes not supported yet"]
 fn prefix_method() {
     let s = src!(
         "
         filtermap my_map(r: u32) {
             let p = 10.10.10.10/20;
-            let add = p.address();
+            let add = p.addr();
             accept
         }
     "
@@ -512,11 +509,10 @@ fn prefix_method() {
 }
 
 #[test]
-#[ignore = "prefixes not supported yet"]
 fn logical_expr() {
     let s = src!(
         "
-        fn foo() -> Bool {
+        fn foo() -> bool {
             (10 == 10) || (10 == 11)
         }
 

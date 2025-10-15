@@ -736,6 +736,10 @@ impl<'r> Lowerer<'r> {
             return self.binop_ip_addr(l, binop, r);
         }
 
+        if l_ty == Type::prefix() {
+            return self.binop_prefix(l, binop, r);
+        }
+
         if *binop == ast::BinOp::And {
             return self.binop_and(l, r);
         }
@@ -835,6 +839,27 @@ impl<'r> Lowerer<'r> {
             }
             _ => {
                 ice!("Operator {binop} is not implemented for IpAddr")
+            }
+        }
+    }
+
+    fn binop_prefix(
+        &mut self,
+        l: &Meta<ast::Expr>,
+        binop: &ast::BinOp,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        let type_id = TypeId::of::<Prefix>();
+        match binop {
+            ast::BinOp::Eq => self.desugared_binop(
+                type_id,
+                "eq",
+                Type::bool(),
+                (l, Type::prefix()),
+                (r, Type::prefix()),
+            ),
+            _ => {
+                ice!("Operator {binop} is not implemented for Prefix")
             }
         }
     }

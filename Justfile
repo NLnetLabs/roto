@@ -39,4 +39,6 @@ clippy:
     cargo clippy --all
 
 valgrind TEST="":
-    VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test -- {{TEST}}
+    # We ignore doctests by passing --all-targets, because apparently doctests leak memory
+    # sometimes, randomly, unexpectedly and frustratingly.
+    VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test --all-targets -- {{TEST}}

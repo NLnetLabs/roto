@@ -850,19 +850,18 @@ impl TypeChecker {
 
                 let ty = self.resolve_type(&ctx.expected_type);
                 let comparable = match ty {
-                    Type::IntVar(_, _)
-                    | Type::Never
-                    | Type::Record(..)
-                    | Type::RecordVar(..) => true,
+                    // TODO: Is never really comparable?
+                    Type::IntVar(_, _) | Type::FloatVar(_) | Type::Never => {
+                        true
+                    }
+                    Type::Record(..) | Type::RecordVar(..) => false,
                     Type::Name(type_name) => {
                         let type_def =
                             self.type_info.resolve_type_name(&type_name);
-                        match type_def {
-                            TypeDefinition::Enum(_, _)
-                            | TypeDefinition::Record(_, _)
-                            | TypeDefinition::Primitive(_) => true,
-                            TypeDefinition::Runtime(_, _) => false,
-                        }
+
+                        // This could be relaxed in the future but we only
+                        // support comparing primitives now.
+                        matches!(type_def, TypeDefinition::Primitive(_))
                     }
                     _ => false,
                 };
