@@ -4,9 +4,9 @@ use crate::ast::{
 };
 
 use super::{
+    ParseError, ParseResult, Parser,
     meta::Meta,
     token::{Keyword, Token},
-    ParseError, ParseResult, Parser,
 };
 
 /// # Parsing `filtermap` and `filter` sections
@@ -26,7 +26,7 @@ impl Parser<'_, '_> {
                     "`filtermap` or `filter`",
                     token,
                     span,
-                ))
+                ));
             }
         };
 

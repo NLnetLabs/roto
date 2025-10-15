@@ -5,7 +5,7 @@ use std::{
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{library, Library};
+use crate::{Library, library};
 
 macro_rules! int_docs {
     ($t:ty) => {&{

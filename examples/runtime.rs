@@ -1,4 +1,4 @@
-use roto::{library, Runtime, Val, Verdict};
+use roto::{Runtime, Val, Verdict, library};
 
 #[derive(Clone, Copy)]
 struct Vec2 {

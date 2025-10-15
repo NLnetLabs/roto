@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{library, runtime::items::Registerable as _, Val};
+use crate::{Val, library, runtime::items::Registerable as _};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
@@ -202,7 +202,7 @@ fn unwrap_or_empty() {
 mod deprecated_api {
     use roto_macros::roto_method;
 
-    use crate::{src, Runtime, Val};
+    use crate::{Runtime, Val, src};
 
     #[test]
     fn use_the_old_api() {
@@ -239,6 +239,6 @@ mod deprecated_api {
             .get_function::<(), fn(Val<Foo>) -> Val<Foo>>("bar")
             .unwrap();
         let res = bar.call(&mut (), Val(Foo(5)));
-        assert_eq!(res.0 .0, 10);
+        assert_eq!(res.0.0, 10);
     }
 }

@@ -9,7 +9,7 @@
 //! for mapping a complex Rust type to Roto types.
 
 use std::{
-    any::{type_name, TypeId},
+    any::{TypeId, type_name},
     collections::HashMap,
     net::IpAddr,
     sync::{Arc, LazyLock, Mutex},

@@ -3,15 +3,15 @@ mod clone_drop;
 use std::collections::HashMap;
 
 use crate::{
+    Runtime,
     ast::{self, BinOp, Identifier, Literal},
     ice,
     label::{LabelRef, LabelStore},
     lir::IrValue,
     mir,
     runtime::{
-        init_string,
+        RuntimeFunctionRef, init_string,
         layout::{Layout, LayoutBuilder},
-        RuntimeFunctionRef,
     },
     typechecker::{
         info::TypeInfo,
@@ -22,12 +22,11 @@ use crate::{
             TypeDefinition,
         },
     },
-    Runtime,
 };
 
 use super::{
-    value::IrType, Block, FloatCmp, Function, Instruction, IntCmp, Lir,
-    Operand, Signature, ValueOrSlot, Var, VarKind,
+    Block, FloatCmp, Function, Instruction, IntCmp, Lir, Operand, Signature,
+    ValueOrSlot, Var, VarKind, value::IrType,
 };
 
 pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
@@ -713,7 +712,7 @@ impl Lowerer<'_, '_> {
             Literal::Integer(x) => {
                 match ty {
                     Type::IntVar(_, _) => {
-                        return Some(IrValue::I32(*x as i32).into())
+                        return Some(IrValue::I32(*x as i32).into());
                     }
                     Type::Name(type_name) => {
                         if let TypeDefinition::Primitive(Primitive::Int(
@@ -746,7 +745,7 @@ impl Lowerer<'_, '_> {
             Literal::Float(x) => {
                 match ty {
                     Type::FloatVar(_) => {
-                        return Some(IrValue::F64(*x).into())
+                        return Some(IrValue::F64(*x).into());
                     }
                     Type::Name(type_name) => {
                         if let TypeDefinition::Primitive(Primitive::Float(

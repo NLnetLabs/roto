@@ -3,7 +3,7 @@
 use crate::{
     ast::Identifier,
     parser::meta::Meta,
-    runtime::{layout::Layout, RuntimeFunctionRef},
+    runtime::{RuntimeFunctionRef, layout::Layout},
     typechecker::scope::ScopeRef,
 };
 use core::fmt;

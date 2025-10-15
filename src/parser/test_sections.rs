@@ -3,7 +3,7 @@ use crate::{
     parser::Parser,
 };
 
-use super::{meta::Spans, ParseResult};
+use super::{ParseResult, meta::Spans};
 
 fn parse_function(s: &str) -> ParseResult<Declaration> {
     let mut spans = Spans::default();

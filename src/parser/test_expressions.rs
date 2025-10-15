@@ -1,8 +1,8 @@
 use crate::{ast::Expr, parser::Parser};
 
 use super::{
-    meta::{Meta, Spans},
     ParseResult,
+    meta::{Meta, Spans},
 };
 
 fn parse_expr(s: &str) -> ParseResult<Meta<Expr>> {
@@ -49,7 +49,7 @@ fn test_logical_expr_3() {
 
 #[test]
 fn test_logical_expr_4() {
-    let s ="(found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table";
+    let s = "(found_prefix.prefix.exists() && found_prefix.prefix.exists()) || route_in_table";
     parse_expr(s).unwrap();
 }
 

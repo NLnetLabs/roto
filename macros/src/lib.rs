@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, spanned::Spanned, Error, Token};
+use syn::{Error, Token, parse::Parse, parse_macro_input, spanned::Spanned};
 
 #[proc_macro_derive(Context)]
 pub fn roto_context(item: TokenStream) -> TokenStream {
@@ -404,16 +404,17 @@ fn get_movability(
         }
     }
 
-    let s =
-        match (clone, copy, value) {
-            (1, 0, 0) => "clone",
-            (0, 1, 0) => "copy",
-            (0, 0, 1) => "value",
-            _ => return Err(syn::Error::new(
+    let s = match (clone, copy, value) {
+        (1, 0, 0) => "clone",
+        (0, 1, 0) => "copy",
+        (0, 0, 1) => "value",
+        _ => {
+            return Err(syn::Error::new(
                 span,
                 "specify exactly 1 of `#[clone]`, `#[copy]` or `#[value]`",
-            )),
-        };
+            ));
+        }
+    };
 
     Ok(syn::Ident::new(s, ident_span.unwrap()))
 }

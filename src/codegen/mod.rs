@@ -4,7 +4,7 @@
 //! then does the rest.
 
 use std::{
-    any::{type_name, Any, TypeId},
+    any::{Any, TypeId, type_name},
     collections::HashMap,
     ffi::c_void,
     marker::PhantomData,
@@ -13,32 +13,32 @@ use std::{
 };
 
 use crate::{
+    Runtime,
     ast::Identifier,
     ice,
     label::{LabelRef, LabelStore},
     lir::{
-        self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
+        self, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind, value::IrType,
     },
     runtime::{
-        context::ContextDescription, ty::Reflect, ConstantValue,
-        RuntimeConstant, RuntimeFunctionRef,
+        ConstantValue, RuntimeConstant, RuntimeFunctionRef,
+        context::ContextDescription, ty::Reflect,
     },
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         types,
     },
-    Runtime,
 };
 use check::{
-    check_roto_type_reflect, FunctionRetrievalError, RotoFunc, TypeMismatch,
+    FunctionRetrievalError, RotoFunc, TypeMismatch, check_roto_type_reflect,
 };
 use cranelift::{
     codegen::{
         entity::EntityRef,
         ir::{
-            condcodes::IntCC, types::*, AbiParam, Block, InstBuilder,
-            MemFlags, StackSlotData, StackSlotKind, Value,
+            AbiParam, Block, InstBuilder, MemFlags, StackSlotData,
+            StackSlotKind, Value, condcodes::IntCC, types::*,
         },
         isa::TargetIsa,
         settings::{self, Configurable as _},

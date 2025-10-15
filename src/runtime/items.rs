@@ -1,15 +1,15 @@
 use std::any::TypeId;
 
 use crate::{
+    Location, Reflect, Runtime,
     ast::Identifier,
     runtime::{
+        CloneDrop, ConstantValue, Movability, RegistrationError,
         extern_clone, extern_drop,
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
         ty::TypeDescription,
-        CloneDrop, ConstantValue, Movability, RegistrationError,
     },
-    Location, Reflect, Runtime,
 };
 
 /// A registerable item

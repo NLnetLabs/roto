@@ -100,8 +100,8 @@ use crate::{
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
     runtime::{
-        ty::{TypeDescription, TypeRegistry},
         Runtime, RuntimeFunctionRef,
+        ty::{TypeDescription, TypeRegistry},
     },
 };
 use cycle::detect_type_cycles;
@@ -117,7 +117,7 @@ use types::{
 
 use self::{
     error::TypeError,
-    types::{default_types, Function, Signature},
+    types::{Function, Signature, default_types},
 };
 
 mod cycle;
@@ -807,10 +807,14 @@ impl TypeChecker {
                     let Type::Name(TypeName { name: _, arguments }) =
                         &**return_type
                     else {
-                        ice!("return type of a filtermap should always be a verdict")
+                        ice!(
+                            "return type of a filtermap should always be a verdict"
+                        )
                     };
                     let [a, r] = &arguments[..] else {
-                        ice!("return type of a filtermap should always be a verdict")
+                        ice!(
+                            "return type of a filtermap should always be a verdict"
+                        )
                     };
 
                     if let Type::Var(x) = self.resolve_type(a) {

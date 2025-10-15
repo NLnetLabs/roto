@@ -7,14 +7,14 @@
 use log::trace;
 
 use crate::{
+    Runtime,
     ast::Identifier,
     lir::{
-        value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
-        ValueOrSlot, Var, VarKind,
+        FloatCmp, Function, Instruction, IntCmp, Operand, ValueOrSlot, Var,
+        VarKind, value::IrValue,
     },
     runtime::{ConstantValue, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
-    Runtime,
 };
 use std::{collections::HashMap, sync::Arc};
 

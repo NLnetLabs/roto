@@ -199,7 +199,10 @@ impl std::fmt::Display for ParseErrorKind {
                 inner_error,
                 ..
             } => {
-                write!(f, "found an invalid {description} literal '{token}': {inner_error}")
+                write!(
+                    f,
+                    "found an invalid {description} literal '{token}': {inner_error}"
+                )
             }
             Self::Custom { description, .. } => {
                 write!(f, "{description}")

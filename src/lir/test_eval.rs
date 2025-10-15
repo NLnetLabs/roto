@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
-use crate::{library, pipeline::LoweredToLir, src, FileTree, Runtime};
+use crate::{FileTree, Runtime, library, pipeline::LoweredToLir, src};
 
 #[track_caller]
 fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {

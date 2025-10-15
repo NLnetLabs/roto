@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use roto::{library, Runtime, Val};
+use roto::{Runtime, Val, library};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]

@@ -42,7 +42,10 @@ impl Display for FunctionRetrievalError {
                 got,
             } => {
                 writeln!(f, "The number of arguments do not match")?;
-                writeln!(f, "The Roto function has {expected} arguments, but the Rust function has {got}.")
+                writeln!(
+                    f,
+                    "The Roto function has {expected} arguments, but the Rust function has {got}."
+                )
             }
             FunctionRetrievalError::TypeMismatch(
                 ctx,
