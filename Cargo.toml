@@ -28,6 +28,7 @@ bench = false
 default = ["cli"]
 cli = ["clap"]
 logger = ["env_logger"]
+disas = ["cranelift-codegen/disas"]
 
 [dependencies]
 ariadne = "0.5.1"
@@ -46,7 +47,6 @@ features = ["frontend", "jit", "module", "native"]
 
 [dependencies.cranelift-codegen]
 version = "0.120.0"
-features = ["disas"]
 
 [dev-dependencies]
 bytes = "1"

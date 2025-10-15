@@ -51,7 +51,6 @@ use cranelift::{
     prelude::{FloatCC, Signature},
 };
 use cranelift_codegen::ir::{SigRef, StackSlot};
-use log::info;
 
 pub mod check;
 pub mod testing;
@@ -558,14 +557,18 @@ impl ModuleBuilder {
 
         self.inner.define_function(func_id, &mut ctx).unwrap();
 
-        let capstone = self.isa.to_capstone().unwrap();
-        info!(
-            "\n{}",
-            ctx.compiled_code()
-                .unwrap()
-                .disassemble(None, &capstone)
-                .unwrap()
-        );
+        #[cfg(feature = "disas")]
+        {
+            use log::info;
+            let capstone = self.isa.to_capstone().unwrap();
+            info!(
+                "\n{}",
+                ctx.compiled_code()
+                    .unwrap()
+                    .disassemble(None, &capstone)
+                    .unwrap()
+            );
+        }
         self.inner.clear_context(&mut ctx);
     }
 
