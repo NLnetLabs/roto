@@ -691,33 +691,6 @@ pub fn eval(
                     unsafe { (drop)(p) }
                 }
             }
-            Instruction::MemCmp {
-                to,
-                size,
-                left,
-                right,
-            } => {
-                let &IrValue::Pointer(left) = eval_operand(&vars, left)
-                else {
-                    panic!()
-                };
-                let &IrValue::Pointer(right) = eval_operand(&vars, right)
-                else {
-                    panic!()
-                };
-                let &IrValue::Pointer(size) = eval_operand(&vars, size)
-                else {
-                    panic!()
-                };
-                let left = mem.read_slice(left, size);
-                let right = mem.read_slice(right, size);
-                let res = match left.cmp(right) {
-                    std::cmp::Ordering::Less => -1isize as usize,
-                    std::cmp::Ordering::Equal => 0,
-                    std::cmp::Ordering::Greater => 1,
-                };
-                vars.insert(to.clone(), IrValue::Pointer(res));
-            }
             Instruction::InitString {
                 to,
                 string,

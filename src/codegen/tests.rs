@@ -3582,3 +3582,20 @@ fn assignment_with_question_mark() {
     let f = pkg.get_function::<(), fn() -> Option<()>>("foo").unwrap();
     f.call(&mut ());
 }
+
+#[test]
+fn prefix_eq() {
+    let s = src!(
+        r#"
+        fn foo() -> bool {
+            let x = 10.0.0.0 / 10;
+            let y = 10.0.0.0 / 10;
+            x == y
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn() -> bool>("foo").unwrap();
+    f.call(&mut ());
+}

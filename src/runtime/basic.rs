@@ -360,7 +360,34 @@ pub fn built_ins() -> Library {
             /// 192.169.0.0 / 16
             /// ```
             fn new(ip: IpAddr, len: u8) -> Prefix {
-                Prefix::new(ip, len).unwrap()
+                Prefix::new_relaxed(ip, len).unwrap()
+            }
+
+            /// Returns the IP address part of a prefix.
+            fn addr(self) -> IpAddr {
+                self.addr()
+            }
+
+            /// Returns the smallest address of the prefix.
+            ///
+            /// This is the same as `Prefix.addr`.
+            fn min_addr(self) -> IpAddr {
+                self.min_addr()
+            }
+
+            /// Returns the largest address of the prefix.
+            fn max_addr(self) -> IpAddr {
+                self.max_addr()
+            }
+
+            /// Returns the length part of a prefix.
+            fn len(self) -> u8 {
+                self.len()
+            }
+
+            /// Check whether those prefixes are the same
+            fn eq(self, other: Self) -> bool {
+                self == other
             }
         }
 

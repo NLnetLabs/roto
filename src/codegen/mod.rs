@@ -1002,28 +1002,6 @@ impl<'c> FuncGen<'c> {
                     );
                 }
             }
-            lir::Instruction::MemCmp {
-                to,
-                size,
-                left,
-                right,
-            } => {
-                let (left, _) = self.operand(left);
-                let (right, _) = self.operand(right);
-                let (size, _) = self.operand(size);
-
-                // We could pass more precise alignment to cranelift, but
-                // values of 1 should just work.
-                let val = self.builder.call_memcmp(
-                    self.module.isa.frontend_config(),
-                    left,
-                    right,
-                    size,
-                );
-
-                let var = self.variable(to, I32);
-                self.def(var, val);
-            }
             lir::Instruction::ConstantAddress { to, name } => {
                 let ty = self.module.cranelift_type(&IrType::Pointer);
                 let const_ptr = self.module.constants.get(name).unwrap();

@@ -903,34 +903,6 @@ impl Lowerer<'_, '_> {
             return to.into();
         }
 
-        if binop == ast::BinOp::Eq {
-            let size = self
-                .ctx
-                .type_info
-                .layout_of(&ty, self.ctx.runtime)
-                .map_or(0, |l| l.size());
-
-            if size == 0 {
-                return Operand::Value(IrValue::Bool(true));
-            }
-
-            let tmp = self.new_tmp(IrType::Pointer);
-            let out = self.new_tmp(IrType::Bool);
-            self.emit(Instruction::MemCmp {
-                to: tmp.clone(),
-                size: IrValue::Pointer(size).into(),
-                left: left.clone(),
-                right: right.clone(),
-            });
-            self.emit(Instruction::IntCmp {
-                to: out.clone(),
-                cmp: IntCmp::Eq,
-                left: tmp.into(),
-                right: IrValue::Pointer(0).into(),
-            });
-            return out.into();
-        }
-
         ice!("Could not lower binop")
     }
 }
