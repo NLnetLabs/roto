@@ -66,10 +66,10 @@ members = ["macros"]
 
 [workspace.package]
 version = "0.9.0"
-edition = "2021"
+edition = "2024"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
-rust-version = "1.84"
+rust-version = "1.85"
 description = "strongly-typed, compiled language for Rotonda"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
