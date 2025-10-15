@@ -40,7 +40,7 @@ log = "0.4"
 roto-macros = { workspace = true }
 symbol_table = { version = "0.4.0", features = ["global"] }
 rustc-literal-escaper = "0.0.4"
-libc = "0.2.177"
+libc = "0.2"
 
 [dependencies.cranelift]
 version = "0.120.0"
@@ -65,7 +65,7 @@ debug = "full"
 members = ["macros"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
@@ -79,7 +79,7 @@ categories = ["network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
-roto-macros = { path = "macros", version = "0.8.0" }
+roto-macros = { path = "macros", version = "=0.9.0" }
 proc-macro2 = "1.0.86"
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }
