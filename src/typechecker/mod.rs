@@ -768,7 +768,7 @@ impl TypeChecker {
                     for (a, b) in
                         sig.parameter_types.iter().zip(&parameter_types)
                     {
-                        correct &= self.unify(&a, &b, id, None).is_ok();
+                        correct &= self.unify(a, b, id, None).is_ok();
                     }
 
                     correct &= self
