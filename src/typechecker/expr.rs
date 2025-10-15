@@ -9,6 +9,7 @@ use crate::{
     typechecker::{
         scope::DeclarationKind,
         types::{MustBeSigned, Primitive},
+        Obligation,
     },
 };
 
@@ -533,49 +534,17 @@ impl TypeChecker {
                             let ctx = ctx.with_type(ty.clone());
                             diverges |= self.expr(scope, &ctx, expr)?;
 
-                            // But that type needs a `to_string` method
-                            let res = self.get_method(
-                                &ty,
-                                &Meta {
-                                    id: MetaId(0),
-                                    node: "to_string".into(),
+                            // But that type needs a `to_string` method, which
+                            // we are going to try to resolve later.
+                            self.obligations.push(
+                                Obligation::ResolveMethod {
+                                    id: part.id,
+                                    receiver: ty.clone(),
+                                    ident: "to_string".into(),
+                                    parameter_types: vec![ty.clone()],
+                                    return_type: Type::string(),
                                 },
                             );
-
-                            match res {
-                                Some(function) => {
-                                    let sig = &function.signature;
-                                    let mut correct = true;
-                                    correct &= sig.parameter_types.len() == 1;
-                                    correct &= self
-                                        .unify(
-                                            &ty,
-                                            &sig.parameter_types[0],
-                                            expr.id,
-                                            None,
-                                        )
-                                        .is_ok();
-                                    correct &= self
-                                        .unify(
-                                            &sig.return_type,
-                                            &Type::string(),
-                                            expr.id,
-                                            None,
-                                        )
-                                        .is_ok();
-                                    if !correct {
-                                        return Err(self.error_simple("the `to_string` method of this type does not have the right signature", "does not have a valid `to_string` method", expr.id));
-                                    }
-                                    self.type_info
-                                        .function_calls
-                                        .insert(part.id, function);
-                                }
-                                None => return Err(self.error_simple(
-                                    "type does not have a `to_string` method",
-                                    "does not have a `to_string` method",
-                                    expr.id,
-                                )),
-                            }
                         }
                     }
                 }
@@ -954,7 +923,7 @@ impl TypeChecker {
         })
     }
 
-    fn get_method(
+    pub(super) fn get_method(
         &mut self,
         ty: &Type,
         method: &Meta<Identifier>,

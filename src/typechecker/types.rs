@@ -31,6 +31,14 @@ impl Type {
         Type::named("u8", Vec::new())
     }
 
+    pub fn i32() -> Type {
+        Type::named("i32", Vec::new())
+    }
+
+    pub fn f64() -> Type {
+        Type::named("f64", Vec::new())
+    }
+
     pub fn string() -> Type {
         Type::named("String", Vec::new())
     }

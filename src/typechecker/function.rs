@@ -49,6 +49,7 @@ impl TypeChecker {
         };
 
         self.block(scope, &ctx, body)?;
+        self.resolve_obligations()?;
 
         let param_types = params.into_iter().map(|(_, t)| t).collect();
 
@@ -91,6 +92,8 @@ impl TypeChecker {
         };
 
         self.block(scope, &ctx, body)?;
+        self.resolve_obligations()?;
+
         Ok(())
     }
 
@@ -131,6 +134,7 @@ impl TypeChecker {
             function_return_type: Some(ret),
         };
         self.block(scope, &ctx, body)?;
+        self.resolve_obligations()?;
         Ok(())
     }
 
