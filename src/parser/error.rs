@@ -147,7 +147,6 @@ fn escape_error_to_msg(error: &EscapeError, mode: Mode) -> String {
 
 #[derive(Clone, Debug)]
 pub enum ParseErrorKind {
-    EmptyInput,
     EndOfInput,
     FailedToParseEntireInput,
     InvalidToken,
@@ -169,7 +168,6 @@ pub enum ParseErrorKind {
 impl ParseErrorKind {
     pub fn label(&self) -> String {
         match self {
-            Self::EmptyInput => "input is empty".into(),
             Self::EndOfInput => "reached end of input".into(),
             Self::FailedToParseEntireInput => "parser got stuck here".into(),
             Self::InvalidToken => "invalid token".into(),
@@ -187,7 +185,6 @@ impl ParseErrorKind {
 impl std::fmt::Display for ParseErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::EmptyInput => write!(f, "input was empty"),
             Self::EndOfInput => write!(f, "unexpected end of input"),
             Self::FailedToParseEntireInput => {
                 write!(f, "failed to parse entire input")
