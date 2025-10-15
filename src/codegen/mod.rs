@@ -6,6 +6,7 @@
 use std::{
     any::{type_name, Any, TypeId},
     collections::HashMap,
+    ffi::c_void,
     marker::PhantomData,
     mem::ManuallyDrop,
     sync::Arc,
@@ -51,7 +52,7 @@ use cranelift::{
     prelude::{FloatCC, Signature},
 };
 use cranelift_codegen::ir::{SigRef, StackSlot};
-use log::info;
+use libc::size_t;
 
 pub mod check;
 pub mod testing;
@@ -299,6 +300,21 @@ pub fn codegen(
     let mut builder = JITBuilder::with_isa(
         isa.to_owned(),
         cranelift::module::default_libcall_names(),
+    );
+
+    // This is a fix for cranelift not finding the memcpy libcall when it is
+    // compiled with static linking (e.g. with musl).
+    //
+    // We might need to add more symbols in the future, but for now, this passes
+    // the tests.
+    builder.symbol(
+        "memcpy",
+        libc::memcpy
+            as unsafe extern "C" fn(
+                *mut c_void,
+                *const c_void,
+                size_t,
+            ) -> *mut c_void as *const u8,
     );
 
     for func_ref in runtime_functions.keys() {
@@ -558,14 +574,18 @@ impl ModuleBuilder {
 
         self.inner.define_function(func_id, &mut ctx).unwrap();
 
-        let capstone = self.isa.to_capstone().unwrap();
-        info!(
-            "\n{}",
-            ctx.compiled_code()
-                .unwrap()
-                .disassemble(None, &capstone)
-                .unwrap()
-        );
+        #[cfg(feature = "disas")]
+        {
+            use log::info;
+            let capstone = self.isa.to_capstone().unwrap();
+            info!(
+                "\n{}",
+                ctx.compiled_code()
+                    .unwrap()
+                    .disassemble(None, &capstone)
+                    .unwrap()
+            );
+        }
         self.inner.clear_context(&mut ctx);
     }
 

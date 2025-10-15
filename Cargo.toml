@@ -28,6 +28,7 @@ bench = false
 default = ["cli"]
 cli = ["clap"]
 logger = ["env_logger"]
+disas = ["cranelift-codegen/disas"]
 
 [dependencies]
 ariadne = "0.5.1"
@@ -39,6 +40,7 @@ log = "0.4"
 roto-macros = { workspace = true }
 symbol_table = { version = "0.4.0", features = ["global"] }
 rustc-literal-escaper = "0.0.4"
+libc = "0.2.177"
 
 [dependencies.cranelift]
 version = "0.120.0"
@@ -46,7 +48,6 @@ features = ["frontend", "jit", "module", "native"]
 
 [dependencies.cranelift-codegen]
 version = "0.120.0"
-features = ["disas"]
 
 [dev-dependencies]
 bytes = "1"
