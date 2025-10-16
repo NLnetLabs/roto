@@ -12,10 +12,10 @@ use crate::{
 };
 
 use super::{
+    ParseResult, Parser,
     error::ParseErrorKind,
     meta::{Meta, Span},
     token::{FStringToken, Keyword, Token},
-    ParseResult, Parser,
 };
 
 /// Contextual restrictions on the expression parsing
@@ -208,7 +208,8 @@ impl Parser<'_, '_> {
                 return Err(ParseError::custom(
                     "left-hand side of an expression must be a single identifier",
                     "cannot assign to this expression",
-                    self.get_span(&left)));
+                    self.get_span(&left),
+                ));
             };
             let right = self.logical_expr(r)?;
             let span = self.merge_spans(&left, &right);
@@ -761,7 +762,7 @@ impl Parser<'_, '_> {
                     "an IP address",
                     token,
                     span,
-                ))
+                ));
             }
         };
         Ok(self.spans.add(span, addr))
@@ -812,7 +813,7 @@ impl Parser<'_, '_> {
                         token,
                         e,
                         span,
-                    ))
+                    ));
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
@@ -1003,16 +1004,14 @@ impl Parser<'_, '_> {
             Token::Keyword(Keyword::Dep) => "dep".into(),
             Token::Keyword(Keyword::Super) => "super".into(),
             Token::Ident(s) => s.into(),
-            _ => {
-                return Err(ParseError::expected(
-                    "an identifier, `super`, `pkg` or `dep`",
-                    &tok,
-                    span,
-                )
-                .with_note(format!(
+            _ => return Err(ParseError::expected(
+                "an identifier, `super`, `pkg` or `dep`",
+                &tok,
+                span,
+            )
+            .with_note(format!(
                 "`{tok}` is a keyword and cannot be used as an identifier."
-            )))
-            }
+            ))),
         };
         Ok(self.spans.add(span, ident))
     }

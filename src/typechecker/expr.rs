@@ -7,13 +7,14 @@ use crate::{
     ice,
     parser::meta::{Meta, MetaId},
     typechecker::{
+        Obligation,
         scope::DeclarationKind,
         types::{MustBeSigned, Primitive},
-        Obligation,
     },
 };
 
 use super::{
+    TypeChecker, TypeResult,
     scope::{
         Declaration, ResolvedName, ScopeRef, ScopeType, TypeOrStub, ValueKind,
     },
@@ -21,7 +22,6 @@ use super::{
         EnumVariant, Function, FunctionDefinition, Signature, Type,
         TypeDefinition, TypeName,
     },
-    TypeChecker, TypeResult,
 };
 
 /// The context for type checking expressions

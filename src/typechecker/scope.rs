@@ -10,10 +10,10 @@ use crate::{
 };
 
 use super::{
+    Type,
     info::TypeInfo,
     scoped_display::TypeDisplay,
     types::{EnumVariant, FunctionDefinition, TypeDefinition},
-    Type,
 };
 
 /// A reference to a [`Scope`] in a [`ScopeGraph`]

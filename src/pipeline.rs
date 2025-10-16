@@ -4,9 +4,8 @@ use std::{collections::HashMap, fmt};
 
 use crate::{
     codegen::{
-        self,
+        self, Module, TypedFunc,
         check::{FunctionRetrievalError, RotoFunc},
-        Module, TypedFunc,
     },
     file_tree::SourceFile,
     label::LabelStore,
@@ -18,12 +17,12 @@ use crate::{
     mir,
     module::{ModuleTree, Parsed},
     parser::{
-        meta::{Span, Spans},
         ParseError,
+        meta::{Span, Spans},
     },
     runtime::{
-        context::{Context, ContextDescription},
         Runtime, RuntimeFunctionRef,
+        context::{Context, ContextDescription},
     },
     typechecker::{
         error::{Level, TypeError},

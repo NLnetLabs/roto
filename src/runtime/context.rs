@@ -1,4 +1,4 @@
-use std::any::{type_name, TypeId};
+use std::any::{TypeId, type_name};
 
 /// The context or environment that a Roto script runs in
 ///

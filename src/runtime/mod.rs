@@ -25,6 +25,7 @@ use layout::Layout;
 use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
 
 use crate::{
+    Context, Location, Package, RotoReport,
     ast::Identifier,
     file_tree::FileTree,
     parser::token::{Lexer, Token},
@@ -35,10 +36,9 @@ use crate::{
         },
     },
     typechecker::{
-        scope::{ResolvedName, ScopeRef},
         TypeChecker,
+        scope::{ResolvedName, ScopeRef},
     },
-    Context, Location, Package, RotoReport,
 };
 
 /// Provides the types and functions that Roto can access via FFI
@@ -969,14 +969,16 @@ impl Runtime {
         };
 
         if lexer.next().is_some() {
-            return Err(format!("Name {name:?} contains multiple tokens and is not a valid Roto identifier"));
+            return Err(format!(
+                "Name {name:?} contains multiple tokens and is not a valid Roto identifier"
+            ));
         }
 
         match tok {
             Token::Ident(_) => Ok(()),
-            Token::Keyword(_) => {
-                Err(format!("Name {name:?} is a keyword in Roto and therefore not a valid identifier"))
-            }
+            Token::Keyword(_) => Err(format!(
+                "Name {name:?} is a keyword in Roto and therefore not a valid identifier"
+            )),
             _ => {
                 Err(format!("Name {name:?} is not a valid Roto identifier."))
             }

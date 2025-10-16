@@ -9,10 +9,10 @@ use crate::{
 };
 
 use super::{
+    ResolvedPath, TypeChecker,
     scope::{DeclarationKind, ValueKind},
     scoped_display::TypeDisplay,
     types::Type,
-    ResolvedPath, TypeChecker,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -218,9 +218,11 @@ impl TypeChecker {
             ),
             location: method_name.id,
             labels: vec![Label::error(
-                format!("takes {takes} arguments but {given} arguments were given"),
-                method_name.id)
-            ],
+                format!(
+                    "takes {takes} arguments but {given} arguments were given"
+                ),
+                method_name.id,
+            )],
         }
     }
 
@@ -252,8 +254,10 @@ impl TypeChecker {
         ty: &Type,
     ) -> TypeError {
         TypeError {
-            description: format!("pattern has fields, but the variant `{variant}` of `{}` doesn't have one",
-                    ty.display(&self.type_info)),
+            description: format!(
+                "pattern has fields, but the variant `{variant}` of `{}` doesn't have one",
+                ty.display(&self.type_info)
+            ),
             location: variant.id,
             labels: vec![Label::error("unexpected data field", variant.id)],
         }
@@ -265,8 +269,10 @@ impl TypeChecker {
         ty: &Type,
     ) -> TypeError {
         TypeError {
-            description: format!("pattern has no arguments, but variant `{variant}` of `{}` does have arguments",
-                    ty.display(&self.type_info)),
+            description: format!(
+                "pattern has no arguments, but variant `{variant}` of `{}` does have arguments",
+                ty.display(&self.type_info)
+            ),
             location: variant.id,
             labels: vec![Label::error("missing arguments", variant.id)],
         }

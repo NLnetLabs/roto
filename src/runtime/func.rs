@@ -3,8 +3,8 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::lir::{IrValue, Memory};
 use crate::Reflect;
+use crate::lir::{IrValue, Memory};
 
 #[derive(Clone)]
 pub struct FunctionDescription {

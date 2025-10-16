@@ -7,10 +7,10 @@ use crate::{
 };
 
 use super::{
+    TypeChecker, TypeResult,
     expr::Context,
     scope::{ScopeRef, ScopeType},
     types::Type,
-    TypeChecker, TypeResult,
 };
 
 impl TypeChecker {

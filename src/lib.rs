@@ -33,9 +33,10 @@ pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub(crate) use pipeline::RotoError;
 pub use pipeline::{Package, RotoReport};
 pub use roto_macros::{
-    roto_function, roto_method, roto_static_method, Context,
+    Context, roto_function, roto_method, roto_static_method,
 };
 pub use runtime::{
+    RegistrationError, Runtime,
     context::Context,
     func::RegisterableFn,
     items::{
@@ -45,7 +46,6 @@ pub use runtime::{
     ty::Reflect,
     val::Val,
     verdict::Verdict,
-    RegistrationError, Runtime,
 };
 
 /// Create a list of items to be registered.

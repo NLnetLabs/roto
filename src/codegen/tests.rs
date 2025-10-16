@@ -2,14 +2,14 @@ use core::f32;
 use std::{
     net::IpAddr,
     sync::{
-        atomic::{AtomicI32, AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicI32, AtomicUsize, Ordering},
     },
 };
 
 use crate::{
-    file_tree::FileSpec, library, pipeline::Package, source_file, src,
-    Context, FileTree, Runtime, Val, Verdict,
+    Context, FileTree, Runtime, Val, Verdict, file_tree::FileSpec, library,
+    pipeline::Package, source_file, src,
 };
 use inetnum::{addr::Prefix, asn::Asn};
 

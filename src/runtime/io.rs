@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{library, Runtime};
+use crate::{Runtime, library};
 
 impl Runtime {
     /// Add functions using I/O to the runtime.

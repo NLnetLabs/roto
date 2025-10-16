@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use roto::{library, Runtime, Val, Verdict};
+use roto::{Runtime, Val, Verdict, library};
 
 #[derive(Clone)]
 struct AddrRange {

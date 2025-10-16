@@ -3,10 +3,10 @@ use std::{any::TypeId, sync::Arc};
 use crate::{
     ast::Identifier,
     ice,
-    lir::{value::IrType, Instruction, Operand},
+    lir::{Instruction, Operand, value::IrType},
     runtime::{
-        layout::{Layout, LayoutBuilder},
         CloneDrop, Movability,
+        layout::{Layout, LayoutBuilder},
     },
     typechecker::types::{Primitive, Type, TypeDefinition},
 };

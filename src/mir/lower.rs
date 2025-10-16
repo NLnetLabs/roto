@@ -9,6 +9,7 @@ use super::{
 };
 
 use crate::{
+    Runtime,
     ast::{self, Identifier, Literal},
     ice,
     ir_printer::{IrPrinter, Printable},
@@ -17,16 +18,14 @@ use crate::{
     parser::meta::{Meta, MetaId},
     runtime::RuntimeFunctionRef,
     typechecker::{
-        self,
+        self, PathValue, ResolvedPath,
         info::TypeInfo,
         scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
         scoped_display::TypeDisplay,
         types::{
             EnumVariant, FunctionDefinition, Signature, Type, TypeDefinition,
         },
-        PathValue, ResolvedPath,
     },
-    Runtime,
 };
 
 pub struct Lowerer<'r> {

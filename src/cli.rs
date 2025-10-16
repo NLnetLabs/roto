@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use crate::{
-    tools::print::print_highlighted, FileTree, RotoError, RotoReport, Runtime,
+    FileTree, RotoError, RotoReport, Runtime, tools::print::print_highlighted,
 };
 
 #[derive(Parser)]
