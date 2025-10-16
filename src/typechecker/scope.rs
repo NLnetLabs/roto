@@ -66,7 +66,7 @@ pub enum DeclarationKind {
     Function(Option<FunctionDeclaration>),
     Module,
     Method(Option<FunctionDeclaration>),
-    Variant(TypeDefinition, EnumVariant),
+    Variant(Option<(TypeDefinition, EnumVariant)>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -323,7 +323,9 @@ impl ScopeGraph {
                 }
             })?;
 
-        dec.scope = Some(new_scope);
+        if dec.scope.is_none() {
+            dec.scope = Some(new_scope);
+        }
         Ok(())
     }
 

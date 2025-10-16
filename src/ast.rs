@@ -19,6 +19,7 @@ pub struct SyntaxTree {
 pub enum Declaration {
     FilterMap(Box<FilterMap>),
     Record(RecordTypeDeclaration),
+    Enum(EnumTypeDeclaration),
     Function(FunctionDeclaration),
     Test(Test),
     Import(Vec<Meta<Path>>),
@@ -32,6 +33,18 @@ pub struct Params(pub Vec<(Meta<Identifier>, Meta<TypeExpr>)>);
 pub struct RecordTypeDeclaration {
     pub ident: Meta<Identifier>,
     pub record_type: RecordType,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumTypeDeclaration {
+    pub ident: Meta<Identifier>,
+    pub variants: Meta<Vec<EnumVariant>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumVariant {
+    pub ident: Meta<Identifier>,
+    pub fields: Vec<Meta<TypeExpr>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

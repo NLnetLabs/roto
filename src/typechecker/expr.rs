@@ -1223,7 +1223,7 @@ impl TypeChecker {
                     fields,
                 }))
             }
-            DeclarationKind::Variant(ty, variant) => {
+            DeclarationKind::Variant(Some((ty, variant))) => {
                 if let Some(_field) = idents.next() {
                     todo!("make a nice error for variant cannot have field")
                 }
@@ -1232,7 +1232,8 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
-            DeclarationKind::Function(None)
+            DeclarationKind::Variant(None)
+            | DeclarationKind::Function(None)
             | DeclarationKind::Method(None) => {
                 ice!("These should be declared at this point")
             }

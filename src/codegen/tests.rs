@@ -3599,3 +3599,84 @@ fn prefix_eq() {
     let f = pkg.get_function::<(), fn() -> bool>("foo").unwrap();
     f.call(&mut ());
 }
+
+#[test]
+fn define_enum() {
+    let s = src!(
+        "
+       enum Foo {
+           Bar,
+           Baz,
+       }
+
+       fn make_foo(x: bool) -> Foo {
+           if x {
+               Foo.Bar
+           } else {
+               Foo.Baz
+           }
+       }
+
+       fn match_on_foo(x: bool) -> i32 {
+           match make_foo(x) {
+               Bar -> 10,
+               Baz -> 20,
+           }
+       }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<(), fn(bool) -> i32>("match_on_foo")
+        .unwrap();
+
+    let res = f.call(&mut (), true);
+    assert_eq!(res, 10);
+
+    let res = f.call(&mut (), false);
+    assert_eq!(res, 20);
+}
+
+#[test]
+fn haskeller_wants_to_feel_at_home() {
+    let s = src!(
+        "
+       enum Maybe {
+           Just(i32),
+           Nothing,
+       }
+
+       import Maybe.{Just, Nothing};
+
+       fn from_option(x: i32?) -> Maybe {
+           match x {
+               None -> Nothing,
+               Some(x) -> Just(x)
+           }
+       }
+
+       fn to_option(x: Maybe) -> i32? {
+           match x {
+               Nothing -> None,
+               Just(x) -> Some(x),
+           }
+       }
+
+       fn useless(x: i32?) -> i32? {
+           to_option(from_option(x))
+       }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<(), fn(Option<i32>) -> Option<i32>>("useless")
+        .unwrap();
+
+    let res = f.call(&mut (), Some(5));
+    assert_eq!(res, Some(5));
+
+    let res = f.call(&mut (), None);
+    assert_eq!(res, None);
+}

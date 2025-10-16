@@ -297,7 +297,7 @@ impl Runtime {
                         items,
                     }));
                 }
-                DeclarationKind::Variant(_, _) => {
+                DeclarationKind::Variant(_) => {
                     // Skip for now
                 }
             }
