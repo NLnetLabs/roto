@@ -18,24 +18,22 @@ fn main() -> ExitCode {
     };
 
     let func = pkg
-        .get_function::<(), fn(IpAddr) -> Verdict<(), ()>>("main")
+        .get_function::<fn(IpAddr) -> Verdict<(), ()>>("main")
         .unwrap();
 
-    let res = func.call(&mut (), "0.0.0.0".parse().unwrap());
+    let res = func.call("0.0.0.0".parse().unwrap());
     println!("main(0.0.0.0) = {res:?}");
 
-    let res = func.call(&mut (), "1.1.1.1".parse().unwrap());
+    let res = func.call("1.1.1.1".parse().unwrap());
     println!("main(1.1.1.1) = {res:?}");
 
-    let is_zero = pkg
-        .get_function::<(), fn(IpAddr) -> bool>("is_zero")
-        .unwrap();
+    let is_zero = pkg.get_function::<fn(IpAddr) -> bool>("is_zero").unwrap();
 
-    let res = is_zero.call(&mut (), "0.0.0.0".parse().unwrap());
+    let res = is_zero.call("0.0.0.0".parse().unwrap());
     println!("is_zero(0.0.0.0) = {res:?}");
 
     println!();
-    let _ = pkg.run_tests(());
+    let _ = pkg.run_tests();
 
     ExitCode::SUCCESS
 }

@@ -9,9 +9,9 @@ fn main() -> Result<(), roto::RotoReport> {
         .compile("examples/modules")
         .inspect_err(|e| eprintln!("{e}"))?;
 
-    let f = pkg.get_function::<(), fn(i32) -> i32>("main").unwrap();
+    let f = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
 
-    let x = f.call(&mut (), 4i32);
+    let x = f.call(4i32);
     println!("main(4) = {x}");
     Ok(())
 }

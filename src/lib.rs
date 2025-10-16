@@ -36,7 +36,7 @@ pub use roto_macros::{
     Context, roto_function, roto_method, roto_static_method,
 };
 pub use runtime::{
-    RegistrationError, Runtime,
+    Ctx, NoCtx, RegistrationError, Runtime,
     context::Context,
     func::RegisterableFn,
     items::{
