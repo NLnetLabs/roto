@@ -141,6 +141,12 @@ fn ip_addr_methods() -> Library {
             fn to_canonical(self) -> IpAddr {
                 self.to_canonical()
             }
+
+            /// The IPv4 address pointing to localhost: `127.0.0.1`
+            const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);
+
+            /// The IPv6 address pointing to localhost: `::1`
+            const LOCALHOSTV6: IpAddr = IpAddr::from(Ipv6Addr::LOCALHOST);
         }
     }
 }
@@ -393,11 +399,5 @@ pub fn built_ins() -> Library {
 
         include!(ip_addr_methods());
         include!(string_methods());
-
-        /// The IPv4 address pointing to localhost: `127.0.0.1`
-        const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);
-
-        /// The IPv6 address pointing to localhost: `::1`
-        const LOCALHOSTV6: IpAddr = IpAddr::from(Ipv6Addr::LOCALHOST);
     }
 }

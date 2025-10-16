@@ -1466,7 +1466,7 @@ fn use_constant() {
         "
         filtermap main() {
             let safi = 127.0.0.1;
-            if safi == LOCALHOSTV4 {
+            if safi == IpAddr.LOCALHOSTV4 {
                 reject
             }
             accept
