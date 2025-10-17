@@ -353,7 +353,7 @@ fn a_bunch_of_comparisons() {
 fn record() {
     let s = src!(
         "
-        type Foo { a: i32, b: i32 }
+        struct Foo { a: i32, b: i32 }
 
         filtermap main(x: i32) {
             let foo = Foo { a: x, b: 20 };
@@ -386,7 +386,7 @@ fn record() {
 fn record_with_fields_flipped() {
     let s = src!(
         "
-        type Foo { a: i32, b: i32 }
+        struct Foo { a: i32, b: i32 }
 
         filtermap main(x: i32) {
             # These are flipped, to ensure that the order in which
@@ -422,8 +422,8 @@ fn record_with_fields_flipped() {
 fn nested_record() {
     let s = src!(
         "
-        type Foo { x: Bar, y: Bar }
-        type Bar { a: i32, b: i32 }
+        struct Foo { x: Bar, y: Bar }
+        struct Bar { a: i32, b: i32 }
 
         filtermap main(x: i32) {
             let bar = Bar { a: 20, b: x };
@@ -458,7 +458,7 @@ fn misaligned_fields() {
     // A record where the second field should be aligned
     let s = src!(
         "
-        type Foo { a: i16, b: i32 }
+        struct Foo { a: i16, b: i32 }
 
         filtermap main(x: i32) {
             let foo = Foo { a: 10, b: x };
@@ -2662,7 +2662,7 @@ fn use_type_from_module() {
     let foo = source_file!(
         "foo",
         "
-            type Foo {
+            struct Foo {
                 bar: i32,
             }
         "
@@ -2693,7 +2693,7 @@ fn use_imported_type() {
     let foo = source_file!(
         "foo",
         "
-            type Foo {
+            struct Foo {
                 bar: i32,
             }
         "
@@ -2726,7 +2726,7 @@ fn use_type_in_function_argument() {
     let foo = source_file!(
         "foo",
         "
-            type Foo {
+            struct Foo {
                 bar: i32,
             }
         "
@@ -2793,7 +2793,7 @@ fn use_type_in_function_return_type() {
     let foo = source_file!(
         "foo",
         "
-            type Foo {
+            struct Foo {
                 bar: i32,
             }
         "
@@ -2814,7 +2814,7 @@ fn use_type_from_other_module_in_type() {
     let pkg = source_file!(
         "pkg",
         "
-            type Bli {
+            struct Bli {
                 bla: foo.Bla,
             }
 
@@ -2826,7 +2826,7 @@ fn use_type_from_other_module_in_type() {
     let foo = source_file!(
         "foo",
         "
-            type Bla {
+            struct Bla {
                 blubb: i32,
             }
         "

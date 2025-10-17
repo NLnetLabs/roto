@@ -86,9 +86,9 @@ pub enum Keyword {
     Reject,
     Return,
     Std,
+    Struct,
     Super,
     Test,
-    Type,
     While,
 }
 
@@ -513,9 +513,9 @@ impl<'s> Lexer<'s> {
             "reject" => Keyword::Reject,
             "return" => Keyword::Return,
             "std" => Keyword::Std,
+            "struct" => Keyword::Struct,
             "super" => Keyword::Super,
             "test" => Keyword::Test,
-            "type" => Keyword::Type,
             "while" => Keyword::While,
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
@@ -602,9 +602,9 @@ impl Keyword {
             Keyword::Reject => "reject",
             Keyword::Return => "return",
             Keyword::Std => "std",
+            Keyword::Struct => "struct",
             Keyword::Super => "super",
             Keyword::Test => "test",
-            Keyword::Type => "type",
             Keyword::While => "while",
         }
     }

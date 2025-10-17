@@ -4,12 +4,12 @@ expression: string
 input_file: tests/scripts/type_errors/types_with_the_same_name.roto
 ---
 Error: Type error: item `Foo` is declared multiple times
-   ╭─[ tests/scripts/type_errors/types_with_the_same_name.roto:2:6 ]
+   ╭─[ tests/scripts/type_errors/types_with_the_same_name.roto:2:8 ]
    │
- 1 │ type Foo { a: u32 }
-   │      ─┬─  
-   │       ╰─── `Foo` previously declared here
- 2 │ type Foo { b: u32 }
-   │      ─┬─  
-   │       ╰─── `Foo` redefined here
+ 1 │ struct Foo { a: u32 }
+   │        ─┬─  
+   │         ╰─── `Foo` previously declared here
+ 2 │ struct Foo { b: u32 }
+   │        ─┬─  
+   │         ╰─── `Foo` redefined here
 ───╯
