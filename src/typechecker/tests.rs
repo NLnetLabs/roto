@@ -1104,3 +1104,14 @@ fn invalid_type_in_f_string() {
 
     typecheck(s).unwrap_err();
 }
+
+#[test]
+fn two_enums() {
+    let s = src!(
+        r#"
+          enum Foo { Bar };
+          enum Foo { Baz };  
+        "#
+    );
+    typecheck(s).unwrap_err();
+}

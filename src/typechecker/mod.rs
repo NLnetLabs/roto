@@ -617,6 +617,8 @@ impl TypeChecker {
 
                 dec.scope = Some(new_scope);
 
+                // We have to insert stub declarations for all the enum
+                // variants, so that they can be imported.
                 if let ast::Declaration::Enum(x) = d {
                     for variant in &*x.variants {
                         let res =
