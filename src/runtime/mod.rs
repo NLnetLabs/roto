@@ -791,6 +791,27 @@ impl Runtime {
                         .unwrap();
                     self.declare_constants(scope, &module.children)?;
                 }
+                Item::Impl(Impl {
+                    ty,
+                    children,
+                    location,
+                }) => {
+                    let ty = self
+                        .types
+                        .iter()
+                        .find(|t| t.type_id == *ty)
+                        .ok_or_else(|| RegistrationError {
+                            message: "Impl block with unregistered type"
+                                .into(),
+                            location: location.clone(),
+                        })?;
+
+                    let scope = ty.name.scope;
+                    let ident = ty.name.ident;
+                    let scope =
+                        self.type_checker.get_scope_of(scope, ident).unwrap();
+                    self.declare_constants(scope, &children)?;
+                }
                 Item::Constant(c) => self.declare_constant(scope, c)?,
                 _ => {}
             }
