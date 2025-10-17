@@ -1109,8 +1109,8 @@ fn invalid_type_in_f_string() {
 fn two_enums() {
     let s = src!(
         r#"
-          enum Foo { Bar };
-          enum Foo { Baz };  
+          enum Foo { Bar }
+          enum Foo { Baz }  
         "#
     );
     typecheck(s).unwrap_err();

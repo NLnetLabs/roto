@@ -104,9 +104,7 @@ impl TypeChecker {
         self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
 
         for stmt in &block.stmts {
-            if diverged {
-                return Err(self.error_unreachable_expression(stmt));
-            }
+            // TODO: emit message for diverging statements
             diverged |= self.stmt(scope, ctx, stmt)?;
         }
 
@@ -124,11 +122,7 @@ impl TypeChecker {
             return Ok(diverged);
         };
 
-        // Here we have a last expression but the previous expressions diverged
-        // that makes this expression unreachable.
-        if diverged {
-            return Err(self.error_unreachable_expression(expr));
-        }
+        // TODO: emit message for diverging statements
         diverged |= self.expr(scope, ctx, expr)?;
 
         // Store the same type info on the block as on the expression

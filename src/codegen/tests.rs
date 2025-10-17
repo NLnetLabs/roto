@@ -3680,3 +3680,53 @@ fn haskeller_wants_to_feel_at_home() {
     let res = f.call(&mut (), None);
     assert_eq!(res, None);
 }
+
+#[test]
+fn match_on_empty_enum() {
+    let s = src!(
+        "
+        enum Foo {}
+
+        fn foo(x: Foo) {
+            match x {}
+        }
+    "
+    );
+
+    let _pkg = compile(s);
+}
+
+#[test]
+fn match_on_empty_enum_2() {
+    let s = src!(
+        "
+        enum Foo {}
+
+        fn foo() {
+            let x: Foo = return;
+            match x {}
+        }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn() -> ()>("foo").unwrap();
+    f.call(&mut ())
+}
+
+#[test]
+fn match_on_uninhabited_enum() {
+    let s = src!(
+        "
+        enum Foo { Baz(!) }
+
+        fn foo(x: Foo) {
+            match x {
+                Baz(x) -> {}
+            }
+        }
+    "
+    );
+
+    let _pkg = compile(s);
+}
