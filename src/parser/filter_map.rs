@@ -83,7 +83,7 @@ impl Parser<'_, '_> {
     pub(super) fn record_type_assignment(
         &mut self,
     ) -> ParseResult<RecordTypeDeclaration> {
-        self.take(Token::Keyword(Keyword::Type))?;
+        self.take(Token::Keyword(Keyword::Record))?;
         let ident = self.identifier()?;
         let record_type = self.record_type()?;
 
