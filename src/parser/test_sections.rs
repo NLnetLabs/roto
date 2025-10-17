@@ -139,3 +139,70 @@ fn sublist_sublist_import() {
 
     parse(s).unwrap();
 }
+
+#[test]
+fn enum_empty() {
+    let s = "
+        enum Foo {}
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_single() {
+    let s = "
+        enum Foo { Bar }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_single_comma() {
+    let s = "
+        enum Foo { Bar, }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_single_field() {
+    let s = "
+        enum Foo { Bar(i32) }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_single_field_comma() {
+    let s = "
+        enum Foo { Bar(i32,) }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_single_field_comma_comma() {
+    let s = "
+        enum Foo { Bar(i32,), }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_two_fields() {
+    let s = "
+        enum Foo { Bar(i32, u32) }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn enum_multiple_variants() {
+    let s = "
+        enum Foo {
+            U(u32),
+            I(i32),
+        }
+    ";
+    parse(s).unwrap();
+}
