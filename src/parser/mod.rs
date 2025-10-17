@@ -206,7 +206,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Keyword(Keyword::Type) => {
+            Token::Keyword(Keyword::Struct) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
             Token::Keyword(Keyword::Fn) => {
@@ -278,8 +278,6 @@ impl Parser<'_, '_> {
         let (token, span) = self.next()?;
         let ident = match token {
             Token::Ident(s) => s,
-            // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Keyword(Keyword::Type) => "type",
             Token::Keyword(_) => {
                 let note = format!(
                     "`{token}` is a keyword and cannot be used as an identifier."

@@ -290,7 +290,7 @@ fn anonymous_record() {
 fn typed_record() {
     let s = src!(
         "
-        type Range {
+        struct Range {
             low: u32,
             high: u32,
         }
@@ -330,8 +330,8 @@ fn typed_record() {
 fn nested_record() {
     let s = src!(
         "
-        type Foo { x: Bar, y: Bar }
-        type Bar { a: i32, b: i32 }
+        struct Foo { x: Bar, y: Bar }
+        struct Bar { a: i32, b: i32 }
 
         filtermap main(x: i32) {
             let bar = Bar { a: 20, b: x };

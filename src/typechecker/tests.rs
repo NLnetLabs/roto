@@ -40,7 +40,7 @@ fn empty() {
 
 #[test]
 fn one_record() {
-    let s = src!("type Foo { a: u32 }");
+    let s = src!("struct Foo { a: u32 }");
     assert!(typecheck(s).is_ok());
 }
 
@@ -48,8 +48,8 @@ fn one_record() {
 fn declared_multiple_times() {
     let s = src!(
         "
-        type Foo { a: u32 }
-        type Foo { a: u32 }
+        struct Foo { a: u32 }
+        struct Foo { a: u32 }
     "
     );
     assert!(typecheck(s).is_err());
@@ -59,7 +59,7 @@ fn declared_multiple_times() {
 fn double_field() {
     let s = src!(
         "
-        type Foo { a: u32, a: u8 }
+        struct Foo { a: u32, a: u8 }
     "
     );
     assert!(typecheck(s).is_err());
@@ -67,7 +67,7 @@ fn double_field() {
 
 #[test]
 fn undeclared_type_in_record() {
-    let s = src!("type Bar { f: Foo }");
+    let s = src!("struct Bar { f: Foo }");
     assert!(typecheck(s).is_err());
 }
 
@@ -75,7 +75,7 @@ fn undeclared_type_in_record() {
 fn nested_record() {
     let s = src!(
         "
-        type Foo { a: { b: u32, c: u32 } }
+        struct Foo { a: { b: u32, c: u32 } }
     "
     );
     assert!(typecheck(s).is_ok());
@@ -85,16 +85,16 @@ fn nested_record() {
 fn two_records() {
     let s = src!(
         "
-        type Foo { a: u32 }
-        type Bar { f: Foo }
+        struct Foo { a: u32 }
+        struct Bar { f: Foo }
     "
     );
     assert!(typecheck(s).is_ok());
 
     let s = src!(
         "
-        type Bar { f: Foo }
-        type Foo { a: u32 }
+        struct Bar { f: Foo }
+        struct Foo { a: u32 }
     "
     );
     assert!(typecheck(s).is_ok());
@@ -104,35 +104,35 @@ fn two_records() {
 fn record_cycle() {
     let s = src!(
         "
-        type Foo { f: Foo }
+        struct Foo { f: Foo }
     "
     );
     assert!(typecheck(s).is_err());
 
     let s = src!(
         "
-        type Bar { f: Foo }
-        type Foo { b: Bar }
+        struct Bar { f: Foo }
+        struct Foo { b: Bar }
     "
     );
     assert!(typecheck(s).is_err());
 
     let s = src!(
         "
-        type A { x: B }
-        type B { x: C }
-        type C { x: D }
-        type D { x: A }
+        struct A { x: B }
+        struct B { x: C }
+        struct C { x: D }
+        struct D { x: A }
     "
     );
     assert!(typecheck(s).is_err());
 
     let s = src!(
         "
-        type A { x: B }
-        type B { x: C }
-        type C { x: { y: D } }
-        type D { x: B }
+        struct A { x: B }
+        struct B { x: C }
+        struct C { x: { y: D } }
+        struct D { x: B }
     "
     );
     assert!(typecheck(s).is_err());
@@ -142,10 +142,10 @@ fn record_cycle() {
 fn record_diamond() {
     let s = src!(
         "
-        type A { x: B, y: C }
-        type B { x: D }
-        type C { x: D }
-        type D { }
+        struct A { x: B, y: C }
+        struct B { x: D }
+        struct C { x: D }
+        struct D { }
     "
     );
     assert!(typecheck(s).is_ok());
@@ -239,7 +239,7 @@ fn filter_map_double_definition() {
 fn using_records() {
     let s = src!(
         r#"
-        type Foo { a: String }
+        struct Foo { a: String }
 
         filtermap bar(r: u32) {
             let a = Foo { a: "hello" };
@@ -251,7 +251,7 @@ fn using_records() {
 
     let s = src!(
         r#"
-        type Foo { a: String }
+        struct Foo { a: String }
 
         filtermap bar(r: u32) {
             let a = Foo { a: 0.0.0.0 };
@@ -263,7 +263,7 @@ fn using_records() {
 
     let s = src!(
         r#"
-        type Foo { a: string }
+        struct Foo { a: string }
 
         filtermap bar(r: u32) {
             let a = Foo { };
@@ -317,7 +317,7 @@ fn let_type_annotation() {
 fn integer_inference() {
     let s = src!(
         "
-        type Foo { x: u8 }
+        struct Foo { x: u8 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -329,8 +329,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        struct Foo { x: u8 }
+        struct Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let a = 5;
@@ -343,8 +343,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        struct Foo { x: u8 }
+        struct Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let a = 5;
@@ -358,8 +358,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        struct Foo { x: u8 }
+        struct Bar { x: u32 }
 
         filtermap my_map(r: u32) {
             let a = 5;
@@ -373,8 +373,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        struct Foo { x: u8 }
+        struct Bar { x: u32 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -390,8 +390,8 @@ fn integer_inference() {
 fn assign_field_to_other_record() {
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        struct Foo { x: u8 }
+        struct Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -404,8 +404,8 @@ fn assign_field_to_other_record() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        struct Foo { x: u8 }
+        struct Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -418,8 +418,8 @@ fn assign_field_to_other_record() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        struct Foo { x: u8 }
+        struct Bar { x: u32 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -567,7 +567,7 @@ fn send_output_stream() {
             foo: String
         }
 
-        type Bar { bar: String }
+        struct Bar { bar: String }
 
         fn hello() {
             stream.send(Bar {
@@ -674,7 +674,7 @@ fn record_inference() {
 
     let s = src!(
         "
-        type A { a: u32 }
+        struct A { a: u32 }
 
         fn bla(a: A, b: A) -> Bool {
             a == b
@@ -694,8 +694,8 @@ fn record_inference() {
 
     let s = src!(
         "
-        type A { a: u32 }
-        type B { a: u32 }
+        struct A { a: u32 }
+        struct B { a: u32 }
 
         fn bla() -> Bool {
             a == b && a == c
@@ -1091,7 +1091,7 @@ fn assignment_to_record() {
 fn invalid_type_in_f_string() {
     let s = src!(
         r#"
-            type Foo {
+            struct Foo {
                 x: i32,
             }
 

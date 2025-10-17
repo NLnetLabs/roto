@@ -1,4 +1,4 @@
-type Foo { a: u32 }
+struct Foo { a: u32 }
 
 fn foo() {
     let foo = Foo { a: 8 };

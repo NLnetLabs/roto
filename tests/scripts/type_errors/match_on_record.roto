@@ -1,4 +1,4 @@
-type Foo { a: u32 }
+struct Foo { a: u32 }
 
 filter foo(msg: Foo) {
 	match msg {}
