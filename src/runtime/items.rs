@@ -207,7 +207,7 @@ impl Type {
         Self::new::<T>(name, doc, movability, location)
     }
 
-    /// A type implementing `Clone`.
+    /// A type implementing `Copy`.
     ///
     /// The `name` must be a valid Roto identifier. The `doc` parameter is the
     /// docstring that will be displayed in the documentation that Roto can
