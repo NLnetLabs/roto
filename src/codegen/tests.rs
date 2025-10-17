@@ -1505,6 +1505,30 @@ fn import_associated_constant() {
 }
 
 #[test]
+fn registered_constant() {
+    let rt = Runtime::from_lib(library! {
+        const PI: f64 = 3.14;
+    })
+    .unwrap();
+
+    let s = src!(
+        "
+        fn circumference(radius: f64) -> f64 {
+            2.0 * PI * radius
+        }"
+    );
+
+    let mut p = compile_with_runtime(s, rt);
+    let f = p
+        .get_function::<(), fn(f64) -> f64>("circumference")
+        .unwrap();
+    let output = f.call(&mut (), 2.0);
+
+    let exp = 2.0 * 3.14 * 2.0;
+    assert!(exp - 0.1 < output && output < exp + 0.1);
+}
+
+#[test]
 fn use_context() {
     #[derive(Context)]
     struct Ctx {
