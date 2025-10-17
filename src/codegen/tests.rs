@@ -3682,6 +3682,49 @@ fn haskeller_wants_to_feel_at_home() {
 }
 
 #[test]
+fn generic_haskeller_wants_to_feel_at_home() {
+    let s = src!(
+        "
+       enum Maybe[T] {
+           Just(T),
+           Nothing,
+       }
+
+       import Maybe.{Just, Nothing};
+
+       fn from_option(x: i32?) -> Maybe[i32] {
+           match x {
+               None -> Nothing,
+               Some(x) -> Just(x)
+           }
+       }
+
+       fn to_option(x: Maybe[i32]) -> i32? {
+           match x {
+               Nothing -> None,
+               Just(x) -> Some(x),
+           }
+       }
+
+       fn useless(x: i32?) -> i32? {
+           to_option(from_option(x))
+       }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<(), fn(Option<i32>) -> Option<i32>>("useless")
+        .unwrap();
+
+    let res = f.call(&mut (), Some(5));
+    assert_eq!(res, Some(5));
+
+    let res = f.call(&mut (), None);
+    assert_eq!(res, None);
+}
+
+#[test]
 fn match_on_empty_enum() {
     let s = src!(
         "
@@ -3729,4 +3772,45 @@ fn match_on_uninhabited_enum() {
     );
 
     let _pkg = compile(s);
+}
+
+#[test]
+fn lets_make_a_result() {
+    let s = src!(
+        "
+        enum Result[T, E] {
+            Ok(T),
+            Err(E),
+        }
+
+        import Result.{Ok, Err};
+
+        fn from(x: Verdict[i32, u32]) -> Result[i32, u32] {
+           match x {
+               Reject(x) -> Err(x),
+               Accept(x) -> Ok(x)
+           }
+        }
+
+        fn to(x: Result[i32, u32]) -> Verdict[i32, u32] {
+           match x {
+               Ok(x) -> Verdict.Accept(x),
+               Err(x) -> Verdict.Reject(x),
+           }
+        }
+
+        fn useless(x: Verdict[i32, u32]) -> Verdict[i32, u32] {
+           to(from(x))
+        }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<(), fn(Verdict<i32, u32>) -> Verdict<i32, u32>>(
+            "useless",
+        )
+        .unwrap();
+    assert_eq!(f.call(&mut (), Verdict::Accept(2)), Verdict::Accept(2));
+    assert_eq!(f.call(&mut (), Verdict::Reject(4)), Verdict::Reject(4));
 }

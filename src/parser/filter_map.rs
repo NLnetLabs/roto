@@ -96,6 +96,18 @@ impl Parser<'_, '_> {
         self.take(Token::Keyword(Keyword::Enum))?;
         let ident = self.identifier()?;
 
+        let type_params = if self.peek_is(Token::SquareLeft) {
+            self.separated(
+                Token::SquareLeft,
+                Token::SquareRight,
+                Token::Comma,
+                Self::identifier,
+            )?
+            .node
+        } else {
+            Vec::new()
+        };
+
         let variants = self.separated(
             Token::CurlyLeft,
             Token::CurlyRight,
@@ -103,7 +115,11 @@ impl Parser<'_, '_> {
             Self::enum_variant,
         )?;
 
-        Ok(EnumTypeDeclaration { ident, variants })
+        Ok(EnumTypeDeclaration {
+            ident,
+            type_params,
+            variants,
+        })
     }
 
     fn enum_variant(&mut self) -> ParseResult<EnumVariant> {

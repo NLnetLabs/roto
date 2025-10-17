@@ -1149,6 +1149,10 @@ impl TypeChecker {
             DeclarationKind::Type(_) => {
                 Err(self.error_expected_value(ident, &dec))
             }
+            // A type param is not a valid value
+            DeclarationKind::TypeParam(_) => {
+                Err(self.error_expected_value(ident, &dec))
+            }
             // We ended on a function, which means there can be no identifiers left
             DeclarationKind::Function(Some(func_dec))
             | DeclarationKind::Method(Some(func_dec)) => {
@@ -1251,6 +1255,19 @@ impl TypeChecker {
             | DeclarationKind::Variant(..)
             | DeclarationKind::Module => {
                 Err(self.error_expected_type(ident, declaration))
+            }
+            DeclarationKind::TypeParam(ident) => {
+                if params.len() != 0 {
+                    return Err(self.error_simple(
+                        format!(
+                            "expected 0 type parameters, got {}",
+                            params.len()
+                        ),
+                        format!("expected 0 type parameters"),
+                        path.id,
+                    ));
+                }
+                Ok(Type::ExplicitVar(ident))
             }
             DeclarationKind::Type(type_or_stub) => {
                 let num_params = match type_or_stub {

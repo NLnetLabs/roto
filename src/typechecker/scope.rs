@@ -67,6 +67,7 @@ pub enum DeclarationKind {
     Module,
     Method(Option<FunctionDeclaration>),
     Variant(Option<(TypeDefinition, EnumVariant)>),
+    TypeParam(Identifier),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -116,6 +117,7 @@ pub enum ScopeType {
     Function(Identifier),
     MatchArm(usize, Option<usize>),
     Type(Identifier),
+    TypeParams,
 }
 
 #[derive(Clone)]
@@ -492,6 +494,7 @@ impl ScopeGraph {
                     format!("$while_body_{idx}")
                 }
                 ScopeType::Type(name) => name.as_str().to_string(),
+                ScopeType::TypeParams => "$type_params".into(),
             };
             idents.push(ident);
             scope = s.parent;

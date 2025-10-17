@@ -38,6 +38,7 @@ pub struct RecordTypeDeclaration {
 #[derive(Clone, Debug)]
 pub struct EnumTypeDeclaration {
     pub ident: Meta<Identifier>,
+    pub type_params: Vec<Meta<Identifier>>,
     pub variants: Meta<Vec<EnumVariant>>,
 }
 

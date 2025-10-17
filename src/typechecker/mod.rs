@@ -581,7 +581,7 @@ impl TypeChecker {
                     ),
                     ast::Declaration::Enum(x) => (
                         DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: 0,
+                            num_params: x.type_params.len(),
                         }),
                         x.ident.clone(),
                     ),
@@ -675,6 +675,7 @@ impl TypeChecker {
                     | ast::Declaration::Import(_) => continue,
                     ast::Declaration::Enum(ast::EnumTypeDeclaration {
                         ident,
+                        type_params,
                         variants,
                     }) => {
                         let name = ResolvedName {
@@ -682,13 +683,36 @@ impl TypeChecker {
                             ident: **ident,
                         };
 
+                        let eval_scope = self
+                            .type_info
+                            .scope_graph
+                            .wrap(scope, ScopeType::TypeParams);
+
+                        for param in type_params {
+                            if let Err(e) =
+                                self.type_info.scope_graph.insert_declaration(
+                                    eval_scope,
+                                    param,
+                                    DeclarationKind::TypeParam(param.node),
+                                    String::new(),
+                                    |_| false,
+                                )
+                            {
+                                return Err(
+                                    self.error_declared_twice(param, e)
+                                );
+                            }
+                        }
+
                         let mut evaluated_variants = Vec::new();
 
                         for v in &**variants {
                             let fields = v
                                 .fields
                                 .iter()
-                                .map(|ty| self.evaluate_type_expr(scope, ty))
+                                .map(|ty| {
+                                    self.evaluate_type_expr(eval_scope, ty)
+                                })
                                 .collect::<Result<_, _>>()?;
 
                             evaluated_variants.push(EnumVariant {
@@ -700,7 +724,12 @@ impl TypeChecker {
                         let type_def = TypeDefinition::Enum(
                             TypeName {
                                 name,
-                                arguments: Vec::new(),
+                                arguments: type_params
+                                    .iter()
+                                    .map(|ident| {
+                                        Type::ExplicitVar(ident.node)
+                                    })
+                                    .collect(),
                             },
                             evaluated_variants.clone(),
                         );

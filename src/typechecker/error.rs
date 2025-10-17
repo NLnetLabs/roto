@@ -502,6 +502,7 @@ fn describe_declaration(d: &Declaration) -> &str {
         DeclarationKind::Module => "module",
         DeclarationKind::Method(..) => "method",
         DeclarationKind::Variant(..) => "variant",
+        DeclarationKind::TypeParam(..) => "type parameter",
     }
 }
 

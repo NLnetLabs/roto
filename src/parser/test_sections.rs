@@ -206,3 +206,14 @@ fn enum_multiple_variants() {
     ";
     parse(s).unwrap();
 }
+
+#[test]
+fn enum_redundant_square_brackets() {
+    let s = "
+        enum Foo[] {
+            U(u32[]),
+            I(i32[]),
+        }
+    ";
+    parse(s).unwrap();
+}

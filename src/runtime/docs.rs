@@ -300,6 +300,9 @@ impl Runtime {
                 DeclarationKind::Variant(_) => {
                     // Skip for now
                 }
+                DeclarationKind::TypeParam(_) => {
+                    // Probably skipped forever
+                }
             }
         }
 
