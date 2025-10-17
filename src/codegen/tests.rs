@@ -1482,6 +1482,29 @@ fn use_constant() {
 }
 
 #[test]
+fn import_associated_constant() {
+    let s = src!(
+        "
+        import IpAddr.LOCALHOSTV4;
+
+        filtermap main() {
+            let safi = 127.0.0.1;
+            if safi == LOCALHOSTV4 {
+                reject
+            }
+            accept
+        }"
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<(), fn() -> Verdict<(), ()>>("main")
+        .unwrap();
+    let output = f.call(&mut ());
+    assert_eq!(output, Verdict::Reject(()));
+}
+
+#[test]
 fn use_context() {
     #[derive(Context)]
     struct Ctx {
