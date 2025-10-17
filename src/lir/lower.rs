@@ -72,13 +72,18 @@ impl Lowerer<'_, '_> {
         let mut functions = Vec::new();
 
         for function in mir.functions {
-            functions.push(Self::function(ctx, function));
+            if let Some(f) = Self::function(ctx, function) {
+                functions.push(f);
+            }
         }
 
         Lir { functions }
     }
 
-    fn function(ctx: &mut LowerCtx<'_>, function: mir::Function) -> Function {
+    fn function(
+        ctx: &mut LowerCtx<'_>,
+        function: mir::Function,
+    ) -> Option<Function> {
         let return_type = function.signature.return_type.clone();
         let mut lowerer = Lowerer {
             ctx,
@@ -90,6 +95,20 @@ impl Lowerer<'_, '_> {
         };
         let name = function.name;
         let signature = function.signature;
+
+        // All parameter must be inhabited. If they aren't then we can skip
+        // lowering this entire function.
+        signature
+            .parameter_types
+            .iter()
+            .map(|ty| {
+                lowerer
+                    .ctx
+                    .type_info
+                    .layout_of(ty, lowerer.ctx.runtime)
+                    .map(|_| ())
+            })
+            .collect::<Option<()>>()?;
 
         lowerer.variables = function
             .variables
@@ -104,23 +123,17 @@ impl Lowerer<'_, '_> {
                 }
 
                 let lir_v = lowerer.var(v.clone());
-                let Some(is_reference_type) = lowerer.is_reference_type(&ty)
-                else {
-                    ice!("Need an inhabited type");
-                };
+                let is_reference_type = lowerer.is_reference_type(&ty)?;
                 let var_type = if is_reference_type {
                     // Parameters don't need a slot because they already
                     // live somewhere.
                     if function.parameters.contains(v) {
                         ValueOrSlot::Val(IrType::Pointer)
                     } else {
-                        let Some(layout) = lowerer
+                        let layout = lowerer
                             .ctx
                             .type_info
-                            .layout_of(&ty, lowerer.ctx.runtime)
-                        else {
-                            ice!("Need an inhabited type");
-                        };
+                            .layout_of(&ty, lowerer.ctx.runtime)?;
                         ValueOrSlot::StackSlot(layout)
                     }
                 } else {
@@ -160,7 +173,7 @@ impl Lowerer<'_, '_> {
             return_type: return_ir_type,
         };
 
-        Function {
+        Some(Function {
             name,
             blocks: lowerer.blocks,
             variables: lowerer.variables,
@@ -169,7 +182,7 @@ impl Lowerer<'_, '_> {
             ir_signature,
             entry_block,
             public: true,
-        }
+        })
     }
 
     fn block(&mut self, block: mir::Block) {

@@ -104,9 +104,7 @@ impl TypeChecker {
         self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
 
         for stmt in &block.stmts {
-            if diverged {
-                return Err(self.error_unreachable_expression(stmt));
-            }
+            // TODO: emit message for diverging statements
             diverged |= self.stmt(scope, ctx, stmt)?;
         }
 
@@ -124,11 +122,7 @@ impl TypeChecker {
             return Ok(diverged);
         };
 
-        // Here we have a last expression but the previous expressions diverged
-        // that makes this expression unreachable.
-        if diverged {
-            return Err(self.error_unreachable_expression(expr));
-        }
+        // TODO: emit message for diverging statements
         diverged |= self.expr(scope, ctx, expr)?;
 
         // Store the same type info on the block as on the expression
@@ -1155,6 +1149,10 @@ impl TypeChecker {
             DeclarationKind::Type(_) => {
                 Err(self.error_expected_value(ident, &dec))
             }
+            // A type param is not a valid value
+            DeclarationKind::TypeParam(_) => {
+                Err(self.error_expected_value(ident, &dec))
+            }
             // We ended on a function, which means there can be no identifiers left
             DeclarationKind::Function(Some(func_dec))
             | DeclarationKind::Method(Some(func_dec)) => {
@@ -1223,7 +1221,7 @@ impl TypeChecker {
                     fields,
                 }))
             }
-            DeclarationKind::Variant(ty, variant) => {
+            DeclarationKind::Variant(Some((ty, variant))) => {
                 if let Some(_field) = idents.next() {
                     todo!("make a nice error for variant cannot have field")
                 }
@@ -1232,7 +1230,8 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
-            DeclarationKind::Function(None)
+            DeclarationKind::Variant(None)
+            | DeclarationKind::Function(None)
             | DeclarationKind::Method(None) => {
                 ice!("These should be declared at this point")
             }
@@ -1256,6 +1255,19 @@ impl TypeChecker {
             | DeclarationKind::Variant(..)
             | DeclarationKind::Module => {
                 Err(self.error_expected_type(ident, declaration))
+            }
+            DeclarationKind::TypeParam(ident) => {
+                if params.len() != 0 {
+                    return Err(self.error_simple(
+                        format!(
+                            "expected 0 type parameters, got {}",
+                            params.len()
+                        ),
+                        format!("expected 0 type parameters"),
+                        path.id,
+                    ));
+                }
+                Ok(Type::ExplicitVar(ident))
             }
             DeclarationKind::Type(type_or_stub) => {
                 let num_params = match type_or_stub {

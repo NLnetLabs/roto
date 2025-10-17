@@ -73,6 +73,7 @@ pub enum Keyword {
     Accept,
     Dep,
     Else,
+    Enum,
     Filter,
     FilterMap,
     Fn,
@@ -499,6 +500,7 @@ impl<'s> Lexer<'s> {
         let kw = match ident {
             "accept" => Keyword::Accept,
             "else" => Keyword::Else,
+            "enum" => Keyword::Enum,
             "filter" => Keyword::Filter,
             "filtermap" => Keyword::FilterMap,
             "fn" => Keyword::Fn,
@@ -588,6 +590,7 @@ impl Keyword {
         match self {
             Keyword::Accept => "accept",
             Keyword::Else => "else",
+            Keyword::Enum => "enum",
             Keyword::Filter => "filter",
             Keyword::FilterMap => "filtermap",
             Keyword::Fn => "fn",
