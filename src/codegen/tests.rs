@@ -3601,10 +3601,10 @@ fn prefix_eq() {
 }
 
 #[test]
-fn define_enum() {
+fn define_variant_type() {
     let s = src!(
         "
-       enum Foo {
+       variant Foo {
            Bar,
            Baz,
        }
@@ -3642,7 +3642,7 @@ fn define_enum() {
 fn haskeller_wants_to_feel_at_home() {
     let s = src!(
         "
-       enum Maybe {
+       variant Maybe {
            Just(i32),
            Nothing,
        }
@@ -3685,7 +3685,7 @@ fn haskeller_wants_to_feel_at_home() {
 fn generic_haskeller_wants_to_feel_at_home() {
     let s = src!(
         "
-       enum Maybe[T] {
+       variant Maybe[T] {
            Just(T),
            Nothing,
        }
@@ -3725,10 +3725,10 @@ fn generic_haskeller_wants_to_feel_at_home() {
 }
 
 #[test]
-fn match_on_empty_enum() {
+fn match_on_empty_variant() {
     let s = src!(
         "
-        enum Foo {}
+        variant Foo {}
 
         fn foo(x: Foo) {
             match x {}
@@ -3740,10 +3740,10 @@ fn match_on_empty_enum() {
 }
 
 #[test]
-fn match_on_empty_enum_2() {
+fn match_on_empty_variant_2() {
     let s = src!(
         "
-        enum Foo {}
+        variant Foo {}
 
         fn foo() {
             let x: Foo = return;
@@ -3758,10 +3758,10 @@ fn match_on_empty_enum_2() {
 }
 
 #[test]
-fn match_on_uninhabited_enum() {
+fn match_on_uninhabited_variant() {
     let s = src!(
         "
-        enum Foo { Baz(!) }
+        variant Foo { Baz(!) }
 
         fn foo(x: Foo) {
             match x {
@@ -3778,7 +3778,7 @@ fn match_on_uninhabited_enum() {
 fn lets_make_a_result() {
     let s = src!(
         "
-        enum Result[T, E] {
+        variant Result[T, E] {
             Ok(T),
             Err(E),
         }

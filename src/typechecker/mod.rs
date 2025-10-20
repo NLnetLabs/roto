@@ -673,7 +673,7 @@ impl TypeChecker {
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Import(_) => continue,
-                    ast::Declaration::Enum(ast::EnumTypeDeclaration {
+                    ast::Declaration::Enum(ast::VariantTypeDeclaration {
                         ident,
                         type_params,
                         variants,

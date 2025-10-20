@@ -141,65 +141,65 @@ fn sublist_sublist_import() {
 }
 
 #[test]
-fn enum_empty() {
+fn variant_empty() {
     let s = "
-        enum Foo {}
+        variant Foo {}
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_single() {
+fn variant_single() {
     let s = "
-        enum Foo { Bar }
+        variant Foo { Bar }
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_single_comma() {
+fn variant_single_comma() {
     let s = "
-        enum Foo { Bar, }
+        variant Foo { Bar, }
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_single_field() {
+fn variant_single_field() {
     let s = "
-        enum Foo { Bar(i32) }
+        variant Foo { Bar(i32) }
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_single_field_comma() {
+fn variant_single_field_comma() {
     let s = "
-        enum Foo { Bar(i32,) }
+        variant Foo { Bar(i32,) }
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_single_field_comma_comma() {
+fn variant_single_field_comma_comma() {
     let s = "
-        enum Foo { Bar(i32,), }
+        variant Foo { Bar(i32,), }
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_two_fields() {
+fn variant_two_fields() {
     let s = "
-        enum Foo { Bar(i32, u32) }
+        variant Foo { Bar(i32, u32) }
     ";
     parse(s).unwrap();
 }
 
 #[test]
-fn enum_multiple_variants() {
+fn variant_multiple_variants() {
     let s = "
-        enum Foo {
+        variant Foo {
             U(u32),
             I(i32),
         }
@@ -208,9 +208,9 @@ fn enum_multiple_variants() {
 }
 
 #[test]
-fn enum_redundant_square_brackets() {
+fn variant_redundant_square_brackets() {
     let s = "
-        enum Foo[] {
+        variant Foo[] {
             U(u32[]),
             I(i32[]),
         }

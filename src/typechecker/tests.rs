@@ -1106,11 +1106,11 @@ fn invalid_type_in_f_string() {
 }
 
 #[test]
-fn two_enums() {
+fn two_variants() {
     let s = src!(
         r#"
-          enum Foo { Bar }
-          enum Foo { Baz }  
+          variant Foo { Bar }
+          variant Foo { Baz }  
         "#
     );
     typecheck(s).unwrap_err();

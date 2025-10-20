@@ -1,6 +1,6 @@
 use crate::ast::{
-    EnumTypeDeclaration, EnumVariant, FilterMap, FilterType, Identifier,
-    Params, RecordTypeDeclaration, TypeExpr,
+    FilterMap, FilterType, Identifier, Params, RecordTypeDeclaration,
+    TypeExpr, Variant, VariantTypeDeclaration,
 };
 
 use super::{
@@ -90,10 +90,10 @@ impl Parser<'_, '_> {
         Ok(RecordTypeDeclaration { ident, record_type })
     }
 
-    pub(super) fn enum_declaration(
+    pub(super) fn variant_declaration(
         &mut self,
-    ) -> ParseResult<EnumTypeDeclaration> {
-        self.take(Token::Keyword(Keyword::Enum))?;
+    ) -> ParseResult<VariantTypeDeclaration> {
+        self.take(Token::Keyword(Keyword::Variant))?;
         let ident = self.identifier()?;
 
         let type_params = if self.peek_is(Token::SquareLeft) {
@@ -115,14 +115,14 @@ impl Parser<'_, '_> {
             Self::enum_variant,
         )?;
 
-        Ok(EnumTypeDeclaration {
+        Ok(VariantTypeDeclaration {
             ident,
             type_params,
             variants,
         })
     }
 
-    fn enum_variant(&mut self) -> ParseResult<EnumVariant> {
+    fn enum_variant(&mut self) -> ParseResult<Variant> {
         let ident = self.identifier()?;
 
         let fields = if self.peek_is(Token::RoundLeft) {
@@ -137,6 +137,6 @@ impl Parser<'_, '_> {
             Vec::new()
         };
 
-        Ok(EnumVariant { ident, fields })
+        Ok(Variant { ident, fields })
     }
 }
