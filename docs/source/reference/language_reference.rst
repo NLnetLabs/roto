@@ -704,7 +704,7 @@ yield more readable type checking errors.
 
 .. code-block:: roto
 
-    type SomeRecord {
+    record SomeRecord {
         foo: i32,
         bar: bool,
     }
