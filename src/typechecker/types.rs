@@ -239,6 +239,27 @@ impl TypeDefinition {
         }
         Some(new_variants)
     }
+
+    pub fn record_fields(
+        &self,
+        type_args: &[Type],
+    ) -> Option<Vec<(Meta<Identifier>, Type)>> {
+        let TypeDefinition::Record(type_name, fields) = self else {
+            return None;
+        };
+
+        assert_eq!(type_name.arguments.len(), type_args.len());
+
+        let subs: Vec<_> =
+            type_name.arguments.iter().zip(type_args).collect();
+
+        Some(
+            fields
+                .iter()
+                .map(|(ident, ty)| (ident.clone(), ty.substitute_many(&subs)))
+                .collect(),
+        )
+    }
 }
 
 impl EnumVariant {

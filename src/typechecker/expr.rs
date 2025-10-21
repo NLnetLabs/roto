@@ -324,49 +324,44 @@ impl TypeChecker {
                 self.record_fields(scope, ctx, field_types, record, id)
             }
             TypedRecord(path, record) => {
-                let last_ident = path.idents.last().unwrap();
-                let type_name = self.resolve_type_path(scope, path, &[])?;
-                let ty = self.resolve_type(&type_name);
+                let mut idents = path.idents.iter();
+                let (ident, declaration) =
+                    self.resolve_module_part_of_path(scope, &mut idents)?;
 
-                let Type::Name(type_name) = &ty else {
-                    return Err(self.error_simple(
-                        format!(
-                            "Expected a named record type, but found `{last_ident}`"
-                        ),
-                        "not a named record type",
-                        last_ident.id,
-                    ));
-                };
-
-                let type_def = self.type_info.resolve_type_name(type_name);
-
-                let TypeDefinition::Record(_, record_fields) = &type_def
+                let DeclarationKind::Type(TypeOrStub::Type(type_def)) =
+                    &declaration.kind
                 else {
                     return Err(self.error_simple(
                         format!(
-                            "Expected a named record type, but found `{last_ident}`"
+                            "Expected a record type, but found `{ident}`"
                         ),
-                        "not a named record type",
-                        last_ident.id,
+                        "not a record type",
+                        ident.id,
+                    ));
+                };
+
+                let ty = type_def.instantiate(|| self.fresh_var());
+                let Type::Name(type_name) = &ty else { ice!() };
+                let Some(instantiated_fields) =
+                    type_def.record_fields(&type_name.arguments)
+                else {
+                    return Err(self.error_simple(
+                        format!(
+                            "Expected a record type, but found `{ident}`"
+                        ),
+                        "not a record type",
+                        ident.id,
                     ));
                 };
 
                 let diverges = self.record_fields(
                     scope,
                     ctx,
-                    record_fields.clone(),
+                    instantiated_fields,
                     record,
                     id,
                 )?;
 
-                // Infer the type based on the given expression
-                let field_types: Vec<_> = record
-                    .fields
-                    .iter()
-                    .map(|(s, _)| (s.clone(), self.fresh_var()))
-                    .collect();
-                let rec = self.fresh_record(field_types);
-                self.unify(&ctx.expected_type, &rec, id, None)?;
                 self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 Ok(diverges)
@@ -1308,16 +1303,13 @@ impl TypeChecker {
     ) -> TypeResult<Type> {
         let ty = self.type_info.resolve(ty);
 
-        let type_def;
+        let fields_vec;
         let fields = match &ty {
             Type::Record(fields) | Type::RecordVar(_, fields) => Some(fields),
             Type::Name(name) => {
-                type_def = self.type_info.resolve_type_name(name);
-                if let TypeDefinition::Record(_, fields) = &type_def {
-                    Some(fields)
-                } else {
-                    None
-                }
+                let type_def = self.type_info.resolve_type_name(name);
+                fields_vec = type_def.record_fields(&name.arguments);
+                fields_vec.as_ref()
             }
             _ => None,
         };
@@ -1371,9 +1363,7 @@ impl TypeChecker {
                 variant,
             } => {
                 let ty = type_def.instantiate(|| self.fresh_var());
-                let Type::Name(type_name) = &ty else {
-                    unreachable!()
-                };
+                let Type::Name(type_name) = &ty else { ice!() };
 
                 let original_name = type_def.type_name();
                 let subs: Vec<_> = original_name

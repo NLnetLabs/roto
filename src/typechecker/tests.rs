@@ -1158,3 +1158,54 @@ fn variant_with_never_type_param() {
     );
     typecheck(s).unwrap();
 }
+
+#[test]
+fn generic_record_contains_itself_but_not_quite() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: Foo[i32],
+        }
+    "
+    );
+
+    typecheck(s).expect_err("type cycle!");
+}
+
+#[test]
+fn assign_generic_to_another() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T,
+        }
+
+        fn main() {
+            let x = Foo { x: 10 };
+            let y: Foo[u64] = Foo { x: 20 };
+            y = x;
+        }
+    "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn assign_generic_to_another_type() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T,
+        }
+
+        fn main() {
+            let x: Foo[i32] = Foo { x: 10 };
+            let y: Foo[u64] = Foo { x: 20 };
+            y = x;
+        }
+    "
+    );
+
+    typecheck(s).unwrap_err();
+}

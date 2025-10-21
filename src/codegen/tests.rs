@@ -3893,3 +3893,124 @@ fn variant_with_never_type_param() {
     let f = pkg.get_function::<(), fn()>("foo").unwrap();
     f.call(&mut ());
 }
+
+#[test]
+fn generic_record() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T,
+        }
+
+        fn wrap(x: i32) -> Foo[i32] {
+            Foo { x: x }
+        }
+
+        fn unwrap(x: Foo[i32]) -> i32 {
+            x.x
+        }
+
+        fn bar(x: i32) -> i32 {
+            let y = wrap(x);
+            unwrap(y)
+        }
+    "
+    );
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn(i32) -> i32>("bar").unwrap();
+    let res = f.call(&mut (), 23);
+    assert_eq!(res, 23);
+}
+
+#[test]
+fn generic_record_contains_option() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T?,
+        }
+
+        fn wrap(x: i32?) -> Foo[i32] {
+            Foo { x: x }
+        }
+
+        fn unwrap(x: Foo[i32]) -> i32? {
+            x.x
+        }
+
+        fn bar(x: i32?) -> i32? {
+            let y = wrap(x);
+            unwrap(y)
+        }
+    "
+    );
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<(), fn(Option<i32>) -> Option<i32>>("bar")
+        .unwrap();
+    let res = f.call(&mut (), None);
+    assert_eq!(res, None);
+    let res = f.call(&mut (), Some(20));
+    assert_eq!(res, Some(20));
+}
+
+#[test]
+fn generic_record_inferred() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T,
+        }
+
+        fn wrap(x: i32) -> Foo[i32] {
+            { x: x } # this is now inferred to be Foo[i32]
+        }
+
+        fn unwrap(x: Foo[i32]) -> i32 {
+            x.x
+        }
+
+        fn bar(x: i32) -> i32 {
+            let y = wrap(x);
+            unwrap(y)
+        }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn(i32) -> i32>("bar").unwrap();
+    let res = f.call(&mut (), 23);
+    assert_eq!(res, 23);
+}
+
+#[test]
+fn generics_all_the_way_down() {
+    let s = src!(
+        "
+        record Foo[T] {
+            bar: Bar[T]?
+        }
+
+        record Bar[T] {
+            inner: T
+        }
+
+        fn main(x: i32) -> i32 {
+            let foo = Foo {
+                bar: Some(Bar {
+                    inner: x
+                }),
+            };
+            match foo.bar {
+                Some(bar) -> bar.inner,
+                None -> 0,
+            }
+        }
+    "
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn(i32) -> i32>("main").unwrap();
+    let res = f.call(&mut (), 23);
+    assert_eq!(res, 23);
+}

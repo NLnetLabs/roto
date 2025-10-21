@@ -32,6 +32,7 @@ pub struct Params(pub Vec<(Meta<Identifier>, Meta<TypeExpr>)>);
 #[derive(Clone, Debug)]
 pub struct RecordTypeDeclaration {
     pub ident: Meta<Identifier>,
+    pub type_params: Vec<Meta<Identifier>>,
     pub record_type: RecordType,
 }
 
