@@ -3814,3 +3814,35 @@ fn lets_make_a_result() {
     assert_eq!(f.call(&mut (), Verdict::Accept(2)), Verdict::Accept(2));
     assert_eq!(f.call(&mut (), Verdict::Reject(4)), Verdict::Reject(4));
 }
+
+#[test]
+fn variant_with_unused_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar }
+
+          fn foo() {
+              let x = Foo.Bar;
+          }
+        "#
+    );
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn()>("foo").unwrap();
+    f.call(&mut ());
+}
+
+#[test]
+fn variant_with_never_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar }
+
+          fn foo() {
+              let x: Foo[!] = Foo.Bar;
+          }
+        "#
+    );
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<(), fn()>("foo").unwrap();
+    f.call(&mut ());
+}
