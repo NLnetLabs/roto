@@ -1,6 +1,6 @@
 use crate::ast::{
     FilterMap, FilterType, Identifier, Params, RecordTypeDeclaration,
-    TypeExpr,
+    TypeExpr, Variant, VariantTypeDeclaration,
 };
 
 use super::{
@@ -88,5 +88,55 @@ impl Parser<'_, '_> {
         let record_type = self.record_type()?;
 
         Ok(RecordTypeDeclaration { ident, record_type })
+    }
+
+    pub(super) fn variant_declaration(
+        &mut self,
+    ) -> ParseResult<VariantTypeDeclaration> {
+        self.take(Token::Keyword(Keyword::Variant))?;
+        let ident = self.identifier()?;
+
+        let type_params = if self.peek_is(Token::SquareLeft) {
+            self.separated(
+                Token::SquareLeft,
+                Token::SquareRight,
+                Token::Comma,
+                Self::identifier,
+            )?
+            .node
+        } else {
+            Vec::new()
+        };
+
+        let variants = self.separated(
+            Token::CurlyLeft,
+            Token::CurlyRight,
+            Token::Comma,
+            Self::enum_variant,
+        )?;
+
+        Ok(VariantTypeDeclaration {
+            ident,
+            type_params,
+            variants,
+        })
+    }
+
+    fn enum_variant(&mut self) -> ParseResult<Variant> {
+        let ident = self.identifier()?;
+
+        let fields = if self.peek_is(Token::RoundLeft) {
+            self.separated(
+                Token::RoundLeft,
+                Token::RoundRight,
+                Token::Comma,
+                Self::type_expr,
+            )?
+            .node
+        } else {
+            Vec::new()
+        };
+
+        Ok(Variant { ident, fields })
     }
 }

@@ -580,7 +580,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         types.push((name, "".into(), TypeDefinition::Primitive(p)))
     }
 
-    struct Enum {
+    struct VariantType {
         name: &'static str,
         doc: &'static str,
         params: Vec<&'static str>,
@@ -588,7 +588,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     }
 
     let compound_types = vec![
-        Enum {
+        VariantType {
             name: "Option",
             doc: "An optional value.",
             params: vec!["T"],
@@ -597,7 +597,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
                 ("None", vec![]),
             ],
         },
-        Enum {
+        VariantType {
             name: "Verdict",
             doc: "The verdict that a filter reaches about a value, that is, whether to accept or reject it.",
             params: vec!["A", "R"],
@@ -608,7 +608,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         },
     ];
 
-    for Enum {
+    for VariantType {
         name,
         doc,
         params,

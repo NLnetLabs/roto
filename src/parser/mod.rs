@@ -209,6 +209,9 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Keyword(Keyword::Type) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
+            Token::Keyword(Keyword::Variant) => {
+                Declaration::Enum(self.variant_declaration()?)
+            }
             Token::Keyword(Keyword::Fn) => {
                 Declaration::Function(self.function()?)
             }

@@ -1104,3 +1104,57 @@ fn invalid_type_in_f_string() {
 
     typecheck(s).unwrap_err();
 }
+
+#[test]
+fn two_variants() {
+    let s = src!(
+        r#"
+          variant Foo { Bar }
+          variant Foo { Baz }  
+        "#
+    );
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn assign_to_variant_with_different_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar(T) }
+
+          fn foo() {
+              let x: Foo[i32] = Foo.Bar(10);
+              let y: Foo[f32] = x; # should error!
+          }
+        "#
+    );
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn variant_with_unused_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar }
+
+          fn foo() {
+              let x = Foo.Bar;
+          }
+        "#
+    );
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn variant_with_never_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar }
+
+          fn foo() {
+              let x: Foo[!] = Foo.Bar;
+          }
+        "#
+    );
+    typecheck(s).unwrap();
+}

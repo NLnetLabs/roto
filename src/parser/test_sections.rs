@@ -139,3 +139,81 @@ fn sublist_sublist_import() {
 
     parse(s).unwrap();
 }
+
+#[test]
+fn variant_empty() {
+    let s = "
+        variant Foo {}
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_single() {
+    let s = "
+        variant Foo { Bar }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_single_comma() {
+    let s = "
+        variant Foo { Bar, }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_single_field() {
+    let s = "
+        variant Foo { Bar(i32) }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_single_field_comma() {
+    let s = "
+        variant Foo { Bar(i32,) }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_single_field_comma_comma() {
+    let s = "
+        variant Foo { Bar(i32,), }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_two_fields() {
+    let s = "
+        variant Foo { Bar(i32, u32) }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_multiple_variants() {
+    let s = "
+        variant Foo {
+            U(u32),
+            I(i32),
+        }
+    ";
+    parse(s).unwrap();
+}
+
+#[test]
+fn variant_redundant_square_brackets() {
+    let s = "
+        variant Foo[] {
+            U(u32[]),
+            I(i32[]),
+        }
+    ";
+    parse(s).unwrap();
+}

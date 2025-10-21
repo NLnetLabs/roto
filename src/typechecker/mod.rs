@@ -103,6 +103,7 @@ use crate::{
         Runtime, RuntimeFunctionRef,
         ty::{TypeDescription, TypeRegistry},
     },
+    typechecker::types::EnumVariant,
 };
 use cycle::detect_type_cycles;
 use scope::{
@@ -265,10 +266,10 @@ impl TypeChecker {
                                 node: variant.name,
                                 id: MetaId(0),
                             },
-                            DeclarationKind::Variant(
+                            DeclarationKind::Variant(Some((
                                 type_def.clone(),
                                 variant.clone(),
-                            ),
+                            ))),
                             String::new(),
                             |_| false,
                         )
@@ -578,6 +579,12 @@ impl TypeChecker {
                         }),
                         x.ident.clone(),
                     ),
+                    ast::Declaration::Enum(x) => (
+                        DeclarationKind::Type(TypeOrStub::Stub {
+                            num_params: x.type_params.len(),
+                        }),
+                        x.ident.clone(),
+                    ),
                     ast::Declaration::Function(x) => {
                         (DeclarationKind::Function(None), x.ident.clone())
                     }
@@ -588,6 +595,11 @@ impl TypeChecker {
                     ast::Declaration::Test(_) => continue,
                 };
 
+                let new_scope = self
+                    .type_info
+                    .scope_graph
+                    .wrap(scope, ScopeType::Type(*ident));
+
                 let res = self.type_info.scope_graph.insert_declaration(
                     scope,
                     &ident,
@@ -595,8 +607,35 @@ impl TypeChecker {
                     String::new(),
                     |_| false,
                 );
-                if let Err(e) = res {
-                    return Err(self.error_declared_twice(&ident, e));
+
+                let dec = match res {
+                    Ok(dec) => dec,
+                    Err(e) => {
+                        return Err(self.error_declared_twice(&ident, e));
+                    }
+                };
+
+                dec.scope = Some(new_scope);
+
+                // We have to insert stub declarations for all the enum
+                // variants, so that they can be imported.
+                if let ast::Declaration::Enum(x) = d {
+                    for variant in &*x.variants {
+                        let res =
+                            self.type_info.scope_graph.insert_declaration(
+                                new_scope,
+                                &variant.ident,
+                                DeclarationKind::Variant(None),
+                                String::new(),
+                                |_| false,
+                            );
+
+                        if let Err(e) = res {
+                            return Err(
+                                self.error_declared_twice(&x.ident, e)
+                            );
+                        };
+                    }
                 }
             }
             modules.push((scope, m))
@@ -634,6 +673,106 @@ impl TypeChecker {
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Import(_) => continue,
+                    ast::Declaration::Enum(ast::VariantTypeDeclaration {
+                        ident,
+                        type_params,
+                        variants,
+                    }) => {
+                        let name = ResolvedName {
+                            scope,
+                            ident: **ident,
+                        };
+
+                        let eval_scope = self
+                            .type_info
+                            .scope_graph
+                            .wrap(scope, ScopeType::TypeParams);
+
+                        for param in type_params {
+                            if let Err(e) =
+                                self.type_info.scope_graph.insert_declaration(
+                                    eval_scope,
+                                    param,
+                                    DeclarationKind::TypeParam(param.node),
+                                    String::new(),
+                                    |_| false,
+                                )
+                            {
+                                return Err(
+                                    self.error_declared_twice(param, e)
+                                );
+                            }
+                        }
+
+                        let mut evaluated_variants = Vec::new();
+
+                        for v in &**variants {
+                            let fields = v
+                                .fields
+                                .iter()
+                                .map(|ty| {
+                                    self.evaluate_type_expr(eval_scope, ty)
+                                })
+                                .collect::<Result<_, _>>()?;
+
+                            evaluated_variants.push(EnumVariant {
+                                name: v.ident.node,
+                                fields: fields,
+                            });
+                        }
+
+                        let type_def = TypeDefinition::Enum(
+                            TypeName {
+                                name,
+                                arguments: type_params
+                                    .iter()
+                                    .map(|ident| {
+                                        Type::ExplicitVar(ident.node)
+                                    })
+                                    .collect(),
+                            },
+                            evaluated_variants.clone(),
+                        );
+
+                        self.type_info
+                            .scope_graph
+                            .insert_type(
+                                scope,
+                                ident,
+                                String::new(),
+                                type_def.clone(),
+                            )
+                            .map_err(|e| {
+                                self.error_declared_twice(ident, e)
+                            })?;
+
+                        let inner_scope =
+                            self.get_scope_of(scope, **ident).unwrap();
+
+                        for variant in evaluated_variants {
+                            self.type_info
+                                .scope_graph
+                                .insert_declaration(
+                                    inner_scope,
+                                    &Meta {
+                                        node: variant.name,
+                                        id: MetaId(0),
+                                    },
+                                    DeclarationKind::Variant(Some((
+                                        type_def.clone(),
+                                        variant.clone(),
+                                    ))),
+                                    String::new(),
+                                    |kind| {
+                                        matches!(
+                                            kind,
+                                            DeclarationKind::Variant(None)
+                                        )
+                                    },
+                                )
+                                .unwrap();
+                        }
+                    }
                     ast::Declaration::Record(
                         ast::RecordTypeDeclaration { ident, record_type },
                     ) => {
@@ -700,6 +839,7 @@ impl TypeChecker {
                     }
                     ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(_) => continue,
+                    ast::Declaration::Enum(_) => continue,
                     ast::Declaration::Import(_) => continue,
                 }
             }

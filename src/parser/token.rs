@@ -89,6 +89,7 @@ pub enum Keyword {
     Super,
     Test,
     Type,
+    Variant,
     While,
 }
 
@@ -498,6 +499,7 @@ impl<'s> Lexer<'s> {
 
         let kw = match ident {
             "accept" => Keyword::Accept,
+            "dep" => Keyword::Dep,
             "else" => Keyword::Else,
             "filter" => Keyword::Filter,
             "filtermap" => Keyword::FilterMap,
@@ -506,7 +508,6 @@ impl<'s> Lexer<'s> {
             "import" => Keyword::Import,
             "in" => Keyword::In,
             "let" => Keyword::Let,
-            "dep" => Keyword::Dep,
             "match" => Keyword::Match,
             "not" => Keyword::Not,
             "pkg" => Keyword::Pkg,
@@ -516,6 +517,7 @@ impl<'s> Lexer<'s> {
             "super" => Keyword::Super,
             "test" => Keyword::Test,
             "type" => Keyword::Type,
+            "variant" => Keyword::Variant,
             "while" => Keyword::While,
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
@@ -587,6 +589,7 @@ impl Keyword {
     fn as_str(&self) -> &'static str {
         match self {
             Keyword::Accept => "accept",
+            Keyword::Dep => "dep",
             Keyword::Else => "else",
             Keyword::Filter => "filter",
             Keyword::FilterMap => "filtermap",
@@ -595,7 +598,6 @@ impl Keyword {
             Keyword::Import => "import",
             Keyword::In => "in",
             Keyword::Let => "let",
-            Keyword::Dep => "dep",
             Keyword::Match => "match",
             Keyword::Not => "not",
             Keyword::Pkg => "pkg",
@@ -605,6 +607,7 @@ impl Keyword {
             Keyword::Super => "super",
             Keyword::Test => "test",
             Keyword::Type => "type",
+            Keyword::Variant => "variant",
             Keyword::While => "while",
         }
     }
