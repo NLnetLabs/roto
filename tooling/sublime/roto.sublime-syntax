@@ -89,7 +89,7 @@ contexts:
     - match: \b(import)\b
       scope: keyword.control.import.roto
 
-    - match: \b(type)\b
+    - match: \b(record)\b
       scope: keyword.declaration.struct.roto
 
   number:
