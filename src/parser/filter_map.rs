@@ -75,28 +75,8 @@ impl Parser<'_, '_> {
         Ok((field_name, ty))
     }
 
-    /// Parse a record type declaration
-    ///
-    /// ```ebnf
-    /// Type ::= 'type' Identifier RecordType
-    /// ```
-    pub(super) fn record_type_assignment(
-        &mut self,
-    ) -> ParseResult<RecordTypeDeclaration> {
-        self.take(Token::Keyword(Keyword::Record))?;
-        let ident = self.identifier()?;
-        let record_type = self.record_type()?;
-
-        Ok(RecordTypeDeclaration { ident, record_type })
-    }
-
-    pub(super) fn variant_declaration(
-        &mut self,
-    ) -> ParseResult<VariantTypeDeclaration> {
-        self.take(Token::Keyword(Keyword::Variant))?;
-        let ident = self.identifier()?;
-
-        let type_params = if self.peek_is(Token::SquareLeft) {
+    fn type_parameters(&mut self) -> ParseResult<Vec<Meta<Identifier>>> {
+        let params = if self.peek_is(Token::SquareLeft) {
             self.separated(
                 Token::SquareLeft,
                 Token::SquareRight,
@@ -107,6 +87,36 @@ impl Parser<'_, '_> {
         } else {
             Vec::new()
         };
+        Ok(params)
+    }
+
+    /// Parse a record type declaration
+    ///
+    /// ```ebnf
+    /// Type ::= 'record' Identifier RecordType
+    /// ```
+    pub(super) fn record_type_assignment(
+        &mut self,
+    ) -> ParseResult<RecordTypeDeclaration> {
+        self.take(Token::Keyword(Keyword::Record))?;
+        let ident = self.identifier()?;
+        let type_params = self.type_parameters()?;
+        let record_type = self.record_type()?;
+
+        Ok(RecordTypeDeclaration {
+            ident,
+            type_params,
+            record_type,
+        })
+    }
+
+    pub(super) fn variant_declaration(
+        &mut self,
+    ) -> ParseResult<VariantTypeDeclaration> {
+        self.take(Token::Keyword(Keyword::Variant))?;
+        let ident = self.identifier()?;
+
+        let type_params = self.type_parameters()?;
 
         let variants = self.separated(
             Token::CurlyLeft,

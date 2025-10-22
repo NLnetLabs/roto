@@ -555,12 +555,19 @@ impl Lowerer<'_, '_> {
 
         let fields = match res_ty {
             Type::Name(name) => {
-                let TypeDefinition::Record(_, fields) =
+                let TypeDefinition::Record(type_name, fields) =
                     self.ctx.type_info.resolve_type_name(&name)
                 else {
                     ice!()
                 };
+
+                let subs: Vec<_> =
+                    type_name.arguments.iter().zip(&name.arguments).collect();
+
                 fields
+                    .into_iter()
+                    .map(|(ident, ty)| (ident, ty.substitute_many(&subs)))
+                    .collect()
             }
             Type::Record(fields) | Type::RecordVar(_, fields) => fields,
             _ => {

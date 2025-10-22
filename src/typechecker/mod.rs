@@ -575,7 +575,7 @@ impl TypeChecker {
                 let (kind, ident) = match d {
                     ast::Declaration::Record(x) => (
                         DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: 0,
+                            num_params: x.type_params.len(),
                         }),
                         x.ident.clone(),
                     ),
@@ -774,18 +774,52 @@ impl TypeChecker {
                         }
                     }
                     ast::Declaration::Record(
-                        ast::RecordTypeDeclaration { ident, record_type },
+                        ast::RecordTypeDeclaration {
+                            ident,
+                            type_params,
+                            record_type,
+                        },
                     ) => {
                         let name = ResolvedName {
                             scope,
                             ident: **ident,
                         };
+
+                        let eval_scope = self
+                            .type_info
+                            .scope_graph
+                            .wrap(scope, ScopeType::TypeParams);
+
+                        for param in type_params {
+                            if let Err(e) =
+                                self.type_info.scope_graph.insert_declaration(
+                                    eval_scope,
+                                    param,
+                                    DeclarationKind::TypeParam(param.node),
+                                    String::new(),
+                                    |_| false,
+                                )
+                            {
+                                return Err(
+                                    self.error_declared_twice(param, e)
+                                );
+                            }
+                        }
+
                         let ty = TypeDefinition::Record(
                             TypeName {
                                 name,
-                                arguments: Vec::new(),
+                                arguments: type_params
+                                    .iter()
+                                    .map(|ident| {
+                                        Type::ExplicitVar(ident.node)
+                                    })
+                                    .collect(),
                             },
-                            self.evaluate_record_type(scope, record_type)?,
+                            self.evaluate_record_type(
+                                eval_scope,
+                                record_type,
+                            )?,
                         );
                         self.type_info
                             .scope_graph
@@ -1255,15 +1289,9 @@ impl TypeChecker {
             }
             (RecordVar(var, fields), Name(name))
             | (Name(name), RecordVar(var, fields)) => {
-                // TODO: Allow type parameters on records
-                if !name.arguments.is_empty() {
-                    return None;
-                }
                 let type_def = self.type_info.resolve_type_name(&name);
-                let TypeDefinition::Record(name, named_fields) = type_def
-                else {
-                    return None;
-                };
+                let named_fields = type_def.record_fields(&name.arguments)?;
+
                 self.unify_fields(&fields, &named_fields)?;
                 self.type_info.unionfind.set(var, Name(name.clone()));
                 Name(name)
