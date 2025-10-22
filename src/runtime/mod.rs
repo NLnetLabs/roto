@@ -27,7 +27,7 @@ use sealed::sealed;
 use ty::{Ty, TypeDescription, TypeRegistry};
 
 use crate::{
-    Context, Location, Package, RotoReport,
+    Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
     file_tree::FileTree,
     parser::token::{Lexer, Token},

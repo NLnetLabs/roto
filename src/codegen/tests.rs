@@ -1475,10 +1475,8 @@ fn use_constant() {
     );
 
     let mut p = compile(s);
-    let f = p
-        .get_function::<(), fn() -> Verdict<(), ()>>("main")
-        .unwrap();
-    let output = f.call(&mut ());
+    let f = p.get_function::<fn() -> Verdict<(), ()>>("main").unwrap();
+    let output = f.call();
     assert_eq!(output, Verdict::Reject(()));
 }
 
@@ -1518,10 +1516,8 @@ fn registered_constant() {
     );
 
     let mut p = compile_with_runtime(s, rt);
-    let f = p
-        .get_function::<(), fn(f64) -> f64>("circumference")
-        .unwrap();
-    let output = f.call(&mut (), 2.0);
+    let f = p.get_function::<fn(f64) -> f64>("circumference").unwrap();
+    let output = f.call(2.0);
 
     let exp = 2.0 * 3.14 * 2.0;
     assert!(exp - 0.1 < output && output < exp + 0.1);
@@ -3646,14 +3642,12 @@ fn define_variant_type() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg
-        .get_function::<(), fn(bool) -> i32>("match_on_foo")
-        .unwrap();
+    let f = pkg.get_function::<fn(bool) -> i32>("match_on_foo").unwrap();
 
-    let res = f.call(&mut (), true);
+    let res = f.call(true);
     assert_eq!(res, 10);
 
-    let res = f.call(&mut (), false);
+    let res = f.call(false);
     assert_eq!(res, 20);
 }
 
@@ -3690,13 +3684,13 @@ fn haskeller_wants_to_feel_at_home() {
 
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<(), fn(Option<i32>) -> Option<i32>>("useless")
+        .get_function::<fn(Option<i32>) -> Option<i32>>("useless")
         .unwrap();
 
-    let res = f.call(&mut (), Some(5));
+    let res = f.call(Some(5));
     assert_eq!(res, Some(5));
 
-    let res = f.call(&mut (), None);
+    let res = f.call(None);
     assert_eq!(res, None);
 }
 
@@ -3733,13 +3727,13 @@ fn generic_haskeller_wants_to_feel_at_home() {
 
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<(), fn(Option<i32>) -> Option<i32>>("useless")
+        .get_function::<fn(Option<i32>) -> Option<i32>>("useless")
         .unwrap();
 
-    let res = f.call(&mut (), Some(5));
+    let res = f.call(Some(5));
     assert_eq!(res, Some(5));
 
-    let res = f.call(&mut (), None);
+    let res = f.call(None);
     assert_eq!(res, None);
 }
 
@@ -3772,8 +3766,8 @@ fn match_on_empty_variant_2() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<(), fn() -> ()>("foo").unwrap();
-    f.call(&mut ())
+    let f = pkg.get_function::<fn() -> ()>("foo").unwrap();
+    f.call()
 }
 
 #[test]
@@ -3826,12 +3820,10 @@ fn lets_make_a_result() {
 
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<(), fn(Verdict<i32, u32>) -> Verdict<i32, u32>>(
-            "useless",
-        )
+        .get_function::<fn(Verdict<i32, u32>) -> Verdict<i32, u32>>("useless")
         .unwrap();
-    assert_eq!(f.call(&mut (), Verdict::Accept(2)), Verdict::Accept(2));
-    assert_eq!(f.call(&mut (), Verdict::Reject(4)), Verdict::Reject(4));
+    assert_eq!(f.call(Verdict::Accept(2)), Verdict::Accept(2));
+    assert_eq!(f.call(Verdict::Reject(4)), Verdict::Reject(4));
 }
 
 #[test]
@@ -3846,8 +3838,8 @@ fn variant_with_unused_type_param() {
         "#
     );
     let mut pkg = compile(s);
-    let f = pkg.get_function::<(), fn()>("foo").unwrap();
-    f.call(&mut ());
+    let f = pkg.get_function::<fn()>("foo").unwrap();
+    f.call();
 }
 
 #[test]
@@ -3862,8 +3854,8 @@ fn variant_with_never_type_param() {
         "#
     );
     let mut pkg = compile(s);
-    let f = pkg.get_function::<(), fn()>("foo").unwrap();
-    f.call(&mut ());
+    let f = pkg.get_function::<fn()>("foo").unwrap();
+    f.call();
 }
 
 #[test]
@@ -3889,8 +3881,8 @@ fn generic_record() {
     "
     );
     let mut pkg = compile(s);
-    let f = pkg.get_function::<(), fn(i32) -> i32>("bar").unwrap();
-    let res = f.call(&mut (), 23);
+    let f = pkg.get_function::<fn(i32) -> i32>("bar").unwrap();
+    let res = f.call(23);
     assert_eq!(res, 23);
 }
 
@@ -3918,11 +3910,11 @@ fn generic_record_contains_option() {
     );
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<(), fn(Option<i32>) -> Option<i32>>("bar")
+        .get_function::<fn(Option<i32>) -> Option<i32>>("bar")
         .unwrap();
-    let res = f.call(&mut (), None);
+    let res = f.call(None);
     assert_eq!(res, None);
-    let res = f.call(&mut (), Some(20));
+    let res = f.call(Some(20));
     assert_eq!(res, Some(20));
 }
 
@@ -3950,8 +3942,8 @@ fn generic_record_inferred() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<(), fn(i32) -> i32>("bar").unwrap();
-    let res = f.call(&mut (), 23);
+    let f = pkg.get_function::<fn(i32) -> i32>("bar").unwrap();
+    let res = f.call(23);
     assert_eq!(res, 23);
 }
 
@@ -3982,7 +3974,7 @@ fn generics_all_the_way_down() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<(), fn(i32) -> i32>("main").unwrap();
-    let res = f.call(&mut (), 23);
+    let f = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
+    let res = f.call(23);
     assert_eq!(res, 23);
 }
