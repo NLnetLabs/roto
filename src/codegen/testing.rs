@@ -1,12 +1,12 @@
 use super::{Module, TypedFunc};
-use crate::{Verdict, runtime::OptionCtx};
+use crate::{Verdict, runtime::OptCtx};
 
 pub struct TestCase<Ctx: 'static> {
     name: String,
     func: TypedFunc<Ctx, fn() -> Verdict<(), ()>>,
 }
 
-impl<C: OptionCtx> TestCase<C> {
+impl<C: OptCtx> TestCase<C> {
     pub fn new(
         name: String,
         func: TypedFunc<C, fn() -> Verdict<(), ()>>,
@@ -19,7 +19,7 @@ impl<C: OptionCtx> TestCase<C> {
     }
 }
 
-impl<C: OptionCtx> TestCase<C> {
+impl<C: OptCtx> TestCase<C> {
     pub fn run(&self, ctx: &mut C::Ctx) -> Result<(), ()> {
         match self.func.call_tuple(ctx, ()) {
             Verdict::Accept(()) => Ok(()),
@@ -28,7 +28,7 @@ impl<C: OptionCtx> TestCase<C> {
     }
 }
 
-pub(crate) fn get_tests<Ctx: OptionCtx>(
+pub(crate) fn get_tests<Ctx: OptCtx>(
     module: &mut Module<Ctx>,
 ) -> impl Iterator<Item = TestCase<Ctx>> + use<'_, Ctx> {
     let tests: Vec<_> = module
@@ -54,7 +54,7 @@ pub(crate) fn get_tests<Ctx: OptionCtx>(
     })
 }
 
-pub(crate) fn run_tests<Ctx: OptionCtx>(
+pub(crate) fn run_tests<Ctx: OptCtx>(
     module: &mut Module<Ctx>,
     mut ctx: Ctx,
 ) -> Result<(), ()> {

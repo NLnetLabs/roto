@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use crate::{
-    FileTree, RotoError, RotoReport, Runtime, runtime::OptionCtx,
+    FileTree, RotoError, RotoReport, Runtime, runtime::OptCtx,
     tools::print::print_highlighted,
 };
 
@@ -56,7 +56,7 @@ enum Command {
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
 ///  - `run`: run a function of a script
-pub fn cli(rt: &Runtime<impl OptionCtx>) {
+pub fn cli(rt: &Runtime<impl OptCtx>) {
     match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
@@ -66,7 +66,7 @@ pub fn cli(rt: &Runtime<impl OptionCtx>) {
     }
 }
 
-fn cli_inner(rt: &Runtime<impl OptionCtx>) -> Result<(), RotoReport> {
+fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
     let cli = Cli::parse();
 
     match &cli.command {

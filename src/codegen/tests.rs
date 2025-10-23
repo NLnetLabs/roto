@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     Context, FileTree, NoCtx, Runtime, Val, Verdict, file_tree::FileSpec,
-    library, pipeline::Package, runtime::OptionCtx, source_file, src,
+    library, pipeline::Package, runtime::OptCtx, source_file, src,
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -20,7 +20,7 @@ fn compile(f: FileTree) -> Package<NoCtx> {
 }
 
 #[track_caller]
-fn compile_with_runtime<Ctx: OptionCtx>(
+fn compile_with_runtime<Ctx: OptCtx>(
     f: FileTree,
     runtime: Runtime<Ctx>,
 ) -> Package<Ctx> {

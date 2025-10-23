@@ -2,7 +2,7 @@ use std::{fs::File, io, path::Path};
 
 use crate::{
     ice,
-    runtime::{OptionCtx, Rt},
+    runtime::{OptCtx, Rt},
     typechecker::{
         scope::{DeclarationKind, ScopeRef, TypeOrStub, ValueKind},
         scoped_display::TypeDisplay,
@@ -207,7 +207,7 @@ impl DocTy {
     }
 }
 
-impl<Ctx: OptionCtx> Runtime<Ctx> {
+impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Print documentation for all the types registered into this runtime.
     ///
     /// The format for the documentation is markdown that can be passed to Sphinx.

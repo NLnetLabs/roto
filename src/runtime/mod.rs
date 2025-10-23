@@ -67,7 +67,7 @@ use crate::{
 ///
 /// - [`Runtime::print_documentation`]
 #[derive(Clone)]
-pub struct Runtime<Ctx: OptionCtx> {
+pub struct Runtime<Ctx: OptCtx> {
     pub(crate) rt: Rt,
     _ctx: PhantomData<Ctx>,
 }
@@ -82,7 +82,7 @@ pub(crate) struct Rt {
     constants: HashMap<ResolvedName, RuntimeConstant>,
 }
 
-impl<Ctx: OptionCtx> std::fmt::Debug for Runtime<Ctx> {
+impl<Ctx: OptCtx> std::fmt::Debug for Runtime<Ctx> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Runtime").finish()
     }
@@ -91,7 +91,7 @@ impl<Ctx: OptionCtx> std::fmt::Debug for Runtime<Ctx> {
 /// This trait is _sealed_, meaning that it cannot be implemented by downstream
 /// crates.
 #[sealed]
-pub trait OptionCtx: 'static + Clone {
+pub trait OptCtx: 'static + Clone {
     type Ctx: Context;
     fn get_context(&mut self) -> &mut Self::Ctx;
 
@@ -102,7 +102,7 @@ pub trait OptionCtx: 'static + Clone {
 pub struct Ctx<T>(pub T);
 
 #[sealed]
-impl<T: Context> OptionCtx for Ctx<T> {
+impl<T: Context> OptCtx for Ctx<T> {
     type Ctx = T;
 
     fn try_to_no_ctx() -> Option<NoCtx> {
@@ -118,7 +118,7 @@ impl<T: Context> OptionCtx for Ctx<T> {
 pub struct NoCtx;
 
 #[sealed]
-impl OptionCtx for NoCtx {
+impl OptCtx for NoCtx {
     type Ctx = Self;
 
     fn try_to_no_ctx() -> Option<NoCtx> {
@@ -131,7 +131,7 @@ impl OptionCtx for NoCtx {
 }
 
 /// Compiling a script
-impl<Ctx: OptionCtx> Runtime<Ctx> {
+impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Compile a script from a path and return the result.
     ///
     /// If the path is a file, then that file will be loaded. If the path is a
@@ -188,7 +188,7 @@ impl Runtime<NoCtx> {
 }
 
 /// Inspecting and modifying the [`Runtime`]
-impl<C: OptionCtx> Runtime<C> {
+impl<C: OptCtx> Runtime<C> {
     /// Add a library of items to this [`Runtime`]
     ///
     /// Typically, one would use the [`library!`](crate::library) macro to

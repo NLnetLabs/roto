@@ -21,7 +21,7 @@ use crate::{
         meta::{Span, Spans},
     },
     runtime::{
-        Ctx, NoCtx, OptionCtx, Runtime, RuntimeFunctionRef, context::Context,
+        Ctx, NoCtx, OptCtx, Runtime, RuntimeFunctionRef, context::Context,
     },
     typechecker::{
         error::{Level, TypeError},
@@ -57,14 +57,14 @@ pub struct RotoReport {
 }
 
 /// Compiler stage: loaded, parsed and type checked
-pub struct TypeChecked<'r, Ctx: OptionCtx> {
+pub struct TypeChecked<'r, Ctx: OptCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
     runtime: &'r Runtime<Ctx>,
 }
 
 /// Compiler stage: MIR
-pub struct LoweredToMir<'r, Ctx: OptionCtx> {
+pub struct LoweredToMir<'r, Ctx: OptCtx> {
     runtime: &'r Runtime<Ctx>,
     ir: mir::Mir,
     label_store: LabelStore,
@@ -72,7 +72,7 @@ pub struct LoweredToMir<'r, Ctx: OptionCtx> {
 }
 
 /// Compiler stage: LIR
-pub struct LoweredToLir<'r, Ctx: OptionCtx> {
+pub struct LoweredToLir<'r, Ctx: OptCtx> {
     runtime: &'r Runtime<Ctx>,
     ir: lir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
@@ -83,7 +83,7 @@ pub struct LoweredToLir<'r, Ctx: OptionCtx> {
 /// The final compiled package of script.
 ///
 /// Functions can be extracted from this package using [`Package::get_function`].
-pub struct Package<Ctx: OptionCtx> {
+pub struct Package<Ctx: OptCtx> {
     module: Module<Ctx>,
 }
 
@@ -242,7 +242,7 @@ macro_rules! source_file {
 pub(crate) use source_file;
 
 impl Parsed {
-    pub fn typecheck<'r, Ctx: OptionCtx>(
+    pub fn typecheck<'r, Ctx: OptCtx>(
         self,
         runtime: &'r Runtime<Ctx>,
     ) -> Result<TypeChecked<'r, Ctx>, RotoReport> {
@@ -273,7 +273,7 @@ impl Parsed {
     }
 }
 
-impl<'r, Ctx: OptionCtx> TypeChecked<'r, Ctx> {
+impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
     pub fn lower_to_mir(&self) -> LoweredToMir<'r, Ctx> {
         let TypeChecked {
             module_tree,
@@ -312,7 +312,7 @@ impl<'r, Ctx: OptionCtx> TypeChecked<'r, Ctx> {
     }
 }
 
-impl<'r, Ctx: OptionCtx> LoweredToMir<'r, Ctx> {
+impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
     pub fn lower_to_lir(self) -> LoweredToLir<'r, Ctx> {
         let LoweredToMir {
             runtime,
@@ -353,7 +353,7 @@ impl<'r, Ctx: OptionCtx> LoweredToMir<'r, Ctx> {
     }
 }
 
-impl<Ctx: OptionCtx> LoweredToLir<'_, Ctx> {
+impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
     pub fn eval(
         &self,
         mem: &mut Memory,
@@ -382,7 +382,7 @@ impl<Ctx: OptionCtx> LoweredToLir<'_, Ctx> {
     }
 }
 
-impl<Ctx: OptionCtx> Package<Ctx> {
+impl<Ctx: OptCtx> Package<Ctx> {
     pub fn get_tests(
         &mut self,
     ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>

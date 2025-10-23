@@ -1,6 +1,6 @@
 use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
-use crate::runtime::OptionCtx;
+use crate::runtime::OptCtx;
 use crate::{Context, Runtime, Val, library, source_file, src};
 
 #[track_caller]
@@ -11,7 +11,7 @@ fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
 #[track_caller]
 fn typecheck_with_runtime(
     loaded: FileTree,
-    rt: Runtime<impl OptionCtx>,
+    rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
     let res = loaded.parse();
 

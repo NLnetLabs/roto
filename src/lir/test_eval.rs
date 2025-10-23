@@ -2,12 +2,11 @@ use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
 use crate::{
-    FileTree, Runtime, library, pipeline::LoweredToLir, runtime::OptionCtx,
-    src,
+    FileTree, Runtime, library, pipeline::LoweredToLir, runtime::OptCtx, src,
 };
 
 #[track_caller]
-fn compile<Ctx: OptionCtx>(
+fn compile<Ctx: OptCtx>(
     s: FileTree,
     rt: &Runtime<Ctx>,
 ) -> LoweredToLir<'_, Ctx> {

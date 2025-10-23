@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptionCtx};
+use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptCtx};
 
 fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
     RotoReport {
@@ -68,7 +68,7 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    pub fn compile<Ctx: OptionCtx>(
+    pub fn compile<Ctx: OptCtx>(
         self,
         rt: &Runtime<Ctx>,
     ) -> Result<Package<Ctx>, RotoReport> {

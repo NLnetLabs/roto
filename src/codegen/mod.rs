@@ -17,7 +17,7 @@ use crate::{
         self, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind, value::IrType,
     },
     runtime::{
-        ConstantValue, Ctx, NoCtx, OptionCtx, RuntimeConstant,
+        ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
         RuntimeFunctionRef, context::Context, ty::Reflect,
     },
     typechecker::{
@@ -125,7 +125,7 @@ unsafe impl Send for ModuleData {}
 unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
-pub struct Module<C: OptionCtx> {
+pub struct Module<C: OptCtx> {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -171,7 +171,7 @@ impl<Ctx, F> Debug for TypedFunc<Ctx, F> {
 unsafe impl<Ctx, F> Send for TypedFunc<Ctx, F> {}
 unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 
-impl<C: OptionCtx, F: RotoFunc> TypedFunc<C, F> {
+impl<C: OptCtx, F: RotoFunc> TypedFunc<C, F> {
     pub fn call_tuple(&self, ctx: &mut C::Ctx, args: F::Args) -> F::Return {
         unsafe {
             F::invoke::<C::Ctx>(ctx, args, self.func, self.return_by_ref)
@@ -300,7 +300,7 @@ struct FuncGen<'c> {
 // point, or at least be configurable.
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
-pub fn codegen<Ctx: OptionCtx>(
+pub fn codegen<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
     ir: &[lir::Function],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
@@ -609,7 +609,7 @@ impl ModuleBuilder {
         self.inner.clear_context(&mut ctx);
     }
 
-    fn finalize<Ctx: OptionCtx>(mut self) -> Module<Ctx> {
+    fn finalize<Ctx: OptCtx>(mut self) -> Module<Ctx> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
@@ -1215,7 +1215,7 @@ impl<'c> FuncGen<'c> {
     }
 }
 
-impl<Ctx: OptionCtx> Module<Ctx> {
+impl<Ctx: OptCtx> Module<Ctx> {
     pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
