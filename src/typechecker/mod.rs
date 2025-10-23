@@ -100,7 +100,7 @@ use crate::{
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
     runtime::{
-        Runtime, RuntimeFunctionRef,
+        Rt, RuntimeFunctionRef,
         ty::{TypeDescription, TypeRegistry},
     },
     typechecker::types::EnumVariant,
@@ -167,7 +167,7 @@ pub struct TypeChecker {
 pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
-    runtime: &Runtime,
+    runtime: &Rt,
     module_tree: &ModuleTree,
 ) -> TypeResult<TypeInfo> {
     let mut type_checker = runtime.type_checker.clone();
@@ -425,7 +425,7 @@ impl TypeChecker {
     }
 
     pub(crate) fn rust_type_to_roto_type(
-        runtime: &Runtime,
+        runtime: &Rt,
         t: TypeId,
     ) -> Result<Type, String> {
         let ty = TypeRegistry::get(t).unwrap();
@@ -513,7 +513,7 @@ impl TypeChecker {
         Ok(())
     }
 
-    fn declare_context(&mut self, runtime: &Runtime) -> TypeResult<()> {
+    fn declare_context(&mut self, runtime: &Rt) -> TypeResult<()> {
         if let Some(ctx) = runtime.context() {
             for field in &ctx.fields {
                 let name =
@@ -717,7 +717,7 @@ impl TypeChecker {
 
                             evaluated_variants.push(EnumVariant {
                                 name: v.ident.node,
-                                fields: fields,
+                                fields,
                             });
                         }
 

@@ -2,6 +2,7 @@ use std::{fs::File, io, path::Path};
 
 use crate::{
     ice,
+    runtime::{OptCtx, Rt},
     typechecker::{
         scope::{DeclarationKind, ScopeRef, TypeOrStub, ValueKind},
         scoped_display::TypeDisplay,
@@ -109,7 +110,7 @@ impl DocMod {
         writeln!(file)?;
         writeln!(file, "{}", self.doc)?;
 
-        let (fs, cs, ts, ms) = Runtime::split_items(&self.items);
+        let (fs, cs, ts, ms) = Rt::split_items(&self.items);
 
         if !ms.is_empty() {
             writeln!(file, "## Modules ")?;
@@ -197,7 +198,7 @@ impl DocTy {
         writeln!(file, "`````\n")?;
         writeln!(file)?;
 
-        let (fs, _, _, _) = Runtime::split_items(&self.items);
+        let (fs, _, _, _) = Rt::split_items(&self.items);
         for f in &fs {
             f.print_md(&mut file)?;
         }
@@ -206,7 +207,25 @@ impl DocTy {
     }
 }
 
-impl Runtime {
+impl<Ctx: OptCtx> Runtime<Ctx> {
+    /// Print documentation for all the types registered into this runtime.
+    ///
+    /// The format for the documentation is markdown that can be passed to Sphinx.
+    pub fn print_documentation(&self, path: &Path) -> io::Result<()> {
+        self.rt.print_documentation(path)
+    }
+}
+
+impl Rt {
+    pub fn print_documentation(&self, path: &Path) -> io::Result<()> {
+        if path.exists() {
+            eprintln!("Delete the directory first!");
+            return Ok(());
+        }
+        let doc = self.build_doc();
+        doc.print_md(path)
+    }
+
     fn print_ty(&self, ty: &impl TypeDisplay) -> String {
         ty.display(&self.type_checker.type_info).to_string()
     }
@@ -332,17 +351,5 @@ impl Runtime {
         ms.sort();
 
         (fs, cs, ts, ms)
-    }
-
-    /// Print documentation for all the types registered into this runtime.
-    ///
-    /// The format for the documentation is markdown that can be passed to Sphinx.
-    pub fn print_documentation(&self, path: &Path) -> io::Result<()> {
-        if path.exists() {
-            eprintln!("Delete the directory first!");
-            return Ok(());
-        }
-        let doc = self.build_doc();
-        doc.print_md(path)
     }
 }

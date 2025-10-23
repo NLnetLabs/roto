@@ -3,14 +3,13 @@ mod clone_drop;
 use std::collections::HashMap;
 
 use crate::{
-    Runtime,
     ast::{self, BinOp, Identifier, Literal},
     ice,
     label::{LabelRef, LabelStore},
     lir::IrValue,
     mir,
     runtime::{
-        RuntimeFunctionRef, init_string,
+        Rt, RuntimeFunctionRef, init_string,
         layout::{Layout, LayoutBuilder},
     },
     typechecker::{
@@ -34,7 +33,7 @@ pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
 }
 
 pub struct LowerCtx<'c> {
-    pub runtime: &'c Runtime,
+    pub runtime: &'c Rt,
     pub type_info: &'c mut TypeInfo,
     pub label_store: &'c mut LabelStore,
     pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,

@@ -9,14 +9,13 @@ use super::{
 };
 
 use crate::{
-    Runtime,
     ast::{self, Identifier, Literal},
     ice,
     ir_printer::{IrPrinter, Printable},
     label::{LabelRef, LabelStore},
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
-    runtime::RuntimeFunctionRef,
+    runtime::{Rt, RuntimeFunctionRef},
     typechecker::{
         self, PathValue, ResolvedPath,
         info::TypeInfo,
@@ -32,7 +31,7 @@ pub struct Lowerer<'r> {
     function_scope: ScopeRef,
     tmp_idx: usize,
     blocks: Vec<Block>,
-    runtime: &'r Runtime,
+    runtime: &'r Rt,
     type_info: &'r mut TypeInfo,
     label_store: &'r mut LabelStore,
     return_type: Type,
@@ -49,7 +48,7 @@ pub struct Lowerer<'r> {
 
 pub fn lower_to_mir(
     tree: &ModuleTree,
-    runtime: &Runtime,
+    runtime: &Rt,
     type_info: &mut TypeInfo,
     label_store: &mut LabelStore,
 ) -> Mir {
@@ -60,7 +59,7 @@ pub fn lower_to_mir(
 
 impl<'r> Lowerer<'r> {
     fn new(
-        runtime: &'r Runtime,
+        runtime: &'r Rt,
         type_info: &'r mut TypeInfo,
         function_name: &Meta<Identifier>,
         label_store: &'r mut LabelStore,
@@ -128,7 +127,7 @@ impl<'r> Lowerer<'r> {
 
     /// Lower a syntax tree
     fn tree(
-        runtime: &Runtime,
+        runtime: &Rt,
         type_info: &mut TypeInfo,
         tree: &ModuleTree,
         label_store: &mut LabelStore,

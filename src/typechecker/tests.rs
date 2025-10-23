@@ -1,5 +1,6 @@
 use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
+use crate::runtime::OptCtx;
 use crate::{Context, Runtime, Val, library, source_file, src};
 
 #[track_caller]
@@ -10,7 +11,7 @@ fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
 #[track_caller]
 fn typecheck_with_runtime(
     loaded: FileTree,
-    rt: Runtime,
+    rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
     let res = loaded.parse();
 
@@ -933,15 +934,13 @@ fn use_globals() {
 
 #[test]
 fn use_context() {
-    let mut rt = Runtime::new();
-
-    #[derive(Context)]
+    #[derive(Clone, Context)]
     struct Ctx {
         /// boop
         pub foo: u8,
     }
 
-    rt.register_context_type::<Ctx>().unwrap();
+    let rt = Runtime::new().with_context_type::<Ctx>().unwrap();
 
     let s = src!(
         "
