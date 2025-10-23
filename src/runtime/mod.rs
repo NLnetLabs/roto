@@ -771,7 +771,7 @@ impl Rt {
                     let ident = ty.name.ident;
                     let scope =
                         self.type_checker.get_scope_of(scope, ident).unwrap();
-                    self.declare_constants(scope, &children)?;
+                    self.declare_constants(scope, children)?;
                 }
                 Item::Constant(c) => self.declare_constant(scope, c)?,
                 _ => {}

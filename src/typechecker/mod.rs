@@ -717,7 +717,7 @@ impl TypeChecker {
 
                             evaluated_variants.push(EnumVariant {
                                 name: v.ident.node,
-                                fields: fields,
+                                fields,
                             });
                         }
 

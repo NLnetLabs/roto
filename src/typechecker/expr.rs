@@ -1252,13 +1252,13 @@ impl TypeChecker {
                 Err(self.error_expected_type(ident, declaration))
             }
             DeclarationKind::TypeParam(ident) => {
-                if params.len() != 0 {
+                if !params.is_empty() {
                     return Err(self.error_simple(
                         format!(
                             "expected 0 type parameters, got {}",
                             params.len()
                         ),
-                        format!("expected 0 type parameters"),
+                        "expected 0 type parameters".to_string(),
                         path.id,
                     ));
                 }
