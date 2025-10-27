@@ -280,6 +280,9 @@ pub fn built_ins() -> Library {
         #[value]
         type f64 = f64;
 
+        #[value]
+        type char = char;
+
         /// An ASN: an Autonomous System Number
         ///
         /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32).
@@ -347,6 +350,7 @@ pub fn built_ins() -> Library {
         include!(to_string_impl!(i64));
         include!(to_string_impl!(f32));
         include!(to_string_impl!(f64));
+        include!(to_string_impl!(char));
         include!(to_string_impl!(IpAddr));
         include!(to_string_impl!(Prefix));
         include!(to_string_impl!(Asn));

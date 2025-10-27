@@ -553,6 +553,7 @@ impl TypeChecker {
 
         let t = match lit.node {
             String(_) => Type::string(),
+            Char(_) => Type::char(),
             Asn(_) => Type::asn(),
             IpAddress(_) => Type::ip_addr(),
             Bool(_) => Type::bool(),
