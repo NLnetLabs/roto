@@ -45,6 +45,7 @@ pub enum Token<'s> {
 
     // === Literals ===
     String(&'s str),
+    Char(&'s str),
     Integer(&'s str),
     Float(&'s str),
     Hex(&'s str),
@@ -170,6 +171,7 @@ impl<'s> Lexer<'s> {
         self.integer()?;
         self.f_string()?;
         self.string()?;
+        self.char()?;
         self.keyword_or_ident()?;
 
         ControlFlow::Continue(())
@@ -451,6 +453,36 @@ impl<'s> Lexer<'s> {
         None
     }
 
+    fn char(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(rest) = self.input.strip_prefix('\'') else {
+            return ControlFlow::Continue(());
+        };
+
+        let mut last_is_backslash = false;
+        let end_quote = rest.find(|c| {
+            if last_is_backslash {
+                last_is_backslash = false;
+                return false;
+            }
+
+            match c {
+                '\'' => true,
+                '\\' => {
+                    last_is_backslash = true;
+                    false
+                }
+                _ => false,
+            }
+        });
+
+        let Some(end_quote) = end_quote else {
+            return ControlFlow::Continue(());
+        };
+
+        let (tok, span) = self.bump(2 + end_quote);
+        ControlFlow::Break((Token::Char(tok), span))
+    }
+
     fn string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
         let Some(rest) = self.input.strip_prefix('"') else {
             return ControlFlow::Continue(());
@@ -569,6 +601,7 @@ impl Display for Token<'_> {
 
             // Literals
             Token::String(s) => s,
+            Token::Char(s) => s,
             Token::Integer(s) => s,
             Token::Float(s) => s,
             Token::Hex(s) => s,

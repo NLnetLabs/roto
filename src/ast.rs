@@ -268,6 +268,7 @@ pub struct RecordType {
 #[derive(Clone, Debug)]
 pub enum Literal {
     String(String),
+    Char(char),
     Asn(Asn),
     IpAddress(std::net::IpAddr),
     Integer(i64),

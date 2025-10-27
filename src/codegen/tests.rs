@@ -3978,3 +3978,41 @@ fn generics_all_the_way_down() {
     let res = f.call(23);
     assert_eq!(res, 23);
 }
+
+#[test]
+fn char_literal() {
+    let s = src!(
+        r#"
+        fn main() -> char {
+            'a'
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> char>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, 'a');
+}
+
+#[test]
+fn stringbuf() {
+    let s = src!(
+        r#"
+        fn quote(s: String) -> String {
+            let buf = StringBuf.new();
+            buf.push_char('"');
+            buf.push_string(s);
+            buf.push_char('"');
+            buf.as_string()
+        }            
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(Arc<str>) -> Arc<str>>("quote")
+        .unwrap();
+    let res = f.call("hello".into());
+    assert_eq!(res, "\"hello\"".into());
+}

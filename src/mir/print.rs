@@ -236,6 +236,7 @@ impl Printable for Literal {
     fn print(&self, _printer: &IrPrinter) -> String {
         match self {
             Literal::String(str) => str.into(),
+            Literal::Char(c) => c.to_string(),
             Literal::Asn(asn) => asn.to_string(),
             Literal::IpAddress(ip) => ip.to_string(),
             Literal::Integer(i) => i.to_string(),

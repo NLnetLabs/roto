@@ -713,6 +713,7 @@ impl Lowerer<'_, '_> {
 
                 to.into()
             }
+            Literal::Char(c) => IrValue::Char(*c).into(),
             Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => {
                 const LAYOUT: Layout = Primitive::IpAddr.layout();
@@ -1072,6 +1073,7 @@ impl Lowerer<'_, '_> {
                         Primitive::Float(F32) => IrType::F32,
                         Primitive::Float(F64) => IrType::F64,
                         Primitive::Asn => IrType::U32,
+                        Primitive::Char => IrType::U32,
                         Primitive::Bool => IrType::Bool,
                         _ => break 'prim,
                     });

@@ -80,6 +80,7 @@ fn check_roto_type(
 ) -> Result<(), TypeMismatch> {
     // TODO: Convert this to consts when TypeId::of is const on stable
     let BOOL: TypeId = TypeId::of::<bool>();
+    let CHAR: TypeId = TypeId::of::<char>();
     let U8: TypeId = TypeId::of::<u8>();
     let U16: TypeId = TypeId::of::<u16>();
     let U32: TypeId = TypeId::of::<u32>();
@@ -130,6 +131,7 @@ fn check_roto_type(
 
             let expected_name = match rust_ty.type_id {
                 x if x == BOOL => "bool",
+                x if x == CHAR => "char",
                 x if x == U8 => "u8",
                 x if x == U16 => "u16",
                 x if x == U32 => "u32",

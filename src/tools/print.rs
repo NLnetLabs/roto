@@ -61,6 +61,7 @@ pub fn print_highlighted(s: &str) {
             | Token::SquareRight => ansi::GRAY,
             Token::Keyword(_) => ansi::BLUE,
             Token::String(_) => ansi::GREEN,
+            Token::Char(_) => ansi::GREEN,
             Token::Integer(_) => ansi::PURPLE,
             Token::Float(_) => ansi::PURPLE,
             Token::Hex(_) => ansi::PURPLE,
