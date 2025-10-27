@@ -3994,3 +3994,25 @@ fn char_literal() {
     let res = f.call();
     assert_eq!(res, 'a');
 }
+
+#[test]
+fn stringbuf() {
+    let s = src!(
+        r#"
+        fn quote(s: String) -> String {
+            let buf = StringBuf.new();
+            buf.push_char('"');
+            buf.push_string(s);
+            buf.push_char('"');
+            buf.as_string()
+        }            
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(Arc<str>) -> Arc<str>>("quote")
+        .unwrap();
+    let res = f.call("hello".into());
+    assert_eq!(res, "\"hello\"".into());
+}
