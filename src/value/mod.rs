@@ -24,12 +24,14 @@ use crate::{
 };
 
 pub use dyn_val::DynVal;
+pub use list::boundary::List;
 pub use option::RotoOption;
 pub use val::Val;
 pub use verdict::Verdict;
 pub use vtable::VTable;
 
 mod dyn_val;
+mod list;
 mod option;
 mod val;
 mod verdict;

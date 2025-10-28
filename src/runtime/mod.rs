@@ -357,7 +357,10 @@ pub struct CloneDrop {
     pub drop: unsafe extern "C" fn(*mut ()),
 }
 
-unsafe extern "C" fn extern_clone<T: Clone>(from: *const (), to: *mut ()) {
+pub(crate) unsafe extern "C" fn extern_clone<T: Clone>(
+    from: *const (),
+    to: *mut (),
+) {
     let from = from as *const T;
     let to = to as *mut T;
 
