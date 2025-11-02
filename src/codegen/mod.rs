@@ -348,26 +348,17 @@ pub fn codegen<Ctx: OptCtx>(
 
     let jit = JITModule::new(builder);
 
+    let pointer_ty = AbiParam::new(isa.pointer_type());
     let mut drop_signature = jit.make_signature();
-    drop_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
+    drop_signature.params.push(pointer_ty);
 
     let mut clone_signature = jit.make_signature();
-    clone_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
-    clone_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
+    clone_signature.params.push(pointer_ty);
+    clone_signature.params.push(pointer_ty);
 
     let mut init_string_signature = jit.make_signature();
-    init_string_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
-    init_string_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
+    init_string_signature.params.push(pointer_ty);
+    init_string_signature.params.push(pointer_ty);
     init_string_signature
         .params
         .push(AbiParam::new(cranelift::codegen::ir::types::I32));
