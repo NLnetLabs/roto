@@ -1,11 +1,16 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    ptr::NonNull,
     sync::{Arc, Mutex},
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{Library, Val, library};
+use crate::{
+    Library, Val, library,
+    runtime::func::OutPtr,
+    value::{DynVal, ErasedList, VTable, list::ffi::list_get},
+};
 
 macro_rules! int_docs {
     ($t:ty) => {&{
@@ -439,6 +444,66 @@ pub fn built_ins() -> Library {
             fn as_string(self) -> Arc<str> {
                 let s = self.lock().unwrap();
                 (&**s).into()
+            }
+        }
+
+        /// A growable array
+        #[clone] type List<T> = ErasedList;
+
+        impl ErasedList {
+            /// Create a new empty list.
+            #[sig = "fn[T]() -> List[T]"]
+            #[vtables(T)]
+            fn new(vtable: VTable) -> Self {
+                Self::new(vtable)
+            }
+
+            /// Push an element to the end of this list.
+            #[sig = "fn[T](List[T], T)"]
+            fn push(mut self, elem: DynVal) {
+                unsafe { self.push(NonNull::new_unchecked(elem.0)) };
+            }
+
+            /// Concatenate this list with another, returning the result.
+            ///
+            /// The arguments are not mutated by this function.
+            #[sig = "fn[T](List[T], List[T]) -> List[T]"]
+            fn concat(self, other: Self) -> Self {
+                unsafe { self.concat(&other) }
+            }
+
+            /// Get an element from the list.
+            ///
+            /// This function returns `None` if the index is out of bounds.
+            #[sig = "fn[T](List[T], u64) -> T?"]
+            fn get(out: OutPtr<DynVal>, this: Self, idx: u64) {
+                unsafe { list_get(out.ptr.cast(), this, idx) }
+            }
+
+            /// Swap two elements in this list at the given indices.
+            ///
+            /// This function does nothing if either `i` or `j` is out of bounds.
+            #[sig = "fn[T](List[T], u64, u64)"]
+            fn swap(self, i: u64, j: u64) {
+                self.swap(i as usize, j as usize);
+            }
+
+            /// Returns the length of this list.
+            #[sig = "fn[T](List[T]) -> u64"]
+            fn len(self) -> u64 {
+                self.len() as u64
+            }
+
+            /// Returns the capacity of the current allocation of this list.
+            #[sig = "fn[T](List[T]) -> u64"]
+            fn capacity(self) -> u64 {
+                self.capacity() as u64
+            }
+
+            /// Returns whether is list is empty.
+            #[sig = "fn[T](List[T]) -> bool"]
+            fn is_empty(self) -> bool {
+                self.is_empty()
             }
         }
     }

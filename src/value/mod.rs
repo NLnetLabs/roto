@@ -32,7 +32,7 @@ pub use verdict::Verdict;
 pub use vtable::VTable;
 
 mod dyn_val;
-mod list;
+pub mod list;
 mod option;
 mod val;
 mod verdict;
