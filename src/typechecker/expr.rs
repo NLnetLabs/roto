@@ -934,14 +934,7 @@ impl TypeChecker {
             return None;
         };
 
-        let Type::Function(parameter_types, return_type) = func_dec.ty else {
-            ice!("Function must have function type");
-        };
-
-        let signature = Signature {
-            parameter_types: parameter_types.clone(),
-            return_type: (*return_type).clone(),
-        };
+        let signature = func_dec.signature.instantiate(|| self.fresh_var());
 
         Some(Function {
             signature,
@@ -961,14 +954,7 @@ impl TypeChecker {
             return None;
         };
 
-        let Type::Function(parameter_types, return_type) = func_dec.ty else {
-            ice!("Function must have function type");
-        };
-
-        let signature = Signature {
-            parameter_types: parameter_types.clone(),
-            return_type: (*return_type).clone(),
-        };
+        let signature = func_dec.signature.instantiate(|| self.fresh_var());
 
         Some(Function {
             signature,
@@ -1153,19 +1139,15 @@ impl TypeChecker {
             DeclarationKind::Function(Some(func_dec))
             | DeclarationKind::Method(Some(func_dec)) => {
                 if let Some(field) = idents.next() {
-                    return Err(
-                        self.error_no_field_on_type(&func_dec.ty, field)
-                    );
+                    let params = func_dec.signature.parameter_types.clone();
+                    let ret = func_dec.signature.return_type.clone();
+                    let ty = Type::Function(params, Box::new(ret));
+                    return Err(self.error_no_field_on_type(&ty, field));
                 }
-                let Type::Function(parameter_types, return_type) =
-                    &func_dec.ty
-                else {
-                    panic!()
-                };
-                let signature = Signature {
-                    parameter_types: parameter_types.clone(),
-                    return_type: (**return_type).clone(),
-                };
+
+                let signature =
+                    func_dec.signature.instantiate(|| self.fresh_var());
+
                 Ok(ResolvedPath::Function {
                     name: dec.name,
                     definition: func_dec.definition.clone(),
@@ -1408,11 +1390,19 @@ impl TypeChecker {
         let last_ident = p.idents.last().unwrap();
 
         // Skip the first parameter if we are checking a method
-        let params = if let ResolvedPath::Method { .. } = resolved_path {
-            &signature.parameter_types[1..]
-        } else {
-            &signature.parameter_types
-        };
+        let params =
+            if let ResolvedPath::Method { value, .. } = &resolved_path {
+                self.unify(
+                    value.final_type(),
+                    &signature.parameter_types[0],
+                    MetaId(0),
+                    None,
+                )?;
+
+                &signature.parameter_types[1..]
+            } else {
+                &signature.parameter_types
+            };
 
         let diverges = self.check_arguments(
             scope,

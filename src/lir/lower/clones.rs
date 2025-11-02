@@ -220,6 +220,7 @@ impl Lowerer<'_, '_> {
         lowerer.generate_clone_body(ident, scope, ty);
 
         let signature = types::Signature {
+            types: Vec::new(),
             parameter_types: vec![ty.clone()],
             return_type: ty.clone(),
         };
