@@ -61,6 +61,8 @@ pub struct TypeInfo {
 
     /// Type for return/accept/reject that it constructs and returns.
     pub(super) return_types: HashMap<MetaId, Type>,
+
+    pub(super) type_ids: HashMap<Type, usize>,
 }
 
 impl Default for TypeInfo {
@@ -83,11 +85,18 @@ impl TypeInfo {
             function_calls: HashMap::new(),
             function_scopes: HashMap::new(),
             runtime_function_signatures: HashMap::new(),
+            type_ids: HashMap::new(),
         }
     }
 }
 
 impl TypeInfo {
+    pub fn type_id(&mut self, ty: &Type) -> usize {
+        let ty = self.resolve(ty);
+        let len = self.type_ids.len();
+        *self.type_ids.entry(ty).or_insert(len + 1)
+    }
+
     pub fn resolved_name(
         &self,
         x: impl Into<MetaId> + Debug,

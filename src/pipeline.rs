@@ -1,6 +1,9 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt,
+};
 
 use crate::{
     codegen::{
@@ -327,6 +330,8 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
             type_info: &mut type_info,
             label_store: &mut label_store,
             runtime_functions: &mut runtime_functions,
+            drops_to_generate: VecDeque::new(),
+            clones_to_generate: VecDeque::new(),
         };
         let ir = lir::lower_to_lir(&mut ctx, ir);
 
