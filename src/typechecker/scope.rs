@@ -7,6 +7,7 @@ use crate::{
     ast::Identifier,
     ice,
     parser::meta::{Meta, MetaId},
+    typechecker::types::Signature,
 };
 
 use super::{
@@ -50,7 +51,7 @@ impl TypeDisplay for ResolvedName {
 }
 
 /// A declaration in a [`ScopeGraph`]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Declaration {
     pub name: ResolvedName,
     pub kind: DeclarationKind,
@@ -59,7 +60,7 @@ pub struct Declaration {
     pub doc: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeclarationKind {
     Value(ValueKind, Type),
     Type(TypeOrStub),
@@ -70,11 +71,11 @@ pub enum DeclarationKind {
     TypeParam(Identifier),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FunctionDeclaration {
     pub definition: FunctionDefinition,
     pub parameter_names: Vec<Identifier>,
-    pub ty: Type,
+    pub signature: Signature,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -352,17 +353,19 @@ impl ScopeGraph {
         definition: FunctionDefinition,
         parameter_names: Vec<Identifier>,
         doc: String,
-        ty: &Type,
+        signature: Signature,
     ) -> Result<ResolvedName, MetaId> {
         let kind = DeclarationKind::Function(Some(FunctionDeclaration {
             definition,
             parameter_names,
-            ty: ty.clone(),
+            signature,
         }));
+
         let dec =
             self.insert_declaration(scope, ident, kind, doc, |kind| {
                 matches!(kind, DeclarationKind::Function(None))
             })?;
+
         Ok(dec.name)
     }
 
@@ -373,12 +376,12 @@ impl ScopeGraph {
         definition: FunctionDefinition,
         parameter_names: Vec<Identifier>,
         doc: String,
-        ty: &Type,
+        signature: Signature,
     ) -> Result<ResolvedName, MetaId> {
         let kind = DeclarationKind::Method(Some(FunctionDeclaration {
             definition,
             parameter_names,
-            ty: ty.clone(),
+            signature,
         }));
         let dec =
             self.insert_declaration(scope, ident, kind, doc, |kind| {

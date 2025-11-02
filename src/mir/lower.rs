@@ -65,15 +65,14 @@ impl<'r> Lowerer<'r> {
         label_store: &'r mut LabelStore,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
-        let ty = type_info.type_of(function_name);
-        let Type::Function(_, return_type) = ty else {
-            ice!()
-        };
+        let signature = type_info.function_signature(function_name);
+        let return_type = signature.return_type;
+
         Self {
             tmp_idx: 0,
             type_info,
             runtime,
-            return_type: (*return_type).clone(),
+            return_type,
             function_scope,
             blocks: Vec::new(),
             stack_slots: Vec::new(),
@@ -192,10 +191,8 @@ impl<'r> Lowerer<'r> {
             ..
         } = fm;
 
-        let Type::Function(_, ret) = self.type_info.type_of(ident) else {
-            ice!("The type of a filter(map) must be a function");
-        };
-        self.function_like(ident, params, &ret, body)
+        let signature = self.type_info.function_signature(ident);
+        self.function_like(ident, params, &signature.return_type, body)
     }
 
     fn function(self, function: &ast::FunctionDeclaration) -> Function {
@@ -206,10 +203,7 @@ impl<'r> Lowerer<'r> {
             ice!();
         };
 
-        let Type::Function(_, ret) = self.type_info.resolve(&func_dec.ty)
-        else {
-            ice!("A function must have a function type");
-        };
+        let ret = &func_dec.signature.return_type;
 
         self.function_like(
             &function.ident,
@@ -261,6 +255,7 @@ impl<'r> Lowerer<'r> {
         }
 
         let signature = Signature {
+            types: Vec::new(),
             parameter_types: parameter_types
                 .iter()
                 .map(|x| &x.1)
@@ -534,6 +529,7 @@ impl<'r> Lowerer<'r> {
             self.do_assign(Place::new(tmp.clone(), ty.clone()), ty, receiver);
             args.push(tmp);
         }
+
         args.extend(arguments.iter().map(|a| {
             let ty = self.type_info.type_of(a);
             let op = self.expr(a);

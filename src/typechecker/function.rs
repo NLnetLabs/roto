@@ -2,8 +2,8 @@
 
 use crate::{
     ast::{self, Identifier},
-    ice,
     parser::meta::Meta,
+    typechecker::types::Signature,
 };
 
 use super::{
@@ -19,7 +19,7 @@ impl TypeChecker {
         &mut self,
         scope: ScopeRef,
         filter_map: &ast::FilterMap,
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<()> {
         let ast::FilterMap {
             filter_type: _,
             ident,
@@ -27,10 +27,8 @@ impl TypeChecker {
             body,
         } = filter_map;
 
-        let ty = self.type_info.type_of(ident);
-        let Type::Function(_, return_type) = &ty else {
-            ice!()
-        };
+        let signature = self.type_info.function_signature(ident);
+        let return_type = signature.return_type;
 
         let scope = self
             .type_info
@@ -44,16 +42,14 @@ impl TypeChecker {
         }
 
         let ctx = Context {
-            expected_type: *return_type.clone(),
-            function_return_type: Some(*return_type.clone()),
+            expected_type: return_type.clone(),
+            function_return_type: Some(return_type.clone()),
         };
 
         self.block(scope, &ctx, body)?;
         self.resolve_obligations()?;
 
-        let param_types = params.into_iter().map(|(_, t)| t).collect();
-
-        Ok(Type::Function(param_types, Box::new(ty)))
+        Ok(())
     }
 
     pub fn function(
@@ -115,10 +111,11 @@ impl TypeChecker {
             super::types::FunctionDefinition::Roto,
             Vec::new(),
             String::new(),
-            Type::Function(
-                Vec::new(),
-                Box::new(Type::verdict(Type::unit(), Type::unit())),
-            ),
+            Signature {
+                types: Vec::new(),
+                parameter_types: Vec::new(),
+                return_type: Type::verdict(Type::unit(), Type::unit()),
+            },
         )?;
 
         let scope = self
@@ -142,36 +139,44 @@ impl TypeChecker {
         &mut self,
         scope: ScopeRef,
         dec: &ast::FunctionDeclaration,
-    ) -> TypeResult<Type> {
-        let ret = if let Some(ret) = &dec.ret {
+    ) -> TypeResult<Signature> {
+        let return_type = if let Some(ret) = &dec.ret {
             self.evaluate_type_expr(scope, ret)?
         } else {
             Type::unit()
         };
-        let param_types = self
+        let parameter_types = self
             .params(scope, &dec.params)?
             .into_iter()
             .map(|(_, t)| t)
             .collect();
-        Ok(Type::Function(param_types, Box::new(ret)))
+
+        Ok(Signature {
+            types: Vec::new(),
+            parameter_types,
+            return_type,
+        })
     }
 
     pub fn filter_map_type(
         &mut self,
         scope: ScopeRef,
         dec: &ast::FilterMap,
-    ) -> TypeResult<Type> {
+    ) -> TypeResult<Signature> {
         let accept = self.fresh_var();
         let reject = self.fresh_var();
-        let param_types = self
+
+        let parameter_types = self
             .params(scope, &dec.params)?
             .into_iter()
             .map(|(_, t)| t)
             .collect();
-        Ok(Type::Function(
-            param_types,
-            Box::new(Type::verdict(accept, reject)),
-        ))
+
+        Ok(Signature {
+            types: Vec::new(),
+            parameter_types,
+            return_type: Type::verdict(accept, reject),
+        })
     }
 
     fn params(

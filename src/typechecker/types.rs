@@ -476,10 +476,57 @@ impl TypeDefinition {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Signature {
+    pub types: Vec<Type>,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
+}
+
+impl Signature {
+    pub fn instantiate(&self, mut fresh_var: impl FnMut() -> Type) -> Self {
+        let mut new_types = Vec::new();
+        let mut subs = Vec::new();
+
+        for ty in &self.types {
+            new_types.push(if let Type::ExplicitVar(_) = ty {
+                let new_ty = fresh_var();
+                subs.push((ty.clone(), new_ty.clone()));
+                new_ty
+            } else {
+                ty.clone()
+            });
+        }
+
+        Self {
+            types: new_types,
+            parameter_types: self
+                .parameter_types
+                .iter()
+                .map(|t| t.substitute_many(&subs))
+                .collect(),
+            return_type: self.return_type.substitute_many(&subs),
+        }
+    }
+
+    pub fn substitute(&self, new_types: &[Type]) -> Self {
+        assert_eq!(self.types.len(), new_types.len());
+        let mut subs = Vec::new();
+
+        for (old, new) in self.types.iter().zip(new_types) {
+            subs.push((old.clone(), new.clone()));
+        }
+
+        Self {
+            types: new_types.into(),
+            parameter_types: self
+                .parameter_types
+                .iter()
+                .map(|t| t.substitute_many(&subs))
+                .collect(),
+            return_type: self.return_type.substitute_many(&subs),
+        }
+    }
 }
 
 impl Type {
@@ -503,10 +550,13 @@ impl Type {
         }
     }
 
-    pub fn substitute_many(&self, iter: &[(&Self, &Self)]) -> Self {
+    pub fn substitute_many(
+        &self,
+        iter: &[(impl Borrow<Self>, impl Borrow<Self>)],
+    ) -> Self {
         let mut me = self.clone();
         for (from, to) in iter {
-            me = me.substitute(from, to);
+            me = me.substitute(from.borrow(), to.borrow());
         }
         me
     }
@@ -541,7 +591,7 @@ impl Primitive {
 ///
 /// This is used to extract the function pointer and any other information
 /// required to generate the code to call this function.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FunctionDefinition {
     Runtime(RuntimeFunctionRef),
     Roto,
