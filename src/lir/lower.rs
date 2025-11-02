@@ -1188,6 +1188,9 @@ impl Lowerer<'_, '_> {
                     });
                 }
             }
+            if let TypeDefinition::List(_) = type_def {
+                return Some(IrType::Pointer);
+            }
             if let TypeDefinition::Runtime(_, _) = type_def {
                 return Some(IrType::Pointer);
             }

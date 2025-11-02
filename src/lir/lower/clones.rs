@@ -18,6 +18,7 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{self, EnumVariant, Primitive, Type, TypeDefinition},
     },
+    value::ErasedList,
 };
 
 use super::Lowerer;
@@ -346,6 +347,9 @@ impl Lowerer<'_, '_> {
 
                         self.emit_return(None);
                     }
+                    TypeDefinition::List(_) => {
+                        ice!("list clone should have been handled above");
+                    }
                     TypeDefinition::Enum(_, _) => {
                         ice!("enum clone should have been handled above");
                     }
@@ -492,6 +496,9 @@ impl Lowerer<'_, '_> {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
                         Some(TypeId::of::<Arc<str>>())
+                    }
+                    TypeDefinition::List(_) => {
+                        Some(TypeId::of::<ErasedList>())
                     }
                     _ => None,
                 }

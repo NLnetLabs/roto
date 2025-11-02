@@ -260,6 +260,7 @@ impl Type {
             TypeDescription::Val(_) => true,
             TypeDescription::Option(_) => false,
             TypeDescription::Verdict(_, _) => false,
+            TypeDescription::List(_) => false,
         };
 
         if !is_allowed {
