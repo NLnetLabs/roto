@@ -213,6 +213,25 @@ fn check_roto_type(
             };
             check_roto_type(type_info, rust_ty, roto_ty)
         }
+        TypeDescription::List(rust_ty) => {
+            let Type::Name(type_name) = &roto_ty else {
+                return Err(error_message);
+            };
+
+            if type_name.name
+                != (ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: "List".into(),
+                })
+            {
+                return Err(error_message);
+            }
+
+            let [roto_ty] = &type_name.arguments[..] else {
+                return Err(error_message);
+            };
+            check_roto_type(type_info, rust_ty, roto_ty)
+        }
     }
 }
 

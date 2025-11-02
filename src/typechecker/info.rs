@@ -10,6 +10,7 @@ use crate::{
         Rt, RuntimeFunctionRef,
         layout::{Layout, LayoutBuilder},
     },
+    value::ErasedList,
 };
 
 use super::{
@@ -217,6 +218,7 @@ impl TypeInfo {
                 let is_ref = matches!(
                     type_def,
                     TypeDefinition::Enum(..)
+                        | TypeDefinition::List(..)
                         | TypeDefinition::Record(..)
                         | TypeDefinition::Runtime(..)
                         | TypeDefinition::Primitive(
@@ -289,6 +291,7 @@ impl TypeInfo {
             Type::Name(type_name) => {
                 let type_def = self.resolve_type_name(&type_name);
                 match type_def {
+                    TypeDefinition::List(_) => Layout::of::<ErasedList>(),
                     TypeDefinition::Enum(type_constructor, variants) => {
                         let subs: Vec<_> = type_constructor
                             .arguments

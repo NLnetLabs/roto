@@ -303,7 +303,7 @@ pub struct Function {
     pub public: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
     pub parameters: Vec<(Identifier, IrType)>,
 

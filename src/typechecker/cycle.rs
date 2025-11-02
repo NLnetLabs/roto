@@ -73,6 +73,7 @@ fn visit_name(
         }
         TypeDefinition::Runtime(_, _) => {}
         TypeDefinition::Primitive(_) => {}
+        TypeDefinition::List(_) => {}
     }
     visited.insert(name, true);
 

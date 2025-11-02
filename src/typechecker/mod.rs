@@ -275,6 +275,7 @@ impl TypeChecker {
 
             self.type_info.types.insert(name, ty);
         }
+
         Ok(())
     }
 
@@ -333,7 +334,7 @@ impl TypeChecker {
             self.type_info.scope_graph.resolve_name(scope, &ident, true)
         {
             if let DeclarationKind::Type(TypeOrStub::Type(
-                TypeDefinition::Primitive(_),
+                TypeDefinition::Primitive(_) | TypeDefinition::List(_),
             )) = other.kind
             {
                 let dec = self
@@ -438,6 +439,9 @@ impl TypeChecker {
                 Self::rust_type_to_roto_type(runtime, a)?,
                 Self::rust_type_to_roto_type(runtime, r)?,
             )),
+            TypeDescription::List(t) => {
+                Ok(Type::list(Self::rust_type_to_roto_type(runtime, t)?))
+            }
             TypeDescription::Val(_) => {
                 let name = runtime
                     .get_runtime_type(ty.type_id)
