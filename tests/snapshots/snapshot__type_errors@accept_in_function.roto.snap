@@ -8,5 +8,5 @@ Error: Type error: mismatched types
    │
  2 │     accept
    │     ───┬──  
-   │        ╰──── expected `bool`, found `Verdict[_, _]`
+   │        ╰──── expected `bool`, found `Verdict[@0, @1]`
 ───╯

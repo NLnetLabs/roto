@@ -348,7 +348,7 @@ impl TypeDisplay for Type {
 
         let ty = type_info.resolve_ref(self);
         match ty {
-            Type::Var(_) => write!(f, "_"),
+            Type::Var(x) => write!(f, "@{x}"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
             Type::IntVar(_, MustBeSigned::Yes) => {
                 write!(f, "{{signed integer}}")
