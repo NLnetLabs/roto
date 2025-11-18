@@ -67,6 +67,7 @@ struct Lowerer<'c, 'r> {
 /// - a variable of a reference type becomes `Location::Pointer` with offset 0
 /// - a variable of any type with some projection becomes a `Location::Pointer`
 ///   with some offset.
+#[derive(Debug)]
 enum Location {
     Var(Var),
     Pointer { base: Var, offset: usize },
