@@ -25,6 +25,7 @@ use crate::{
             EnumVariant, FunctionDefinition, Signature, Type, TypeDefinition,
         },
     },
+    value::ErasedList,
 };
 
 pub struct Lowerer<'r> {
@@ -365,7 +366,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Record(record) | ast::Expr::TypedRecord(_, record) => {
                 self.record(id, record)
             }
-            ast::Expr::List(_list) => todo!(),
+            ast::Expr::List(list) => self.list(id, list),
             ast::Expr::Not(expr) => self.not(expr),
             ast::Expr::Negate(expr) => self.negate(expr),
             ast::Expr::Assign(expr, field) => self.assign(expr, field),
@@ -674,6 +675,70 @@ impl<'r> Lowerer<'r> {
         let val = self.expr(expr);
         let var = self.assign_to_var(val, ty.clone());
         Value::Negate(var, ty)
+    }
+
+    fn list(&mut self, id: MetaId, list: &[Meta<ast::Expr>]) -> Value {
+        let ty = self.type_info.type_of(id);
+        let ty = self.type_info.resolve(&ty);
+        let Type::Name(name) = &ty else { ice!() };
+        let type_def = self.type_info.resolve_type_name(name);
+        let TypeDefinition::List(_) = type_def else {
+            ice!()
+        };
+        let inner = name.arguments[0].clone();
+
+        let tmp = self.tmp(ty.clone());
+
+        let func_ref = self.find_method(TypeId::of::<ErasedList>(), "new");
+        self.emit(Instruction::Assign {
+            to: Place {
+                var: tmp.clone(),
+                root_ty: ty.clone(),
+                projection: Vec::new(),
+            },
+            ty: ty.clone(),
+            value: Value::CallRuntime {
+                func_ref,
+                args: Vec::new(),
+                type_params: vec![inner.clone()],
+            },
+        });
+
+        let unit_tmp = self.tmp(Type::unit());
+        for expr in list {
+            let list_var = Value::Clone(Place::new(tmp.clone(), ty.clone()));
+            let list_var = self.assign_to_var(list_var, ty.clone());
+            self.remove_live_variable(&list_var);
+
+            let elem = self.expr(expr);
+            let elem_ty = self.type_info.type_of(expr);
+            let elem_var = self.undropped_tmp();
+            self.vars.push((elem_var.clone(), elem_ty.clone()));
+
+            self.do_assign(
+                Place::new(elem_var.clone(), elem_ty.clone()),
+                elem_ty,
+                elem,
+            );
+
+            let func_ref =
+                self.find_method(TypeId::of::<ErasedList>(), "push");
+            self.emit(Instruction::Assign {
+                to: Place {
+                    var: unit_tmp.clone(),
+                    root_ty: Type::unit(),
+                    projection: Vec::new(),
+                },
+                ty: Type::unit(),
+                value: Value::CallRuntime {
+                    func_ref,
+                    args: vec![list_var, elem_var],
+                    type_params: vec![inner.clone()],
+                },
+            });
+        }
+
+        Value::Move(tmp)
     }
 
     fn assign(
