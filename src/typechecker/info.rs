@@ -192,6 +192,17 @@ impl TypeInfo {
         }
     }
 
+    pub fn is_list_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                matches!(type_def, TypeDefinition::List(_))
+            }
+            _ => false,
+        }
+    }
+
     /// Whether or not the type is passed around by reference or by value
     ///
     /// Roto always has by-value semantics, but we still have types that we

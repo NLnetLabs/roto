@@ -805,6 +805,10 @@ impl<'r> Lowerer<'r> {
             return self.binop_prefix(l, binop, r);
         }
 
+        if self.type_info.is_list_type(&l_ty) {
+            return self.binop_list(l_ty, l, binop, r);
+        }
+
         if *binop == ast::BinOp::And {
             return self.binop_and(l, r);
         }
@@ -932,6 +936,28 @@ impl<'r> Lowerer<'r> {
             ),
             _ => {
                 ice!("Operator {binop} is not implemented for Prefix")
+            }
+        }
+    }
+
+    fn binop_list(
+        &mut self,
+        ty: Type,
+        l: &Meta<ast::Expr>,
+        binop: &ast::BinOp,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        match binop {
+            ast::BinOp::Add => self.desugared_binop(
+                TypeId::of::<ErasedList>(),
+                "concat",
+                vec![ty.clone()],
+                ty.clone(),
+                (l, ty.clone()),
+                (r, ty.clone()),
+            ),
+            _ => {
+                ice!("Operator {binop} is not implemented for List")
             }
         }
     }
