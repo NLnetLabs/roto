@@ -802,6 +802,31 @@ impl TypeChecker {
                 self.type_info.function_calls.insert(span, function);
                 return Ok(diverges);
             }
+
+            if let Type::Name(n) = resolved {
+                let list_name = ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: "List".into(),
+                };
+
+                if n.name == list_name {
+                    diverges |= self.expr(scope, &ctx_new, right)?;
+
+                    self.unify(&ctx.expected_type, &var, span, None)?;
+
+                    let function = self
+                        .get_function_in_type(
+                            ResolvedName {
+                                scope: ScopeRef::GLOBAL,
+                                ident: "List".into(),
+                            },
+                            "concat".into(),
+                        )
+                        .unwrap();
+                    self.type_info.function_calls.insert(span, function);
+                    return Ok(diverges);
+                }
+            }
         }
 
         match op {
