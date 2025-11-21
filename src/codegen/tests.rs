@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    Context, FileTree, NoCtx, Runtime,
+    Context, FileTree, List, NoCtx, Runtime,
     file_tree::FileSpec,
     library,
     pipeline::Package,
@@ -175,7 +175,7 @@ fn equal_to_10_with_function() {
         fn is_10(x: i32) -> bool {
             x == 10
         }
-        
+
         filtermap main(x: i32) {
             if is_10(x) {
                 accept
@@ -279,7 +279,7 @@ fn inversion() {
             } else {
                 reject
             }
-        } 
+        }
     "
     );
 
@@ -305,7 +305,7 @@ fn not_not() {
         "
         fn main(x: i32) -> bool {
             not not (x == 10)
-        } 
+        }
     "
     );
 
@@ -737,7 +737,7 @@ fn remainder() {
                 x = x - y;
             }
             x
-        }     
+        }
     "
     );
 
@@ -1221,7 +1221,7 @@ fn to_string() {
             + g.to_string()
             + " "
             + h.to_string()
-        }     
+        }
     "#
     );
 
@@ -1545,7 +1545,7 @@ fn use_context() {
                 accept foo + 1
             } else {
                 accept foo
-            } 
+            }
         }"
     );
 
@@ -1588,7 +1588,7 @@ fn use_a_test() {
         fn double(x: i32) -> i32 {
             x # oops! not correct
         }
-        
+
         test check_double {
             if double(4) != 8 {
                 reject;
@@ -1609,7 +1609,7 @@ fn use_a_test() {
         fn double(x: i32) -> i32 {
             2 * x
         }
-        
+
         test check_double {
             if double(4) != 8 {
                 reject;
@@ -1664,7 +1664,7 @@ fn string() {
     let s = src!(
         r#"
         filtermap main() {
-            accept "hello" 
+            accept "hello"
         }
     "#
     );
@@ -1684,7 +1684,7 @@ fn escape_string() {
     let s = src!(
         r#"
         fn main() -> String {
-            "\t\tfoo" 
+            "\t\tfoo"
         }
     "#
     );
@@ -1879,7 +1879,7 @@ fn string_to_lowercase_and_uppercase() {
     let s = src!(
         r#"
         filtermap main(lower: bool, s: String) {
-            if lower { 
+            if lower {
                 accept s.to_lowercase()
             } else {
                 accept s.to_uppercase()
@@ -1907,7 +1907,7 @@ fn string_repeat() {
         r#"
         filtermap main(s: String) {
             let exclamation = (s + "!").to_uppercase();
-            accept (exclamation + " ").repeat(4) + exclamation 
+            accept (exclamation + " ").repeat(4) + exclamation
         }
     "#
     );
@@ -2120,7 +2120,7 @@ fn unused_accept() {
         "
         fn foo() {
             Verdict.Accept(5);
-        }    
+        }
         "
     );
 
@@ -2260,7 +2260,7 @@ fn question_unit() {
             } else {
                 None
             }
-        }    
+        }
     "
     );
 
@@ -2290,7 +2290,7 @@ fn question_record() {
             } else {
                 None
             }
-        }    
+        }
     "
     );
 
@@ -2387,7 +2387,7 @@ fn top_level_import() {
         "
             import foo.bar;
             fn main(x: i32) -> i32 {
-                bar(x)    
+                bar(x)
             }
         "
     );
@@ -2417,7 +2417,7 @@ fn local_import() {
         "
             fn main(x: i32) -> i32 {
                 import foo.bar;
-                bar(x)    
+                bar(x)
             }
         "
     );
@@ -2517,7 +2517,7 @@ fn import_via_super() {
         "
             import foo.a;
             fn main(x: i32) -> i32 {
-                a(x)  
+                a(x)
             }
         "
     );
@@ -2556,7 +2556,7 @@ fn import_module_first() {
         "
             import foo.a;
             fn main(x: i32) -> i32 {
-                a(x)  
+                a(x)
             }
         "
     );
@@ -2596,7 +2596,7 @@ fn import_module_second() {
         "
             import foo.a;
             fn main(x: i32) -> i32 {
-                a(x)  
+                a(x)
             }
         "
     );
@@ -2696,7 +2696,7 @@ fn use_type_in_function_argument() {
         "pkg",
         "
             fn main(x: i32) -> i32 {
-                get_bar(foo.Foo { bar: x }) 
+                get_bar(foo.Foo { bar: x })
             }
 
             fn get_bar(f: foo.Foo) -> i32 {
@@ -2977,7 +2977,7 @@ fn refcounting_in_a_recursive_function() {
         fn main(foo: Foo) -> Verdict[i32, i32] {
             f(foo, 1);
             reject 3
-        }           
+        }
     "##
     );
 
@@ -3501,7 +3501,7 @@ fn call_runtime_function_in_f_string() {
         r#"
        fn foo() -> String {
            f"foo{gimme_an_asn()}bar"
-       }     
+       }
     "#
     );
 
@@ -4010,7 +4010,7 @@ fn stringbuf() {
             buf.push_string(s);
             buf.push_char('"');
             buf.as_string()
-        }            
+        }
     "#
     );
 
@@ -4020,4 +4020,364 @@ fn stringbuf() {
         .unwrap();
     let res = f.call("hello".into());
     assert_eq!(res, "\"hello\"".into());
+}
+
+#[test]
+fn list_basic() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let list = List.new();
+            list.push(5);
+            list.get(0)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, Some(5));
+}
+
+#[test]
+fn list_push_twice() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let list = List.new();
+            list.push(5);
+            list.push(10);
+            list.push(15);
+
+            list.get(0)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, Some(5));
+}
+
+#[test]
+fn list_get_many() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let list = List.new();
+            list.push(5);
+            list.push(10);
+            list.push(15);
+            list.push(20);
+
+            let a = list.get(0)?
+                + list.get(1)?
+                + list.get(2)?
+                + list.get(3)?;
+
+            Some(a)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, Some(50));
+}
+
+#[test]
+fn list_len() {
+    let s = src!(
+        r#"
+        fn main() -> u64 {
+            let list = List.new();
+            list.push(1);
+            list.push(2);
+            list.push(3);
+            list.len()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u64>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, 3);
+}
+
+#[test]
+fn list_is_empty_1() {
+    let s = src!(
+        r#"
+        fn main() -> bool {
+            let list = List.new();
+            list.is_empty()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> bool>("main").unwrap();
+    let res = f.call();
+    assert!(res);
+}
+
+#[test]
+fn list_is_empty_2() {
+    let s = src!(
+        r#"
+        fn main() -> bool {
+            let list = List.new();
+            list.push(5);
+            list.is_empty()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> bool>("main").unwrap();
+    let res = f.call();
+    assert!(!res);
+}
+
+#[test]
+fn list_of_strings_1() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            let list = List.new();
+            list.push("hello");
+
+            list.get(0)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> Option<Arc<str>>>("main")
+        .unwrap();
+    let res = f.call();
+    assert_eq!(res, Some("hello".into()));
+}
+
+#[test]
+fn list_of_strings_2() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            let list = List.new();
+            list.push("hello");
+            list.push("world");
+
+            Some(f"{list.get(0)?} {list.get(1)?}")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> Option<Arc<str>>>("main")
+        .unwrap();
+    let res = f.call();
+    assert_eq!(res, Some("hello world".into()));
+}
+
+#[test]
+fn list_through_script() {
+    let s = src!(
+        r#"
+        fn main(x: List[u64]) -> List[u64] {
+            x.push(3);
+            x.push(4);
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(List<u64>) -> List<u64>>("main")
+        .unwrap();
+
+    let mut x = List::new();
+    x.push(1);
+    x.push(2);
+    let res = f.call(x);
+    assert_eq!(res.to_vec(), vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn list_of_lists() {
+    let s = src!(
+        r#"
+        fn main() -> List[List[u64]] {
+            let x = List.new();
+
+            let a = List.new();
+            a.push(1);
+            a.push(2);
+
+            let b = List.new();
+            b.push(3);
+            b.push(4);
+
+            x.push(a);
+            x.push(b);
+
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<List<u64>>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(
+        res.to_vec().iter().map(|l| l.to_vec()).collect::<Vec<_>>(),
+        vec![vec![1, 2], vec![3, 4]]
+    );
+}
+
+#[test]
+fn list_literal() {
+    let s = src!(
+        r#"
+        fn main() -> List[u64] {
+            [1, 2, 3, 4]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<u64>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn list_concat() {
+    let s = src!(
+        r#"
+        fn main() -> List[u64] {
+            [1, 2, 3, 4].concat([5, 6, 7, 8])
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<u64>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+}
+
+#[test]
+fn list_concat_strings() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            ["a", "b"].concat(["c", "d"])
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<Arc<str>> =
+        ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_swap() {
+    let s = src!(
+        r#"
+        fn main() -> List[i32] {
+            let x = [1, 2, 3, 4];
+            x.swap(1, 2);
+            x.swap(0, 3);
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<i32>>("main").unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<i32> = vec![4, 3, 2, 1];
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_plus_strings() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            ["a", "b"] + ["c", "d"]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<Arc<str>> =
+        ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_of_options() {
+    let s = src!(
+        r#"
+        fn main() -> List[i32?] {
+            [Some(1), None, Some(2), None]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<Option<i32>>>("main")
+        .unwrap();
+
+    let res = f.call();
+
+    let expected = vec![Some(1), None, Some(2), None];
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_of_option_of_strings() {
+    let s = src!(
+        r#"
+        fn main() -> List[String?] {
+            [Some("hello"), None, Some("bonjour"), None]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<Option<Arc<str>>>>("main")
+        .unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<Option<Arc<str>>> =
+        vec![Some("hello".into()), None, Some("bonjour".into()), None];
+    assert_eq!(res.to_vec(), expected);
 }
