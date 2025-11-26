@@ -8,7 +8,7 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{Type, TypeDefinition},
     },
-    value::{Reflect, TypeDescription, TypeRegistry},
+    value::{TypeDescription, TypeRegistry, Value},
 };
 use std::{
     any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
@@ -64,7 +64,7 @@ impl Display for FunctionRetrievalError {
 
 impl std::error::Error for FunctionRetrievalError {}
 
-pub fn check_roto_type_reflect<T: Reflect>(
+pub fn check_roto_type_reflect<T: Value>(
     type_info: &mut TypeInfo,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
@@ -234,7 +234,7 @@ pub trait RotoFunc {
     type Args;
 
     /// Return type of this function
-    type Return: Reflect;
+    type Return: Value;
 
     /// Type of a Roto function with this type using a return pointer
     type RotoWithReturnPointer;
@@ -279,7 +279,7 @@ macro_rules! func {
         #[allow(unused_mut)]
         #[sealed]
         impl<$($a,)* $r> RotoFunc for fn($($a,)*) -> $r
-        where $($a: Reflect,)* $r: Reflect {
+        where $($a: Value,)* $r: Value {
             type Args = ($($a,)*);
             type Return = $r;
 
@@ -309,9 +309,9 @@ macro_rules! func {
 
             unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8, return_by_ref: bool) -> R {
                 let ($($a,)*) = args;
-                let mut transformed = ($(<$a as Reflect>::transform($a),)*);
+                let mut transformed = ($(<$a as Value>::transform($a),)*);
                 let ($($a,)*) = &mut transformed;
-                let ($($a,)*) = ($(<$a as Reflect>::as_param($a),)*);
+                let ($($a,)*) = ($(<$a as Value>::as_param($a),)*);
 
                 // We forget values that we pass into Roto. The script is responsible
                 // for cleaning them op. Forgetting copy types does nothing, but that's
@@ -323,7 +323,7 @@ macro_rules! func {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, Self::RotoWithReturnPointer>(func_ptr)
                     };
-                    let mut ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
+                    let mut ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
                     func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
                     let transformed_ret = unsafe { ret.assume_init() };
                     let ret: Self::Return = Self::Return::untransform(transformed_ret);
@@ -333,7 +333,7 @@ macro_rules! func {
                         std::mem::transmute::<*const u8, Self::RotoWithoutReturnPointer>(func_ptr)
                     };
                     let ret = func_ptr(ctx as *mut Ctx as *mut (), $($a),*);
-                    <R as Reflect>::untransform(ret)
+                    <R as Value>::untransform(ret)
                 }
             }
         }

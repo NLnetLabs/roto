@@ -45,7 +45,7 @@ pub use runtime::{
         Use,
     },
 };
-pub use value::{Reflect, val::Val, verdict::Verdict};
+pub use value::{Value, val::Val, verdict::Verdict};
 
 /// Create a list of items to be registered.
 ///
