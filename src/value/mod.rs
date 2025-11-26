@@ -23,7 +23,13 @@ use crate::{
     runtime::layout::Layout,
 };
 
-use super::{option::RotoOption, val::Val, verdict::Verdict};
+use option::RotoOption;
+use val::Val;
+use verdict::Verdict;
+
+pub mod option;
+pub mod val;
+pub mod verdict;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -35,7 +41,6 @@ pub enum TypeDescription {
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
-
     /// `Val<T>`
     Val(TypeId),
 }
@@ -117,7 +122,7 @@ impl TypeRegistry {
 #[sealed]
 pub trait Reflect: Sized + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
-    type Transformed;
+    type Transformed: Clone;
 
     /// The type that this type should be converted into when passed to Roto
     type AsParam: Param<Self::Transformed>;

@@ -94,15 +94,13 @@
 //!
 //! [`Declaration`]: scope::Declaration
 
+use crate::value::{TypeDescription, TypeRegistry};
 use crate::{
     ast::{self, Identifier},
     ice,
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
-    runtime::{
-        Rt, RuntimeFunctionRef,
-        ty::{TypeDescription, TypeRegistry},
-    },
+    runtime::{Rt, RuntimeFunctionRef},
     typechecker::types::EnumVariant,
 };
 use cycle::detect_type_cycles;

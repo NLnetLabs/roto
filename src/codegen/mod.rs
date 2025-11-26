@@ -18,13 +18,14 @@ use crate::{
     },
     runtime::{
         ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
-        RuntimeFunctionRef, context::Context, ty::Reflect,
+        RuntimeFunctionRef, context::Context,
     },
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         types,
     },
+    value::Reflect,
 };
 use check::{FunctionRetrievalError, RotoFunc, check_roto_type_reflect};
 use cranelift::{

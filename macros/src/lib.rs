@@ -192,6 +192,7 @@ fn to_tokens(
                 let ident_str = ident.to_string();
                 let ty = &item.ty;
                 let movability = get_movability(item.span(), &item.attrs)?;
+
                 quote! {
                     roto::Type::#movability::<#ty>(
                         #ident_str,

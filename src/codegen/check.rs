@@ -2,13 +2,13 @@ use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
 use crate::{
-    runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         scoped_display::TypeDisplay,
         types::{Type, TypeDefinition},
     },
+    value::{Reflect, TypeDescription, TypeRegistry},
 };
 use std::{
     any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,

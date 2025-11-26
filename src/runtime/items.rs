@@ -1,5 +1,6 @@
 use std::any::TypeId;
 
+use crate::value::TypeDescription;
 use crate::{
     Location, Reflect,
     ast::Identifier,
@@ -8,7 +9,6 @@ use crate::{
         extern_clone, extern_drop,
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
-        ty::TypeDescription,
     },
 };
 

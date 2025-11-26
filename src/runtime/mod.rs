@@ -7,10 +7,6 @@ pub mod func;
 mod io;
 pub mod items;
 pub mod layout;
-pub mod option;
-pub mod ty;
-pub mod val;
-pub mod verdict;
 
 #[cfg(test)]
 pub mod tests;
@@ -20,11 +16,11 @@ use std::{
     slice, str, sync::Arc,
 };
 
+use crate::value::{Ty, TypeDescription, TypeRegistry};
 use context::ContextDescription;
 use func::FunctionDescription;
 use layout::Layout;
 use sealed::sealed;
-use ty::{Ty, TypeDescription, TypeRegistry};
 
 use crate::{
     Context, Impl, Location, Package, RotoReport,

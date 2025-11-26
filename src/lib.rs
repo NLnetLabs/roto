@@ -21,6 +21,7 @@ mod pipeline;
 mod runtime;
 pub mod tools;
 mod typechecker;
+mod value;
 
 #[cfg(feature = "cli")]
 pub use cli::cli;
@@ -43,10 +44,8 @@ pub use runtime::{
         Constant, Function, Impl, Item, Library, Module, Registerable, Type,
         Use,
     },
-    ty::Reflect,
-    val::Val,
-    verdict::Verdict,
 };
+pub use value::{Reflect, val::Val, verdict::Verdict};
 
 /// Create a list of items to be registered.
 ///
