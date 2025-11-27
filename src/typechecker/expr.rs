@@ -1430,6 +1430,10 @@ impl TypeChecker {
             return Err(self.error_no_method_on_type(&ty, field));
         };
 
+        // This might seem silly but we are unifying the receiver type with the
+        // _instantiated_ type of the method.
+        self.unify(&function.signature.parameter_types[0], &ty, id, None)?;
+
         let params = &function.signature.parameter_types[1..];
         let diverges =
             self.check_arguments(scope, ctx, "method", field, params, args)?;

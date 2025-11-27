@@ -544,7 +544,13 @@ impl<'r> Lowerer<'r> {
 
         match func.definition {
             FunctionDefinition::Runtime(func_ref) => {
-                Value::CallRuntime { func_ref, args }
+                let type_params = func.signature.types.clone();
+
+                Value::CallRuntime {
+                    func_ref,
+                    args,
+                    type_params,
+                }
             }
             FunctionDefinition::Roto => Value::Call { func: name, args },
         }
@@ -767,6 +773,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
                 "eq",
+                Vec::new(),
                 Type::bool(),
                 (l, Type::string()),
                 (r, Type::string()),
@@ -775,6 +782,7 @@ impl<'r> Lowerer<'r> {
                 let val = self.desugared_binop(
                     type_id,
                     "eq",
+                    Vec::new(),
                     Type::bool(),
                     (l, Type::string()),
                     (r, Type::string()),
@@ -785,6 +793,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Add => self.desugared_binop(
                 type_id,
                 "append",
+                Vec::new(),
                 Type::string(),
                 (l, Type::string()),
                 (r, Type::string()),
@@ -806,6 +815,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
                 "eq",
+                Vec::new(),
                 Type::bool(),
                 (l, Type::ip_addr()),
                 (r, Type::ip_addr()),
@@ -814,6 +824,7 @@ impl<'r> Lowerer<'r> {
                 let val = self.desugared_binop(
                     type_id,
                     "eq",
+                    Vec::new(),
                     Type::bool(),
                     (l, Type::ip_addr()),
                     (r, Type::ip_addr()),
@@ -826,6 +837,7 @@ impl<'r> Lowerer<'r> {
                 self.desugared_binop(
                     type_id,
                     "new",
+                    Vec::new(),
                     Type::prefix(),
                     (l, Type::ip_addr()),
                     (r, Type::u8()),
@@ -848,6 +860,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
                 "eq",
+                Vec::new(),
                 Type::bool(),
                 (l, Type::prefix()),
                 (r, Type::prefix()),
@@ -918,6 +931,7 @@ impl<'r> Lowerer<'r> {
         &mut self,
         kind: TypeId,
         name: &str,
+        type_params: Vec<Type>,
         return_type: Type,
         (l, l_ty): (&Meta<ast::Expr>, Type),
         (r, r_ty): (&Meta<ast::Expr>, Type),
@@ -930,7 +944,7 @@ impl<'r> Lowerer<'r> {
         let r = self.assign_to_var(r, r_ty);
 
         let tmp = self.tmp(return_type.clone());
-        let val = self.call_runtime(func_ref, vec![l, r]);
+        let val = self.call_runtime(func_ref, type_params, vec![l, r]);
         self.do_assign(
             Place::new(tmp.clone(), return_type.clone()),
             return_type,
@@ -943,12 +957,17 @@ impl<'r> Lowerer<'r> {
     fn call_runtime(
         &mut self,
         func_ref: RuntimeFunctionRef,
+        type_params: Vec<Type>,
         args: Vec<Var>,
     ) -> Value {
         for var in &args {
             self.remove_live_variable(var);
         }
-        Value::CallRuntime { func_ref, args }
+        Value::CallRuntime {
+            func_ref,
+            args,
+            type_params,
+        }
     }
 
     fn if_else(
@@ -1163,8 +1182,11 @@ impl<'r> Lowerer<'r> {
 
             let new_string = self.assign_to_var(new_string, Type::string());
 
-            let val =
-                self.call_runtime(func_ref, vec![string.clone(), new_string]);
+            let val = self.call_runtime(
+                func_ref,
+                Vec::new(),
+                vec![string.clone(), new_string],
+            );
 
             self.stack_slots
                 .last_mut()

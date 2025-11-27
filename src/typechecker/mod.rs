@@ -364,17 +364,10 @@ impl TypeChecker {
         ident: Identifier,
         id: RuntimeFunctionRef,
         parameter_names: Vec<Identifier>,
-        parameter_types: Vec<Type>,
-        return_type: Type,
+        signature: Signature,
         doc: String,
         method: bool,
     ) -> Result<(), String> {
-        let signature = Signature {
-            types: Vec::new(),
-            parameter_types: parameter_types.clone(),
-            return_type: return_type.clone(),
-        };
-
         // TODO: Figure out some what to make nice spans for built-in types
         let ident = Meta {
             node: ident,
@@ -1370,7 +1363,7 @@ impl TypeChecker {
     }
 
     /// Evaluate a type expression into a [`Type`]
-    fn evaluate_type_expr(
+    pub fn evaluate_type_expr(
         &self,
         scope: ScopeRef,
         ty: &ast::TypeExpr,

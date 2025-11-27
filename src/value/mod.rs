@@ -23,13 +23,17 @@ use crate::{
     runtime::layout::Layout,
 };
 
-use option::RotoOption;
-use val::Val;
-use verdict::Verdict;
+pub use dyn_val::DynVal;
+pub use option::RotoOption;
+pub use val::Val;
+pub use verdict::Verdict;
+pub use vtable::VTable;
 
-pub mod option;
-pub mod val;
-pub mod verdict;
+mod dyn_val;
+mod option;
+mod val;
+mod verdict;
+mod vtable;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {

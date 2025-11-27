@@ -87,6 +87,9 @@ pub enum Instruction {
     /// Get the address of a constant
     ConstantAddress { to: Var, name: ResolvedName },
 
+    /// Get the address of a function
+    FunctionAddress { to: Var, name: Identifier },
+
     /// Create string
     InitString {
         to: Var,

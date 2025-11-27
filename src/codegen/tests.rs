@@ -8,8 +8,13 @@ use std::{
 };
 
 use crate::{
-    Context, FileTree, NoCtx, Runtime, Val, Verdict, file_tree::FileSpec,
-    library, pipeline::Package, runtime::OptCtx, source_file, src,
+    Context, FileTree, NoCtx, Runtime,
+    file_tree::FileSpec,
+    library,
+    pipeline::Package,
+    runtime::OptCtx,
+    source_file, src,
+    value::{Val, Verdict},
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
