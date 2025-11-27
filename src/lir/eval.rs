@@ -393,6 +393,9 @@ pub fn eval(
                 let val = eval_operand(&vars, val);
                 vars.insert(to.clone(), val.clone());
             }
+            Instruction::FunctionAddress { .. } => {
+                panic!("Getting a function address on eval is not supported.")
+            }
             Instruction::ConstantAddress { to, name } => {
                 let x = constants.get(name).unwrap();
                 let x = x.ptr();

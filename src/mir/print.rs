@@ -193,13 +193,28 @@ impl Printable for Value {
                     .join(", ");
                 format!("{func}({args})")
             }
-            Value::CallRuntime { func_ref, args } => {
+            Value::CallRuntime {
+                func_ref,
+                args,
+                type_params,
+            } => {
                 let args = args
                     .iter()
                     .map(|a| a.print(printer))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("runtime_func_{func_ref}({args})")
+
+                let type_params = type_params
+                    .iter()
+                    .map(|t| t.display(printer.type_info).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                if type_params.is_empty() {
+                    format!("runtime_func_{func_ref}({args})")
+                } else {
+                    format!("runtime_func_{func_ref}[{type_params}]({args})")
+                }
             }
         }
     }

@@ -1042,6 +1042,19 @@ impl<'c> FuncGen<'c> {
                 let to = self.variable(to, ty);
                 self.def(to, val);
             }
+            lir::Instruction::FunctionAddress { to, name } => {
+                let func = name.as_str();
+                let func_id = self.module.functions[func].id;
+                let func_ref = self
+                    .module
+                    .inner
+                    .declare_func_in_func(func_id, self.builder.func);
+
+                let ty = self.module.cranelift_type(&IrType::Pointer);
+                let ptr = self.ins().func_addr(ty, func_ref);
+                let to = self.variable(to, ty);
+                self.def(to, ptr);
+            }
             lir::Instruction::InitString {
                 to,
                 string,

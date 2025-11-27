@@ -131,7 +131,7 @@ impl Parse for ItemList {
                     item.attrs = attributes;
                     Item::Const(item)
                 }
-                // Case 6: A clone type
+                // Case 6: A type
                 _ if look.peek(Token![type]) => {
                     let mut item: syn::ItemType = input.parse()?;
                     item.attrs = attributes;
@@ -201,7 +201,7 @@ fn to_tokens(
                     ).unwrap()
                 }
             }
-            Item::Let(item) => {
+            Item::Let(mut item) => {
                 let pat = item.pat;
 
                 let syn::Pat::Ident(ident) = &*pat else {
@@ -227,17 +227,43 @@ fn to_tokens(
                     .map(|p| param_name(p).unwrap())
                     .collect();
 
-                quote! {
-                    roto::Function::new(
-                        #ident_str,
-                        #doc,
-                        { let x: Vec<&'static str> = vec![#(#params),*]; x },
-                        #expr,
-                        #location,
-                    ).unwrap()
+                let roto_sig = get_sig(&item.attrs)?;
+                let vtables = get_vtables(&item.attrs)?;
+
+                // We have to remove the attributes that we define, because the generated
+                // code won't recognize them.
+                item.attrs.retain(|a| {
+                    let path = a.meta.path();
+                    let our_attrs =
+                        path.is_ident("sig") || path.is_ident("vtables");
+                    !our_attrs
+                });
+
+                if let Some(roto_sig) = roto_sig {
+                    quote! {
+                        unsafe { roto::Function::new_generic(
+                            #ident_str,
+                            #doc,
+                            { let x: Vec<&'static str> = vec![#(#params),*]; x },
+                            #expr,
+                            #roto_sig,
+                            vec![#(#vtables),*],
+                            #location,
+                        )}.unwrap()
+                    }
+                } else {
+                    quote! {
+                        roto::Function::new(
+                            #ident_str,
+                            #doc,
+                            { let x: Vec<&'static str> = vec![#(#params),*]; x },
+                            #expr,
+                            #location,
+                        ).unwrap()
+                    }
                 }
             }
-            Item::Fn(item) => {
+            Item::Fn(mut item) => {
                 let sig = &item.sig;
                 let ident = &sig.ident;
                 let location = location(ident.span());
@@ -284,6 +310,18 @@ fn to_tokens(
                         }
                     })
                     .collect();
+
+                let roto_sig = get_sig(&item.attrs)?;
+                let vtables = get_vtables(&item.attrs)?;
+
+                // We have to remove the attributes that we define, because the generated
+                // code won't recognize them.
+                item.attrs.retain(|a| {
+                    let path = a.meta.path();
+                    let our_attrs =
+                        path.is_ident("sig") || path.is_ident("vtables");
+                    !our_attrs
+                });
 
                 let expr = if let Some(ty) = ty {
                     // This is a trick to allow method syntax:
@@ -354,17 +392,32 @@ fn to_tokens(
                 };
 
                 let span = ident.span();
-                quote_spanned! {span=> {
-                    let #ident = #expr;
+                if let Some(roto_sig) = roto_sig {
+                    quote_spanned! {span=> {
+                        let #ident = #expr;
+                        unsafe { roto::Function::new_generic(
+                            #ident_str,
+                            #doc,
+                            { let x: Vec<&'static str> = vec![#(#params),*]; x },
+                            #expr,
+                            #roto_sig,
+                            vec![#(#vtables),*],
+                            #location,
+                        )}.unwrap()
+                    }}
+                } else {
+                    quote_spanned! {span=> {
+                        let #ident = #expr;
 
-                    roto::Function::new(
-                        #ident_str,
-                        #doc,
-                        { let x: Vec<&'static str> = vec![#(#params),*]; x },
-                        #ident,
-                        #location,
-                    ).unwrap()
-                } }
+                         roto::Function::new(
+                            #ident_str,
+                            #doc,
+                            { let x: Vec<&'static str> = vec![#(#params),*]; x },
+                            #ident,
+                            #location,
+                         ).unwrap()
+                    }}
+                }
             }
             Item::Mod(ident, items) => {
                 let ident_str = ident.to_string();
@@ -426,6 +479,58 @@ fn to_tokens(
         #(roto::Registerable::add_to_lib(#items, &mut lib);)*
         lib
     }})
+}
+
+fn get_sig(attrs: &[syn::Attribute]) -> syn::Result<Option<String>> {
+    let mut sig = None;
+    for attr in attrs {
+        if attr.meta.path().is_ident("sig") {
+            let syn::Meta::NameValue(syn::MetaNameValue {
+                value:
+                    syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(lit_str),
+                        ..
+                    }),
+                ..
+            }) = &attr.meta
+            else {
+                return Err(syn::Error::new(
+                    attr.meta.span(),
+                    "sig attribute must contain an equals sign followed by a string literal",
+                ));
+            };
+            let value = lit_str.value();
+            if sig.is_some() {
+                return Err(syn::Error::new(
+                    attr.span(),
+                    "duplicate sig attribute found, only 1 sig attribute is allowed",
+                ));
+            }
+            sig = Some(value);
+        }
+    }
+
+    Ok(sig)
+}
+
+fn get_vtables(attrs: &[syn::Attribute]) -> syn::Result<Vec<String>> {
+    let mut vtables = Vec::new();
+    for attr in attrs {
+        if attr.meta.path().is_ident("vtables") {
+            attr.parse_nested_meta(|meta| {
+                let Some(ident) = meta.path.get_ident() else {
+                    return Err(syn::Error::new(
+                        meta.path.span(),
+                        "argument of vtables attribute must be an identifier",
+                    ));
+                };
+                vtables.push(ident.to_string());
+                Ok(())
+            })?;
+        }
+    }
+
+    Ok(vtables)
 }
 
 fn get_movability(

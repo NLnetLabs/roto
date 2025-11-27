@@ -6,6 +6,15 @@ use std::sync::Arc;
 use crate::Value;
 use crate::lir::{IrValue, Memory};
 
+/// A type that indicates that a parameter is an out ptr.
+#[repr(transparent)]
+pub struct OutPtr<T: Value> {
+    pub ptr: *mut T::Transformed,
+}
+
+pub struct WithOutPtr;
+pub struct WithoutOutPtr;
+
 #[derive(Clone)]
 pub struct FunctionDescription {
     parameter_types: Vec<TypeId>,
@@ -26,7 +35,7 @@ unsafe impl Sync for FunctionDescription {}
     note = "All arguments and the return type of this function implement `Value`.",
     note = "You might have forgotten to wrap one of the arguments in `Val<T>`."
 )]
-pub trait RegisterableFn<A, R>: Send + 'static {
+pub trait RegisterableFn<A, R, MaybeOutPtr>: Send + 'static {
     /// The type of a Rust function wrapping a function of this type
     type RustWrapper;
 
@@ -40,7 +49,7 @@ pub trait RegisterableFn<A, R>: Send + 'static {
 }
 
 impl FunctionDescription {
-    pub fn of<A, R, F: RegisterableFn<A, R>>(func: F) -> Self {
+    pub fn of<A, R, O, F: RegisterableFn<A, R, O>>(func: F) -> Self {
         let parameter_types = func.parameter_types();
         let return_type = F::return_type();
         let trampoline_ptr = &F::TRAMPOLINE as *const _ as *const *const u8;
@@ -116,7 +125,7 @@ macro_rules! registerable_fn {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         #[allow(unused_mut)]
-        impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r> for F
+        impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r, WithoutOutPtr> for F
         where
             $($a: Value,)*
             $r: Value,
@@ -188,3 +197,80 @@ registerable_fn!(fn(A1, A2, A3, A4) -> R);
 registerable_fn!(fn(A1, A2, A3, A4, A5) -> R);
 registerable_fn!(fn(A1, A2, A3, A4, A5, A6) -> R);
 registerable_fn!(fn(A1, A2, A3, A4, A5, A6, A7) -> R);
+
+macro_rules! registerable_fn_out_ptr {
+    (fn($($a:ident),*) -> $r:ident) => {
+        #[allow(non_snake_case)]
+        #[allow(unused_variables)]
+        #[allow(unused_mut)]
+        impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r, WithOutPtr> for F
+        where
+            $($a: Value,)*
+            $r: Value,
+            F: Fn(OutPtr<$r>, $($a,)*) + Send + 'static,
+        {
+            type RustWrapper = extern "C" fn (*const Self, *mut $r::Transformed, $($a::AsParam),*) -> ();
+
+            const TRAMPOLINE: Self::RustWrapper = {
+                extern "C" fn foo<$($a: Value,)* $r: Value>(x: *const impl Fn(OutPtr<$r>, $($a,)*), out: *mut $r::Transformed, $($a: $a::AsParam),*) -> () {
+                    (unsafe { &*x })(
+                        OutPtr { ptr: out },
+                        $(<$a as Value>::untransform(<$a as Value>::to_value($a)),)*
+                    );
+                }
+                foo
+            };
+
+            fn ptr(self) -> Arc<Box<dyn Any>> {
+                Arc::new(Box::new(self))
+            }
+
+            fn parameter_types(&self) -> Vec<TypeId> {
+                vec![$($a::resolve().type_id,)*]
+            }
+
+            fn return_type() -> TypeId {
+                $r::resolve().type_id
+            }
+
+            fn ir_function(&self) -> RustIrFunction {
+                let f = self as *const _;
+                // We reuse the type names as variable names, so they are
+                // uppercase, but that's the easiest way to do this.
+                #[allow(non_snake_case)]
+                let f = move |mem: &mut Memory, args: Vec<IrValue>| {
+                    let [$r, $($a),*]: &[IrValue] = &args else {
+                        panic!("Number of arguments is not correct")
+                    };
+
+                    let &IrValue::Pointer($r) = $r else {
+                        panic!("Out pointer is not a pointer")
+                    };
+                    let $r = mem.get($r);
+
+                    $(
+                        let Ok($a) = <$a as Value>::from_ir_value(mem, $a.clone()) else {
+                            panic!("Type of argument is not correct: {}", $a)
+                        };
+                    )*
+                    let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
+                    Self::TRAMPOLINE(
+                        f,
+                        $r as *mut <$r as Value>::Transformed,
+                        $($a),*
+                    );
+                };
+                RustIrFunction(Arc::new(f))
+            }
+        }
+    }
+}
+
+registerable_fn_out_ptr!(fn() -> R);
+registerable_fn_out_ptr!(fn(A1) -> R);
+registerable_fn_out_ptr!(fn(A1, A2) -> R);
+registerable_fn_out_ptr!(fn(A1, A2, A3) -> R);
+registerable_fn_out_ptr!(fn(A1, A2, A3, A4) -> R);
+registerable_fn_out_ptr!(fn(A1, A2, A3, A4, A5) -> R);
+registerable_fn_out_ptr!(fn(A1, A2, A3, A4, A5, A6) -> R);
+registerable_fn_out_ptr!(fn(A1, A2, A3, A4, A5, A6, A7) -> R);

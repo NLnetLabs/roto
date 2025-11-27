@@ -1,7 +1,7 @@
 use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
 use crate::runtime::OptCtx;
-use crate::{Context, Runtime, Val, library, source_file, src};
+use crate::{Context, Runtime, library, source_file, src, value::Val};
 
 #[track_caller]
 fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {

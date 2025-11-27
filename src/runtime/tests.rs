@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{Val, library, runtime::items::Registerable as _};
+use crate::{library, runtime::items::Registerable as _, value::Val};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};

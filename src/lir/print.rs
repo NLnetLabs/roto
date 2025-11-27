@@ -123,6 +123,13 @@ impl Printable for Instruction {
                     name.print(printer),
                 )
             }
+            FunctionAddress { to, name } => {
+                format!(
+                    "{} = FunctionAddress(\"{}\")",
+                    to.print(printer),
+                    name.print(printer),
+                )
+            }
             Call {
                 to: Some((to, ty)),
                 ctx,
