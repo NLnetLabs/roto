@@ -899,7 +899,7 @@ impl<'r> Lowerer<'r> {
         let lbl_cont = self.label_store.next(current_label);
         let lbl_other = self
             .label_store
-            .wrap_internal(current_label, Identifier::from("and_other"));
+            .wrap_internal(current_label, Identifier::from("or_other"));
 
         let val = self.expr(l);
         let tmp = self.assign_to_var(val, Type::bool());
