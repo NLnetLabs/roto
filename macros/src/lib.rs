@@ -204,14 +204,20 @@ fn to_tokens(
                 let pat = item.pat;
 
                 let syn::Pat::Ident(ident) = &*pat else {
-                    todo!("good error message");
+                    return Err(syn::Error::new(
+                        pat.span(),
+                        "pattern must be an identifier",
+                    ));
                 };
                 let location = location(ident.ident.span());
                 let ident_str = ident.ident.to_string();
 
                 let expr = item.expr;
                 let syn::Expr::Closure(closure) = &*expr else {
-                    todo!("good error message");
+                    return Err(syn::Error::new(
+                        expr.span(),
+                        "expressions must be a closure",
+                    ));
                 };
 
                 let params: Vec<_> = closure
