@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        rust: [1.85.0, stable, beta, nightly]
+        rust: [1.89.0, stable, beta, nightly]
 
         # Test with no features, default features ("") and all features.
         # Ordered fewest features to most features.

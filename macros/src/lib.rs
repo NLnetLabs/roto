@@ -519,11 +519,15 @@ fn get_vtables(attrs: &[syn::Attribute]) -> syn::Result<Vec<String>> {
         if attr.meta.path().is_ident("vtables") {
             attr.parse_nested_meta(|meta| {
                 let Some(ident) = meta.path.get_ident() else {
-                    return Err(syn::Error::new(
-                        meta.path.span(),
+                    return Err(meta.error(
                         "argument of vtables attribute must be an identifier",
                     ));
                 };
+                if !meta.input.is_empty() {
+                    return Err(meta.error(
+                        "argument of vtables attribute must be an identifier",
+                    ));
+                }
                 vtables.push(ident.to_string());
                 Ok(())
             })?;
