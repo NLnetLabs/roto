@@ -170,7 +170,7 @@ fn equal_to_10_with_function() {
         fn is_10(x: i32) -> bool {
             x == 10
         }
-        
+
         filtermap main(x: i32) {
             if is_10(x) {
                 accept
@@ -274,7 +274,7 @@ fn inversion() {
             } else {
                 reject
             }
-        } 
+        }
     "
     );
 
@@ -300,7 +300,7 @@ fn not_not() {
         "
         fn main(x: i32) -> bool {
             not not (x == 10)
-        } 
+        }
     "
     );
 
@@ -732,7 +732,7 @@ fn remainder() {
                 x = x - y;
             }
             x
-        }     
+        }
     "
     );
 
@@ -1216,7 +1216,7 @@ fn to_string() {
             + g.to_string()
             + " "
             + h.to_string()
-        }     
+        }
     "#
     );
 
@@ -1540,7 +1540,7 @@ fn use_context() {
                 accept foo + 1
             } else {
                 accept foo
-            } 
+            }
         }"
     );
 
@@ -1583,7 +1583,7 @@ fn use_a_test() {
         fn double(x: i32) -> i32 {
             x # oops! not correct
         }
-        
+
         test check_double {
             if double(4) != 8 {
                 reject;
@@ -1604,7 +1604,7 @@ fn use_a_test() {
         fn double(x: i32) -> i32 {
             2 * x
         }
-        
+
         test check_double {
             if double(4) != 8 {
                 reject;
@@ -1659,7 +1659,7 @@ fn string() {
     let s = src!(
         r#"
         filtermap main() {
-            accept "hello" 
+            accept "hello"
         }
     "#
     );
@@ -1679,7 +1679,7 @@ fn escape_string() {
     let s = src!(
         r#"
         fn main() -> String {
-            "\t\tfoo" 
+            "\t\tfoo"
         }
     "#
     );
@@ -1874,7 +1874,7 @@ fn string_to_lowercase_and_uppercase() {
     let s = src!(
         r#"
         filtermap main(lower: bool, s: String) {
-            if lower { 
+            if lower {
                 accept s.to_lowercase()
             } else {
                 accept s.to_uppercase()
@@ -1902,7 +1902,7 @@ fn string_repeat() {
         r#"
         filtermap main(s: String) {
             let exclamation = (s + "!").to_uppercase();
-            accept (exclamation + " ").repeat(4) + exclamation 
+            accept (exclamation + " ").repeat(4) + exclamation
         }
     "#
     );
@@ -2115,7 +2115,7 @@ fn unused_accept() {
         "
         fn foo() {
             Verdict.Accept(5);
-        }    
+        }
         "
     );
 
@@ -2255,7 +2255,7 @@ fn question_unit() {
             } else {
                 None
             }
-        }    
+        }
     "
     );
 
@@ -2285,7 +2285,7 @@ fn question_record() {
             } else {
                 None
             }
-        }    
+        }
     "
     );
 
@@ -2382,7 +2382,7 @@ fn top_level_import() {
         "
             import foo.bar;
             fn main(x: i32) -> i32 {
-                bar(x)    
+                bar(x)
             }
         "
     );
@@ -2412,7 +2412,7 @@ fn local_import() {
         "
             fn main(x: i32) -> i32 {
                 import foo.bar;
-                bar(x)    
+                bar(x)
             }
         "
     );
@@ -2512,7 +2512,7 @@ fn import_via_super() {
         "
             import foo.a;
             fn main(x: i32) -> i32 {
-                a(x)  
+                a(x)
             }
         "
     );
@@ -2551,7 +2551,7 @@ fn import_module_first() {
         "
             import foo.a;
             fn main(x: i32) -> i32 {
-                a(x)  
+                a(x)
             }
         "
     );
@@ -2591,7 +2591,7 @@ fn import_module_second() {
         "
             import foo.a;
             fn main(x: i32) -> i32 {
-                a(x)  
+                a(x)
             }
         "
     );
@@ -2691,7 +2691,7 @@ fn use_type_in_function_argument() {
         "pkg",
         "
             fn main(x: i32) -> i32 {
-                get_bar(foo.Foo { bar: x }) 
+                get_bar(foo.Foo { bar: x })
             }
 
             fn get_bar(f: foo.Foo) -> i32 {
@@ -2972,7 +2972,7 @@ fn refcounting_in_a_recursive_function() {
         fn main(foo: Foo) -> Verdict[i32, i32] {
             f(foo, 1);
             reject 3
-        }           
+        }
     "##
     );
 
@@ -3496,7 +3496,7 @@ fn call_runtime_function_in_f_string() {
         r#"
        fn foo() -> String {
            f"foo{gimme_an_asn()}bar"
-       }     
+       }
     "#
     );
 
