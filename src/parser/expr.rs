@@ -782,8 +782,20 @@ impl Parser<'_, '_> {
                     start: span.start + 1,
                     ..span
                 };
-                let unescaped = unescape(trimmed, span)?;
+                let unescaped = unescape_str(trimmed, span)?;
                 Literal::String(unescaped)
+            }
+            Token::Char(s) => {
+                // Trim the quotes from the string literal
+                let trimmed = &s[1..s.len() - 1];
+                // The span starts at the quote so we add one to get to the
+                // string content.
+                let span = Span {
+                    start: span.start + 1,
+                    ..span
+                };
+                let unescaped = unescape_char(trimmed, span)?;
+                Literal::Char(unescaped)
             }
             Token::Integer(s) => {
                 Literal::Integer(s.parse::<i64>().map_err(|e| {
@@ -1032,7 +1044,7 @@ impl Parser<'_, '_> {
                     start: span.start,
                     end: span.end,
                 };
-                let s = unescape(s, span)?;
+                let s = unescape_str(s, span)?;
                 let s = s.replace("{{", "{").replace("}}", "}");
                 parts.push(self.spans.add(span, FStringPart::String(s)));
             }
@@ -1064,7 +1076,12 @@ impl Parser<'_, '_> {
     }
 }
 
-fn unescape(s: &str, span: Span) -> ParseResult<String> {
+fn unescape_char(s: &str, span: Span) -> ParseResult<char> {
+    rustc_literal_escaper::unescape_char(s)
+        .map_err(|e| ParseError::escape(&e, span))
+}
+
+fn unescape_str(s: &str, span: Span) -> ParseResult<String> {
     let mut unescaped = String::new();
     let mut errors = Vec::new();
     rustc_literal_escaper::unescape_str(s, |range: Range<usize>, res| {

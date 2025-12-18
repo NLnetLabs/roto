@@ -27,6 +27,10 @@ impl Type {
         Type::named("bool", Vec::new())
     }
 
+    pub fn char() -> Type {
+        Type::named("char", Vec::new())
+    }
+
     pub fn u8() -> Type {
         Type::named("u8", Vec::new())
     }
@@ -129,6 +133,7 @@ pub enum Primitive {
     Int(IntKind, IntSize),
     Float(FloatSize),
     String,
+    Char,
     Bool,
     Asn,
     IpAddr,
@@ -319,6 +324,7 @@ impl Display for Primitive {
                 Primitive::Float(size) => format!("f{}", size.int()),
                 Primitive::String => "String".into(),
                 Primitive::Bool => "bool".into(),
+                Primitive::Char => "char".into(),
                 Primitive::Asn => "Asn".into(),
                 Primitive::IpAddr => "IpAddr".into(),
                 Primitive::Prefix => "Prefix".into(),
@@ -522,6 +528,7 @@ impl Primitive {
                 Layout::new(bytes, bytes)
             }
             Bool => Layout::new(1, 1),
+            Char => Layout::of::<char>(),
             Asn => Layout::new(4, 4),
             String => Layout::of::<Arc<str>>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
@@ -588,6 +595,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         ("f32", Float(FloatSize::F32)),
         ("f64", Float(FloatSize::F64)),
         ("bool", Bool),
+        ("char", Char),
         ("String", String),
         ("Asn", Asn),
         ("IpAddr", IpAddr),

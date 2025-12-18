@@ -454,4 +454,5 @@ simple_reflect!(i32, I32);
 simple_reflect!(i64, I64);
 simple_reflect!(f32, F32);
 simple_reflect!(f64, F64);
+simple_reflect!(char, Char);
 simple_reflect!(Asn, Asn);

@@ -628,7 +628,7 @@ impl ModuleBuilder {
         match ty {
             IrType::Bool | IrType::U8 | IrType::I8 => I8,
             IrType::U16 | IrType::I16 => I16,
-            IrType::U32 | IrType::I32 | IrType::Asn => I32,
+            IrType::U32 | IrType::I32 | IrType::Asn | IrType::Char => I32,
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
@@ -1155,6 +1155,7 @@ impl<'c> FuncGen<'c> {
             IrValue::I32(x) => (I32, *x as i64),
             IrValue::I64(x) => (I64, *x),
             IrValue::Asn(x) => (I32, x.into_u32() as i64),
+            IrValue::Char(x) => (I32, *x as u32 as i64),
             IrValue::Pointer(x) => (pointer_ty, *x as i64),
             _ => return None,
         })

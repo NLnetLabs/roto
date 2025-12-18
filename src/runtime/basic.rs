@@ -1,11 +1,11 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{Library, library};
+use crate::{Library, Val, library};
 
 macro_rules! int_docs {
     ($t:ty) => {&{
@@ -280,6 +280,12 @@ pub fn built_ins() -> Library {
         #[value]
         type f64 = f64;
 
+        /// A character in a `String`
+        ///
+        /// A `char` represents a Unicode code point.
+        #[value]
+        type char = char;
+
         /// An ASN: an Autonomous System Number
         ///
         /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32).
@@ -347,6 +353,7 @@ pub fn built_ins() -> Library {
         include!(to_string_impl!(i64));
         include!(to_string_impl!(f32));
         include!(to_string_impl!(f64));
+        include!(to_string_impl!(char));
         include!(to_string_impl!(IpAddr));
         include!(to_string_impl!(Prefix));
         include!(to_string_impl!(Asn));
@@ -399,5 +406,40 @@ pub fn built_ins() -> Library {
 
         include!(ip_addr_methods());
         include!(string_methods());
+
+        /// A mutable string type
+        ///
+        /// It is possible to mutate this type in place, allowing for faster
+        /// manipulation. In particular, adding `char`s or `String` to the end
+        /// of this type is much cheaper than using `+` or `String.append`.
+        #[clone] type StringBuf = Val<Arc<Mutex<String>>>;
+
+        impl Val<Arc<Mutex<String>>> {
+            /// Create a new empty `StringBuf`
+            fn new() -> Self {
+                Val(Default::default())
+            }
+
+            /// Create a `StringBuf` with an initial `String`
+            fn from(s: Arc<str>) -> Self {
+                Val(Arc::new(Mutex::new(s.as_ref().to_owned())))
+            }
+
+            /// Add a `char` to the end of this `StringBuf`
+            fn push_char(self, c: char) {
+                self.lock().unwrap().push(c);
+            }
+
+            /// Add a `String` to the end of this `StringBuf`
+            fn push_string(self, s: Arc<str>) {
+                self.lock().unwrap().push_str(&s);
+            }
+
+            /// Get the underlying `String` of this `StringBuf`
+            fn as_string(self) -> Arc<str> {
+                let s = self.lock().unwrap();
+                (&**s).into()
+            }
+        }
     }
 }
