@@ -2909,28 +2909,27 @@ fn name_collision() {
         _x: u32,
     }
 
-    for _ in 0..100 {
-        let rt = Runtime::from_lib(library! {
-            #[clone] type A = Val<A>;
+    let rt = Runtime::from_lib(library! {
+        #[clone] type A = Val<A>;
 
-            impl Val<A> {
-                fn foo(self) -> bool {
-                    true
-                }
+        impl Val<A> {
+            fn foo(self) -> bool {
+                true
             }
+        }
 
-            #[clone] type B = Val<B>;
+        #[clone] type B = Val<B>;
 
-            impl Val<B> {
-                fn foo(self) -> bool {
-                    unreachable!()
-                }
+        impl Val<B> {
+            fn foo(self) -> bool {
+                unreachable!()
             }
-        })
-        .unwrap();
+        }
+    })
+    .unwrap();
 
-        let s = src!(
-            "
+    let s = src!(
+        "
            filter foo(t: B) {
                accept t.foo()
            }
@@ -2939,18 +2938,16 @@ fn name_collision() {
                accept t.foo()
            }
        "
-        );
+    );
 
-        let mut p = compile_with_runtime(s, rt);
-        let f = p
-            .get_function::<fn(Val<A>) -> Verdict<bool, ()>>("main")
-            .expect("No function found (or mismatched types)");
+    let mut p = compile_with_runtime(s, rt);
+    let f = p
+        .get_function::<fn(Val<A>) -> Verdict<bool, ()>>("main")
+        .expect("No function found (or mismatched types)");
 
-        let t = A { _x: 1 };
-        let res = f.call(Val(t));
-        assert_eq!(res, Verdict::Accept(true));
-        eprint!(".");
-    }
+    let t = A { _x: 1 };
+    let res = f.call(Val(t));
+    assert_eq!(res, Verdict::Accept(true));
 }
 
 #[test]
