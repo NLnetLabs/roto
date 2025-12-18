@@ -23,7 +23,13 @@ use crate::{
     runtime::layout::Layout,
 };
 
-use super::{option::RotoOption, val::Val, verdict::Verdict};
+use option::RotoOption;
+use val::Val;
+use verdict::Verdict;
+
+pub mod option;
+pub mod val;
+pub mod verdict;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -35,7 +41,6 @@ pub enum TypeDescription {
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
-
     /// `Val<T>`
     Val(TypeId),
 }
@@ -97,7 +102,7 @@ impl TypeRegistry {
     }
 
     /// Register a type implementing [`Reflect`]
-    pub fn resolve<T: Reflect>() -> Ty {
+    pub fn resolve<T: Value>() -> Ty {
         T::resolve()
     }
 }
@@ -115,9 +120,9 @@ impl TypeRegistry {
 /// function. Most primitives are simply passed by value, but many other types
 /// are passed by `*mut Reflect::Transformed`.
 #[sealed]
-pub trait Reflect: Sized + 'static {
+pub trait Value: Sized + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
-    type Transformed;
+    type Transformed: Clone;
 
     /// The type that this type should be converted into when passed to Roto
     type AsParam: Param<Self::Transformed>;
@@ -188,7 +193,7 @@ impl<T> Param<T> for *mut T {
 }
 
 #[sealed]
-impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R>
+impl<A: Value, R: Value> Value for Verdict<A, R>
 where
     A::Transformed: Clone,
     R::Transformed: Clone,
@@ -220,7 +225,7 @@ where
 }
 
 #[sealed]
-impl<T: Reflect> Reflect for Option<T> {
+impl<T: Value> Value for Option<T> {
     type Transformed = RotoOption<T::Transformed>;
     type AsParam = *mut Self::Transformed;
 
@@ -267,7 +272,7 @@ impl<T> Param<Val<T>> for *mut T {
 }
 
 #[sealed]
-impl<T: 'static + Clone> Reflect for Val<T> {
+impl<T: 'static + Clone> Value for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
 
@@ -292,7 +297,7 @@ impl<T: 'static + Clone> Reflect for Val<T> {
 }
 
 #[sealed]
-impl Reflect for IpAddr {
+impl Value for IpAddr {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -310,7 +315,7 @@ impl Reflect for IpAddr {
 }
 
 #[sealed]
-impl Reflect for Prefix {
+impl Value for Prefix {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -328,7 +333,7 @@ impl Reflect for Prefix {
 }
 
 #[sealed]
-impl Reflect for Arc<str> {
+impl Value for Arc<str> {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -367,7 +372,7 @@ impl Param<()> for () {
 }
 
 #[sealed]
-impl Reflect for () {
+impl Value for () {
     type Transformed = Self;
     type AsParam = Self;
 
@@ -424,7 +429,7 @@ macro_rules! simple_reflect {
         }
 
         #[sealed]
-        impl Reflect for $t {
+        impl Value for $t {
             type Transformed = Self;
             type AsParam = Self;
 

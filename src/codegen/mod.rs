@@ -18,21 +18,22 @@ use crate::{
     },
     runtime::{
         ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
-        RuntimeFunctionRef, context::Context, ty::Reflect,
+        RuntimeFunctionRef, context::Context,
     },
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         types,
     },
+    value::Value,
 };
 use check::{FunctionRetrievalError, RotoFunc, check_roto_type_reflect};
 use cranelift::{
     codegen::{
         entity::EntityRef,
         ir::{
-            AbiParam, Block, InstBuilder, MemFlags, StackSlotData,
-            StackSlotKind, Value, condcodes::IntCC, types::*,
+            self, AbiParam, Block, InstBuilder, MemFlags, StackSlotData,
+            StackSlotKind, condcodes::IntCC, types::*,
         },
         isa::TargetIsa,
         settings::{self, Configurable as _},
@@ -183,8 +184,8 @@ macro_rules! call_impl {
     ($($ty:ident),*) => {
         impl<$($ty,)* Return> TypedFunc<NoCtx, fn($($ty,)*) -> Return>
         where
-            $($ty: Reflect,)*
-            Return: Reflect
+            $($ty: Value,)*
+            Return: Value
         {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
@@ -200,8 +201,8 @@ macro_rules! call_impl {
 
         impl<C: Context, $($ty,)* Return> TypedFunc<Ctx<C>, fn($($ty,)*) -> Return>
         where
-            $($ty: Reflect,)*
-            Return: Reflect
+            $($ty: Value,)*
+            Return: Value
         {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
@@ -1105,11 +1106,11 @@ impl<'c> FuncGen<'c> {
     }
 
     /// Define a variable with a value
-    fn def(&mut self, var: Variable, val: Value) {
+    fn def(&mut self, var: Variable, val: ir::Value) {
         self.builder.def_var(var, val);
     }
 
-    fn operand(&mut self, val: &Operand) -> (Value, Type) {
+    fn operand(&mut self, val: &Operand) -> (ir::Value, Type) {
         match val {
             lir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
@@ -1182,7 +1183,12 @@ impl<'c> FuncGen<'c> {
         var
     }
 
-    fn int_cmp(&mut self, left: Value, right: Value, op: &IntCmp) -> Value {
+    fn int_cmp(
+        &mut self,
+        left: ir::Value,
+        right: ir::Value,
+        op: &IntCmp,
+    ) -> ir::Value {
         let cc = match op {
             IntCmp::Eq => IntCC::Equal,
             IntCmp::Ne => IntCC::NotEqual,
@@ -1200,10 +1206,10 @@ impl<'c> FuncGen<'c> {
 
     fn float_cmp(
         &mut self,
-        left: Value,
-        right: Value,
+        left: ir::Value,
+        right: ir::Value,
         op: &FloatCmp,
-    ) -> Value {
+    ) -> ir::Value {
         let cc = match op {
             FloatCmp::Eq => FloatCC::Equal,
             FloatCmp::Ne => FloatCC::NotEqual,
