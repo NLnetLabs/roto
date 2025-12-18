@@ -1,6 +1,7 @@
-mod clone_drop;
+mod clones;
+mod drops;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
@@ -37,6 +38,11 @@ pub struct LowerCtx<'c> {
     pub type_info: &'c mut TypeInfo,
     pub label_store: &'c mut LabelStore,
     pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,
+
+    /// Drop functions to generate at the end of lowering
+    pub drops_to_generate: VecDeque<Type>,
+    /// Clone functions to generate at the end of lowering
+    pub clones_to_generate: VecDeque<Type>,
 }
 
 struct Lowerer<'c, 'r> {
@@ -76,6 +82,12 @@ impl Lowerer<'_, '_> {
             }
         }
 
+        let clone_functions = Self::generate_clones(ctx);
+        functions.extend(clone_functions);
+
+        let drop_functions = Self::generate_drops(ctx);
+        functions.extend(drop_functions);
+
         Lir { functions }
     }
 
@@ -95,7 +107,7 @@ impl Lowerer<'_, '_> {
         let name = function.name;
         let signature = function.signature;
 
-        // All parameter must be inhabited. If they aren't then we can skip
+        // All parameters must be inhabited. If they aren't then we can skip
         // lowering this entire function.
         signature
             .parameter_types
@@ -230,7 +242,7 @@ impl Lowerer<'_, '_> {
                 self.emit_constant_address(ptr_var.clone(), name);
 
                 if let Some(to) = to {
-                    self.clone_place(
+                    self.call_clone_of(
                         to,
                         Location::Pointer {
                             base: ptr_var,
@@ -250,7 +262,7 @@ impl Lowerer<'_, '_> {
                     offset: x,
                 };
                 if let Some(to) = to {
-                    self.clone_place(to, from, &ty);
+                    self.call_clone_of(to, from, &ty);
                 }
                 return;
             }
@@ -272,7 +284,7 @@ impl Lowerer<'_, '_> {
             mir::Value::Clone(place) => {
                 let from = self.location(place, ty.clone());
                 if let (Some(to), Some(from)) = (to, from) {
-                    self.clone_place(to, from, &ty);
+                    self.call_clone_of(to, from, &ty);
                 }
                 return;
             }
@@ -413,8 +425,7 @@ impl Lowerer<'_, '_> {
                 self.emit_assign(to, val, ir_ty);
             }
             Location::Pointer { base, offset } => {
-                let to = self.offset(base.into(), offset as u32);
-
+                let to = self.offset(base, offset as u32);
                 match self.is_reference_type(ty) {
                     Some(true) => {
                         let size = self
@@ -423,57 +434,11 @@ impl Lowerer<'_, '_> {
                             .layout_of(ty, self.ctx.runtime)
                             .unwrap()
                             .size();
-                        self.emit_memcpy(to, val, size as u32);
+                        self.emit_memcpy(to.into(), val, size as u32);
                     }
-                    Some(false) => self.emit_write(to, val),
+                    Some(false) => self.emit_write(to.into(), val),
                     None => {}
                 }
-            }
-        }
-    }
-
-    fn clone_place(&mut self, to: Location, from: Location, ty: &Type) {
-        match (to, from) {
-            // This is a not-by-reference type so we'll just assign it.
-            (Location::Var(to), Location::Var(from)) => {
-                let Some(ty) = self.lower_type(ty) else {
-                    return;
-                };
-                self.emit(Instruction::Assign {
-                    to,
-                    val: from.into(),
-                    ty,
-                })
-            }
-            // We read a not-by-reference type from a field
-            (Location::Var(to), Location::Pointer { base, offset }) => {
-                let Some(ty) = self.lower_type(ty) else {
-                    return;
-                };
-                let from = self.offset(base.into(), offset as u32);
-                self.emit_read(to, from, ty)
-            }
-            // We write a not-by-reference type to a field
-            (Location::Pointer { base, offset }, Location::Var(from)) => {
-                let Some(_ty) = self.lower_type(ty) else {
-                    return;
-                };
-                let to = self.offset(base.into(), offset as u32);
-                self.emit_write(to, from.into());
-            }
-            (
-                Location::Pointer {
-                    base: base_to,
-                    offset: offset_to,
-                },
-                Location::Pointer {
-                    base: base_from,
-                    offset: offset_from,
-                },
-            ) => {
-                let from = self.offset(base_from.into(), offset_from as u32);
-                let to = self.offset(base_to.into(), offset_to as u32);
-                self.clone_type(from, to, ty);
             }
         }
     }
@@ -681,8 +646,8 @@ impl Lowerer<'_, '_> {
         match var {
             Location::Var(_var) => {}
             Location::Pointer { base, offset } => {
-                let op = self.offset(base.into(), offset as u32);
-                self.drop_type(op, ty);
+                let op = self.offset(base, offset as u32);
+                self.call_drop_of(op.into(), &ty);
             }
         };
     }
@@ -1001,17 +966,17 @@ impl Lowerer<'_, '_> {
         self.blocks.last().unwrap().label
     }
 
-    fn offset(&mut self, var: Operand, offset: u32) -> Operand {
+    fn offset(&mut self, var: Var, offset: u32) -> Var {
         if offset == 0 {
             var
         } else {
             let new = self.new_tmp(IrType::Pointer);
             self.emit(Instruction::Offset {
                 to: new.clone(),
-                from: var,
+                from: var.into(),
                 offset,
             });
-            new.into()
+            new
         }
     }
 

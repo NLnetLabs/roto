@@ -112,9 +112,10 @@ impl Printable for Instruction {
             Return { var: value } => {
                 format!("return {}", value.print(printer))
             }
-            Drop { val, ty: _ } => {
+            Drop { val, ty } => {
+                let ty = ty.display(printer.type_info);
                 let val = val.print(printer);
-                format!("drop({val})")
+                format!("drop[{ty}]({val})")
             }
         }
     }
