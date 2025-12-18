@@ -59,7 +59,7 @@ fn unit() {
         .get_function::<fn() -> ()>("unit_expression")
         .expect("No function found (or mismatched types)");
 
-    let _res = f.call();
+    f.call();
 }
 
 #[test]
@@ -77,7 +77,7 @@ fn unit_type() {
         .get_function::<fn() -> ()>("unit_type")
         .expect("No function found (or mismatched types)");
 
-    let _res = f.call();
+    f.call();
 }
 
 #[test]
@@ -1504,7 +1504,7 @@ fn import_associated_constant() {
 #[test]
 fn registered_constant() {
     let rt = Runtime::from_lib(library! {
-        const PI: f64 = 3.14;
+        const PI: f64 = std::f64::consts::PI;
     })
     .unwrap();
 
@@ -1519,7 +1519,7 @@ fn registered_constant() {
     let f = p.get_function::<fn(f64) -> f64>("circumference").unwrap();
     let output = f.call(2.0);
 
-    let exp = 2.0 * 3.14 * 2.0;
+    let exp = 2.0 * std::f64::consts::PI * 2.0;
     assert!(exp - 0.1 < output && output < exp + 0.1);
 }
 
@@ -2123,7 +2123,7 @@ fn unused_accept() {
 
     let f = p.get_function::<fn() -> ()>("foo").unwrap();
 
-    let _res = f.call();
+    f.call();
 }
 
 #[test]
@@ -2192,7 +2192,7 @@ fn none_with_unknown_type() {
     let f = p.get_function::<fn() -> ()>("foo").unwrap();
 
     // We don't care about the output
-    let _ = f.call();
+    f.call();
 }
 
 #[test]
@@ -3374,10 +3374,10 @@ fn bool_is_true() {
         .expect("No function found (or mismatched types)");
 
     let res = f.call(false);
-    assert_eq!(res, false);
+    assert!(!res);
 
     let res = f.call(true);
-    assert_eq!(res, true);
+    assert!(res);
 }
 
 #[test]
@@ -3396,10 +3396,10 @@ fn bool_is_not_true() {
         .expect("No function found (or mismatched types)");
 
     let res = f.call(false);
-    assert_eq!(res, true);
+    assert!(res);
 
     let res = f.call(true);
-    assert_eq!(res, false);
+    assert!(!res);
 }
 
 #[test]
@@ -3540,7 +3540,7 @@ fn f32_issue() {
         .get_function::<fn()>("foo")
         .expect("No function found (or mismatched types)");
 
-    let _res = f.call();
+    f.call();
 }
 
 #[test]
