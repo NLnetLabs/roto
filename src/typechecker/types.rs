@@ -520,11 +520,13 @@ impl Signature {
 
     pub fn substitute(&self, new_types: &[Type]) -> Self {
         assert_eq!(self.types.len(), new_types.len());
-        let mut subs = Vec::new();
 
-        for (old, new) in self.types.iter().zip(new_types) {
-            subs.push((old.clone(), new.clone()));
-        }
+        let subs: Vec<_> = self
+            .types
+            .iter()
+            .zip(new_types)
+            .map(|(a, b)| (a.clone(), b.clone()))
+            .collect();
 
         Self {
             types: new_types.into(),
