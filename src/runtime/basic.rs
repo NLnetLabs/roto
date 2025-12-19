@@ -460,8 +460,13 @@ pub fn built_ins() -> Library {
 
             /// Push an element to the end of this list.
             #[sig = "fn[T](List[T], T)"]
-            fn push(mut self, elem: DynVal) {
-                unsafe { self.push(NonNull::new_unchecked(elem.0)) };
+            fn push(self, elem: DynVal) {
+                // SAFETY: Roto ensures we don't get a null value
+                let ptr = unsafe { NonNull::new_unchecked(elem.0) };
+
+                // SAFETY: The Roto signature ensures that the types match up
+                // between the list and the element.
+                unsafe { self.push(ptr) };
             }
 
             /// Concatenate this list with another, returning the result.
@@ -469,6 +474,8 @@ pub fn built_ins() -> Library {
             /// The arguments are not mutated by this function.
             #[sig = "fn[T](List[T], List[T]) -> List[T]"]
             fn concat(self, other: Self) -> Self {
+                // SAFETY: Roto ensures that both lists have the same
+                // element type.
                 unsafe { self.concat(&other) }
             }
 
@@ -477,6 +484,8 @@ pub fn built_ins() -> Library {
             /// This function returns `None` if the index is out of bounds.
             #[sig = "fn[T](List[T], u64) -> T?"]
             fn get(out: OutPtr<DynVal>, this: Self, idx: u64) {
+                // SAFETY: Roto ensures that the return type of this function
+                // matches the element type of the list.
                 unsafe { list_get(out.ptr.cast(), this, idx) }
             }
 

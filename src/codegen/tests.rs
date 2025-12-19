@@ -4239,7 +4239,7 @@ fn list_through_script() {
         .get_function::<fn(List<u64>) -> List<u64>>("main")
         .unwrap();
 
-    let mut x = List::new();
+    let x = List::new();
     x.push(1);
     x.push(2);
     let res = f.call(x);

@@ -21,7 +21,7 @@ fn main() -> ExitCode {
         .get_function::<fn(List<u64>) -> List<u64>>("add_numbers")
         .unwrap();
 
-    let mut list = List::new();
+    let list = List::new();
     list.push(0);
 
     let new_list = func.call(list);
