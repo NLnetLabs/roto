@@ -100,7 +100,7 @@ pub enum Instruction {
     /// Call a function.
     Call {
         to: Option<(Var, IrType)>,
-        ctx: Operand,
+        ctx: Option<Operand>,
         func: Identifier,
         args: Vec<Operand>,
         return_ptr: Option<Var>,
@@ -306,6 +306,9 @@ pub struct Function {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
     pub parameters: Vec<(Identifier, IrType)>,
+
+    /// Whether this function takes a context pointer
+    pub context: bool,
 
     /// Whether this function takes a pointer for the return value
     /// passed as an argument

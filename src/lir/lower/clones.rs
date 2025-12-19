@@ -112,15 +112,10 @@ impl Lowerer<'_, '_> {
 
         // Finally, this might be a complex Roto type for which we generate a
         // drop function
-        let ctx = Var {
-            scope: self.function_scope,
-            kind: VarKind::Context,
-        };
-
         let type_id = self.ctx.type_info.type_id(ty);
         self.emit(Instruction::Call {
             to: None,
-            ctx: ctx.into(),
+            ctx: None,
             func: format!("::generated::clone_{type_id}").into(),
             args: vec![from.clone().into()],
             return_ptr: Some(to),
@@ -229,6 +224,7 @@ impl Lowerer<'_, '_> {
         // We need a unified signature for all types, so we always expect pointers
         let ir_signature = Signature {
             parameters: vec![("val".into(), IrType::Pointer)],
+            context: false,
             return_ptr: true,
             return_type: None,
         };
