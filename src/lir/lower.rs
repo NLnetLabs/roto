@@ -413,8 +413,6 @@ impl Lowerer<'_, '_> {
                 ice!("vtable index is out of bounds")
             };
 
-            let layout_var = self.compute_layout(ty);
-
             let clone_func_addr = if self.needs_clone(ty) {
                 let type_id = self.ctx.type_info.type_id(ty);
                 let tmp = self.new_tmp(IrType::Pointer);
@@ -446,14 +444,30 @@ impl Lowerer<'_, '_> {
             let vtable_layout = Layout::of::<VTable>();
             let base = self.new_stack_slot(vtable_layout);
 
+            let ty_layout = self
+                .ctx
+                .type_info
+                .layout_of(ty, self.ctx.runtime)
+                .unwrap_or(Layout::of::<()>());
+
             let mut builder = LayoutBuilder::new();
 
-            let layout_layout = Layout::of::<std::alloc::Layout>();
-            let _offset = builder.add(&layout_layout);
-            self.emit_memcpy(
-                base.clone().into(),
-                layout_var.into(),
-                layout_layout.size() as u32,
+            let offset = builder.add(&Layout::of::<usize>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(
+                dst,
+                Operand::Value(crate::lir::IrValue::Pointer(
+                    ty_layout.size(),
+                )),
+            );
+
+            let offset = builder.add(&Layout::of::<usize>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(
+                dst,
+                Operand::Value(crate::lir::IrValue::Pointer(
+                    ty_layout.align(),
+                )),
             );
 
             let offset = builder.add(&Layout::of::<*mut ()>());
@@ -529,37 +543,6 @@ impl Lowerer<'_, '_> {
             self.emit_read(tmp.clone(), out_ptr.into(), ty);
             Some(tmp.into())
         }
-    }
-
-    /// Compute the layout of a type and put it in a stack slot
-    fn compute_layout(&mut self, ty: &Type) -> Var {
-        let tmp = self.new_tmp(IrType::Pointer);
-
-        let layout = self
-            .ctx
-            .type_info
-            .layout_of(ty, self.ctx.runtime)
-            .unwrap_or(Layout::of::<()>());
-
-        let layout = std::alloc::Layout::from_size_align(
-            layout.size(),
-            layout.align(),
-        )
-        .unwrap();
-
-        const LAYOUT_LAYOUT: std::alloc::Layout =
-            std::alloc::Layout::new::<std::alloc::Layout>();
-
-        const SIZE: usize = LAYOUT_LAYOUT.size();
-        let bytes: [u8; SIZE] = unsafe { std::mem::transmute_copy(&layout) };
-
-        self.emit(Instruction::Initialize {
-            to: tmp.clone(),
-            bytes: bytes.into(),
-            layout: Layout::of::<std::alloc::Layout>(),
-        });
-
-        tmp
     }
 
     fn move_val(&mut self, to: Location, val: Operand, ty: &Type) {

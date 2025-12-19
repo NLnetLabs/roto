@@ -54,12 +54,18 @@ pub mod ffi {
             Some(src) => {
                 // We got a pointer into the list, clone it into out at the correct alignment
 
-                // SAFETY: 0 is the discriminant of `Some`. We asserted that
+                // To leave this value in a valid state even if a panic happens
+                // in the clone_fn we first write the discriminant of `None` and
+                // only replace that with the discriminant of `Some` if the
+                // clone has succeeded.
+
+                // SAFETY: 1 is the discriminant of `None`. We asserted that
                 // `out` must be a valid RotoOption<T>.
-                unsafe { out.cast::<u8>().write(0) };
+                unsafe { out.cast::<u8>().write(1) };
+
                 let raw = this.0.lock().unwrap();
-                let size = raw.vtable.layout.size();
-                let alignment = raw.vtable.layout.align();
+                let size = raw.vtable.size();
+                let alignment = raw.vtable.align();
                 let offset = 1usize.next_multiple_of(alignment);
 
                 // SAFETY: `out` is an uninitialized properly aligned value of
@@ -89,6 +95,10 @@ pub mod ffi {
                         };
                     }
                 }
+
+                // SAFETY: 0 is the discriminant of `Some`. We asserted that
+                // `out` must be a valid RotoOption<T>.
+                unsafe { out.cast::<u8>().write(0) };
             }
             None => {
                 // write None to out
@@ -102,7 +112,9 @@ pub mod ffi {
 }
 
 pub mod boundary {
-    use std::{alloc::Layout, marker::PhantomData, ptr::NonNull};
+    use std::{
+        alloc::Layout, marker::PhantomData, mem::ManuallyDrop, ptr::NonNull,
+    };
 
     use crate::{
         Value,
@@ -118,7 +130,9 @@ pub mod boundary {
     /// A Roto list
     ///
     /// This is conceptually similar to a `Arc<Mutex<Vec<T>>>`, that is, a shared
-    /// growable vec.
+    /// growable array. Note that, in contrast with `Vec`, this type can be modified
+    /// with only a shared immutable reference, locking access to the list at each
+    /// operation.
     ///
     /// This type is covariant over the type parameter `T`.
     #[repr(transparent)]
@@ -140,6 +154,7 @@ pub mod boundary {
     }
 
     impl<T: Value> List<T> {
+        /// Create a new empty [`List`]
         pub fn new() -> Self {
             /// Wrapper around a Rust clone function that has the ABI of a Roto function.
             ///
@@ -177,27 +192,33 @@ pub mod boundary {
 
             let clone_fn = Some(clone::<T::Transformed> as CloneFn);
 
+            let layout = Layout::new::<T::Transformed>();
             Self {
-                inner: ErasedList::new(VTable {
-                    layout: Layout::new::<T::Transformed>(),
+                inner: ErasedList::new(VTable::new(
+                    layout.size(),
+                    layout.align(),
                     clone_fn,
                     drop_fn,
-                }),
+                )),
                 _phantom: PhantomData,
             }
         }
 
-        pub fn push(&mut self, elem: T) {
-            let mut elem = T::transform(elem);
+        /// Push a new element to this [`List`]
+        pub fn push(&self, elem: T) {
+            let elem = T::transform(elem);
+
+            // Don't drop the element because we move it into the list
+            let mut elem = ManuallyDrop::new(elem);
+
             let elem_ptr = NonNull::from_mut(&mut elem).cast::<()>();
 
             // SAFETY: We have a valid value behind the pointer and forget
             // the value to ensure that we give ownership.
             unsafe { self.inner.push(elem_ptr) };
-
-            std::mem::forget(elem);
         }
 
+        /// Get the element at index `idx`
         pub fn get(&self, idx: usize) -> Option<T> {
             let ptr = self.inner.get(idx)?;
 
@@ -209,10 +230,35 @@ pub mod boundary {
             Some(T::untransform(transformed.clone()))
         }
 
+        /// Concatenate two lists, returning the result.
+        ///
+        /// The `self` and `other` lists will be not be modified.
+        pub fn concat(&self, other: &Self) -> Self {
+            // SAFETY: other has the same type as self and therefore the
+            // element types of the list match up.
+            let inner = unsafe { self.inner.concat(&other.inner) };
+            Self {
+                inner,
+                _phantom: PhantomData,
+            }
+        }
+
+        /// Swap the elements at index `i` and `j`
+        pub fn swap(&self, i: usize, j: usize) {
+            self.inner.swap(i, j)
+        }
+
+        /// Return the length of this `List`
         pub fn len(&self) -> usize {
             self.inner.len()
         }
 
+        /// Return the capacity of this `List`
+        pub fn capacity(&self) -> usize {
+            self.inner.capacity()
+        }
+
+        /// Return `true` if this `List` has a length of `0` and `false` otherwise
         pub fn is_empty(&self) -> bool {
             self.inner.is_empty()
         }
@@ -266,7 +312,7 @@ impl ErasedList {
     ///  - `elem_ptr` must be a pointer to the element type `T` that the list
     ///    contains. This function takes ownership of this value.
     ///
-    pub unsafe fn push(&mut self, elem_ptr: NonNull<T>) {
+    pub unsafe fn push(&self, elem_ptr: NonNull<T>) {
         // SAFETY: We require that `elem_ptr` must be a pointer to the element
         // type `T` that the list contains.
         unsafe { self.0.lock().unwrap().push(elem_ptr) };
@@ -284,7 +330,7 @@ impl ErasedList {
         let new = Self::new(a.vtable.clone());
         let mut raw = new.0.lock().unwrap();
 
-        // SAFETY: `clone_fn` is valid
+        // SAFETY: self and other have the same element type
         unsafe { raw.extend(&a) };
 
         // This drop is important in the case that self == other
@@ -293,7 +339,7 @@ impl ErasedList {
 
         let b = other.0.lock().unwrap();
 
-        // SAFETY: `clone_fn` is valid
+        // SAFETY: raw and b have the same element type
         unsafe { raw.extend(&b) };
 
         drop(b);
@@ -384,7 +430,13 @@ impl RawList {
     /// type `T`. The function is not allowed to use its context pointer.
     ///
     unsafe fn drop_elements_with(&mut self, drop_fn: DropFn) {
-        for i in 0..self.len {
+        let len = self.len;
+
+        // Set self.len to 0 so that if this function panics, we still consider
+        // all the elements dropped.
+        self.len = 0;
+
+        for i in 0..len {
             let offset = self.offset_of(i);
 
             // SAFETY: We stay within the allocation because we stay within the
@@ -395,20 +447,17 @@ impl RawList {
             // argument.
             unsafe { (drop_fn)(non_null) }
         }
-        self.len = 0;
     }
 
     fn with_capacity(capacity: usize, vtable: VTable) -> Self {
         // Create a dangling non-null pointer with the right alignment
         // SAFETY: Align cannot be zero, so a pointer constructed with it won't be null.
-        let ptr = unsafe {
-            NonNull::new_unchecked(vtable.layout.align() as *mut T)
-        };
+        let ptr = unsafe { NonNull::new_unchecked(vtable.align() as *mut T) };
 
         // Zero-sized types need some special treatment, because they don't
         // require any allocations. The capacity is therefore always
         // usize::MAX.
-        if vtable.layout.size() == 0 {
+        if vtable.size() == 0 {
             return Self {
                 ptr,
                 len: 0,
@@ -430,7 +479,7 @@ impl RawList {
     }
 
     fn current_memory(&self) -> Option<NonNull<T>> {
-        if self.vtable.layout.size() == 0 || self.capacity == 0 {
+        if self.vtable.size() == 0 || self.capacity == 0 {
             None
         } else {
             Some(self.ptr)
@@ -442,23 +491,21 @@ impl RawList {
     /// - This function takes ownership of the element, it should not be used afterwards
     ///
     unsafe fn push(&mut self, elem_ptr: NonNull<T>) {
-        if self.vtable.layout.size() > 0 {
+        if self.vtable.size() > 0 {
             self.reserve(1);
             let offset = self.offset_of(self.len);
 
             // The pointers are cast to *mut u8, to ensure that
             // copy_nonoverlapping will copy a number of bytes.
             let src = elem_ptr.cast::<u8>().as_ptr();
+            let dst = self.ptr.cast::<u8>().as_ptr();
 
             // SAFETY:
             //  - We stay within the allocation since we reserved the space
-            //    for this element, so we know that this offset won't overflow
-            //    `isize`.
-            //  - This also ensures that we stay within the same allocation.
-            let dst = unsafe { self.ptr.byte_add(offset) };
-            let dst = dst.cast::<u8>().as_ptr();
+            //    for this element.
+            let dst = unsafe { dst.byte_add(offset) };
 
-            let size = self.vtable.layout.size();
+            let size = self.vtable.size();
 
             // SAFETY:
             //  - The pointers have types of *mut u8 and *const u8 so we are
@@ -479,17 +526,77 @@ impl RawList {
     /// Both `self` and `other` must have the same element type.
     ///
     unsafe fn extend(&mut self, other: &Self) {
-        if self.vtable.layout.size() == 0 {
+        /// Drops a slice of a list to ensure we don't leak them on a panic
+        struct DropGuard {
+            ptr: NonNull<()>,
+            vtable: VTable,
+            offset: usize,
+            len: usize,
+        }
+
+        impl Drop for DropGuard {
+            fn drop(&mut self) {
+                let Some(drop_fn) = self.vtable.drop_fn else {
+                    return;
+                };
+
+                for i in 0..self.len {
+                    let offset = self.vtable.size() * (self.offset + i);
+
+                    // SAFETY: We only access addresses we've already written to
+                    let src = unsafe { self.ptr.byte_add(offset) };
+
+                    // SAFETY: We drop we've just written to
+                    unsafe { (drop_fn)(src) }
+                }
+            }
+        }
+
+        if self.vtable.size() == 0 {
+            // Even for zero-sized types, we need to call clone if that is
+            // present in the vtable.
+            if let Some(clone_fn) = self.vtable.clone_fn {
+                // The clone_fn might panic in which case we should clean up the elements
+                // that we have cloned. We do this by creating a DropGuard that keeps track
+                // of how many elements have been written. At the end of the loop, we forget
+                // the guard so that none of the elements get dropped.
+                let mut drop_guard = DropGuard {
+                    ptr: self.ptr,
+                    vtable: self.vtable.clone(),
+                    offset: self.len,
+                    len: 0,
+                };
+                for _ in 0..other.len {
+                    // SAFETY: The ptr field is always aligned
+                    unsafe {
+                        (clone_fn)(self.ptr.as_ptr(), other.ptr.as_ptr())
+                    };
+                    drop_guard.len += 1;
+                }
+                std::mem::forget(drop_guard);
+            }
             self.len += other.len;
             return;
         }
 
+        // Small optimization for when other is empty
         if other.len == 0 {
             return;
         }
 
         self.reserve(other.len);
+
         if let Some(clone_fn) = self.vtable.clone_fn {
+            // The clone_fn might panic in which case we should clean up the elements
+            // that we have cloned. We do this by creating a DropGuard that keeps track
+            // of how many elements have been written. At the end of the loop, we forget
+            // the guard so that none of the elements get dropped.
+            let mut drop_guard = DropGuard {
+                ptr: self.ptr,
+                vtable: self.vtable.clone(),
+                offset: self.len,
+                len: 0,
+            };
             for i in 0..other.len {
                 let src_offset = other.offset_of(i);
 
@@ -508,7 +615,10 @@ impl RawList {
                 // The src is valid because we stay within the length of other
                 // and get the offset with offset_of.
                 unsafe { (clone_fn)(dst.as_ptr(), src.as_ptr()) }
+
+                drop_guard.len += 1;
             }
+            std::mem::forget(drop_guard);
         } else {
             let src = other.ptr;
 
@@ -539,11 +649,15 @@ impl RawList {
     }
 
     fn reserve(&mut self, added: usize) {
-        if self.vtable.layout.size() == 0 {
+        if self.vtable.size() == 0 {
             return;
         }
 
-        let new_capacity = (self.len + added).next_power_of_two();
+        // The unwrap is intentional here. There's not much we can do except
+        // panic when this overflows.
+        let new_required = self.len.checked_add(added).unwrap();
+        let new_capacity = compute_capacity(self.vtable.size(), new_required);
+
         if new_capacity > self.capacity {
             if let Some(ptr) = self.current_memory() {
                 // SAFETY: At this point, we know that:
@@ -556,7 +670,7 @@ impl RawList {
                 let new_ptr = unsafe {
                     realloc_array(
                         ptr,
-                        self.vtable.layout,
+                        self.vtable.layout(),
                         self.capacity,
                         new_capacity,
                     )
@@ -567,8 +681,9 @@ impl RawList {
                 // is not zero and we that the `new_capacity` is not
                 // zero since it must be greater than `self.capacity` which
                 // cannot be negative.
-                let new_ptr =
-                    unsafe { alloc_array(self.vtable.layout, new_capacity) };
+                let new_ptr = unsafe {
+                    alloc_array(self.vtable.layout(), new_capacity)
+                };
                 self.ptr = new_ptr;
             }
             self.capacity = new_capacity;
@@ -618,7 +733,7 @@ impl RawList {
             std::ptr::swap_nonoverlapping(
                 ptr_i.cast::<u8>().as_ptr(),
                 ptr_j.cast::<u8>().as_ptr(),
-                self.vtable.layout.size(),
+                self.vtable.size(),
             )
         };
     }
@@ -630,18 +745,20 @@ impl RawList {
     /// This should only be called once.
     unsafe fn dealloc(&mut self) {
         // If the size of the elements is 0 we never allocated anything
-        if self.vtable.layout.size() == 0 {
+        if self.vtable.size() == 0 {
             return;
         }
 
         if let Some(ptr) = self.current_memory() {
             // SAFETY: We allocated the ptr with alloc_array or realloc_array.
-            unsafe { dealloc_array(ptr, self.vtable.layout, self.capacity) };
+            unsafe {
+                dealloc_array(ptr, self.vtable.layout(), self.capacity)
+            };
         }
     }
 
     fn offset_of(&self, n: usize) -> usize {
-        self.vtable.layout.size() * n
+        self.vtable.size() * n
     }
 
     fn is_empty(&self) -> bool {
@@ -655,6 +772,29 @@ impl RawList {
     fn capacity(&self) -> usize {
         self.capacity
     }
+}
+
+fn compute_capacity(size: usize, required: usize) -> usize {
+    if required == 0 {
+        return 0;
+    }
+
+    // This is copied from std's Vec
+    //
+    // The idea is that doing multiple allocations for small vecs is not worth it
+    // compared to just using a bit more space.
+    let minimum_capacity = if size == 1 {
+        8
+    } else if size <= 1024 {
+        4
+    } else {
+        1
+    };
+
+    // The unwrap is intentional here. There's not much we can do except
+    // panic when this overflows.
+    let next_power_of_two = required.checked_next_power_of_two().unwrap();
+    Ord::max(next_power_of_two, minimum_capacity)
 }
 
 /// # Safety
@@ -748,4 +888,131 @@ fn array_layout(elem_layout: Layout, n: usize) -> Layout {
     let array_size = element_size * n;
 
     Layout::from_size_align(array_size, align).unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, atomic::AtomicUsize};
+
+    use crate::Val;
+
+    use super::boundary::List;
+
+    #[test]
+    fn empty_list() {
+        let l = List::<u64>::new();
+        assert_eq!(l.to_vec(), Vec::new());
+    }
+
+    #[test]
+    fn push_and_get() {
+        let l = List::<u64>::new();
+        l.push(10);
+        l.push(20);
+        l.push(30);
+
+        assert_eq!(Some(10), l.get(0));
+        assert_eq!(Some(20), l.get(1));
+        assert_eq!(Some(30), l.get(2));
+        assert_eq!(None, l.get(3));
+    }
+
+    #[test]
+    fn list_of_strings() {
+        // Create a list of string to and concat it a few times, which
+        // should exercise the clone and drop implementation (especially
+        // under valgrind).
+        let l = List::<Arc<str>>::new();
+        l.push("hello".into());
+        l.push("world".into());
+
+        let l = l.concat(&l);
+        let l = l.concat(&l);
+
+        assert_eq!(l.len(), 8);
+
+        assert_eq!(
+            l.to_vec(),
+            vec![
+                "hello".into(),
+                "world".into(),
+                "hello".into(),
+                "world".into(),
+                "hello".into(),
+                "world".into(),
+                "hello".into(),
+                "world".into(),
+            ]
+        );
+    }
+
+    #[test]
+    fn zero_sized_refcount() {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        static COUNT: AtomicUsize = AtomicUsize::new(1);
+
+        struct Counter;
+
+        impl Clone for Counter {
+            fn clone(&self) -> Self {
+                COUNT.fetch_add(1, Relaxed);
+                Self
+            }
+        }
+
+        impl Drop for Counter {
+            fn drop(&mut self) {
+                COUNT.fetch_sub(1, Relaxed);
+            }
+        }
+
+        let counter = Counter;
+
+        // This test is made for zero-sized types, so we do a sanity check that
+        // we actually are dealing with a zero-sized type.
+        assert_eq!(std::mem::size_of::<Val<Counter>>(), 0);
+
+        let list_one = List::<Val<Counter>>::new();
+        list_one.push(Val(counter.clone()));
+
+        assert_eq!(COUNT.load(Relaxed), 2);
+
+        let list_two = list_one.concat(&list_one);
+
+        assert_eq!(COUNT.load(Relaxed), 4);
+
+        let list_three = list_two.concat(&list_two);
+
+        assert_eq!(COUNT.load(Relaxed), 8);
+
+        drop(list_one);
+
+        assert_eq!(COUNT.load(Relaxed), 7);
+
+        drop(list_two);
+
+        assert_eq!(COUNT.load(Relaxed), 5);
+
+        drop(list_three);
+
+        assert_eq!(COUNT.load(Relaxed), 1);
+
+        drop(counter);
+    }
+
+    #[test]
+    fn swap() {
+        let list = List::<i32>::new();
+
+        list.push(1);
+        list.push(2);
+        list.push(3);
+        list.push(4);
+
+        list.swap(1, 2);
+        list.swap(0, 3);
+
+        assert_eq!(list.to_vec(), vec![4, 3, 2, 1])
+    }
 }
