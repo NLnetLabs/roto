@@ -1104,16 +1104,13 @@ impl<'c> FuncGen<'c> {
     fn operand(&mut self, val: &Operand) -> (ir::Value, Type) {
         match val {
             lir::Operand::Place(p) => {
-                let (var, ty) = self.module.variable_map.get(p).map_or_else(
-                    || {
+                let (var, ty) = self.module.variable_map.get(p).unwrap_or_else(|| {
                         ice!(
                             "did not find {:?} in {:#?}",
                             p,
                             self.module.variable_map,
                         )
-                    },
-                    |x| x,
-                );
+                    });
                 (self.builder.use_var(*var), *ty)
             }
             lir::Operand::Value(v) => {
