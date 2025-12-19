@@ -182,6 +182,7 @@ impl Lowerer<'_, '_> {
                     Some((x, ty))
                 })
                 .collect(),
+            context: true,
             return_ptr,
             return_type: return_ir_type,
         };
@@ -362,7 +363,7 @@ impl Lowerer<'_, '_> {
 
         self.emit(Instruction::Call {
             to: to.clone(),
-            ctx: ctx.into(),
+            ctx: Some(ctx.into()),
             func,
             args,
             return_ptr: out_ptr.clone(),
@@ -508,6 +509,7 @@ impl Lowerer<'_, '_> {
 
         let ir_signature = Signature {
             parameters,
+            context: false,
             return_ptr: true,
             return_type: None,
         };

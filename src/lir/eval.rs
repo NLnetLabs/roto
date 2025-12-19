@@ -435,14 +435,17 @@ pub fn eval(
                             .clone(),
                     );
                 }
-                let ctx_val = eval_operand(&vars, ctx);
-                vars.insert(
-                    Var {
-                        scope: f.scope,
-                        kind: VarKind::Context,
-                    },
-                    ctx_val.clone(),
-                );
+
+                if let Some(ctx) = ctx {
+                    let ctx_val = eval_operand(&vars, ctx);
+                    vars.insert(
+                        Var {
+                            scope: f.scope,
+                            kind: VarKind::Context,
+                        },
+                        ctx_val.clone(),
+                    );
+                }
 
                 let names = f.ir_signature.parameters.iter().map(|p| p.0);
 

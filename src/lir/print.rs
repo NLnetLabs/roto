@@ -131,47 +131,28 @@ impl Printable for Instruction {
                 )
             }
             Call {
-                to: Some((to, ty)),
+                to,
                 ctx,
                 func,
                 args,
-                return_ptr: _,
+                return_ptr,
             } => format!(
-                "{}: {ty} = {}({}, {})",
-                to.print(printer),
+                "{}{}({}{}{})",
+                to.as_ref()
+                    .map(|(to, ty)| format!(
+                        "{}: {} = ",
+                        to.print(printer),
+                        ty
+                    ))
+                    .unwrap_or_default(),
                 func.print(printer),
-                ctx.print(printer),
-                args.iter()
-                    .map(|a| a.print(printer))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Call {
-                to: None,
-                ctx,
-                func,
-                args,
-                return_ptr: Some(ret),
-            } => format!(
-                "{}({}, {}, {})",
-                func.print(printer),
-                ret.print(printer),
-                ctx.print(printer),
-                args.iter()
-                    .map(|a| a.print(printer).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Call {
-                to: None,
-                ctx,
-                func,
-                args,
-                return_ptr: None,
-            } => format!(
-                "{}({}, {})",
-                func.print(printer),
-                ctx.print(printer),
+                return_ptr
+                    .as_ref()
+                    .map(|p| format!("{} ,", p.print(printer)))
+                    .unwrap_or_default(),
+                ctx.as_ref()
+                    .map(|c| format!("{} ,", c.print(printer)))
+                    .unwrap_or_default(),
                 args.iter()
                     .map(|a| a.print(printer))
                     .collect::<Vec<_>>()
