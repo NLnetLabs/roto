@@ -22,7 +22,7 @@ Check whether a string contains another string
 ````
 
 ````{roto:function} ends_with(self: String, suffix: String) -> bool
-Check whether a string end with a given suffix
+Check whether a string ends with a given suffix
 
 ```roto
 "haystack".ends_with("stack") # -> true
