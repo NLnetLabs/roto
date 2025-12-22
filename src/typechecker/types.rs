@@ -39,6 +39,10 @@ impl Type {
         Type::named("i32", Vec::new())
     }
 
+    pub fn u64() -> Type {
+        Type::named("u64", Vec::new())
+    }
+
     pub fn f64() -> Type {
         Type::named("f64", Vec::new())
     }
@@ -119,6 +123,7 @@ pub enum TypeDefinition {
     Record(TypeName, Vec<(Meta<Identifier>, Type)>),
     Runtime(ResolvedName, TypeId),
     Primitive(Primitive),
+    List(TypeName),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -204,6 +209,7 @@ impl TypeDefinition {
         match self {
             TypeDefinition::Enum(type_name, _) => type_name.clone(),
             TypeDefinition::Record(type_name, _) => type_name.clone(),
+            TypeDefinition::List(type_name) => type_name.clone(),
             TypeDefinition::Runtime(resolved_name, _) => TypeName {
                 name: *resolved_name,
                 arguments: Vec::new(),
@@ -402,6 +408,9 @@ impl TypeDisplay for TypeDefinition {
             TypeDefinition::Record(type_name, _) => {
                 Display::fmt(&type_name.display(type_info), f)
             }
+            TypeDefinition::List(type_name) => {
+                Display::fmt(&type_name.display(type_info), f)
+            }
             TypeDefinition::Runtime(resolved_name, _) => {
                 Display::fmt(&resolved_name.display(type_info), f)
             }
@@ -468,18 +477,67 @@ impl TypeDefinition {
 
     pub fn type_parameters(&self) -> usize {
         match self {
-            Self::Enum(type_name, _) | Self::Record(type_name, _) => {
-                type_name.arguments.len()
-            }
+            Self::Enum(type_name, _)
+            | Self::Record(type_name, _)
+            | Self::List(type_name) => type_name.arguments.len(),
             Self::Runtime(..) | Self::Primitive(..) => 0,
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Signature {
+    pub types: Vec<Type>,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
+}
+
+impl Signature {
+    pub fn instantiate(&self, mut fresh_var: impl FnMut() -> Type) -> Self {
+        let mut new_types = Vec::new();
+        let mut subs = Vec::new();
+
+        for ty in &self.types {
+            new_types.push(if let Type::ExplicitVar(_) = ty {
+                let new_ty = fresh_var();
+                subs.push((ty.clone(), new_ty.clone()));
+                new_ty
+            } else {
+                ty.clone()
+            });
+        }
+
+        Self {
+            types: new_types,
+            parameter_types: self
+                .parameter_types
+                .iter()
+                .map(|t| t.substitute_many(&subs))
+                .collect(),
+            return_type: self.return_type.substitute_many(&subs),
+        }
+    }
+
+    pub fn substitute(&self, new_types: &[Type]) -> Self {
+        assert_eq!(self.types.len(), new_types.len());
+
+        let subs: Vec<_> = self
+            .types
+            .iter()
+            .zip(new_types)
+            .map(|(a, b)| (a.clone(), b.clone()))
+            .collect();
+
+        Self {
+            types: new_types.into(),
+            parameter_types: self
+                .parameter_types
+                .iter()
+                .map(|t| t.substitute_many(&subs))
+                .collect(),
+            return_type: self.return_type.substitute_many(&subs),
+        }
+    }
 }
 
 impl Type {
@@ -503,10 +561,13 @@ impl Type {
         }
     }
 
-    pub fn substitute_many(&self, iter: &[(&Self, &Self)]) -> Self {
+    pub fn substitute_many(
+        &self,
+        iter: &[(impl Borrow<Self>, impl Borrow<Self>)],
+    ) -> Self {
         let mut me = self.clone();
         for (from, to) in iter {
-            me = me.substitute(from, to);
+            me = me.substitute(from.borrow(), to.borrow());
         }
         me
     }
@@ -541,7 +602,7 @@ impl Primitive {
 ///
 /// This is used to extract the function pointer and any other information
 /// required to generate the code to call this function.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FunctionDefinition {
     Runtime(RuntimeFunctionRef),
     Roto,
@@ -675,6 +736,13 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
             TypeDefinition::Enum(type_name, variants),
         ))
     }
+
+    // Add the list type to the typechecker
+    let Type::Name(list_type) = Type::list(Type::ExplicitVar("T".into()))
+    else {
+        panic!()
+    };
+    types.push(("List".into(), "".into(), TypeDefinition::List(list_type)));
 
     types
 }

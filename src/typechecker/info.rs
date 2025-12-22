@@ -10,6 +10,7 @@ use crate::{
         Rt, RuntimeFunctionRef,
         layout::{Layout, LayoutBuilder},
     },
+    value::ErasedList,
 };
 
 use super::{
@@ -25,7 +26,7 @@ use super::{
 };
 
 /// The output of the type checker that is used for lowering
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
@@ -50,6 +51,8 @@ pub struct TypeInfo {
     /// The function that is called on each function call
     pub(super) function_calls: HashMap<MetaId, Function>,
 
+    pub(super) function_signatures: HashMap<MetaId, Signature>,
+
     pub(super) runtime_function_signatures:
         HashMap<RuntimeFunctionRef, Signature>,
 
@@ -65,28 +68,9 @@ pub struct TypeInfo {
     pub(super) type_ids: HashMap<Type, usize>,
 }
 
-impl Default for TypeInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TypeInfo {
     pub fn new() -> Self {
-        Self {
-            unionfind: UnionFind::default(),
-            scope_graph: ScopeGraph::new(),
-            types: HashMap::new(),
-            expr_types: HashMap::new(),
-            resolved_names: HashMap::new(),
-            path_kinds: HashMap::new(),
-            diverges: HashMap::new(),
-            return_types: HashMap::new(),
-            function_calls: HashMap::new(),
-            function_scopes: HashMap::new(),
-            runtime_function_signatures: HashMap::new(),
-            type_ids: HashMap::new(),
-        }
+        Self::default()
     }
 }
 
@@ -102,6 +86,10 @@ impl TypeInfo {
         x: impl Into<MetaId> + Debug,
     ) -> ResolvedName {
         self.resolved_names[&x.into()]
+    }
+
+    pub fn function_signature(&self, x: impl Into<MetaId>) -> Signature {
+        self.function_signatures[&x.into()].clone()
     }
 
     pub fn type_of(&mut self, x: impl Into<MetaId> + Debug) -> Type {
@@ -204,6 +192,17 @@ impl TypeInfo {
         }
     }
 
+    pub fn is_list_type(&mut self, ty: &Type) -> bool {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::Name(name) => {
+                let type_def = self.resolve_type_name(&name);
+                matches!(type_def, TypeDefinition::List(_))
+            }
+            _ => false,
+        }
+    }
+
     /// Whether or not the type is passed around by reference or by value
     ///
     /// Roto always has by-value semantics, but we still have types that we
@@ -230,6 +229,7 @@ impl TypeInfo {
                 let is_ref = matches!(
                     type_def,
                     TypeDefinition::Enum(..)
+                        | TypeDefinition::List(..)
                         | TypeDefinition::Record(..)
                         | TypeDefinition::Runtime(..)
                         | TypeDefinition::Primitive(
@@ -302,6 +302,7 @@ impl TypeInfo {
             Type::Name(type_name) => {
                 let type_def = self.resolve_type_name(&type_name);
                 match type_def {
+                    TypeDefinition::List(_) => Layout::of::<ErasedList>(),
                     TypeDefinition::Enum(type_constructor, variants) => {
                         let subs: Vec<_> = type_constructor
                             .arguments
@@ -370,7 +371,11 @@ impl TypeInfo {
     }
 
     pub fn resolve_ref<'a>(&'a self, mut t: &'a Type) -> &'a Type {
-        if let Type::Var(x) | Type::IntVar(x, _) | Type::RecordVar(x, _) = t {
+        if let Type::Var(x)
+        | Type::IntVar(x, _)
+        | Type::FloatVar(x)
+        | Type::RecordVar(x, _) = t
+        {
             t = self.unionfind.find_ref(*x);
         }
 

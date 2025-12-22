@@ -17,6 +17,7 @@ mod error;
 mod expr;
 mod filter_map;
 pub mod meta;
+mod signature;
 pub mod token;
 
 pub use error::ParseError;
@@ -155,7 +156,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         Self::run_parser(Self::tree, file, spans, input)
     }
 
-    fn run_parser<T>(
+    pub fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
         file: usize,
         spans: &'spans mut Spans,

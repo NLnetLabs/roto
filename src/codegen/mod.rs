@@ -454,8 +454,10 @@ impl ModuleBuilder {
         }
 
         // This is the parameter for the context
-        sig.params
-            .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        if ir_signature.context {
+            sig.params
+                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        }
 
         for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
@@ -516,8 +518,10 @@ impl ModuleBuilder {
         }
 
         // This is the context
-        sig.params
-            .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        if ir_signature.context {
+            sig.params
+                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
+        }
 
         for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
@@ -576,6 +580,7 @@ impl ModuleBuilder {
             &ir_signature.parameters,
             stack_slots,
             ir_signature.return_ptr,
+            ir_signature.context,
         );
 
         for block in &blocks[1..] {
@@ -642,18 +647,21 @@ impl<'c> FuncGen<'c> {
         parameters: &[(Identifier, IrType)],
         stack_slots: Vec<(Var, StackSlot)>,
         return_ptr: bool,
+        context: bool,
     ) {
         let entry_block = self.get_block(block.label);
         self.builder.switch_to_block(entry_block);
 
-        let ty = self.module.cranelift_type(&IrType::Pointer);
-        self.variable(
-            &Var {
-                scope: self.scope,
-                kind: VarKind::Context,
-            },
-            ty,
-        );
+        if context {
+            let ty = self.module.cranelift_type(&IrType::Pointer);
+            self.variable(
+                &Var {
+                    scope: self.scope,
+                    kind: VarKind::Context,
+                },
+                ty,
+            );
+        }
 
         if return_ptr {
             let ty = self.module.cranelift_type(&IrType::Pointer);
@@ -694,14 +702,16 @@ impl<'c> FuncGen<'c> {
             )
         }
 
-        self.def(
-            self.module.variable_map[&Var {
-                scope: self.scope,
-                kind: VarKind::Context,
-            }]
-                .0,
-            args.next().unwrap(),
-        );
+        if context {
+            self.def(
+                self.module.variable_map[&Var {
+                    scope: self.scope,
+                    kind: VarKind::Context,
+                }]
+                    .0,
+                args.next().unwrap(),
+            );
+        }
 
         for ((x, _), val) in parameters.iter().zip(args) {
             self.def(
@@ -786,7 +796,9 @@ impl<'c> FuncGen<'c> {
                     new_args.push(self.operand(&return_ptr.clone().into()).0);
                 }
 
-                new_args.push(self.operand(ctx).0);
+                if let Some(ctx) = ctx {
+                    new_args.push(self.operand(ctx).0);
+                }
 
                 for arg in args {
                     new_args.push(self.operand(arg).0);
@@ -1041,6 +1053,19 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().iconst(ty, ptr as i64);
                 let to = self.variable(to, ty);
                 self.def(to, val);
+            }
+            lir::Instruction::FunctionAddress { to, name } => {
+                let func = name.as_str();
+                let func_id = self.module.functions[func].id;
+                let func_ref = self
+                    .module
+                    .inner
+                    .declare_func_in_func(func_id, self.builder.func);
+
+                let ty = self.module.cranelift_type(&IrType::Pointer);
+                let ptr = self.ins().func_addr(ty, func_ref);
+                let to = self.variable(to, ty);
+                self.def(to, ptr);
             }
             lir::Instruction::InitString {
                 to,

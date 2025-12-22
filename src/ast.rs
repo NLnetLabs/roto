@@ -25,6 +25,12 @@ pub enum Declaration {
     Import(Vec<Meta<Path>>),
 }
 
+pub struct Signature {
+    pub type_params: Vec<Meta<Identifier>>,
+    pub params: Vec<Meta<TypeExpr>>,
+    pub ret: Option<Meta<TypeExpr>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Params(pub Vec<(Meta<Identifier>, Meta<TypeExpr>)>);
 

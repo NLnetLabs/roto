@@ -6,7 +6,7 @@ use crate::{
     typechecker::{
         scope::{DeclarationKind, ScopeRef, TypeOrStub, ValueKind},
         scoped_display::TypeDisplay,
-        types::Type,
+        types,
     },
 };
 
@@ -283,17 +283,19 @@ impl Rt {
                 }
                 DeclarationKind::Method(f) | DeclarationKind::Function(f) => {
                     let f = f.as_ref().unwrap();
-                    let Type::Function(params, ret) = &f.ty else {
-                        ice!()
-                    };
+                    let types::Signature {
+                        types: _,
+                        parameter_types,
+                        return_type,
+                    } = &f.signature;
 
                     let params = f
                         .parameter_names
                         .iter()
-                        .zip(params)
+                        .zip(parameter_types)
                         .map(|(n, ty)| (n.as_str().into(), self.print_ty(ty)))
                         .collect();
-                    let ret = self.print_ty(&**ret);
+                    let ret = self.print_ty(return_type);
                     let ret = if ret == "()" { None } else { Some(ret) };
 
                     out.push(DocItem::Fn(DocFn {

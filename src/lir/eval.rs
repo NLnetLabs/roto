@@ -393,6 +393,9 @@ pub fn eval(
                 let val = eval_operand(&vars, val);
                 vars.insert(to.clone(), val.clone());
             }
+            Instruction::FunctionAddress { .. } => {
+                panic!("Getting a function address on eval is not supported.")
+            }
             Instruction::ConstantAddress { to, name } => {
                 let x = constants.get(name).unwrap();
                 let x = x.ptr();
@@ -432,14 +435,17 @@ pub fn eval(
                             .clone(),
                     );
                 }
-                let ctx_val = eval_operand(&vars, ctx);
-                vars.insert(
-                    Var {
-                        scope: f.scope,
-                        kind: VarKind::Context,
-                    },
-                    ctx_val.clone(),
-                );
+
+                if let Some(ctx) = ctx {
+                    let ctx_val = eval_operand(&vars, ctx);
+                    vars.insert(
+                        Var {
+                            scope: f.scope,
+                            kind: VarKind::Context,
+                        },
+                        ctx_val.clone(),
+                    );
+                }
 
                 let names = f.ir_signature.parameters.iter().map(|p| p.0);
 
