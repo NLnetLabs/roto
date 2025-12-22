@@ -508,7 +508,7 @@ limitations.
     the full path to the ``variant`` constructor, but only the name. So
     ``Option.None`` is not allowed as a pattern, but ``None`` is. This will
     probably change once ``match`` expressions become more general.
-    
+
 
 .. _lang_while:
 
@@ -552,7 +552,7 @@ This function can then be called like so:
 
 A function can contain multiple expressions. The last expression is returned if
 it is not terminated by a ``;``. The return can also be made explicit with the
-``return`` keyword. This function is equivalent to the previous example. 
+``return`` keyword. This function is equivalent to the previous example.
 
 .. code-block:: roto
 
@@ -777,13 +777,43 @@ Variant types can be generic over other types by taking type parameters.
 .. note::
     Variant types are also used to model optional values. See :ref:`lang_optionals`.
 
+.. _lang_lists:
+
+Lists
+-----
+
+A list is a growable array of items. In Roto, all elements of a list must be of the
+same type. Therefore, the type of a list has a type parameter: ``List[T]``. You can
+create lists with ``[`` and ``]`` with expressions separated by commas.
+
+.. code-block:: roto
+
+  let my_list: List[i32] = [1, 2, 3];
+  let first: i32? = my_list.get(0);
+  match first {
+      Some(first) => print(f"First element was: {first}"),
+      None => print("No elements!"),
+  }
+
+The ``+`` operator can be used to concatenate two lists.
+
+.. code-block:: roto
+
+  let a = ["one", "two", "three"];
+  let b = ["four", "five", "six"];
+  let concatenated = a + b;
+
+See :roto:ref:`List[T]` for all methods available on lists. Lists are passed by reference,
+meaning that if we assign a list ``a`` to a variable ``b`` and we modify ``a`` then ``b``
+will see the same modifications.
+
 Modules
 -------
 
 A Roto script can be split over multiple files. To do this, we have to create
 a folder with the name of the script and create a Roto file directly in it
 called ``pkg.roto``. This file is the root of our script. The contents of
-``pkg.roto`` will form the ``pkg`` module. No other files in the directory 
+``pkg.roto`` will form the ``pkg`` module. No other files in the directory
 can be called ``pkg.roto``.
 
 Files adjacent to ``pkg.roto`` are sub-modules of ``pkg``. For example, a file
@@ -837,7 +867,7 @@ module. Multiple ``super`` keywords can appear at the start of a path.
 
 .. code-block:: roto
 
-    # in pkg.roto   
+    # in pkg.roto
     foo.square
 
     # in foo.roto
@@ -852,7 +882,7 @@ module. Multiple ``super`` keywords can appear at the start of a path.
 There are 3 special identifiers that can only be used at the start of a path
 and automatically make the path an absolute path:
 
-- ``pkg`` for the current package 
+- ``pkg`` for the current package
 - ``std`` for the Roto standard library
 - ``dep`` for dependencies (not implemented yet, but the identifier is reserved)
 
@@ -867,7 +897,7 @@ with the ``import`` keyword. The ``import`` keyword is followed by a path. The
 item the path references will be available by name in the current scope.
 
 .. code-block:: roto
-    
+
     import foo.square;
 
     fn fourth_power(x: i32) -> i32 {
@@ -881,7 +911,7 @@ An ``import`` does not need to be at the top-level, they can be in any scope.
 We can rewrite the previous example as follows.
 
 .. code-block:: roto
- 
+
     fn fourth_power(x: i32) -> i32 {
         import foo.square;
         square(square(x))
@@ -927,7 +957,7 @@ Like any enum it is possible to match on a value of type ``T?``
         None -> 0,
     }
 
-In addition, there is a ``?`` operator, which will evaluate to the value of 
+In addition, there is a ``?`` operator, which will evaluate to the value of
 ``Some`` or return ``Option.None``. That is, if ``x`` is of type ``T?``, then
 ``x?`` is equivalent to the following match expression:
 

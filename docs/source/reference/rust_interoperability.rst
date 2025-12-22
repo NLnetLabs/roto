@@ -31,6 +31,8 @@ This pages details how Roto types map to Rust types for interoperability. The
 +-------------------------+-------------------------+
 | ``String``              | ``Arc<str>``            |
 +-------------------------+-------------------------+
+| ``List[T]``             | ``roto::List<T>``       |
++-------------------------+-------------------------+
 | ``IpAddr``              | ``std::net::IpAddr``    |
 +-------------------------+-------------------------+
 | ``Prefix``              | ``inetnum::Prefix``     |
