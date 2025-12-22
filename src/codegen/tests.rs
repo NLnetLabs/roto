@@ -3579,6 +3579,45 @@ fn register_module() {
 }
 
 #[test]
+fn register_type_in_module() {
+    let s = src!(
+        r#"
+       fn main() -> u32 {
+           foo.Foo.new().bar()
+       }
+    "#
+    );
+
+    #[derive(Clone)]
+    struct Foo(u32);
+
+    let rt = Runtime::from_lib(library! {
+        mod foo {
+            #[clone] type Foo = Val<Foo>;
+
+            impl Val<Foo> {
+                fn new() -> Self {
+                    Val(Foo(3))
+                }
+
+                fn bar(self) -> u32 {
+                    self.0.0
+                }
+            }
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
+    let f = p
+        .get_function::<fn() -> u32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call();
+    assert_eq!(res, 3);
+}
+
+#[test]
 fn assignment_with_question_mark() {
     let s = src!(
         r#"

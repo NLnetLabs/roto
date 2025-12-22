@@ -350,7 +350,7 @@ impl TypeChecker {
         let ty = TypeDefinition::Runtime(name, type_id);
         self.type_info
             .scope_graph
-            .insert_type(ScopeRef::GLOBAL, &ident, doc, ty.clone())
+            .insert_type(scope, &ident, doc, ty.clone())
             .map_err(|_id| {
                 format!("Item `{ident}` already exists in this scope")
             })?;
