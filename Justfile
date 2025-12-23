@@ -45,3 +45,9 @@ valgrind TEST="":
 
 miri TEST="":
     MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test -- {{TEST}}
+
+doc:
+    rm -r docs/source/reference/std
+    cargo run -- doc docs/source/reference/std
+    cd docs && make clean
+    cd docs && make html

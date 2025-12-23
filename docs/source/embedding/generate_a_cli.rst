@@ -1,3 +1,5 @@
+.. _generate_cli:
+
 Generate a CLI
 ==============
 
@@ -13,11 +15,10 @@ To get a better CLI for your use case, you can generate a CLI from your runtime.
     let rt = Runtime::new();
 
     // add all your custom types, methods and constants here
-    
+
     rt.cli();
 
 The CLI helps with testing and type checking your scripts without running your
-entire application. To start the CLI, just call the ``cli`` method on the 
+entire application. To start the CLI, just call the ``cli`` method on the
 ``Runtime``. The commands of this CLI are identical to the ones described in
 :doc:`../reference/command_line`.
-

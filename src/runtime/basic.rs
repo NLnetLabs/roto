@@ -338,6 +338,17 @@ pub fn built_ins() -> Library {
         #[copy] type Prefix = Prefix;
 
         /// The string type
+        ///
+        /// A `String` literal is created by putting some text between double
+        /// quotes.
+        ///
+        /// ```roto
+        /// let x = "Hello!";
+        /// ```
+        ///
+        /// See [the language reference](#lang_strings) for more information.
+        /// Roto supports string formatting when a string literal is prefixed
+        /// with an `f`.
         #[clone] type String = Arc<str>;
 
         impl Arc<str> {
