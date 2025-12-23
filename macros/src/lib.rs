@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
 use syn::{Error, Token, parse::Parse, parse_macro_input, spanned::Spanned};
 
 #[proc_macro_derive(Context)]
@@ -242,6 +242,7 @@ fn to_tokens(
                 let ident = &sig.ident;
                 let location = location(ident.span());
                 let ident_str = ident.to_string();
+
                 let params: Vec<_> = item
                     .sig
                     .inputs
@@ -250,6 +251,36 @@ fn to_tokens(
                         syn::FnArg::Receiver(_) => "self".into(),
                         syn::FnArg::Typed(pat) => {
                             param_name(&pat.pat).unwrap()
+                        }
+                    })
+                    .collect();
+
+                let value_checks: proc_macro2::TokenStream = item
+                    .sig
+                    .inputs
+                    .iter()
+                    .map(|arg| {
+                        let ty = match arg {
+                            syn::FnArg::Receiver(receiver) => {
+                                let span = receiver.span();
+                                let ident = syn::Ident::new("Self", span);
+                                quote!(#ident)
+                            }
+                            syn::FnArg::Typed(pat_type) => {
+                                let ty = &pat_type.ty;
+                                quote!(#ty)
+                            }
+                        };
+                        let span = ty.span();
+                        quote_spanned!(span=> roto::__internal::implements_value::<#ty>();)
+                    })
+                    .chain(match &item.sig.output {
+                        syn::ReturnType::Default => None,
+                        syn::ReturnType::Type(_, ty) => {
+                            let span = ty.span();
+                            Some(quote_spanned!(span=>
+                                roto::__internal::implements_value::<#ty>();
+                            ))
                         }
                     })
                     .collect();
@@ -300,30 +331,40 @@ fn to_tokens(
                     new_item.sig.ident =
                         syn::Ident::new("__ext__", sig.ident.span());
 
-                    quote!(const {
-                        trait Ext {
-                            #new_sig;
-                        }
+                    quote!(
+                        const {
+                            trait Ext {
+                                #new_sig;
+                                fn value_checks();
+                            }
 
-                        impl Ext for #ty {
-                            #new_item
-                        }
+                            impl Ext for #ty {
+                                #new_item
 
-                        <#ty as Ext>::__ext__
-                    })
+                                fn value_checks() {
+                                    #value_checks
+                                }
+                            }
+
+                            <#ty as Ext>::__ext__
+                        }
+                    )
                 } else {
-                    quote!({ #item #ident })
+                    quote!({ #value_checks #item #ident })
                 };
 
-                quote! {
+                let span = ident.span();
+                quote_spanned! {span=> {
+                    let #ident = #expr;
+
                     roto::Function::new(
                         #ident_str,
                         #doc,
                         { let x: Vec<&'static str> = vec![#(#params),*]; x },
-                        #expr,
+                        #ident,
                         #location,
                     ).unwrap()
-                }
+                } }
             }
             Item::Mod(ident, items) => {
                 let ident_str = ident.to_string();

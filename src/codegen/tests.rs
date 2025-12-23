@@ -4002,7 +4002,7 @@ fn stringbuf() {
             buf.push_string(s);
             buf.push_char('"');
             buf.as_string()
-        }            
+        }
     "#
     );
 
