@@ -1,6 +1,17 @@
 # String
 `````{roto:type} String
 The string type
+
+A `String` literal is created by putting some text between double
+quotes.
+
+```roto
+let x = "Hello!";
+```
+
+See [the language reference](#lang_strings) for more information.
+Roto supports string formatting when a string literal is prefixed
+with an `f`.
 `````
 
 
@@ -22,7 +33,7 @@ Check whether a string contains another string
 ````
 
 ````{roto:function} ends_with(self: String, suffix: String) -> bool
-Check whether a string end with a given suffix
+Check whether a string ends with a given suffix
 
 ```roto
 "haystack".ends_with("stack") # -> true
