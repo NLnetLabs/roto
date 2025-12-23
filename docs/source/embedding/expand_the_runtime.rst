@@ -34,6 +34,13 @@ use this macro as an attribute macro on a function and pass it the runtime you
 want to add the function to. This function will then become available in the
 scripts you compile.
 
+.. note::
+
+    We use ``Arc<str>`` because that's the Rust type corresponding to Roto's
+    ``String`` type. You always have to use the Rust names of types when
+    registering functions. To learn how the types correspond to each other, see
+    :ref:`rust_interop`.
+
 .. code-block:: rust
 
     use std::sync::Arc;
@@ -41,8 +48,6 @@ scripts you compile.
     use std::io::Write;
     use roto::{Runtime, roto_function};
 
-    // Note: we use Arc<str> because that's the Rust type corresponding to a
-    // Roto string.
     let lib = library!{
         /// Print to the log file.
         fn print(s: Arc<str>) {
@@ -77,7 +82,9 @@ Add types
 ---------
 
 We can also add our own types to Roto. As an example, we'll add a ``Range``
-type. All registered types must implement ``Clone``.
+type. All registered types must implement ``Clone``. Every type you register
+must be wrapped in `Val<T>`, which tells Roto that it is a custom type and
+not built in.
 
 .. code-block:: rust
 
@@ -125,7 +132,7 @@ Roto, but otherwise it works exactly like before.
 The ``#[copy]`` attribute above specifies that the Rust type implements
 ``Copy``. If the type does not implement ``Copy``, you can instead annotate the
 declaration with ``#[clone]``. However, you should prefer ``#[copy]`` to allow
-Roto to generate code that performs slightly better. 
+Roto to generate code that performs slightly better.
 
 Add methods
 -----------
@@ -137,10 +144,10 @@ expose methods on it to Roto.
 
     let lib = library! {
         impl Val<Range> {
-            fn contains(range: Val<Range>, x: i64) -> bool {
+            fn contains(self, x: i64) -> bool {
                 range.low <= x && x < range.high
             }
-        }  
+        }
     };
 
     let rt = Runtime::from_lib(lib);
@@ -171,10 +178,10 @@ example below ``new`` is such a method.
 
     let lib = library! {
         impl Val<Range> {
-            fn new(low: i64, high: i64) -> Val<Range> {
+            fn new(low: i64, high: i64) -> Self {
                 Val(Range { low, high })
             }
-            
+
             fn contains(range: Val<Range>, x: i64) -> bool {
                 range.low <= x && x < range.high
             }
@@ -204,7 +211,7 @@ documentation generated for this runtime.
         /// A range from 0 to 100
         const ONE_HUNDRED: Val<Range> = Val(Range { low: 0, high: 100 });
     };
-    
+
     let rt = Runtime::from_lib(lib).unwrap();
 
 The name ``ONE_HUNDRED`` will then be available in Roto scripts.
@@ -250,7 +257,7 @@ then create and register the following type.
 
     let mut ctx = Ctx {
         first_name: "John".into(),
-        last_name: "Doe".into(),  
+        last_name: "Doe".into(),
     };
     let greeting = f.call(&mut ctx);
     println!("{greeting}");
@@ -268,6 +275,86 @@ give to this invocation. The script can then use the names of the fields of
 
 Other use-cases of context are log files, unique ids per invocation or just to
 provide easy access to some common data.
+
+Add modules
+-----------
+
+Everything registered so far has been added to the global module. With a large
+runtime, that quickly becomes unwieldy. We can fix this by using Roto's module
+system. To do so, simply wrap the items you want to register in a Rust-like
+`mod`.
+
+You can nest `mod` statements to create complex structures.
+
+.. code-block:: rust
+
+    let lib = library! {
+        mod math {
+            /// Compute the sine of `x`
+            fn sin(x: f64) -> f64 {
+                x.sin()
+            }
+
+            /// Compute the cosine of `x`
+            fn cos(x: f64) -> f64 {
+                x.cos()
+            }
+        }
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+The Rust code above registers the `sin` and `cos` functions in the `math` module, so
+that's how we can then access it from Roto:
+
+.. code-block:: roto
+
+    # import the cos function so we can use it directly
+    import math.cos;
+
+    fn foo(x: f64) -> f64 {
+        # we haven't imported sin so we have to access it via `math`
+        math.sin(x)
+    }
+
+    fn foo(x: f64) -> f64 {
+        cos(x)
+    }
+
+Composing libraries
+-------------------
+
+We are not limited to using just a single `library!` call, but we can create
+multiple libraries and compose them using the `include!` macro inside a
+`library!`. Doing so includes a library directly in another at the point where
+the `include!` macro is used.
+
+.. warning::
+
+    Take care not to include items twice at different points in the hierarchy to
+    avoid confusion.
+
+.. code-block:: rust
+
+    let foo = library! {
+        #[clone] type Foo = Val<SomeRustType>;
+    };
+
+    let bar = library! {
+        fn bar() -> u32 {
+            5
+        }
+    };
+
+    let baz = library! {
+        // include the contents of foo directly
+        include!(foo)
+
+        // include the contents of bar inside the functions module
+        mod functions {
+            include!(bar)
+        }
+    };
 
 See also
 --------
