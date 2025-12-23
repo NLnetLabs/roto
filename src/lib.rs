@@ -238,7 +238,10 @@ pub use roto_macros::library;
 
 /// Items exported only for use in macros
 pub mod __internal {
+    use crate::Value;
     pub use crate::runtime::context::ContextField;
+
+    pub fn implements_value<T: Value>() {}
 }
 
 pub(crate) const FIND_HELP: &str = "\n\

@@ -4,7 +4,7 @@
 //! so we can match them to Roto types and use the names in error messages.
 //!
 //! The registry should initially hold all registered types and primitives.
-//! On demand, we add more complex types via the [`Reflect`] trait, which
+//! On demand, we add more complex types via the [`Value`] trait, which
 //! is implemented for types that have a Roto equivalent. This is necessary
 //! for mapping a complex Rust type to Roto types.
 
@@ -101,7 +101,7 @@ impl TypeRegistry {
         registry.map.get(&id).map(|v| &**v)
     }
 
-    /// Register a type implementing [`Reflect`]
+    /// Register a type implementing [`Value`]
     pub fn resolve<T: Value>() -> Ty {
         T::resolve()
     }
@@ -112,14 +112,18 @@ impl TypeRegistry {
 /// This trait is _sealed_, meaning that it cannot be implemented by downstream
 /// crates, instead these types can be wrapped in [`Val`].
 ///
-/// The `Reflect::Transformed` type represents the type that this type will be
+/// The [`Value::Transformed`] type represents the type that this type will be
 /// converted into before being passed to Roto. For example, `Option` will be
 /// converted into a type with the same variants, but a fixed layout.
 ///
-/// The `Reflect::AsParam` then specifies how this value is passed to a Roto
+/// The [`Value::AsParam`] then specifies how this value is passed to a Roto
 /// function. Most primitives are simply passed by value, but many other types
-/// are passed by `*mut Reflect::Transformed`.
+/// are passed by `*mut Value::Transformed`.
 #[sealed]
+#[diagnostic::on_unimplemented(
+    note = "`Value` is implemented for Roto's built-in types and `Val<T>`.",
+    note = "You cannot implement `Value` for your own types but you can wrap them in `Val<T>`."
+)]
 pub trait Value: Sized + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed: Clone;
@@ -389,7 +393,7 @@ impl Value for () {
     }
 }
 
-macro_rules! simple_reflect {
+macro_rules! simple_value {
     ($t:ty, $ir:ident) => {
         impl From<$t> for IrValue {
             fn from(value: $t) -> Self {
@@ -448,16 +452,16 @@ macro_rules! simple_reflect {
     };
 }
 
-simple_reflect!(bool, Bool);
-simple_reflect!(u8, U8);
-simple_reflect!(u16, U16);
-simple_reflect!(u32, U32);
-simple_reflect!(u64, U64);
-simple_reflect!(i8, I8);
-simple_reflect!(i16, I16);
-simple_reflect!(i32, I32);
-simple_reflect!(i64, I64);
-simple_reflect!(f32, F32);
-simple_reflect!(f64, F64);
-simple_reflect!(char, Char);
-simple_reflect!(Asn, Asn);
+simple_value!(bool, Bool);
+simple_value!(u8, U8);
+simple_value!(u16, U16);
+simple_value!(u32, U32);
+simple_value!(u64, U64);
+simple_value!(i8, I8);
+simple_value!(i16, I16);
+simple_value!(i32, I32);
+simple_value!(i64, I64);
+simple_value!(f32, F32);
+simple_value!(f64, F64);
+simple_value!(char, Char);
+simple_value!(Asn, Asn);

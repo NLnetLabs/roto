@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 /// A wrapper type that makes a registered type safe to pass to and from Roto.
 ///
-/// Only types that implement the sealed [`Reflect`] trait can be passed to
+/// Only types that implement the sealed [`Value`] trait can be passed to
 /// Roto. Some primitive types implement this trait directly, but every other
 /// type needs to be wrapped in [`Val`]. You should not wrap the primitives in
 /// [`Val`].
@@ -30,11 +30,11 @@ use std::ops::{Deref, DerefMut};
 /// // For Option and Verdict, wrap the inner type in Val
 /// pkg.get_function::<fn(Option<Val<Foo>>) -> ()>("main").unwrap();
 ///
-/// // Do not wrap types that already implement Reflect.
+/// // Do not wrap types that already implement Value.
 /// pkg.get_function::<fn(i32) -> ()>("main").unwrap();
 /// ```
 ///
-/// [`Reflect`]: super::Reflect
+/// [`Value`]: super::Value
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Val<T>(pub T);
