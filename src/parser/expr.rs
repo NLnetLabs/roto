@@ -209,7 +209,7 @@ impl Parser<'_, '_> {
                     "left-hand side of an expression must be a single identifier",
                     "cannot assign to this expression",
                     self.get_span(&left),
-                ));
+                ).into());
             };
             let right = self.logical_expr(r)?;
             let span = self.merge_spans(&left, &right);
@@ -242,7 +242,8 @@ impl Parser<'_, '_> {
                     "`||` cannot be chained with `&&`",
                     "cannot be chained with `&&`",
                     pipe,
-                ));
+                )
+                .into());
             }
             Ok(exprs
                 .into_iter()
@@ -266,7 +267,8 @@ impl Parser<'_, '_> {
                     "`&&` cannot be chained with `||`",
                     "cannot be chained with `||`",
                     amp,
-                ));
+                )
+                .into());
             }
             Ok(exprs
                 .into_iter()
@@ -762,7 +764,8 @@ impl Parser<'_, '_> {
                     "an IP address",
                     token,
                     span,
-                ));
+                )
+                .into());
             }
         };
         Ok(self.spans.add(span, addr))
@@ -825,11 +828,14 @@ impl Parser<'_, '_> {
                         token,
                         e,
                         span,
-                    ));
+                    )
+                    .into());
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
-            t => return Err(ParseError::expected("a literal", t, span)),
+            t => {
+                return Err(ParseError::expected("a literal", t, span).into());
+            }
         };
         Ok(self.spans.add(span, literal))
     }
@@ -1023,7 +1029,8 @@ impl Parser<'_, '_> {
             )
             .with_note(format!(
                 "`{tok}` is a keyword and cannot be used as an identifier."
-            ))),
+            ))
+            .into()),
         };
         Ok(self.spans.add(span, ident))
     }
@@ -1072,13 +1079,15 @@ impl Parser<'_, '_> {
                 self.file_length..self.file_length,
             ),
             note: None,
-        })
+            hints: Vec::new(),
+        }
+        .into())
     }
 }
 
 fn unescape_char(s: &str, span: Span) -> ParseResult<char> {
     rustc_literal_escaper::unescape_char(s)
-        .map_err(|e| ParseError::escape(&e, span))
+        .map_err(|e| ParseError::escape(&e, span).into())
 }
 
 fn unescape_str(s: &str, span: Span) -> ParseResult<String> {
@@ -1100,7 +1109,7 @@ fn unescape_str(s: &str, span: Span) -> ParseResult<String> {
         let start = span.start + range.start;
         let end = span.start + range.end;
         let span = Span::new(span.file, start..end);
-        Err(ParseError::escape(e, span))
+        Err(ParseError::escape(e, span).into())
     } else {
         Ok(unescaped)
     }

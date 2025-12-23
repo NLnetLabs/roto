@@ -26,7 +26,8 @@ impl Parser<'_, '_> {
                     "`filtermap` or `filter`",
                     token,
                     span,
-                ));
+                )
+                .into());
             }
         };
 
