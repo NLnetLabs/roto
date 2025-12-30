@@ -57,6 +57,13 @@ impl Span {
             end: value.end,
         }
     }
+
+    /// Given the source file, returns a range of character offsets
+    pub fn character_range(&self, file: &str) -> Range<usize> {
+        let start = file[..self.start].chars().count();
+        let end = start + file[self.start..self.end].chars().count();
+        start..end
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
