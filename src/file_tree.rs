@@ -26,6 +26,14 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
+    pub fn name(&self) -> String {
+        if self.location_offset > 0 {
+            format!("{}@{}", self.name, self.location_offset)
+        } else {
+            self.name.clone()
+        }
+    }
+
     pub fn read(path: &Path) -> Result<Self, RotoReport> {
         Self::read_internal(path).map_err(|e| read_error(path, e))
     }
