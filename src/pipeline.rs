@@ -99,7 +99,7 @@ impl RotoReport {
             .iter()
             .map(|s| {
                 (
-                    s.name.clone(),
+                    s.name(),
                     ariadne::Source::from(s.contents.clone())
                         .with_display_line_offset(s.location_offset),
                 )
@@ -212,7 +212,7 @@ impl std::fmt::Debug for RotoReport {
 
 impl RotoReport {
     fn filename(&self, s: Span) -> String {
-        self.files[s.file].name.clone()
+        self.files[s.file].name()
     }
 }
 
