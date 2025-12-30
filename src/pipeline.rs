@@ -35,6 +35,7 @@ use crate::{
 #[cfg(feature = "logger")]
 use crate::ir_printer::{IrPrinter, Printable};
 
+use ariadne::Cache;
 #[cfg(feature = "logger")]
 use log::info;
 
@@ -152,9 +153,12 @@ impl RotoReport {
                     write!(f, "{s}")?;
                 }
                 RotoError::Type(error) => {
+                    let file = self.filename(self.spans.get(error.location));
+                    let file_text = file_cache.fetch(&file).unwrap().text();
+
                     let labels = error.labels.iter().map(|l| {
                         let s = self.spans.get(l.id);
-                        Label::new((self.filename(s), s.start..s.end))
+                        Label::new((self.filename(s), s.character_range(file_text)))
                             .with_message(&l.message)
                             .with_color(match l.level {
                                 Level::Error => Color::Red,
@@ -162,12 +166,10 @@ impl RotoReport {
                             })
                     });
 
-                    let file = self.filename(self.spans.get(error.location));
-
                     let span = self.spans.get(error.location);
                     let report = Report::build(
                         ReportKind::Error,
-                        (file, span.start..span.end),
+                        (file, span.character_range(file_text)),
                     )
                     .with_config(config)
                     .with_message(format!(
