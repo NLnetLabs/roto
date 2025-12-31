@@ -1,0 +1,5 @@
+fn foo() {
+    # https://www.unicode.org/charts/PDF/U20A0.pdf
+    # €€€€€€€€€ (U+20AC)
+    bar();
+}
