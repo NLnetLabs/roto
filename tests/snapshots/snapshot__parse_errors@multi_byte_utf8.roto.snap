@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/parse_errors/multi_byte_utf8.roto
+---
+Error: Parse error: expected an identifier but got ';'
+   ╭─[ tests/scripts/parse_errors/multi_byte_utf8.roto:3:3 ]
+   │
+ 3 │ fn;
+   │   ┬  
+   │   ╰── expected an identifier
+───╯

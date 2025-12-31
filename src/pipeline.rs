@@ -32,6 +32,8 @@ use crate::{
     },
 };
 
+use ariadne::Cache;
+
 #[cfg(feature = "logger")]
 use crate::ir_printer::{IrPrinter, Printable};
 
@@ -122,19 +124,20 @@ impl RotoReport {
                     write!(f, "Could not read file `{name}`: {io}")?;
                 }
                 RotoError::Parse(error) => {
+                    let file = self.filename(error.location);
+                    let file_text = file_cache.fetch(&file).unwrap().text();
+
                     let label_message = error.kind.label();
                     let label = Label::new((
                         self.filename(error.location),
-                        error.location.start..error.location.end,
+                        error.location.character_range(file_text),
                     ))
                     .with_message(label_message)
                     .with_color(Color::Red);
 
-                    let file = self.filename(error.location);
-
                     let mut report = Report::build(
                         ReportKind::Error,
-                        (file, error.location.start..error.location.end),
+                        (file, error.location.character_range(file_text)),
                     )
                     .with_config(config)
                     .with_message(format!("Parse error: {}", error))
@@ -152,9 +155,12 @@ impl RotoReport {
                     write!(f, "{s}")?;
                 }
                 RotoError::Type(error) => {
+                    let file = self.filename(self.spans.get(error.location));
+                    let file_text = file_cache.fetch(&file).unwrap().text();
+
                     let labels = error.labels.iter().map(|l| {
                         let s = self.spans.get(l.id);
-                        Label::new((self.filename(s), s.start..s.end))
+                        Label::new((self.filename(s), s.character_range(file_text)))
                             .with_message(&l.message)
                             .with_color(match l.level {
                                 Level::Error => Color::Red,
@@ -162,12 +168,10 @@ impl RotoReport {
                             })
                     });
 
-                    let file = self.filename(self.spans.get(error.location));
-
                     let span = self.spans.get(error.location);
                     let report = Report::build(
                         ReportKind::Error,
-                        (file, span.start..span.end),
+                        (file, span.character_range(file_text)),
                     )
                     .with_config(config)
                     .with_message(format!(
