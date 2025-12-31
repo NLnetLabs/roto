@@ -1,4 +1,4 @@
-use roto::{library, Runtime, Val, Verdict};
+use roto::{Runtime, Val, Verdict, library};
 
 #[derive(Clone, Copy)]
 struct Vec2 {
@@ -37,14 +37,14 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<(), fn(Val<Vec2>) -> Verdict<i32, ()>>("main")
+        .get_function::<fn(Val<Vec2>) -> Verdict<i32, ()>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
     for x in 0..20 {
         let vec = Vec2 { x, y: 0 };
 
-        let res = func.call(&mut (), Val(vec));
+        let res = func.call(Val(vec));
         let expected = if x > 10 {
             Verdict::Accept(x * 2)
         } else {

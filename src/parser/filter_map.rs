@@ -1,12 +1,12 @@
 use crate::ast::{
     FilterMap, FilterType, Identifier, Params, RecordTypeDeclaration,
-    TypeExpr,
+    TypeExpr, Variant, VariantTypeDeclaration,
 };
 
 use super::{
+    ParseError, ParseResult, Parser,
     meta::Meta,
     token::{Keyword, Token},
-    ParseError, ParseResult, Parser,
 };
 
 /// # Parsing `filtermap` and `filter` sections
@@ -26,7 +26,7 @@ impl Parser<'_, '_> {
                     "`filtermap` or `filter`",
                     token,
                     span,
-                ))
+                ));
             }
         };
 
@@ -75,18 +75,78 @@ impl Parser<'_, '_> {
         Ok((field_name, ty))
     }
 
+    fn type_parameters(&mut self) -> ParseResult<Vec<Meta<Identifier>>> {
+        let params = if self.peek_is(Token::SquareLeft) {
+            self.separated(
+                Token::SquareLeft,
+                Token::SquareRight,
+                Token::Comma,
+                Self::identifier,
+            )?
+            .node
+        } else {
+            Vec::new()
+        };
+        Ok(params)
+    }
+
     /// Parse a record type declaration
     ///
     /// ```ebnf
-    /// Type ::= 'type' Identifier RecordType
+    /// Type ::= 'record' Identifier RecordType
     /// ```
     pub(super) fn record_type_assignment(
         &mut self,
     ) -> ParseResult<RecordTypeDeclaration> {
-        self.take(Token::Keyword(Keyword::Type))?;
+        self.take(Token::Keyword(Keyword::Record))?;
         let ident = self.identifier()?;
+        let type_params = self.type_parameters()?;
         let record_type = self.record_type()?;
 
-        Ok(RecordTypeDeclaration { ident, record_type })
+        Ok(RecordTypeDeclaration {
+            ident,
+            type_params,
+            record_type,
+        })
+    }
+
+    pub(super) fn variant_declaration(
+        &mut self,
+    ) -> ParseResult<VariantTypeDeclaration> {
+        self.take(Token::Keyword(Keyword::Variant))?;
+        let ident = self.identifier()?;
+
+        let type_params = self.type_parameters()?;
+
+        let variants = self.separated(
+            Token::CurlyLeft,
+            Token::CurlyRight,
+            Token::Comma,
+            Self::enum_variant,
+        )?;
+
+        Ok(VariantTypeDeclaration {
+            ident,
+            type_params,
+            variants,
+        })
+    }
+
+    fn enum_variant(&mut self) -> ParseResult<Variant> {
+        let ident = self.identifier()?;
+
+        let fields = if self.peek_is(Token::RoundLeft) {
+            self.separated(
+                Token::RoundLeft,
+                Token::RoundRight,
+                Token::Comma,
+                Self::type_expr,
+            )?
+            .node
+        } else {
+            Vec::new()
+        };
+
+        Ok(Variant { ident, fields })
     }
 }

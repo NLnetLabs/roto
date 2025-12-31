@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use roto::{library, Runtime, Val, Verdict};
+use roto::{Runtime, Val, Verdict, library};
 
 #[derive(Clone)]
 struct AddrRange {
@@ -29,7 +29,7 @@ fn main() {
 
     // Extract the function
     let function = program
-        .get_function::<(), fn(Val<AddrRange>, IpAddr) -> Verdict<IpAddr, ()>>(
+        .get_function::<fn(Val<AddrRange>, IpAddr) -> Verdict<IpAddr, ()>>(
             "within_range",
         )
         .unwrap();
@@ -41,8 +41,8 @@ fn main() {
 
     // Run the function
     let in_range = "10.10.10.11".parse().unwrap();
-    println!("{:?}", function.call(&mut (), Val(range.clone()), in_range));
+    println!("{:?}", function.call(Val(range.clone()), in_range));
 
     let out_of_range = "20.20.20.20".parse().unwrap();
-    println!("{:?}", function.call(&mut (), Val(range), out_of_range));
+    println!("{:?}", function.call(Val(range), out_of_range));
 }

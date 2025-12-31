@@ -1,4 +1,4 @@
-type Foo { a: u32 }
-type Foo { b: u32 }
+record Foo { a: u32 }
+record Foo { b: u32 }
 
 fn foo() {}

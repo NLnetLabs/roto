@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::{library, Runtime};
+use crate::{Runtime, library, runtime::OptCtx};
 
-impl Runtime {
+impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Add functions using I/O to the runtime.
     ///
     /// These functions are disabled by default because Roto might be used in a

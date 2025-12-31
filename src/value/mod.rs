@@ -9,20 +9,27 @@
 //! for mapping a complex Rust type to Roto types.
 
 use std::{
-    any::{type_name, TypeId},
+    any::{TypeId, type_name},
     collections::HashMap,
     net::IpAddr,
     sync::{Arc, LazyLock, Mutex},
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
+use sealed::sealed;
 
 use crate::{
     lir::{IrValue, Memory},
     runtime::layout::Layout,
 };
 
-use super::{option::RotoOption, val::Val, verdict::Verdict};
+use option::RotoOption;
+use val::Val;
+use verdict::Verdict;
+
+pub mod option;
+pub mod val;
+pub mod verdict;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -34,7 +41,6 @@ pub enum TypeDescription {
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
-
     /// `Val<T>`
     Val(TypeId),
 }
@@ -96,22 +102,9 @@ impl TypeRegistry {
     }
 
     /// Register a type implementing [`Reflect`]
-    pub fn resolve<T: Reflect>() -> Ty {
+    pub fn resolve<T: Value>() -> Ty {
         T::resolve()
     }
-}
-
-/// A type that can register itself into the global type registry.
-mod seal {
-    /// A trait that can be used to seal other traits if added as a trait bound.
-    ///
-    /// It lives in a private module, but the name is public. Hence, we can use
-    /// it a bound, but downstream crates can't implement it.
-    ///
-    /// Based on a [blog post] by Predrag Gruevski
-    ///
-    /// [blog post]: https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/#sealing-traits-with-a-supertrait
-    pub trait Sealed {}
 }
 
 /// A type that can be passed to Roto.
@@ -126,9 +119,10 @@ mod seal {
 /// The `Reflect::AsParam` then specifies how this value is passed to a Roto
 /// function. Most primitives are simply passed by value, but many other types
 /// are passed by `*mut Reflect::Transformed`.
-pub trait Reflect: Sized + seal::Sealed + 'static {
+#[sealed]
+pub trait Value: Sized + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
-    type Transformed;
+    type Transformed: Clone;
 
     /// The type that this type should be converted into when passed to Roto
     type AsParam: Param<Self::Transformed>;
@@ -198,9 +192,8 @@ impl<T> Param<T> for *mut T {
     }
 }
 
-impl<A: Reflect, R: Reflect> seal::Sealed for Verdict<A, R> {}
-
-impl<A: Reflect, R: Reflect> Reflect for Verdict<A, R>
+#[sealed]
+impl<A: Value, R: Value> Value for Verdict<A, R>
 where
     A::Transformed: Clone,
     R::Transformed: Clone,
@@ -231,9 +224,8 @@ where
     }
 }
 
-impl<T: Reflect> seal::Sealed for Option<T> {}
-
-impl<T: Reflect> Reflect for Option<T> {
+#[sealed]
+impl<T: Value> Value for Option<T> {
     type Transformed = RotoOption<T::Transformed>;
     type AsParam = *mut Self::Transformed;
 
@@ -279,9 +271,8 @@ impl<T> Param<Val<T>> for *mut T {
     }
 }
 
-impl<T: 'static + Clone> seal::Sealed for Val<T> {}
-
-impl<T: 'static + Clone> Reflect for Val<T> {
+#[sealed]
+impl<T: 'static + Clone> Value for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
 
@@ -305,9 +296,8 @@ impl<T: 'static + Clone> Reflect for Val<T> {
     }
 }
 
-impl seal::Sealed for IpAddr {}
-
-impl Reflect for IpAddr {
+#[sealed]
+impl Value for IpAddr {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -324,9 +314,8 @@ impl Reflect for IpAddr {
     }
 }
 
-impl seal::Sealed for Prefix {}
-
-impl Reflect for Prefix {
+#[sealed]
+impl Value for Prefix {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -343,9 +332,8 @@ impl Reflect for Prefix {
     }
 }
 
-impl seal::Sealed for Arc<str> {}
-
-impl Reflect for Arc<str> {
+#[sealed]
+impl Value for Arc<str> {
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -383,9 +371,8 @@ impl Param<()> for () {
     }
 }
 
-impl seal::Sealed for () {}
-
-impl Reflect for () {
+#[sealed]
+impl Value for () {
     type Transformed = Self;
     type AsParam = Self;
 
@@ -441,9 +428,8 @@ macro_rules! simple_reflect {
             }
         }
 
-        impl seal::Sealed for $t {}
-
-        impl Reflect for $t {
+        #[sealed]
+        impl Value for $t {
             type Transformed = Self;
             type AsParam = Self;
 
@@ -473,4 +459,5 @@ simple_reflect!(i32, I32);
 simple_reflect!(i64, I64);
 simple_reflect!(f32, F32);
 simple_reflect!(f64, F64);
+simple_reflect!(char, Char);
 simple_reflect!(Asn, Asn);

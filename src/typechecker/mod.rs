@@ -94,15 +94,14 @@
 //!
 //! [`Declaration`]: scope::Declaration
 
+use crate::value::{TypeDescription, TypeRegistry};
 use crate::{
     ast::{self, Identifier},
     ice,
     module::{Module, ModuleTree},
     parser::meta::{Meta, MetaId},
-    runtime::{
-        ty::{TypeDescription, TypeRegistry},
-        Runtime, RuntimeFunctionRef,
-    },
+    runtime::{Rt, RuntimeFunctionRef},
+    typechecker::types::EnumVariant,
 };
 use cycle::detect_type_cycles;
 use scope::{
@@ -117,7 +116,7 @@ use types::{
 
 use self::{
     error::TypeError,
-    types::{default_types, Function, Signature},
+    types::{Function, Signature, default_types},
 };
 
 mod cycle;
@@ -135,6 +134,17 @@ mod unionfind;
 pub use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
 
+#[derive(Clone)]
+enum Obligation {
+    ResolveMethod {
+        id: MetaId,
+        receiver: Type,
+        ident: Identifier,
+        parameter_types: Vec<Type>,
+        return_type: Type,
+    },
+}
+
 /// Holds the state for type checking
 ///
 /// Most type checking steps are methods on this type.
@@ -146,13 +156,16 @@ pub struct TypeChecker {
     match_counter: usize,
     if_else_counter: usize,
     while_counter: usize,
+    /// Set of obligations that we have to satisfy at the end of type checking
+    /// a function
+    obligations: Vec<Obligation>,
 }
 
 /// Result of type checking
 pub type TypeResult<T> = Result<T, TypeError>;
 
 pub fn typecheck(
-    runtime: &Runtime,
+    runtime: &Rt,
     module_tree: &ModuleTree,
 ) -> TypeResult<TypeInfo> {
     let mut type_checker = runtime.type_checker.clone();
@@ -168,6 +181,7 @@ impl TypeChecker {
             match_counter: 0,
             if_else_counter: 0,
             while_counter: 0,
+            obligations: Vec::new(),
         };
         checker.declare_builtin_types().unwrap();
         checker
@@ -250,10 +264,10 @@ impl TypeChecker {
                                 node: variant.name,
                                 id: MetaId(0),
                             },
-                            DeclarationKind::Variant(
+                            DeclarationKind::Variant(Some((
                                 type_def.clone(),
                                 variant.clone(),
-                            ),
+                            ))),
                             String::new(),
                             |_| false,
                         )
@@ -409,7 +423,7 @@ impl TypeChecker {
     }
 
     pub(crate) fn rust_type_to_roto_type(
-        runtime: &Runtime,
+        runtime: &Rt,
         t: TypeId,
     ) -> Result<Type, String> {
         let ty = TypeRegistry::get(t).unwrap();
@@ -497,7 +511,7 @@ impl TypeChecker {
         Ok(())
     }
 
-    fn declare_context(&mut self, runtime: &Runtime) -> TypeResult<()> {
+    fn declare_context(&mut self, runtime: &Rt) -> TypeResult<()> {
         if let Some(ctx) = runtime.context() {
             for field in &ctx.fields {
                 let name =
@@ -559,7 +573,13 @@ impl TypeChecker {
                 let (kind, ident) = match d {
                     ast::Declaration::Record(x) => (
                         DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: 0,
+                            num_params: x.type_params.len(),
+                        }),
+                        x.ident.clone(),
+                    ),
+                    ast::Declaration::Enum(x) => (
+                        DeclarationKind::Type(TypeOrStub::Stub {
+                            num_params: x.type_params.len(),
                         }),
                         x.ident.clone(),
                     ),
@@ -573,6 +593,11 @@ impl TypeChecker {
                     ast::Declaration::Test(_) => continue,
                 };
 
+                let new_scope = self
+                    .type_info
+                    .scope_graph
+                    .wrap(scope, ScopeType::Type(*ident));
+
                 let res = self.type_info.scope_graph.insert_declaration(
                     scope,
                     &ident,
@@ -580,8 +605,35 @@ impl TypeChecker {
                     String::new(),
                     |_| false,
                 );
-                if let Err(e) = res {
-                    return Err(self.error_declared_twice(&ident, e));
+
+                let dec = match res {
+                    Ok(dec) => dec,
+                    Err(e) => {
+                        return Err(self.error_declared_twice(&ident, e));
+                    }
+                };
+
+                dec.scope = Some(new_scope);
+
+                // We have to insert stub declarations for all the enum
+                // variants, so that they can be imported.
+                if let ast::Declaration::Enum(x) = d {
+                    for variant in &*x.variants {
+                        let res =
+                            self.type_info.scope_graph.insert_declaration(
+                                new_scope,
+                                &variant.ident,
+                                DeclarationKind::Variant(None),
+                                String::new(),
+                                |_| false,
+                            );
+
+                        if let Err(e) = res {
+                            return Err(
+                                self.error_declared_twice(&x.ident, e)
+                            );
+                        };
+                    }
                 }
             }
             modules.push((scope, m))
@@ -619,19 +671,153 @@ impl TypeChecker {
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Import(_) => continue,
+                    ast::Declaration::Enum(ast::VariantTypeDeclaration {
+                        ident,
+                        type_params,
+                        variants,
+                    }) => {
+                        let name = ResolvedName {
+                            scope,
+                            ident: **ident,
+                        };
+
+                        let eval_scope = self
+                            .type_info
+                            .scope_graph
+                            .wrap(scope, ScopeType::TypeParams);
+
+                        for param in type_params {
+                            if let Err(e) =
+                                self.type_info.scope_graph.insert_declaration(
+                                    eval_scope,
+                                    param,
+                                    DeclarationKind::TypeParam(param.node),
+                                    String::new(),
+                                    |_| false,
+                                )
+                            {
+                                return Err(
+                                    self.error_declared_twice(param, e)
+                                );
+                            }
+                        }
+
+                        let mut evaluated_variants = Vec::new();
+
+                        for v in &**variants {
+                            let fields = v
+                                .fields
+                                .iter()
+                                .map(|ty| {
+                                    self.evaluate_type_expr(eval_scope, ty)
+                                })
+                                .collect::<Result<_, _>>()?;
+
+                            evaluated_variants.push(EnumVariant {
+                                name: v.ident.node,
+                                fields,
+                            });
+                        }
+
+                        let type_def = TypeDefinition::Enum(
+                            TypeName {
+                                name,
+                                arguments: type_params
+                                    .iter()
+                                    .map(|ident| {
+                                        Type::ExplicitVar(ident.node)
+                                    })
+                                    .collect(),
+                            },
+                            evaluated_variants.clone(),
+                        );
+
+                        self.type_info
+                            .scope_graph
+                            .insert_type(
+                                scope,
+                                ident,
+                                String::new(),
+                                type_def.clone(),
+                            )
+                            .map_err(|e| {
+                                self.error_declared_twice(ident, e)
+                            })?;
+
+                        let inner_scope =
+                            self.get_scope_of(scope, **ident).unwrap();
+
+                        for variant in evaluated_variants {
+                            self.type_info
+                                .scope_graph
+                                .insert_declaration(
+                                    inner_scope,
+                                    &Meta {
+                                        node: variant.name,
+                                        id: MetaId(0),
+                                    },
+                                    DeclarationKind::Variant(Some((
+                                        type_def.clone(),
+                                        variant.clone(),
+                                    ))),
+                                    String::new(),
+                                    |kind| {
+                                        matches!(
+                                            kind,
+                                            DeclarationKind::Variant(None)
+                                        )
+                                    },
+                                )
+                                .unwrap();
+                        }
+                    }
                     ast::Declaration::Record(
-                        ast::RecordTypeDeclaration { ident, record_type },
+                        ast::RecordTypeDeclaration {
+                            ident,
+                            type_params,
+                            record_type,
+                        },
                     ) => {
                         let name = ResolvedName {
                             scope,
                             ident: **ident,
                         };
+
+                        let eval_scope = self
+                            .type_info
+                            .scope_graph
+                            .wrap(scope, ScopeType::TypeParams);
+
+                        for param in type_params {
+                            if let Err(e) =
+                                self.type_info.scope_graph.insert_declaration(
+                                    eval_scope,
+                                    param,
+                                    DeclarationKind::TypeParam(param.node),
+                                    String::new(),
+                                    |_| false,
+                                )
+                            {
+                                return Err(
+                                    self.error_declared_twice(param, e)
+                                );
+                            }
+                        }
+
                         let ty = TypeDefinition::Record(
                             TypeName {
                                 name,
-                                arguments: Vec::new(),
+                                arguments: type_params
+                                    .iter()
+                                    .map(|ident| {
+                                        Type::ExplicitVar(ident.node)
+                                    })
+                                    .collect(),
                             },
-                            self.evaluate_record_type(scope, record_type)?,
+                            self.evaluate_record_type(
+                                eval_scope,
+                                record_type,
+                            )?,
                         );
                         self.type_info
                             .scope_graph
@@ -685,6 +871,7 @@ impl TypeChecker {
                     }
                     ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(_) => continue,
+                    ast::Declaration::Enum(_) => continue,
                     ast::Declaration::Import(_) => continue,
                 }
             }
@@ -713,6 +900,73 @@ impl TypeChecker {
         Ok(())
     }
 
+    fn resolve_obligations(&mut self) -> TypeResult<()> {
+        let mut obligations = Vec::new();
+        std::mem::swap(&mut obligations, &mut self.obligations);
+        for obligation in obligations {
+            match obligation {
+                Obligation::ResolveMethod {
+                    id,
+                    receiver,
+                    ident,
+                    parameter_types,
+                    return_type,
+                } => {
+                    let receiver_ty = self.type_info.resolve(&receiver);
+                    match receiver_ty {
+                        Type::IntVar(_, _) => {
+                            self.unify(&receiver_ty, &Type::i32(), id, None)
+                                .unwrap();
+                        }
+                        Type::FloatVar(_) => {
+                            self.unify(&receiver_ty, &Type::f64(), id, None)
+                                .unwrap();
+                        }
+                        _ => {}
+                    }
+                    let ident = Meta { id, node: ident };
+                    let Some(f) = self.get_method(&receiver, &ident) else {
+                        return Err(
+                            self.error_no_method_on_type(&receiver, &ident)
+                        );
+                    };
+
+                    let sig = &f.signature;
+
+                    let mut correct = true;
+                    correct &=
+                        sig.parameter_types.len() == parameter_types.len();
+
+                    for (a, b) in
+                        sig.parameter_types.iter().zip(&parameter_types)
+                    {
+                        correct &= self.unify(a, b, id, None).is_ok();
+                    }
+
+                    correct &= self
+                        .unify(&sig.return_type, &return_type, id, None)
+                        .is_ok();
+
+                    if !correct {
+                        return Err(self.error_simple(
+                            format!(
+                                "the `{}` method of type `{}` does not have the right signature",
+                                ident,
+                                receiver_ty.display(&self.type_info),
+                            ),
+                            format!("does not have a valid `{}` method", ident),
+                            id,
+                        ));
+                    }
+
+                    self.type_info.function_calls.insert(id, f);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn force_filtermap_types(&mut self, modules: &[(ScopeRef, &Module)]) {
         for &(_, module) in modules {
             for expr in &module.ast.declarations {
@@ -725,10 +979,14 @@ impl TypeChecker {
                     let Type::Name(TypeName { name: _, arguments }) =
                         &**return_type
                     else {
-                        ice!("return type of a filtermap should always be a verdict")
+                        ice!(
+                            "return type of a filtermap should always be a verdict"
+                        )
                     };
                     let [a, r] = &arguments[..] else {
-                        ice!("return type of a filtermap should always be a verdict")
+                        ice!(
+                            "return type of a filtermap should always be a verdict"
+                        )
                     };
 
                     if let Type::Var(x) = self.resolve_type(a) {
@@ -1029,15 +1287,9 @@ impl TypeChecker {
             }
             (RecordVar(var, fields), Name(name))
             | (Name(name), RecordVar(var, fields)) => {
-                // TODO: Allow type parameters on records
-                if !name.arguments.is_empty() {
-                    return None;
-                }
                 let type_def = self.type_info.resolve_type_name(&name);
-                let TypeDefinition::Record(name, named_fields) = type_def
-                else {
-                    return None;
-                };
+                let named_fields = type_def.record_fields(&name.arguments)?;
+
                 self.unify_fields(&fields, &named_fields)?;
                 self.type_info.unionfind.set(var, Name(name.clone()));
                 Name(name)

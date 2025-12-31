@@ -11,9 +11,7 @@ compiled script can contain many different functions, so we pick one that we
 want to extract by calling the ``get_function`` method, with the function type we
 expect and the name of the function (step 3).
 
-Finally, we call the extracted Roto function with the ``call`` method (step 4). We
-pass it a context of ``&mut ()`` (explained in :ref:`add-context`) and the
-parameter ``4``.
+Finally, we call the extracted Roto function with the ``call`` method (step 4).
 
 .. code:: rust
 
@@ -34,11 +32,11 @@ parameter ``4``.
 
         // Step 3: Extract the function
         let func = pkg
-            .get_function::<(), fn(i32) -> i32>("times_two")
+            .get_function::<fn(i32) -> i32>("times_two")
             .unwrap();
 
         // Step 4: Call the function
-        let result = func.call(&mut (), 4);
+        let result = func.call(4);
         println!("times_two(4) = {result}");
     }
 

@@ -24,6 +24,7 @@ pub enum IrValue {
     I64(i64),
     F32(f32),
     F64(f64),
+    Char(char),
     Asn(Asn),
     Pointer(usize),
 }
@@ -42,6 +43,7 @@ pub enum IrType {
     I64,
     F32,
     F64,
+    Char,
     Asn,
     Pointer,
 }
@@ -53,7 +55,7 @@ impl IrType {
         match self {
             Bool | U8 | I8 => 1,
             U16 | I16 => 2,
-            U32 | I32 | F32 | Asn => 4,
+            U32 | I32 | F32 | Asn | Char => 4,
             U64 | I64 | F64 => 8,
             Pointer => (usize::BITS / 8) as usize,
         }
@@ -79,6 +81,7 @@ impl Display for IrType {
             I64 => "i64",
             F32 => "f32",
             F64 => "f64",
+            Char => "char",
             Asn => "Asn",
             Pointer => "Pointer",
         };
@@ -122,6 +125,7 @@ impl IrValue {
             F32(_) => IrType::F32,
             F64(_) => IrType::F64,
             Asn(_) => IrType::Asn,
+            Char(_) => IrType::Char,
             Pointer(_) => IrType::Pointer,
         }
     }
@@ -140,6 +144,7 @@ impl IrValue {
             Self::F32(x) => x,
             Self::F64(x) => x,
             Self::Asn(x) => x,
+            Self::Char(x) => x,
             Self::Pointer(x) => x,
         }
     }
@@ -164,6 +169,8 @@ impl IrValue {
         } else if let Some(x) = any.downcast_ref() {
             IrValue::I64(*x)
         } else if let Some(x) = any.downcast_ref() {
+            IrValue::Char(*x)
+        } else if let Some(x) = any.downcast_ref() {
             IrValue::Asn(*x)
         } else {
             panic!("Could not downcast");
@@ -184,6 +191,7 @@ impl IrValue {
             Self::F32(x) => x.to_ne_bytes().into(),
             Self::F64(x) => x.to_ne_bytes().into(),
             Self::Asn(x) => x.into_u32().to_ne_bytes().into(),
+            Self::Char(x) => (*x as u32).to_ne_bytes().into(),
             Self::Pointer(x) => x.to_ne_bytes().into(),
         }
     }
@@ -237,6 +245,10 @@ impl IrValue {
             IrType::F64 => {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::F64(f64::from_ne_bytes(*val))
+            }
+            IrType::Char => {
+                let val: &[u8; 4] = val.try_into().unwrap();
+                Self::Char(char::from_u32(u32::from_ne_bytes(*val)).unwrap())
             }
             IrType::Asn => {
                 let val: &[u8; 4] = val.try_into().unwrap();
@@ -317,6 +329,7 @@ impl Display for IrValue {
             I64(x) => write!(f, "i64({x})"),
             F32(x) => write!(f, "f32({x})"),
             F64(x) => write!(f, "f64({x})"),
+            Char(x) => write!(f, "char({x})"),
             Asn(x) => write!(f, "Asn({x})"),
             Pointer(x) => write!(f, "Pointer({x})"),
         }

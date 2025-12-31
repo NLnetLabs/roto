@@ -206,8 +206,11 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Keyword(Keyword::Type) => {
+            Token::Keyword(Keyword::Record) => {
                 Declaration::Record(self.record_type_assignment()?)
+            }
+            Token::Keyword(Keyword::Variant) => {
+                Declaration::Enum(self.variant_declaration()?)
             }
             Token::Keyword(Keyword::Fn) => {
                 Declaration::Function(self.function()?)
@@ -278,10 +281,10 @@ impl Parser<'_, '_> {
         let (token, span) = self.next()?;
         let ident = match token {
             Token::Ident(s) => s,
-            // 'contains' and `type` is already used as both a keyword and an identifier
-            Token::Keyword(Keyword::Type) => "type",
             Token::Keyword(_) => {
-                let note = format!("`{token}` is a keyword and cannot be used as an identifier.");
+                let note = format!(
+                    "`{token}` is a keyword and cannot be used as an identifier."
+                );
                 let err = ParseError::expected("an identifier", &token, span)
                     .with_note(note);
                 return Err(err);
@@ -291,7 +294,7 @@ impl Parser<'_, '_> {
                     "an identifier",
                     token,
                     span,
-                ))
+                ));
             }
         };
         let ident = Identifier::from(ident);

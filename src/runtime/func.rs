@@ -3,8 +3,8 @@ use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::Value;
 use crate::lir::{IrValue, Memory};
-use crate::Reflect;
 
 #[derive(Clone)]
 pub struct FunctionDescription {
@@ -114,18 +114,18 @@ macro_rules! registerable_fn {
         #[allow(unused_mut)]
         impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r> for F
         where
-            $($a: Reflect,)*
-            $r: Reflect,
+            $($a: Value,)*
+            $r: Value,
             F: Fn($($a,)*) -> $r + Send + 'static,
         {
             type RustWrapper = extern "C" fn (*const Self, *mut $r::Transformed, $($a::AsParam),*) -> ();
 
             const TRAMPOLINE: Self::RustWrapper = {
-                extern "C" fn foo<$($a: Reflect,)* $r: Reflect>(x: *const impl Fn($($a,)*) -> $r, out: *mut $r::Transformed, $($a: $a::AsParam),*) -> () {
+                extern "C" fn foo<$($a: Value,)* $r: Value>(x: *const impl Fn($($a,)*) -> $r, out: *mut $r::Transformed, $($a: $a::AsParam),*) -> () {
                     let res = (unsafe { &*x })(
-                        $(<$a as Reflect>::untransform(<$a as Reflect>::to_value($a)),)*
+                        $(<$a as Value>::untransform(<$a as Value>::to_value($a)),)*
                     );
-                    let res_transformed  = <$r as Reflect>::transform(res);
+                    let res_transformed  = <$r as Value>::transform(res);
                     unsafe { std::ptr::write(out, res_transformed) };
                 }
                 foo
@@ -159,14 +159,14 @@ macro_rules! registerable_fn {
                     let $r = mem.get($r);
 
                     $(
-                        let Ok($a) = <$a as Reflect>::from_ir_value(mem, $a.clone()) else {
+                        let Ok($a) = <$a as Value>::from_ir_value(mem, $a.clone()) else {
                             panic!("Type of argument is not correct: {}", $a)
                         };
                     )*
-                    let mut uninit_ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
+                    let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
                     Self::TRAMPOLINE(
                         f,
-                        $r as *mut <$r as Reflect>::Transformed,
+                        $r as *mut <$r as Value>::Transformed,
                         $($a),*
                     );
                 };

@@ -1,12 +1,14 @@
 //! Compiler pipeline that executes multiple compiler stages in sequence
 
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt,
+};
 
 use crate::{
     codegen::{
-        self,
+        self, Module, TypedFunc,
         check::{FunctionRetrievalError, RotoFunc},
-        Module, TypedFunc,
     },
     file_tree::SourceFile,
     label::LabelStore,
@@ -18,18 +20,19 @@ use crate::{
     mir,
     module::{ModuleTree, Parsed},
     parser::{
-        meta::{Span, Spans},
         ParseError,
+        meta::{Span, Spans},
     },
     runtime::{
-        context::{Context, ContextDescription},
-        Runtime, RuntimeFunctionRef,
+        Ctx, NoCtx, OptCtx, Runtime, RuntimeFunctionRef, context::Context,
     },
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
     },
 };
+
+use ariadne::Cache;
 
 #[cfg(feature = "logger")]
 use crate::ir_printer::{IrPrinter, Printable};
@@ -45,6 +48,7 @@ pub(crate) enum RotoError {
     Type(TypeError),
     TestsFailed(),
     CouldNotRetrieveFunction(FunctionRetrievalError),
+    Custom(String),
 }
 
 /// An error report containing a set of Roto errors.
@@ -58,37 +62,34 @@ pub struct RotoReport {
 }
 
 /// Compiler stage: loaded, parsed and type checked
-pub struct TypeChecked<'r> {
+pub struct TypeChecked<'r, Ctx: OptCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
-    runtime: &'r Runtime,
-    context_type: ContextDescription,
+    runtime: &'r Runtime<Ctx>,
 }
 
 /// Compiler stage: MIR
-pub struct LoweredToMir<'r> {
-    runtime: &'r Runtime,
+pub struct LoweredToMir<'r, Ctx: OptCtx> {
+    runtime: &'r Runtime<Ctx>,
     ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
-    context_type: ContextDescription,
 }
 
 /// Compiler stage: LIR
-pub struct LoweredToLir<'r> {
-    runtime: &'r Runtime,
+pub struct LoweredToLir<'r, Ctx: OptCtx> {
+    runtime: &'r Runtime<Ctx>,
     ir: lir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
-    context_type: ContextDescription,
 }
 
 /// The final compiled package of script.
 ///
 /// Functions can be extracted from this package using [`Package::get_function`].
-pub struct Package {
-    module: Module,
+pub struct Package<Ctx: OptCtx> {
+    module: Module<Ctx>,
 }
 
 impl RotoReport {
@@ -100,7 +101,7 @@ impl RotoReport {
             .iter()
             .map(|s| {
                 (
-                    s.name.clone(),
+                    s.name(),
                     ariadne::Source::from(s.contents.clone())
                         .with_display_line_offset(s.location_offset),
                 )
@@ -123,19 +124,20 @@ impl RotoReport {
                     write!(f, "Could not read file `{name}`: {io}")?;
                 }
                 RotoError::Parse(error) => {
+                    let file = self.filename(error.location);
+                    let file_text = file_cache.fetch(&file).unwrap().text();
+
                     let label_message = error.kind.label();
                     let label = Label::new((
                         self.filename(error.location),
-                        error.location.start..error.location.end,
+                        error.location.character_range(file_text),
                     ))
                     .with_message(label_message)
                     .with_color(Color::Red);
 
-                    let file = self.filename(error.location);
-
                     let mut report = Report::build(
                         ReportKind::Error,
-                        (file, error.location.start..error.location.end),
+                        (file, error.location.character_range(file_text)),
                     )
                     .with_config(config)
                     .with_message(format!("Parse error: {}", error))
@@ -153,9 +155,12 @@ impl RotoReport {
                     write!(f, "{s}")?;
                 }
                 RotoError::Type(error) => {
+                    let file = self.filename(self.spans.get(error.location));
+                    let file_text = file_cache.fetch(&file).unwrap().text();
+
                     let labels = error.labels.iter().map(|l| {
                         let s = self.spans.get(l.id);
-                        Label::new((self.filename(s), s.start..s.end))
+                        Label::new((self.filename(s), s.character_range(file_text)))
                             .with_message(&l.message)
                             .with_color(match l.level {
                                 Level::Error => Color::Red,
@@ -163,12 +168,10 @@ impl RotoReport {
                             })
                     });
 
-                    let file = self.filename(self.spans.get(error.location));
-
                     let span = self.spans.get(error.location);
                     let report = Report::build(
                         ReportKind::Error,
-                        (file, span.start..span.end),
+                        (file, span.character_range(file_text)),
                     )
                     .with_config(config)
                     .with_message(format!(
@@ -188,6 +191,9 @@ impl RotoReport {
                 }
                 RotoError::CouldNotRetrieveFunction(e) => {
                     write!(f, "Could not retrieve function: {e}")?;
+                }
+                RotoError::Custom(s) => {
+                    write!(f, "{s}")?;
                 }
             }
         }
@@ -210,7 +216,7 @@ impl std::fmt::Debug for RotoReport {
 
 impl RotoReport {
     fn filename(&self, s: Span) -> String {
-        self.files[s.file].name.clone()
+        self.files[s.file].name()
     }
 }
 
@@ -243,20 +249,17 @@ macro_rules! source_file {
 pub(crate) use source_file;
 
 impl Parsed {
-    pub fn typecheck<'r>(
+    pub fn typecheck<'r, Ctx: OptCtx>(
         self,
-        runtime: &'r Runtime,
-    ) -> Result<TypeChecked<'r>, RotoReport> {
+        runtime: &'r Runtime<Ctx>,
+    ) -> Result<TypeChecked<'r, Ctx>, RotoReport> {
         let Parsed {
             file_tree,
             module_tree,
             spans,
         } = self;
 
-        let context_type =
-            runtime.context().clone().unwrap_or_else(<()>::description);
-
-        let result = crate::typechecker::typecheck(runtime, &module_tree);
+        let result = crate::typechecker::typecheck(&runtime.rt, &module_tree);
 
         let type_info = match result {
             Ok(type_info) => type_info,
@@ -273,25 +276,23 @@ impl Parsed {
             module_tree,
             type_info,
             runtime,
-            context_type,
         })
     }
 }
 
-impl<'r> TypeChecked<'r> {
-    pub fn lower_to_mir(&self) -> LoweredToMir<'r> {
+impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
+    pub fn lower_to_mir(&self) -> LoweredToMir<'r, Ctx> {
         let TypeChecked {
             module_tree,
             type_info,
             runtime,
-            context_type,
         } = self;
 
         let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
         let ir = mir::lower_to_mir(
             module_tree,
-            runtime,
+            &runtime.rt,
             &mut type_info,
             &mut label_store,
         );
@@ -313,28 +314,28 @@ impl<'r> TypeChecked<'r> {
             ir,
             runtime,
             label_store,
-            context_type: context_type.clone(),
             type_info,
         }
     }
 }
 
-impl<'r> LoweredToMir<'r> {
-    pub fn lower_to_lir(self) -> LoweredToLir<'r> {
+impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
+    pub fn lower_to_lir(self) -> LoweredToLir<'r, Ctx> {
         let LoweredToMir {
             runtime,
             ir,
             mut label_store,
             mut type_info,
-            context_type,
         } = self;
 
         let mut runtime_functions = HashMap::new();
         let mut ctx = lir::lower::LowerCtx {
-            runtime,
+            runtime: &runtime.rt,
             type_info: &mut type_info,
             label_store: &mut label_store,
             runtime_functions: &mut runtime_functions,
+            drops_to_generate: VecDeque::new(),
+            clones_to_generate: VecDeque::new(),
         };
         let ir = lir::lower_to_lir(&mut ctx, ir);
 
@@ -356,52 +357,66 @@ impl<'r> LoweredToMir<'r> {
             ir,
             label_store,
             type_info,
-            context_type,
             runtime_functions,
         }
     }
 }
 
-impl LoweredToLir<'_> {
+impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
     pub fn eval(
         &self,
         mem: &mut Memory,
         ctx: IrValue,
         args: Vec<IrValue>,
     ) -> Option<IrValue> {
-        eval::eval(self.runtime, &self.ir.functions, "main", mem, ctx, args)
+        eval::eval(
+            &self.runtime.rt,
+            &self.ir.functions,
+            "main",
+            mem,
+            ctx,
+            args,
+        )
     }
 
-    pub fn codegen(self) -> Package {
+    pub fn codegen(self) -> Package<Ctx> {
         let module = codegen::codegen(
             self.runtime,
             &self.ir.functions,
             &self.runtime_functions,
             self.label_store,
             self.type_info,
-            self.context_type,
         );
         Package { module }
     }
 }
 
-impl Package {
-    pub fn get_tests<Ctx: 'static>(
+impl<Ctx: OptCtx> Package<Ctx> {
+    pub fn get_tests(
         &mut self,
     ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
     {
         codegen::testing::get_tests(&mut self.module)
     }
 
-    #[allow(clippy::result_unit_err)]
-    pub fn run_tests<Ctx: 'static>(&mut self, ctx: Ctx) -> Result<(), ()> {
-        codegen::testing::run_tests(&mut self.module, ctx)
-    }
-
-    pub fn get_function<Ctx: 'static, F: RotoFunc>(
+    pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         self.module.get_function(name)
+    }
+}
+
+impl Package<NoCtx> {
+    #[allow(clippy::result_unit_err)]
+    pub fn run_tests(&mut self) -> Result<(), ()> {
+        codegen::testing::run_tests(&mut self.module, NoCtx)
+    }
+}
+
+impl<C: Context> Package<Ctx<C>> {
+    #[allow(clippy::result_unit_err)]
+    pub fn run_tests(&mut self, ctx: C) -> Result<(), ()> {
+        codegen::testing::run_tests(&mut self.module, Ctx(ctx))
     }
 }

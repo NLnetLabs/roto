@@ -1,6 +1,7 @@
 use crate::file_tree::{FileSpec, FileTree};
 use crate::pipeline::RotoReport;
-use crate::{library, source_file, src, Context, Runtime, Val};
+use crate::runtime::OptCtx;
+use crate::{Context, Runtime, Val, library, source_file, src};
 
 #[track_caller]
 fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
@@ -10,7 +11,7 @@ fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
 #[track_caller]
 fn typecheck_with_runtime(
     loaded: FileTree,
-    rt: Runtime,
+    rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
     let res = loaded.parse();
 
@@ -40,7 +41,7 @@ fn empty() {
 
 #[test]
 fn one_record() {
-    let s = src!("type Foo { a: u32 }");
+    let s = src!("record Foo { a: u32 }");
     assert!(typecheck(s).is_ok());
 }
 
@@ -48,8 +49,8 @@ fn one_record() {
 fn declared_multiple_times() {
     let s = src!(
         "
-        type Foo { a: u32 }
-        type Foo { a: u32 }
+        record Foo { a: u32 }
+        record Foo { a: u32 }
     "
     );
     assert!(typecheck(s).is_err());
@@ -59,7 +60,7 @@ fn declared_multiple_times() {
 fn double_field() {
     let s = src!(
         "
-        type Foo { a: u32, a: u8 }
+        record Foo { a: u32, a: u8 }
     "
     );
     assert!(typecheck(s).is_err());
@@ -67,7 +68,7 @@ fn double_field() {
 
 #[test]
 fn undeclared_type_in_record() {
-    let s = src!("type Bar { f: Foo }");
+    let s = src!("record Bar { f: Foo }");
     assert!(typecheck(s).is_err());
 }
 
@@ -75,7 +76,7 @@ fn undeclared_type_in_record() {
 fn nested_record() {
     let s = src!(
         "
-        type Foo { a: { b: u32, c: u32 } }
+        record Foo { a: { b: u32, c: u32 } }
     "
     );
     assert!(typecheck(s).is_ok());
@@ -85,16 +86,16 @@ fn nested_record() {
 fn two_records() {
     let s = src!(
         "
-        type Foo { a: u32 }
-        type Bar { f: Foo }
+        record Foo { a: u32 }
+        record Bar { f: Foo }
     "
     );
     assert!(typecheck(s).is_ok());
 
     let s = src!(
         "
-        type Bar { f: Foo }
-        type Foo { a: u32 }
+        record Bar { f: Foo }
+        record Foo { a: u32 }
     "
     );
     assert!(typecheck(s).is_ok());
@@ -104,35 +105,35 @@ fn two_records() {
 fn record_cycle() {
     let s = src!(
         "
-        type Foo { f: Foo }
+        record Foo { f: Foo }
     "
     );
     assert!(typecheck(s).is_err());
 
     let s = src!(
         "
-        type Bar { f: Foo }
-        type Foo { b: Bar }
+        record Bar { f: Foo }
+        record Foo { b: Bar }
     "
     );
     assert!(typecheck(s).is_err());
 
     let s = src!(
         "
-        type A { x: B }
-        type B { x: C }
-        type C { x: D }
-        type D { x: A }
+        record A { x: B }
+        record B { x: C }
+        record C { x: D }
+        record D { x: A }
     "
     );
     assert!(typecheck(s).is_err());
 
     let s = src!(
         "
-        type A { x: B }
-        type B { x: C }
-        type C { x: { y: D } }
-        type D { x: B }
+        record A { x: B }
+        record B { x: C }
+        record C { x: { y: D } }
+        record D { x: B }
     "
     );
     assert!(typecheck(s).is_err());
@@ -142,10 +143,10 @@ fn record_cycle() {
 fn record_diamond() {
     let s = src!(
         "
-        type A { x: B, y: C }
-        type B { x: D }
-        type C { x: D }
-        type D { }
+        record A { x: B, y: C }
+        record B { x: D }
+        record C { x: D }
+        record D { }
     "
     );
     assert!(typecheck(s).is_ok());
@@ -205,7 +206,6 @@ fn negation_on_string() {
 }
 
 #[test]
-#[ignore = "prefixes not supported yet"]
 fn filter_map() {
     let s = src!(
         r#"
@@ -240,7 +240,7 @@ fn filter_map_double_definition() {
 fn using_records() {
     let s = src!(
         r#"
-        type Foo { a: String }
+        record Foo { a: String }
 
         filtermap bar(r: u32) {
             let a = Foo { a: "hello" };
@@ -252,7 +252,7 @@ fn using_records() {
 
     let s = src!(
         r#"
-        type Foo { a: String }
+        record Foo { a: String }
 
         filtermap bar(r: u32) {
             let a = Foo { a: 0.0.0.0 };
@@ -264,7 +264,7 @@ fn using_records() {
 
     let s = src!(
         r#"
-        type Foo { a: string }
+        record Foo { a: string }
 
         filtermap bar(r: u32) {
             let a = Foo { };
@@ -318,7 +318,7 @@ fn let_type_annotation() {
 fn integer_inference() {
     let s = src!(
         "
-        type Foo { x: u8 }
+        record Foo { x: u8 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -330,8 +330,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        record Foo { x: u8 }
+        record Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let a = 5;
@@ -344,8 +344,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        record Foo { x: u8 }
+        record Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let a = 5;
@@ -359,8 +359,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        record Foo { x: u8 }
+        record Bar { x: u32 }
 
         filtermap my_map(r: u32) {
             let a = 5;
@@ -374,8 +374,8 @@ fn integer_inference() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        record Foo { x: u8 }
+        record Bar { x: u32 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -391,8 +391,8 @@ fn integer_inference() {
 fn assign_field_to_other_record() {
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        record Foo { x: u8 }
+        record Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -405,8 +405,8 @@ fn assign_field_to_other_record() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u8 }
+        record Foo { x: u8 }
+        record Bar { x: u8 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -419,8 +419,8 @@ fn assign_field_to_other_record() {
 
     let s = src!(
         "
-        type Foo { x: u8 }
-        type Bar { x: u32 }
+        record Foo { x: u8 }
+        record Bar { x: u32 }
 
         filtermap my_map(r: u32) {
             let foo = Foo { x: 5 };
@@ -471,7 +471,6 @@ fn ip_addr_method() {
 }
 
 #[test]
-#[ignore = "to_canonical doesn't work for now"]
 fn ip_addr_method_of_method_return_type() {
     let s = src!(
         "
@@ -497,13 +496,12 @@ fn ip_addr_method_of_method_return_type() {
 }
 
 #[test]
-#[ignore = "prefixes not supported yet"]
 fn prefix_method() {
     let s = src!(
         "
         filtermap my_map(r: u32) {
             let p = 10.10.10.10/20;
-            let add = p.address();
+            let add = p.addr();
             accept
         }
     "
@@ -512,11 +510,10 @@ fn prefix_method() {
 }
 
 #[test]
-#[ignore = "prefixes not supported yet"]
 fn logical_expr() {
     let s = src!(
         "
-        fn foo() -> Bool {
+        fn foo() -> bool {
             (10 == 10) || (10 == 11)
         }
 
@@ -571,7 +568,7 @@ fn send_output_stream() {
             foo: String
         }
 
-        type Bar { bar: String }
+        record Bar { bar: String }
 
         fn hello() {
             stream.send(Bar {
@@ -678,7 +675,7 @@ fn record_inference() {
 
     let s = src!(
         "
-        type A { a: u32 }
+        record A { a: u32 }
 
         fn bla(a: A, b: A) -> Bool {
             a == b
@@ -698,8 +695,8 @@ fn record_inference() {
 
     let s = src!(
         "
-        type A { a: u32 }
-        type B { a: u32 }
+        record A { a: u32 }
+        record B { a: u32 }
 
         fn bla() -> Bool {
             a == b && a == c
@@ -937,15 +934,13 @@ fn use_globals() {
 
 #[test]
 fn use_context() {
-    let mut rt = Runtime::new();
-
-    #[derive(Context)]
+    #[derive(Clone, Context)]
     struct Ctx {
         /// boop
         pub foo: u8,
     }
 
-    rt.register_context_type::<Ctx>().unwrap();
+    let rt = Runtime::new().with_context_type::<Ctx>().unwrap();
 
     let s = src!(
         "
@@ -1095,7 +1090,7 @@ fn assignment_to_record() {
 fn invalid_type_in_f_string() {
     let s = src!(
         r#"
-            type Foo {
+            record Foo {
                 x: i32,
             }
 
@@ -1104,6 +1099,111 @@ fn invalid_type_in_f_string() {
                 f"Value is {y}"
             }
         "#
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn two_variants() {
+    let s = src!(
+        r#"
+          variant Foo { Bar }
+          variant Foo { Baz }  
+        "#
+    );
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn assign_to_variant_with_different_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar(T) }
+
+          fn foo() {
+              let x: Foo[i32] = Foo.Bar(10);
+              let y: Foo[f32] = x; # should error!
+          }
+        "#
+    );
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn variant_with_unused_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar }
+
+          fn foo() {
+              let x = Foo.Bar;
+          }
+        "#
+    );
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn variant_with_never_type_param() {
+    let s = src!(
+        r#"
+          variant Foo[T] { Bar }
+
+          fn foo() {
+              let x: Foo[!] = Foo.Bar;
+          }
+        "#
+    );
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn generic_record_contains_itself_but_not_quite() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: Foo[i32],
+        }
+    "
+    );
+
+    typecheck(s).expect_err("type cycle!");
+}
+
+#[test]
+fn assign_generic_to_another() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T,
+        }
+
+        fn main() {
+            let x = Foo { x: 10 };
+            let y: Foo[u64] = Foo { x: 20 };
+            y = x;
+        }
+    "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn assign_generic_to_another_type() {
+    let s = src!(
+        "
+        record Foo[T] {
+            x: T,
+        }
+
+        fn main() {
+            let x: Foo[i32] = Foo { x: 10 };
+            let y: Foo[u64] = Foo { x: 20 };
+            y = x;
+        }
+    "
     );
 
     typecheck(s).unwrap_err();

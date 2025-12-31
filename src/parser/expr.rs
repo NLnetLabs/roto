@@ -12,10 +12,10 @@ use crate::{
 };
 
 use super::{
+    ParseResult, Parser,
     error::ParseErrorKind,
     meta::{Meta, Span},
     token::{FStringToken, Keyword, Token},
-    ParseResult, Parser,
 };
 
 /// Contextual restrictions on the expression parsing
@@ -208,7 +208,8 @@ impl Parser<'_, '_> {
                 return Err(ParseError::custom(
                     "left-hand side of an expression must be a single identifier",
                     "cannot assign to this expression",
-                    self.get_span(&left)));
+                    self.get_span(&left),
+                ));
             };
             let right = self.logical_expr(r)?;
             let span = self.merge_spans(&left, &right);
@@ -761,7 +762,7 @@ impl Parser<'_, '_> {
                     "an IP address",
                     token,
                     span,
-                ))
+                ));
             }
         };
         Ok(self.spans.add(span, addr))
@@ -781,8 +782,20 @@ impl Parser<'_, '_> {
                     start: span.start + 1,
                     ..span
                 };
-                let unescaped = unescape(trimmed, span)?;
+                let unescaped = unescape_str(trimmed, span)?;
                 Literal::String(unescaped)
+            }
+            Token::Char(s) => {
+                // Trim the quotes from the string literal
+                let trimmed = &s[1..s.len() - 1];
+                // The span starts at the quote so we add one to get to the
+                // string content.
+                let span = Span {
+                    start: span.start + 1,
+                    ..span
+                };
+                let unescaped = unescape_char(trimmed, span)?;
+                Literal::Char(unescaped)
             }
             Token::Integer(s) => {
                 Literal::Integer(s.parse::<i64>().map_err(|e| {
@@ -812,7 +825,7 @@ impl Parser<'_, '_> {
                         token,
                         e,
                         span,
-                    ))
+                    ));
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
@@ -1003,16 +1016,14 @@ impl Parser<'_, '_> {
             Token::Keyword(Keyword::Dep) => "dep".into(),
             Token::Keyword(Keyword::Super) => "super".into(),
             Token::Ident(s) => s.into(),
-            _ => {
-                return Err(ParseError::expected(
-                    "an identifier, `super`, `pkg` or `dep`",
-                    &tok,
-                    span,
-                )
-                .with_note(format!(
+            _ => return Err(ParseError::expected(
+                "an identifier, `super`, `pkg` or `dep`",
+                &tok,
+                span,
+            )
+            .with_note(format!(
                 "`{tok}` is a keyword and cannot be used as an identifier."
-            )))
-            }
+            ))),
         };
         Ok(self.spans.add(span, ident))
     }
@@ -1033,7 +1044,7 @@ impl Parser<'_, '_> {
                     start: span.start,
                     end: span.end,
                 };
-                let s = unescape(s, span)?;
+                let s = unescape_str(s, span)?;
                 let s = s.replace("{{", "{").replace("}}", "}");
                 parts.push(self.spans.add(span, FStringPart::String(s)));
             }
@@ -1065,7 +1076,12 @@ impl Parser<'_, '_> {
     }
 }
 
-fn unescape(s: &str, span: Span) -> ParseResult<String> {
+fn unescape_char(s: &str, span: Span) -> ParseResult<char> {
+    rustc_literal_escaper::unescape_char(s)
+        .map_err(|e| ParseError::escape(&e, span))
+}
+
+fn unescape_str(s: &str, span: Span) -> ParseResult<String> {
     let mut unescaped = String::new();
     let mut errors = Vec::new();
     rustc_literal_escaper::unescape_str(s, |range: Range<usize>, res| {

@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, parse_macro_input, spanned::Spanned, Error, Token};
+use syn::{Error, Token, parse::Parse, parse_macro_input, spanned::Spanned};
 
 #[proc_macro_derive(Context)]
 pub fn roto_context(item: TokenStream) -> TokenStream {
@@ -192,6 +192,7 @@ fn to_tokens(
                 let ident_str = ident.to_string();
                 let ty = &item.ty;
                 let movability = get_movability(item.span(), &item.attrs)?;
+
                 quote! {
                     roto::Type::#movability::<#ty>(
                         #ident_str,
@@ -204,14 +205,20 @@ fn to_tokens(
                 let pat = item.pat;
 
                 let syn::Pat::Ident(ident) = &*pat else {
-                    todo!("good error message");
+                    return Err(syn::Error::new(
+                        pat.span(),
+                        "pattern must be an identifier",
+                    ));
                 };
                 let location = location(ident.ident.span());
                 let ident_str = ident.ident.to_string();
 
                 let expr = item.expr;
                 let syn::Expr::Closure(closure) = &*expr else {
-                    todo!("good error message");
+                    return Err(syn::Error::new(
+                        expr.span(),
+                        "expressions must be a closure",
+                    ));
                 };
 
                 let params: Vec<_> = closure
@@ -404,16 +411,17 @@ fn get_movability(
         }
     }
 
-    let s =
-        match (clone, copy, value) {
-            (1, 0, 0) => "clone",
-            (0, 1, 0) => "copy",
-            (0, 0, 1) => "value",
-            _ => return Err(syn::Error::new(
+    let s = match (clone, copy, value) {
+        (1, 0, 0) => "clone",
+        (0, 1, 0) => "copy",
+        (0, 0, 1) => "value",
+        _ => {
+            return Err(syn::Error::new(
                 span,
                 "specify exactly 1 of `#[clone]`, `#[copy]` or `#[value]`",
-            )),
-        };
+            ));
+        }
+    };
 
     Ok(syn::Ident::new(s, ident_span.unwrap()))
 }

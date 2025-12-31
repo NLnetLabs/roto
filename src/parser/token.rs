@@ -45,6 +45,7 @@ pub enum Token<'s> {
 
     // === Literals ===
     String(&'s str),
+    Char(&'s str),
     Integer(&'s str),
     Float(&'s str),
     Hex(&'s str),
@@ -83,12 +84,13 @@ pub enum Keyword {
     Match,
     Not,
     Pkg,
+    Record,
     Reject,
     Return,
     Std,
     Super,
     Test,
-    Type,
+    Variant,
     While,
 }
 
@@ -169,6 +171,7 @@ impl<'s> Lexer<'s> {
         self.integer()?;
         self.f_string()?;
         self.string()?;
+        self.char()?;
         self.keyword_or_ident()?;
 
         ControlFlow::Continue(())
@@ -450,6 +453,36 @@ impl<'s> Lexer<'s> {
         None
     }
 
+    fn char(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let Some(rest) = self.input.strip_prefix('\'') else {
+            return ControlFlow::Continue(());
+        };
+
+        let mut last_is_backslash = false;
+        let end_quote = rest.find(|c| {
+            if last_is_backslash {
+                last_is_backslash = false;
+                return false;
+            }
+
+            match c {
+                '\'' => true,
+                '\\' => {
+                    last_is_backslash = true;
+                    false
+                }
+                _ => false,
+            }
+        });
+
+        let Some(end_quote) = end_quote else {
+            return ControlFlow::Continue(());
+        };
+
+        let (tok, span) = self.bump(2 + end_quote);
+        ControlFlow::Break((Token::Char(tok), span))
+    }
+
     fn string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
         let Some(rest) = self.input.strip_prefix('"') else {
             return ControlFlow::Continue(());
@@ -498,6 +531,7 @@ impl<'s> Lexer<'s> {
 
         let kw = match ident {
             "accept" => Keyword::Accept,
+            "dep" => Keyword::Dep,
             "else" => Keyword::Else,
             "filter" => Keyword::Filter,
             "filtermap" => Keyword::FilterMap,
@@ -506,16 +540,16 @@ impl<'s> Lexer<'s> {
             "import" => Keyword::Import,
             "in" => Keyword::In,
             "let" => Keyword::Let,
-            "dep" => Keyword::Dep,
             "match" => Keyword::Match,
             "not" => Keyword::Not,
             "pkg" => Keyword::Pkg,
+            "record" => Keyword::Record,
             "reject" => Keyword::Reject,
             "return" => Keyword::Return,
             "std" => Keyword::Std,
             "super" => Keyword::Super,
             "test" => Keyword::Test,
-            "type" => Keyword::Type,
+            "variant" => Keyword::Variant,
             "while" => Keyword::While,
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
@@ -567,6 +601,7 @@ impl Display for Token<'_> {
 
             // Literals
             Token::String(s) => s,
+            Token::Char(s) => s,
             Token::Integer(s) => s,
             Token::Float(s) => s,
             Token::Hex(s) => s,
@@ -587,6 +622,7 @@ impl Keyword {
     fn as_str(&self) -> &'static str {
         match self {
             Keyword::Accept => "accept",
+            Keyword::Dep => "dep",
             Keyword::Else => "else",
             Keyword::Filter => "filter",
             Keyword::FilterMap => "filtermap",
@@ -595,16 +631,16 @@ impl Keyword {
             Keyword::Import => "import",
             Keyword::In => "in",
             Keyword::Let => "let",
-            Keyword::Dep => "dep",
             Keyword::Match => "match",
             Keyword::Not => "not",
             Keyword::Pkg => "pkg",
+            Keyword::Record => "record",
             Keyword::Reject => "reject",
             Keyword::Return => "return",
             Keyword::Std => "std",
             Keyword::Super => "super",
             Keyword::Test => "test",
-            Keyword::Type => "type",
+            Keyword::Variant => "variant",
             Keyword::While => "while",
         }
     }

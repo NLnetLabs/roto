@@ -9,12 +9,11 @@ use log::trace;
 use crate::{
     ast::Identifier,
     lir::{
-        value::IrValue, FloatCmp, Function, Instruction, IntCmp, Operand,
-        ValueOrSlot, Var, VarKind,
+        FloatCmp, Function, Instruction, IntCmp, Operand, ValueOrSlot, Var,
+        VarKind, value::IrValue,
     },
-    runtime::{ConstantValue, RuntimeFunctionRef},
+    runtime::{ConstantValue, Rt, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
-    Runtime,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -282,7 +281,7 @@ impl Allocation {
 /// fairly slow. This is because all variables at this point are identified
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
-    rt: &Runtime,
+    rt: &Rt,
     p: &[Function],
     filter_map: &str,
     mem: &mut Memory,
@@ -691,33 +690,6 @@ pub fn eval(
                     unsafe { (drop)(p) }
                 }
             }
-            Instruction::MemCmp {
-                to,
-                size,
-                left,
-                right,
-            } => {
-                let &IrValue::Pointer(left) = eval_operand(&vars, left)
-                else {
-                    panic!()
-                };
-                let &IrValue::Pointer(right) = eval_operand(&vars, right)
-                else {
-                    panic!()
-                };
-                let &IrValue::Pointer(size) = eval_operand(&vars, size)
-                else {
-                    panic!()
-                };
-                let left = mem.read_slice(left, size);
-                let right = mem.read_slice(right, size);
-                let res = match left.cmp(right) {
-                    std::cmp::Ordering::Less => -1isize as usize,
-                    std::cmp::Ordering::Equal => 0,
-                    std::cmp::Ordering::Greater => 1,
-                };
-                vars.insert(to.clone(), IrValue::Pointer(res));
-            }
             Instruction::InitString {
                 to,
                 string,
@@ -738,7 +710,7 @@ pub fn eval(
 }
 
 fn call_runtime_function(
-    rt: &Runtime,
+    rt: &Rt,
     mem: &mut Memory,
     func: RuntimeFunctionRef,
     args: Vec<IrValue>,

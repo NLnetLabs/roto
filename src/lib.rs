@@ -21,6 +21,7 @@ mod pipeline;
 mod runtime;
 pub mod tools;
 mod typechecker;
+mod value;
 
 #[cfg(feature = "cli")]
 pub use cli::cli;
@@ -28,25 +29,23 @@ pub use cli::cli;
 #[cfg(test)]
 pub(crate) use pipeline::{source_file, src};
 
-pub use codegen::TypedFunc;
+pub use codegen::{TypedFunc, check::RotoFunc};
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub(crate) use pipeline::RotoError;
 pub use pipeline::{Package, RotoReport};
 pub use roto_macros::{
-    roto_function, roto_method, roto_static_method, Context,
+    Context, roto_function, roto_method, roto_static_method,
 };
 pub use runtime::{
+    Ctx, NoCtx, RegistrationError, Runtime,
     context::Context,
     func::RegisterableFn,
     items::{
         Constant, Function, Impl, Item, Library, Module, Registerable, Type,
         Use,
     },
-    ty::Reflect,
-    val::Val,
-    verdict::Verdict,
-    RegistrationError, Runtime,
 };
+pub use value::{Value, val::Val, verdict::Verdict};
 
 /// Create a list of items to be registered.
 ///

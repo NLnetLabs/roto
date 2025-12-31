@@ -7,38 +7,33 @@ pub mod func;
 mod io;
 pub mod items;
 pub mod layout;
-pub mod option;
-pub mod ty;
-pub mod val;
-pub mod verdict;
 
 #[cfg(test)]
 pub mod tests;
 
 use std::{
-    any::TypeId, collections::HashMap, path::Path, ptr, slice, str, sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData, path::Path, ptr,
+    slice, str, sync::Arc,
 };
 
+use crate::value::{Ty, TypeDescription, TypeRegistry};
 use context::ContextDescription;
 use func::FunctionDescription;
 use layout::Layout;
-use ty::{Reflect, Ty, TypeDescription, TypeRegistry};
+use sealed::sealed;
 
 use crate::{
+    Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
     file_tree::FileTree,
     parser::token::{Lexer, Token},
-    runtime::{
-        func::RegisterableFn,
-        items::{
-            Constant, Function, Impl, Item, Module, Registerable, Type, Use,
-        },
+    runtime::items::{
+        Constant, Function, Item, Module, Registerable, Type, Use,
     },
     typechecker::{
-        scope::{ResolvedName, ScopeRef},
         TypeChecker,
+        scope::{ResolvedName, ScopeRef},
     },
-    Context, Location, Package, RotoReport,
 };
 
 /// Provides the types and functions that Roto can access via FFI
@@ -68,7 +63,14 @@ use crate::{
 ///
 /// - [`Runtime::print_documentation`]
 #[derive(Clone)]
-pub struct Runtime {
+pub struct Runtime<Ctx: OptCtx> {
+    pub(crate) rt: Rt,
+    _ctx: PhantomData<Ctx>,
+}
+
+/// Inner type of the runtime, without the type parameter
+#[derive(Clone)]
+pub(crate) struct Rt {
     pub(crate) type_checker: TypeChecker,
     context: Option<ContextDescription>,
     types: Vec<RuntimeType>,
@@ -76,13 +78,56 @@ pub struct Runtime {
     constants: HashMap<ResolvedName, RuntimeConstant>,
 }
 
-impl std::fmt::Debug for Runtime {
+impl<Ctx: OptCtx> std::fmt::Debug for Runtime<Ctx> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Runtime").finish()
     }
 }
 
-impl Runtime {
+/// This trait is _sealed_, meaning that it cannot be implemented by downstream
+/// crates.
+#[sealed]
+pub trait OptCtx: 'static + Clone {
+    type Ctx: Context;
+    fn get_context(&mut self) -> &mut Self::Ctx;
+
+    fn try_to_no_ctx() -> Option<NoCtx>;
+}
+
+#[derive(Clone)]
+pub struct Ctx<T>(pub T);
+
+#[sealed]
+impl<T: Context> OptCtx for Ctx<T> {
+    type Ctx = T;
+
+    fn try_to_no_ctx() -> Option<NoCtx> {
+        None
+    }
+
+    fn get_context(&mut self) -> &mut Self::Ctx {
+        &mut self.0
+    }
+}
+
+#[derive(Clone)]
+pub struct NoCtx;
+
+#[sealed]
+impl OptCtx for NoCtx {
+    type Ctx = Self;
+
+    fn try_to_no_ctx() -> Option<NoCtx> {
+        Some(NoCtx)
+    }
+
+    fn get_context(&mut self) -> &mut Self::Ctx {
+        self
+    }
+}
+
+/// Compiling a script
+impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Compile a script from a path and return the result.
     ///
     /// If the path is a file, then that file will be loaded. If the path is a
@@ -90,26 +135,29 @@ impl Runtime {
     pub fn compile(
         &self,
         path: impl AsRef<Path>,
-    ) -> Result<Package, RotoReport> {
+    ) -> Result<Package<Ctx>, RotoReport> {
         FileTree::read(path)?.compile(self)
     }
 }
 
-/// Inspecting the [`Runtime`]
-impl Runtime {
+/// Creating a [`Runtime`]
+impl Runtime<NoCtx> {
     /// A Runtime that is as empty as possible.
     ///
     /// This contains only type information for Roto primitives.
     pub fn new() -> Self {
-        let mut this = Self {
+        let mut rt = Rt {
             type_checker: TypeChecker::new(),
             context: None,
             types: Default::default(),
             functions: Default::default(),
             constants: Default::default(),
         };
-        this.add(basic::built_ins()).unwrap();
-        this
+        rt.add(basic::built_ins()).unwrap();
+        Self {
+            rt,
+            _ctx: PhantomData,
+        }
     }
 
     /// Create a new [`Runtime`] with a given library.
@@ -124,6 +172,19 @@ impl Runtime {
         Ok(rt)
     }
 
+    pub fn with_context_type<C: Context + 'static>(
+        mut self,
+    ) -> Result<Runtime<Ctx<C>>, String> {
+        self.rt.register_context_type::<C>()?;
+        Ok(Runtime {
+            rt: self.rt,
+            _ctx: PhantomData,
+        })
+    }
+}
+
+/// Inspecting and modifying the [`Runtime`]
+impl<C: OptCtx> Runtime<C> {
     /// Add a library of items to this [`Runtime`]
     ///
     /// Typically, one would use the [`library!`](crate::library) macro to
@@ -196,6 +257,47 @@ impl Runtime {
     ///
     /// See also [`Runtime::from_lib`], which combines [`Runtime::new`] and
     /// [`Runtime::add`] into a single function.
+    pub fn add(
+        &mut self,
+        items: impl Registerable,
+    ) -> Result<(), RegistrationError> {
+        self.rt.add(items)
+    }
+
+    /// Get the context type, if any.
+    pub fn context(&self) -> &Option<ContextDescription> {
+        self.rt.context()
+    }
+
+    /// Get the registered types.
+    pub fn types(&self) -> &[RuntimeType] {
+        self.rt.types()
+    }
+
+    /// Get the registered functions.
+    pub fn functions(&self) -> &[RuntimeFunction] {
+        self.rt.functions()
+    }
+
+    /// Get the registered constants.
+    pub fn constants(&self) -> &HashMap<ResolvedName, RuntimeConstant> {
+        self.rt.constants()
+    }
+
+    #[cfg(feature = "cli")]
+    pub fn cli(&self) {
+        crate::cli(self)
+    }
+
+    pub fn try_without_ctx(self) -> Option<Runtime<NoCtx>> {
+        C::try_to_no_ctx().map(|_| Runtime {
+            rt: self.rt,
+            _ctx: PhantomData,
+        })
+    }
+}
+
+impl Rt {
     pub fn add(
         &mut self,
         items: impl Registerable,
@@ -393,158 +495,13 @@ impl std::fmt::Display for RegistrationError {
 
 impl std::error::Error for RegistrationError {}
 
-impl Runtime {
-    pub(crate) fn get_function(
-        &self,
-        f: RuntimeFunctionRef,
-    ) -> &RuntimeFunction {
+impl Rt {
+    pub fn get_function(&self, f: RuntimeFunctionRef) -> &RuntimeFunction {
         &self.functions[f.0]
     }
+}
 
-    /// Register a type with a default name
-    ///
-    /// This type will be cloned and dropped many times, so make sure to have
-    /// a cheap [`Clone`] and [`Drop`] implementations, for example an
-    /// [`Rc`](std::rc::Rc) or an [`Arc`](std::sync::Arc).
-    ///
-    /// The default type name is based on [`std::any::type_name`]. The string
-    /// returned from that consists of a path with possibly some generics.
-    /// Neither full paths and generics make sense in Roto, so we just want
-    /// the last part of the path just before any generics. So, we determine
-    /// the name with the following procedure:
-    ///
-    ///  - Split at the first `<` (if any) and take the first part
-    ///  - Then split at the last `::` and take the last part.
-    ///
-    /// If that doesn't work for the type you want, use
-    /// [`Runtime::register_clone_type_with_name`] instead.
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_clone_type<T: Reflect + Clone>(
-        &mut self,
-        docstring: &str,
-    ) -> Result<(), String> {
-        let name = Self::extract_name::<T>();
-        Type::clone::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add(l))
-            .map_err(|e| e.to_string())
-    }
-
-    /// Register a `Copy` type with a default name
-    ///
-    /// See [`Runtime::register_clone_type`]
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_copy_type<T: Reflect + Copy>(
-        &mut self,
-        docstring: &str,
-    ) -> Result<(), String> {
-        let name = Self::extract_name::<T>();
-        Type::copy::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add(l))
-            .map_err(|e| e.to_string())
-    }
-
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_copy_type_with_name<T: Reflect + Copy>(
-        &mut self,
-        name: &str,
-        docstring: &str,
-    ) -> Result<(), String> {
-        Type::copy::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add(l))
-            .map_err(|e| e.to_string())
-    }
-
-    /// Register a reference type with a given name
-    ///
-    /// This makes the type available for use in Roto. However, Roto will
-    /// only store pointers to this type.
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_clone_type_with_name<T: Reflect + Clone>(
-        &mut self,
-        name: &str,
-        docstring: &str,
-    ) -> Result<(), String> {
-        Type::clone::<T>(name, docstring, roto::location!())
-            .and_then(|l| self.add(l))
-            .map_err(|e| e.to_string())
-    }
-
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_fn<'a, A, R>(
-        &mut self,
-        name: impl AsRef<str>,
-        docstring: impl AsRef<str>,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        let argument_names = argument_names.into_iter().collect();
-        Function::new(
-            name.as_ref(),
-            docstring,
-            argument_names,
-            func,
-            roto::location!(),
-        )
-        .and_then(|l| self.add(l))
-        .map_err(|e| e.to_string())
-    }
-
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_method<'a, T: Reflect, A, R>(
-        &mut self,
-        name: impl AsRef<str>,
-        docstring: impl AsRef<str>,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        let argument_names = argument_names.into_iter().collect();
-        let mut impl_block = Impl::new::<T>(roto::location!());
-
-        Function::new(
-            name.as_ref(),
-            docstring,
-            argument_names,
-            func,
-            roto::location!(),
-        )
-        .and_then(|i| {
-            impl_block.add(i);
-            self.add(impl_block)
-        })
-        .map_err(|e| e.to_string())
-    }
-
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_static_method<'a, T: Reflect, A, R>(
-        &mut self,
-        name: impl AsRef<str>,
-        docstring: impl AsRef<str>,
-        argument_names: impl IntoIterator<Item = &'a str>,
-        func: impl RegisterableFn<A, R>,
-    ) -> Result<(), String> {
-        #[allow(deprecated)]
-        self.register_method::<T, _, _>(name, docstring, argument_names, func)
-    }
-
-    /// Register a new global constant
-    ///
-    /// Constants are shared between function functions. Since functions
-    /// can be send to other threads, the constants must be `Send` and `Sync`.
-    #[deprecated = "use `library!` and `Runtime::add` instead"]
-    pub fn register_constant<T: Reflect>(
-        &mut self,
-        name: impl Into<String>,
-        docstring: &str,
-        x: T,
-    ) -> Result<(), String>
-    where
-        T::Transformed: Send + Sync + 'static,
-    {
-        Constant::new::<T>(name.into(), docstring, x, roto::location!())
-            .and_then(|l| self.add(l))
-            .map_err(|e| e.to_string())
-    }
-
+impl Rt {
     fn declare_modules(
         &mut self,
         scope: Option<ScopeRef>,
@@ -791,6 +748,27 @@ impl Runtime {
                         .unwrap();
                     self.declare_constants(scope, &module.children)?;
                 }
+                Item::Impl(Impl {
+                    ty,
+                    children,
+                    location,
+                }) => {
+                    let ty = self
+                        .types
+                        .iter()
+                        .find(|t| t.type_id == *ty)
+                        .ok_or_else(|| RegistrationError {
+                            message: "Impl block with unregistered type"
+                                .into(),
+                            location: location.clone(),
+                        })?;
+
+                    let scope = ty.name.scope;
+                    let ident = ty.name.ident;
+                    let scope =
+                        self.type_checker.get_scope_of(scope, ident).unwrap();
+                    self.declare_constants(scope, children)?;
+                }
                 Item::Constant(c) => self.declare_constant(scope, c)?,
                 _ => {}
             }
@@ -905,18 +883,6 @@ impl Runtime {
         })
     }
 
-    fn extract_name<T: Reflect>() -> &'static str {
-        let mut name = T::name();
-
-        if let Some((first, _)) = name.split_once('<') {
-            name = first;
-        }
-        if let Some((_, second)) = name.rsplit_once("::") {
-            name = second;
-        }
-        name
-    }
-
     pub fn register_context_type<Ctx: Context + 'static>(
         &mut self,
     ) -> Result<(), String> {
@@ -969,14 +935,16 @@ impl Runtime {
         };
 
         if lexer.next().is_some() {
-            return Err(format!("Name {name:?} contains multiple tokens and is not a valid Roto identifier"));
+            return Err(format!(
+                "Name {name:?} contains multiple tokens and is not a valid Roto identifier"
+            ));
         }
 
         match tok {
             Token::Ident(_) => Ok(()),
-            Token::Keyword(_) => {
-                Err(format!("Name {name:?} is a keyword in Roto and therefore not a valid identifier"))
-            }
+            Token::Keyword(_) => Err(format!(
+                "Name {name:?} is a keyword in Roto and therefore not a valid identifier"
+            )),
             _ => {
                 Err(format!("Name {name:?} is not a valid Roto identifier."))
             }
@@ -991,14 +959,9 @@ impl Runtime {
             )),
         }
     }
-
-    #[cfg(feature = "cli")]
-    pub fn cli(&self) {
-        crate::cli(self)
-    }
 }
 
-impl Default for Runtime {
+impl Default for Runtime<NoCtx> {
     fn default() -> Self {
         Self::new()
     }

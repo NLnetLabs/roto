@@ -29,6 +29,7 @@ default = ["cli"]
 cli = ["clap"]
 logger = ["env_logger"]
 selinux-fix = ["cranelift-jit/selinux-fix"]
+disas = ["cranelift-codegen/disas"]
 
 [dependencies]
 ariadne = "0.5.1"
@@ -40,6 +41,8 @@ log = "0.4"
 roto-macros = { workspace = true }
 symbol_table = { version = "0.4.0", features = ["global"] }
 rustc-literal-escaper = "0.0.4"
+libc = "0.2"
+sealed = "0.6.0"
 
 [dependencies.cranelift]
 version = "0.120.0"
@@ -47,7 +50,6 @@ features = ["frontend", "jit", "module", "native"]
 
 [dependencies.cranelift-codegen]
 version = "0.120.0"
-features = ["disas"]
 
 [dependencies.cranelift-jit]
 version = "0.120.0"
@@ -68,11 +70,11 @@ debug = "full"
 members = ["macros"]
 
 [workspace.package]
-version = "0.8.0"
-edition = "2021"
+version = "0.9.0"
+edition = "2024"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
-rust-version = "1.84"
+rust-version = "1.85"
 description = "strongly-typed, compiled language for Rotonda"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
@@ -82,7 +84,7 @@ categories = ["network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
-roto-macros = { path = "macros", version = "0.8.0" }
+roto-macros = { path = "macros", version = "=0.9.0" }
 proc-macro2 = "1.0.86"
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }

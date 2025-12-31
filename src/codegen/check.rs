@@ -1,13 +1,14 @@
 use inetnum::{addr::Prefix, asn::Asn};
+use sealed::sealed;
 
 use crate::{
-    runtime::ty::{Reflect, TypeDescription, TypeRegistry},
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         scoped_display::TypeDisplay,
         types::{Type, TypeDefinition},
     },
+    value::{TypeDescription, TypeRegistry, Value},
 };
 use std::{
     any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
@@ -42,7 +43,10 @@ impl Display for FunctionRetrievalError {
                 got,
             } => {
                 writeln!(f, "The number of arguments do not match")?;
-                writeln!(f, "The Roto function has {expected} arguments, but the Rust function has {got}.")
+                writeln!(
+                    f,
+                    "The Roto function has {expected} arguments, but the Rust function has {got}."
+                )
             }
             FunctionRetrievalError::TypeMismatch(
                 ctx,
@@ -60,7 +64,7 @@ impl Display for FunctionRetrievalError {
 
 impl std::error::Error for FunctionRetrievalError {}
 
-pub fn check_roto_type_reflect<T: Reflect>(
+pub fn check_roto_type_reflect<T: Value>(
     type_info: &mut TypeInfo,
     roto_ty: &Type,
 ) -> Result<(), TypeMismatch> {
@@ -76,6 +80,7 @@ fn check_roto_type(
 ) -> Result<(), TypeMismatch> {
     // TODO: Convert this to consts when TypeId::of is const on stable
     let BOOL: TypeId = TypeId::of::<bool>();
+    let CHAR: TypeId = TypeId::of::<char>();
     let U8: TypeId = TypeId::of::<u8>();
     let U16: TypeId = TypeId::of::<u16>();
     let U32: TypeId = TypeId::of::<u32>();
@@ -126,6 +131,7 @@ fn check_roto_type(
 
             let expected_name = match rust_ty.type_id {
                 x if x == BOOL => "bool",
+                x if x == CHAR => "char",
                 x if x == U8 => "u8",
                 x if x == U16 => "u16",
                 x if x == U32 => "u32",
@@ -210,18 +216,6 @@ fn check_roto_type(
     }
 }
 
-mod seal {
-    /// A trait that can be used to seal other traits if added as a trait bound.
-    ///
-    /// It lives in a private module, but the name is public. Hence, we can use
-    /// it a bound, but downstream crates can't implement it.
-    ///
-    /// Based on a [blog post] by Predrag Gruevski
-    ///
-    /// [blog post]: https://predr.ag/blog/definitive-guide-to-sealed-traits-in-rust/#sealing-traits-with-a-supertrait
-    pub trait Sealed {}
-}
-
 /// Parameters of a Roto function
 ///
 /// This trait allows for checking the types against Roto types and converting
@@ -234,12 +228,13 @@ mod seal {
 ///
 /// This trait is _sealed_, meaning that it cannot be implemented by downstream
 /// crates.
-pub trait RotoFunc: seal::Sealed {
+#[sealed]
+pub trait RotoFunc {
     /// Argument types of this function
     type Args;
 
     /// Return type of this function
-    type Return: Reflect;
+    type Return: Value;
 
     /// Type of a Roto function with this type using a return pointer
     type RotoWithReturnPointer;
@@ -279,13 +274,12 @@ macro_rules! unit {
 /// Implement the [`RotoParams`] trait for a tuple with some type parameters.
 macro_rules! func {
     (fn($($a:ident),*) -> $r:ident) => {
-        impl<$($a,)* $r> seal::Sealed for fn($($a,)*) -> $r {}
-
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         #[allow(unused_mut)]
+        #[sealed]
         impl<$($a,)* $r> RotoFunc for fn($($a,)*) -> $r
-        where $($a: Reflect,)* $r: Reflect {
+        where $($a: Value,)* $r: Value {
             type Args = ($($a,)*);
             type Return = $r;
 
@@ -315,9 +309,9 @@ macro_rules! func {
 
             unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8, return_by_ref: bool) -> R {
                 let ($($a,)*) = args;
-                let mut transformed = ($(<$a as Reflect>::transform($a),)*);
+                let mut transformed = ($(<$a as Value>::transform($a),)*);
                 let ($($a,)*) = &mut transformed;
-                let ($($a,)*) = ($(<$a as Reflect>::as_param($a),)*);
+                let ($($a,)*) = ($(<$a as Value>::as_param($a),)*);
 
                 // We forget values that we pass into Roto. The script is responsible
                 // for cleaning them op. Forgetting copy types does nothing, but that's
@@ -329,7 +323,7 @@ macro_rules! func {
                     let func_ptr = unsafe {
                         std::mem::transmute::<*const u8, Self::RotoWithReturnPointer>(func_ptr)
                     };
-                    let mut ret = MaybeUninit::<<$r as Reflect>::Transformed>::uninit();
+                    let mut ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
                     func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
                     let transformed_ret = unsafe { ret.assume_init() };
                     let ret: Self::Return = Self::Return::untransform(transformed_ret);
@@ -339,7 +333,7 @@ macro_rules! func {
                         std::mem::transmute::<*const u8, Self::RotoWithoutReturnPointer>(func_ptr)
                     };
                     let ret = func_ptr(ctx as *mut Ctx as *mut (), $($a),*);
-                    <R as Reflect>::untransform(ret)
+                    <R as Value>::untransform(ret)
                 }
             }
         }

@@ -18,6 +18,10 @@ The standalone compiler can be installed using cargo:
 Editor support
 --------------
 
+Here is a list of known third party extensions for adding Roto highlighting to editors:
+
+- `Zed <https://zed.dev/extensions/roto>`__
+
 A tree-sitter grammar for Roto is available in the `tree-sitter-roto repository
 <https://github.com/NLnetLabs/tree-sitter-roto>`__. If your editor supports tree-sitter
 you can install it from that repository.

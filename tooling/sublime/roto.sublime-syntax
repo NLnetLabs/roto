@@ -1,0 +1,141 @@
+%YAML 1.2
+---
+name: Roto
+file_extensions: [roto]
+scope: source.roto
+
+variables:
+  ident: '\b[_\p{XID_Start}][_\p{XID_Continue}]*\b'
+  lower_ident: '\b[[:lower:]][_\p{XID_Continue}]*\b'
+  upper_ident: '\b[[:upper:]][_\p{XID_Continue}]*\b'
+ 
+contexts:
+  main:
+    - include: base
+
+  base:
+    - include: comment
+    - include: block
+    - include: bool
+    - include: type_name
+    - include: function_call
+    - include: function_def
+    - include: keyword
+    - include: number
+    - include: operator
+    - include: punctuation
+    
+    - match: '{{lower_ident}}'
+      scope: variable.other.roto
+
+    - match: '"'
+      push: string
+
+  block:
+    - match: '{'
+      scope: punctuation.section.block.begin.roto
+      push: block_content
+
+  block_content:
+    - include: base
+    - match: '}'
+      scope: punctuation.section.block.end.roto
+      pop: true
+
+  type_name:
+    - match: \b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool)\b
+      scope: storage.type
+
+    - match: '{{upper_ident}}'
+      scope: storage.type
+
+  function_def:
+    - match: '\b(fn)(?:[[:space:]]+({{ident}}))?[[:space:]]*\('
+      captures:
+        1: storage.type.function.roto
+        2: entity.name.function.roto
+      push: function_def_args
+
+  function_def_args:
+    - include: punctuation
+    - include: type_name
+    - match: '({{ident}})[[:space:]]*:'
+      captures:
+        1: variable.parameter.roto
+    - match: \)
+      pop: true
+
+  function_call:
+    - match: '({{lower_ident}})\('
+      captures:
+        1: variable.function.roto
+      push: function_call_args
+
+  function_call_args:
+    - include: base
+    - match: \)
+      pop: true
+
+  keyword:
+    - match: \b(let)\b
+      scope: keyword.declaration.roto
+
+    - match: \b(fn|filter|filtermap|test)\b
+      scope: keyword.declaration.function.roto
+
+    - match: \b(if|else|while|return|accept|reject|match)\b
+      scope: keyword.control.roto
+
+    - match: \b(import)\b
+      scope: keyword.control.import.roto
+
+    - match: \b(record)\b
+      scope: keyword.declaration.struct.roto
+
+  number:
+    - match: '\b[0-9][0-9_]*(\.[0-9]+([eE][+-]?[0-9_]*)?)\b'
+      scope: constant.numeric.float.roto
+
+    - match: '\b[0-9][0-9_]*\b'
+      scope: constant.numeric.integer.roto
+
+  operator:
+    - match: '(<=|>=|==|!=|<|>|<>)'
+      scope: keyword.operator.roto
+    - match: '='
+      scope: keyword.operator.assignment.roto
+    - match: '->'
+      scope: keyword.operator.roto
+    - match: '(\+|\-|/|\*)'
+      scope: keyword.operator.arithmetic.roto
+    - match: '(&&|\|\|)'
+      scope: keyword.operator.logical.roto
+
+  punctuation:
+    - match: '\.'
+      scope: punctuation.accessor.roto
+    - match: ','
+      scope: punctuation.separator.roto
+    - match: ';'
+      scope: punctuation.control.roto
+
+  bool:
+    - match: '\b(true|false)\b'
+      scope: constant.language.roto
+
+  comment:
+    - match: '\#'
+      scope: punctuation.definition.comment.roto
+      push:
+        - meta_scope: comment.line.roto
+        - match: \n
+          pop: true
+
+  string:
+    - meta_scope: string.quoted.double.roto
+
+    - match: '\\.'
+      scope: constant.character.escape.c
+
+    - match: '"'
+      pop: true

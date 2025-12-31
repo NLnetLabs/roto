@@ -3,7 +3,7 @@
 use crate::{
     ast::Identifier,
     parser::meta::Meta,
-    runtime::{layout::Layout, RuntimeFunctionRef},
+    runtime::{RuntimeFunctionRef, layout::Layout},
     typechecker::scope::ScopeRef,
 };
 use core::fmt;
@@ -27,8 +27,20 @@ impl Type {
         Type::named("bool", Vec::new())
     }
 
+    pub fn char() -> Type {
+        Type::named("char", Vec::new())
+    }
+
     pub fn u8() -> Type {
         Type::named("u8", Vec::new())
+    }
+
+    pub fn i32() -> Type {
+        Type::named("i32", Vec::new())
+    }
+
+    pub fn f64() -> Type {
+        Type::named("f64", Vec::new())
     }
 
     pub fn string() -> Type {
@@ -121,6 +133,7 @@ pub enum Primitive {
     Int(IntKind, IntSize),
     Float(FloatSize),
     String,
+    Char,
     Bool,
     Asn,
     IpAddr,
@@ -231,6 +244,27 @@ impl TypeDefinition {
         }
         Some(new_variants)
     }
+
+    pub fn record_fields(
+        &self,
+        type_args: &[Type],
+    ) -> Option<Vec<(Meta<Identifier>, Type)>> {
+        let TypeDefinition::Record(type_name, fields) = self else {
+            return None;
+        };
+
+        assert_eq!(type_name.arguments.len(), type_args.len());
+
+        let subs: Vec<_> =
+            type_name.arguments.iter().zip(type_args).collect();
+
+        Some(
+            fields
+                .iter()
+                .map(|(ident, ty)| (ident.clone(), ty.substitute_many(&subs)))
+                .collect(),
+        )
+    }
 }
 
 impl EnumVariant {
@@ -290,6 +324,7 @@ impl Display for Primitive {
                 Primitive::Float(size) => format!("f{}", size.int()),
                 Primitive::String => "String".into(),
                 Primitive::Bool => "bool".into(),
+                Primitive::Char => "char".into(),
                 Primitive::Asn => "Asn".into(),
                 Primitive::IpAddr => "IpAddr".into(),
                 Primitive::Prefix => "Prefix".into(),
@@ -319,7 +354,7 @@ impl TypeDisplay for Type {
 
         let ty = type_info.resolve_ref(self);
         match ty {
-            Type::Var(_) => write!(f, "_"),
+            Type::Var(x) => write!(f, "@{x}"),
             Type::ExplicitVar(s) => write!(f, "{s}"),
             Type::IntVar(_, MustBeSigned::Yes) => {
                 write!(f, "{{signed integer}}")
@@ -493,6 +528,7 @@ impl Primitive {
                 Layout::new(bytes, bytes)
             }
             Bool => Layout::new(1, 1),
+            Char => Layout::of::<char>(),
             Asn => Layout::new(4, 4),
             String => Layout::of::<Arc<str>>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
@@ -559,6 +595,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         ("f32", Float(FloatSize::F32)),
         ("f64", Float(FloatSize::F64)),
         ("bool", Bool),
+        ("char", Char),
         ("String", String),
         ("Asn", Asn),
         ("IpAddr", IpAddr),
@@ -572,7 +609,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         types.push((name, "".into(), TypeDefinition::Primitive(p)))
     }
 
-    struct Enum {
+    struct VariantType {
         name: &'static str,
         doc: &'static str,
         params: Vec<&'static str>,
@@ -580,7 +617,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     }
 
     let compound_types = vec![
-        Enum {
+        VariantType {
             name: "Option",
             doc: "An optional value.",
             params: vec!["T"],
@@ -589,7 +626,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
                 ("None", vec![]),
             ],
         },
-        Enum {
+        VariantType {
             name: "Verdict",
             doc: "The verdict that a filter reaches about a value, that is, whether to accept or reject it.",
             params: vec!["A", "R"],
@@ -600,7 +637,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         },
     ];
 
-    for Enum {
+    for VariantType {
         name,
         doc,
         params,

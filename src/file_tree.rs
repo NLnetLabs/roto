@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{Package, RotoError, RotoReport, Runtime};
+use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptCtx};
 
 fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
     RotoReport {
@@ -26,6 +26,14 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
+    pub fn name(&self) -> String {
+        if self.location_offset > 0 {
+            format!("{}@{}", self.name, self.location_offset)
+        } else {
+            self.name.clone()
+        }
+    }
+
     pub fn read(path: &Path) -> Result<Self, RotoReport> {
         Self::read_internal(path).map_err(|e| read_error(path, e))
     }
@@ -68,7 +76,10 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    pub fn compile(self, rt: &Runtime) -> Result<Package, RotoReport> {
+    pub fn compile<Ctx: OptCtx>(
+        self,
+        rt: &Runtime<Ctx>,
+    ) -> Result<Package<Ctx>, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
         let pkg = checked.lower_to_mir().lower_to_lir().codegen();
         Ok(pkg)

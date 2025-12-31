@@ -112,9 +112,10 @@ impl Printable for Instruction {
             Return { var: value } => {
                 format!("return {}", value.print(printer))
             }
-            Drop { val, ty: _ } => {
+            Drop { val, ty } => {
+                let ty = ty.display(printer.type_info);
                 let val = val.print(printer);
-                format!("drop({val})")
+                format!("drop[{ty}]({val})")
             }
         }
     }
@@ -236,6 +237,7 @@ impl Printable for Literal {
     fn print(&self, _printer: &IrPrinter) -> String {
         match self {
             Literal::String(str) => str.into(),
+            Literal::Char(c) => c.to_string(),
             Literal::Asn(asn) => asn.to_string(),
             Literal::IpAddress(ip) => ip.to_string(),
             Literal::Integer(i) => i.to_string(),

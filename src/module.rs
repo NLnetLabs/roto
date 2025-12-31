@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    FileTree, RotoError, RotoReport,
     ast::{self, Identifier},
     parser::{
-        meta::{Meta, Span, Spans},
         Parser,
+        meta::{Meta, Span, Spans},
     },
-    FileTree, RotoError, RotoReport,
 };
 
 pub struct Parsed {

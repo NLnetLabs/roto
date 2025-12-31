@@ -75,7 +75,7 @@ Additionally, we have the following conventions:
 
 - The names of local variables, modules, functions and function arguments
   should use ``snake_case``, i.e. should be all lowercase with words separated by ``_``.
-- The names of types and enum variants should use ``PascalCase``, i.e. should
+- The names of types and variant constructors should use ``PascalCase``, i.e. should
   have each word capitalized. The exceptions are the primitive boolean, integer
   and floating point types.
 - The names of constants should use ``SCREAMING_SNAKE_CASE``, i.e. should be all uppercase
@@ -483,10 +483,9 @@ The pattern is separated from the associated expression with ``->``. The arms
 should be separated with commas, unless the expression is a block, i.e., when
 it is wrapped in ``{}``.
 
-The current implementation of this feature is very limited: you can only
-match against ``enum`` types and only match against the variant, not against
-the contents of the variant. Since you can't create your own ``enum``
-types, matching is limited to ``Option`` and ``Verdict``. See `issue 124
+The current implementation of this feature is very limited: you
+can only match against ``variant`` types and only match against the
+constructor, not against the contents of the constructor.  See `issue 124
 <https://github.com/NLnetLabs/roto/issues/124>`_ for the status on these
 limitations.
 
@@ -505,10 +504,10 @@ limitations.
     If you are used to Rust, be aware that Roto uses ``->`` instead of ``=>`` to
     separate the pattern from the expression.
 
-    Another difference to be aware of is that Roto currently doesn't use the
-    full path to the ``enum`` variant, but only the name. So ``Option.None`` is not
-    allowed as a pattern, but ``None`` is. This will probably change once ``match``
-    expressions become more general.
+    Another difference to be aware of is that Roto currently doesn't use
+    the full path to the ``variant`` constructor, but only the name. So
+    ``Option.None`` is not allowed as a pattern, but ``None`` is. This will
+    probably change once ``match`` expressions become more general.
     
 
 .. _lang_while:
@@ -705,7 +704,7 @@ yield more readable type checking errors.
 
 .. code-block:: roto
 
-    type SomeRecord {
+    record SomeRecord {
         foo: i32,
         bar: bool,
     }
@@ -723,6 +722,60 @@ There is an automatic coercion from anonymous records to named records:
     fn foo(int: i32) -> SomeRecord {
         { foo: int, bar: false }  # implicitly coerced to SomeRecord
     }
+
+.. _lang_variant_type:
+
+Variant types
+-------------
+
+Another kind of custom type in Roto are ``variant`` types. These types have a
+set of constructors and values of these types are always constructed using one
+of these. Each of the constructors can take arguments. To inspect ``variant``
+types, we can ``match`` on them.
+
+.. code-block:: roto
+
+    # A `Number` variant type that has the constructors `Int`, `Float` and `Nan`.
+    variant Number {
+        Int(i32),
+        Float(f32),
+        Nan,
+    }
+
+    fn use_number() {
+        let x = Number.Int(10);
+        let y = Number.Float(21.5),
+        let z = Number.Nan;
+
+        match x {
+            Int(i) => print(f"int: {i}"),
+            Float(f) => print(f"float: {f}"),
+            Nan => print(f"nan!"),
+        }
+    }
+
+Variant types can be generic over other types by taking type parameters.
+
+.. code-block:: roto
+
+    variant Either[L, R] {
+        Left(L),
+        Right(R),
+    }
+
+    fn to_string(x: Either[i32, String]) -> String {
+        match x {
+            Left(i) -> f"{i}",
+            Right(s) -> s,
+        }
+    }
+
+.. note::
+    If you're familiar with Rust, ``variant`` types are just ``enum`` with another name.
+    Or, for the functional programmers, ``variant`` types are algebraic data types.
+
+.. note::
+    Variant types are also used to model optional values. See :ref:`lang_optionals`.
 
 Modules
 -------
@@ -861,9 +914,9 @@ has optional values. The type of an optional value is written ``T?``, which is
 shorthand for ``Option[T]``. For example, an optional ``u32`` is ``u32?``, or
 equivalently, ``Option[u32]``.
 
-The ``Option`` type is an enum with 2 variants: ``None`` and ``Some``. A value
-of ``T?`` is constructed with either ``Option.None`` or ``Option.Some(t)`` where
-``t`` is a value of type ``T``.
+The ``Option`` type is a ``variant`` type with 2 constructors: ``None`` and
+``Some``. A value of ``T?`` is constructed with either ``Option.None`` or
+``Option.Some(t)`` where ``t`` is a value of type ``T``.
 
 Like any enum it is possible to match on a value of type ``T?``
 

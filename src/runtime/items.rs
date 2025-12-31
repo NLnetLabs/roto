@@ -1,15 +1,15 @@
 use std::any::TypeId;
 
+use crate::value::TypeDescription;
 use crate::{
+    Location, Value,
     ast::Identifier,
     runtime::{
+        CloneDrop, ConstantValue, Movability, RegistrationError, Rt,
         extern_clone, extern_drop,
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
-        ty::TypeDescription,
-        CloneDrop, ConstantValue, Movability, RegistrationError,
     },
-    Location, Reflect, Runtime,
 };
 
 /// A registerable item
@@ -131,7 +131,7 @@ impl Module {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         Ok(Self {
             ident: name,
@@ -195,7 +195,7 @@ impl Type {
     ///
     /// Type::clone::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
     /// ```
-    pub fn clone<T: Reflect + Clone>(
+    pub fn clone<T: Value + Clone>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -207,7 +207,7 @@ impl Type {
         Self::new::<T>(name, doc, movability, location)
     }
 
-    /// A type implementing `Clone`.
+    /// A type implementing `Copy`.
     ///
     /// The `name` must be a valid Roto identifier. The `doc` parameter is the
     /// docstring that will be displayed in the documentation that Roto can
@@ -223,7 +223,7 @@ impl Type {
     ///
     /// Type::copy::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
     /// ```
-    pub fn copy<T: Reflect + Copy>(
+    pub fn copy<T: Value + Copy>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -232,7 +232,7 @@ impl Type {
     }
 
     /// For internal use only, might lead to unexpected behaviour if used incorrectly
-    pub(crate) fn value<T: Reflect + Copy>(
+    pub(crate) fn value<T: Value + Copy>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -240,14 +240,14 @@ impl Type {
         Self::new::<T>(name, doc, Movability::Value, location)
     }
 
-    fn new<T: Reflect>(
+    fn new<T: Value>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         movability: Movability,
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let ty = T::resolve();
 
@@ -341,7 +341,7 @@ impl Function {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let func = FunctionDescription::of(func);
 
@@ -401,7 +401,7 @@ impl Constant {
     ///     location!(),
     /// ).unwrap();
     /// ```
-    pub fn new<T: Reflect>(
+    pub fn new<T: Value>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         val: T,
@@ -411,7 +411,7 @@ impl Constant {
         T::Transformed: Send + Sync + 'static,
     {
         let name = name.into();
-        Runtime::check_name(&location, name)?;
+        Rt::check_name(&location, name)?;
 
         let ty = T::resolve();
 
@@ -459,7 +459,7 @@ impl Impl {
     /// let mut impl_u32 = Impl::new::<u32>(location!());
     /// impl_u32.add(library! { /* more items */ });
     /// ```
-    pub fn new<T: Reflect>(location: Location) -> Self {
+    pub fn new<T: Value>(location: Location) -> Self {
         let ty = T::resolve();
         Self {
             ty: ty.type_id,

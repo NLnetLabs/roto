@@ -3,7 +3,8 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use crate::{
-    tools::print::print_highlighted, FileTree, RotoError, RotoReport, Runtime,
+    FileTree, RotoError, RotoReport, Runtime, runtime::OptCtx,
+    tools::print::print_highlighted,
 };
 
 #[derive(Parser)]
@@ -55,7 +56,7 @@ enum Command {
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
 ///  - `run`: run a function of a script
-pub fn cli(rt: &Runtime) {
+pub fn cli(rt: &Runtime<impl OptCtx>) {
     match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
@@ -65,26 +66,34 @@ pub fn cli(rt: &Runtime) {
     }
 }
 
-fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
+fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
     let cli = Cli::parse();
 
     match &cli.command {
         Command::Doc { path } => {
-            rt.print_documentation(path).unwrap();
+            rt.rt.print_documentation(path).unwrap();
         }
         Command::Check { file } => {
             FileTree::read(file)?.parse()?.typecheck(rt)?;
             println!("All ok!")
         }
         Command::Test { file } => {
+            let Some(rt) = rt.clone().try_without_ctx() else {
+                eprintln!("Can only run tests on a Runtime without Context");
+                return Err(RotoReport {
+                    errors: vec![RotoError::TestsFailed()],
+                    ..Default::default()
+                });
+            };
+
             let mut p = FileTree::read(file)?
                 .parse()?
-                .typecheck(rt)?
+                .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
                 .codegen();
 
-            if let Err(()) = p.run_tests(()) {
+            if let Err(()) = p.run_tests() {
                 return Err(RotoReport {
                     errors: vec![RotoError::TestsFailed()],
                     ..Default::default()
@@ -92,21 +101,27 @@ fn cli_inner(rt: &Runtime) -> Result<(), RotoReport> {
             }
         }
         Command::Run { file, function } => {
+            let Some(rt) = rt.clone().try_without_ctx() else {
+                return Err(RotoReport {
+                    errors: vec![RotoError::Custom("Can only run a script with a Runtime without Context".into())],
+                    ..Default::default()
+                });
+            };
+
             let mut p = FileTree::read(file)?
                 .parse()?
-                .typecheck(rt)?
+                .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
                 .codegen();
 
-            let f = p.get_function::<(), fn()>(function).map_err(|e| {
-                RotoReport {
+            let f =
+                p.get_function::<fn()>(function).map_err(|e| RotoReport {
                     errors: vec![RotoError::CouldNotRetrieveFunction(e)],
                     ..Default::default()
-                }
-            })?;
+                })?;
 
-            f.call(&mut ())
+            f.call()
         }
         Command::Print { file } => {
             let s = std::fs::read_to_string(file).unwrap();

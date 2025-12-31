@@ -1,6 +1,7 @@
-mod clone_drop;
+mod clones;
+mod drops;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
@@ -9,9 +10,8 @@ use crate::{
     lir::IrValue,
     mir,
     runtime::{
-        init_string,
+        Rt, RuntimeFunctionRef, init_string,
         layout::{Layout, LayoutBuilder},
-        RuntimeFunctionRef,
     },
     typechecker::{
         info::TypeInfo,
@@ -22,12 +22,11 @@ use crate::{
             TypeDefinition,
         },
     },
-    Runtime,
 };
 
 use super::{
-    value::IrType, Block, FloatCmp, Function, Instruction, IntCmp, Lir,
-    Operand, Signature, ValueOrSlot, Var, VarKind,
+    Block, FloatCmp, Function, Instruction, IntCmp, Lir, Operand, Signature,
+    ValueOrSlot, Var, VarKind, value::IrType,
 };
 
 pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
@@ -35,10 +34,15 @@ pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
 }
 
 pub struct LowerCtx<'c> {
-    pub runtime: &'c Runtime,
+    pub runtime: &'c Rt,
     pub type_info: &'c mut TypeInfo,
     pub label_store: &'c mut LabelStore,
     pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,
+
+    /// Drop functions to generate at the end of lowering
+    pub drops_to_generate: VecDeque<Type>,
+    /// Clone functions to generate at the end of lowering
+    pub clones_to_generate: VecDeque<Type>,
 }
 
 struct Lowerer<'c, 'r> {
@@ -73,13 +77,24 @@ impl Lowerer<'_, '_> {
         let mut functions = Vec::new();
 
         for function in mir.functions {
-            functions.push(Self::function(ctx, function));
+            if let Some(f) = Self::function(ctx, function) {
+                functions.push(f);
+            }
         }
+
+        let clone_functions = Self::generate_clones(ctx);
+        functions.extend(clone_functions);
+
+        let drop_functions = Self::generate_drops(ctx);
+        functions.extend(drop_functions);
 
         Lir { functions }
     }
 
-    fn function(ctx: &mut LowerCtx<'_>, function: mir::Function) -> Function {
+    fn function(
+        ctx: &mut LowerCtx<'_>,
+        function: mir::Function,
+    ) -> Option<Function> {
         let return_type = function.signature.return_type.clone();
         let mut lowerer = Lowerer {
             ctx,
@@ -91,6 +106,20 @@ impl Lowerer<'_, '_> {
         };
         let name = function.name;
         let signature = function.signature;
+
+        // All parameters must be inhabited. If they aren't then we can skip
+        // lowering this entire function.
+        signature
+            .parameter_types
+            .iter()
+            .map(|ty| {
+                lowerer
+                    .ctx
+                    .type_info
+                    .layout_of(ty, lowerer.ctx.runtime)
+                    .map(|_| ())
+            })
+            .collect::<Option<()>>()?;
 
         lowerer.variables = function
             .variables
@@ -105,23 +134,17 @@ impl Lowerer<'_, '_> {
                 }
 
                 let lir_v = lowerer.var(v.clone());
-                let Some(is_reference_type) = lowerer.is_reference_type(&ty)
-                else {
-                    ice!("Need an inhabited type");
-                };
+                let is_reference_type = lowerer.is_reference_type(&ty)?;
                 let var_type = if is_reference_type {
                     // Parameters don't need a slot because they already
                     // live somewhere.
                     if function.parameters.contains(v) {
                         ValueOrSlot::Val(IrType::Pointer)
                     } else {
-                        let Some(layout) = lowerer
+                        let layout = lowerer
                             .ctx
                             .type_info
-                            .layout_of(&ty, lowerer.ctx.runtime)
-                        else {
-                            ice!("Need an inhabited type");
-                        };
+                            .layout_of(&ty, lowerer.ctx.runtime)?;
                         ValueOrSlot::StackSlot(layout)
                     }
                 } else {
@@ -161,7 +184,7 @@ impl Lowerer<'_, '_> {
             return_type: return_ir_type,
         };
 
-        Function {
+        Some(Function {
             name,
             blocks: lowerer.blocks,
             variables: lowerer.variables,
@@ -170,7 +193,7 @@ impl Lowerer<'_, '_> {
             ir_signature,
             entry_block,
             public: true,
-        }
+        })
     }
 
     fn block(&mut self, block: mir::Block) {
@@ -219,7 +242,7 @@ impl Lowerer<'_, '_> {
                 self.emit_constant_address(ptr_var.clone(), name);
 
                 if let Some(to) = to {
-                    self.clone_place(
+                    self.call_clone_of(
                         to,
                         Location::Pointer {
                             base: ptr_var,
@@ -239,7 +262,7 @@ impl Lowerer<'_, '_> {
                     offset: x,
                 };
                 if let Some(to) = to {
-                    self.clone_place(to, from, &ty);
+                    self.call_clone_of(to, from, &ty);
                 }
                 return;
             }
@@ -261,7 +284,7 @@ impl Lowerer<'_, '_> {
             mir::Value::Clone(place) => {
                 let from = self.location(place, ty.clone());
                 if let (Some(to), Some(from)) = (to, from) {
-                    self.clone_place(to, from, &ty);
+                    self.call_clone_of(to, from, &ty);
                 }
                 return;
             }
@@ -402,8 +425,7 @@ impl Lowerer<'_, '_> {
                 self.emit_assign(to, val, ir_ty);
             }
             Location::Pointer { base, offset } => {
-                let to = self.offset(base.into(), offset as u32);
-
+                let to = self.offset(base, offset as u32);
                 match self.is_reference_type(ty) {
                     Some(true) => {
                         let size = self
@@ -412,57 +434,11 @@ impl Lowerer<'_, '_> {
                             .layout_of(ty, self.ctx.runtime)
                             .unwrap()
                             .size();
-                        self.emit_memcpy(to, val, size as u32);
+                        self.emit_memcpy(to.into(), val, size as u32);
                     }
-                    Some(false) => self.emit_write(to, val),
+                    Some(false) => self.emit_write(to.into(), val),
                     None => {}
                 }
-            }
-        }
-    }
-
-    fn clone_place(&mut self, to: Location, from: Location, ty: &Type) {
-        match (to, from) {
-            // This is a not-by-reference type so we'll just assign it.
-            (Location::Var(to), Location::Var(from)) => {
-                let Some(ty) = self.lower_type(ty) else {
-                    return;
-                };
-                self.emit(Instruction::Assign {
-                    to,
-                    val: from.into(),
-                    ty,
-                })
-            }
-            // We read a not-by-reference type from a field
-            (Location::Var(to), Location::Pointer { base, offset }) => {
-                let Some(ty) = self.lower_type(ty) else {
-                    return;
-                };
-                let from = self.offset(base.into(), offset as u32);
-                self.emit_read(to, from, ty)
-            }
-            // We write a not-by-reference type to a field
-            (Location::Pointer { base, offset }, Location::Var(from)) => {
-                let Some(_ty) = self.lower_type(ty) else {
-                    return;
-                };
-                let to = self.offset(base.into(), offset as u32);
-                self.emit_write(to, from.into());
-            }
-            (
-                Location::Pointer {
-                    base: base_to,
-                    offset: offset_to,
-                },
-                Location::Pointer {
-                    base: base_from,
-                    offset: offset_from,
-                },
-            ) => {
-                let from = self.offset(base_from.into(), offset_from as u32);
-                let to = self.offset(base_to.into(), offset_to as u32);
-                self.clone_type(from, to, ty);
             }
         }
     }
@@ -543,12 +519,19 @@ impl Lowerer<'_, '_> {
 
         let fields = match res_ty {
             Type::Name(name) => {
-                let TypeDefinition::Record(_, fields) =
+                let TypeDefinition::Record(type_name, fields) =
                     self.ctx.type_info.resolve_type_name(&name)
                 else {
                     ice!()
                 };
+
+                let subs: Vec<_> =
+                    type_name.arguments.iter().zip(&name.arguments).collect();
+
                 fields
+                    .into_iter()
+                    .map(|(ident, ty)| (ident, ty.substitute_many(&subs)))
+                    .collect()
             }
             Type::Record(fields) | Type::RecordVar(_, fields) => fields,
             _ => {
@@ -663,8 +646,8 @@ impl Lowerer<'_, '_> {
         match var {
             Location::Var(_var) => {}
             Location::Pointer { base, offset } => {
-                let op = self.offset(base.into(), offset as u32);
-                self.drop_type(op, ty);
+                let op = self.offset(base, offset as u32);
+                self.call_drop_of(op.into(), &ty);
             }
         };
     }
@@ -695,6 +678,7 @@ impl Lowerer<'_, '_> {
 
                 to.into()
             }
+            Literal::Char(c) => IrValue::Char(*c).into(),
             Literal::Asn(n) => IrValue::Asn(*n).into(),
             Literal::IpAddress(addr) => {
                 const LAYOUT: Layout = Primitive::IpAddr.layout();
@@ -713,7 +697,7 @@ impl Lowerer<'_, '_> {
             Literal::Integer(x) => {
                 match ty {
                     Type::IntVar(_, _) => {
-                        return Some(IrValue::I32(*x as i32).into())
+                        return Some(IrValue::I32(*x as i32).into());
                     }
                     Type::Name(type_name) => {
                         if let TypeDefinition::Primitive(Primitive::Int(
@@ -746,7 +730,7 @@ impl Lowerer<'_, '_> {
             Literal::Float(x) => {
                 match ty {
                     Type::FloatVar(_) => {
-                        return Some(IrValue::F64(*x).into())
+                        return Some(IrValue::F64(*x).into());
                     }
                     Type::Name(type_name) => {
                         if let TypeDefinition::Primitive(Primitive::Float(
@@ -903,34 +887,6 @@ impl Lowerer<'_, '_> {
             return to.into();
         }
 
-        if binop == ast::BinOp::Eq {
-            let size = self
-                .ctx
-                .type_info
-                .layout_of(&ty, self.ctx.runtime)
-                .map_or(0, |l| l.size());
-
-            if size == 0 {
-                return Operand::Value(IrValue::Bool(true));
-            }
-
-            let tmp = self.new_tmp(IrType::Pointer);
-            let out = self.new_tmp(IrType::Bool);
-            self.emit(Instruction::MemCmp {
-                to: tmp.clone(),
-                size: IrValue::Pointer(size).into(),
-                left: left.clone(),
-                right: right.clone(),
-            });
-            self.emit(Instruction::IntCmp {
-                to: out.clone(),
-                cmp: IntCmp::Eq,
-                left: tmp.into(),
-                right: IrValue::Pointer(0).into(),
-            });
-            return out.into();
-        }
-
         ice!("Could not lower binop")
     }
 }
@@ -1010,17 +966,17 @@ impl Lowerer<'_, '_> {
         self.blocks.last().unwrap().label
     }
 
-    fn offset(&mut self, var: Operand, offset: u32) -> Operand {
+    fn offset(&mut self, var: Var, offset: u32) -> Var {
         if offset == 0 {
             var
         } else {
             let new = self.new_tmp(IrType::Pointer);
             self.emit(Instruction::Offset {
                 to: new.clone(),
-                from: var,
+                from: var.into(),
                 offset,
             });
-            new.into()
+            new
         }
     }
 
@@ -1082,6 +1038,7 @@ impl Lowerer<'_, '_> {
                         Primitive::Float(F32) => IrType::F32,
                         Primitive::Float(F64) => IrType::F64,
                         Primitive::Asn => IrType::U32,
+                        Primitive::Char => IrType::U32,
                         Primitive::Bool => IrType::Bool,
                         _ => break 'prim,
                     });

@@ -15,25 +15,23 @@ use crate::{
     label::{LabelRef, LabelStore},
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
-    runtime::RuntimeFunctionRef,
+    runtime::{Rt, RuntimeFunctionRef},
     typechecker::{
-        self,
+        self, PathValue, ResolvedPath,
         info::TypeInfo,
         scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
         scoped_display::TypeDisplay,
         types::{
             EnumVariant, FunctionDefinition, Signature, Type, TypeDefinition,
         },
-        PathValue, ResolvedPath,
     },
-    Runtime,
 };
 
 pub struct Lowerer<'r> {
     function_scope: ScopeRef,
     tmp_idx: usize,
     blocks: Vec<Block>,
-    runtime: &'r Runtime,
+    runtime: &'r Rt,
     type_info: &'r mut TypeInfo,
     label_store: &'r mut LabelStore,
     return_type: Type,
@@ -50,7 +48,7 @@ pub struct Lowerer<'r> {
 
 pub fn lower_to_mir(
     tree: &ModuleTree,
-    runtime: &Runtime,
+    runtime: &Rt,
     type_info: &mut TypeInfo,
     label_store: &mut LabelStore,
 ) -> Mir {
@@ -61,7 +59,7 @@ pub fn lower_to_mir(
 
 impl<'r> Lowerer<'r> {
     fn new(
-        runtime: &'r Runtime,
+        runtime: &'r Rt,
         type_info: &'r mut TypeInfo,
         function_name: &Meta<Identifier>,
         label_store: &'r mut LabelStore,
@@ -129,7 +127,7 @@ impl<'r> Lowerer<'r> {
 
     /// Lower a syntax tree
     fn tree(
-        runtime: &Runtime,
+        runtime: &Rt,
         type_info: &mut TypeInfo,
         tree: &ModuleTree,
         label_store: &mut LabelStore,
@@ -693,7 +691,6 @@ impl<'r> Lowerer<'r> {
         };
 
         let ty = self.type_info.type_of(expr);
-        let tmp = self.tmp(ty.clone());
 
         let to = Var {
             scope: name.scope,
@@ -710,6 +707,7 @@ impl<'r> Lowerer<'r> {
         };
 
         let val = self.expr(expr);
+        let tmp = self.tmp(ty.clone());
         self.do_assign(Place::new(tmp.clone(), ty.clone()), ty.clone(), val);
 
         self.emit_drop(place.clone(), ty.clone());
@@ -734,6 +732,10 @@ impl<'r> Lowerer<'r> {
 
         if l_ty == Type::ip_addr() {
             return self.binop_ip_addr(l, binop, r);
+        }
+
+        if l_ty == Type::prefix() {
+            return self.binop_prefix(l, binop, r);
         }
 
         if *binop == ast::BinOp::And {
@@ -839,6 +841,27 @@ impl<'r> Lowerer<'r> {
         }
     }
 
+    fn binop_prefix(
+        &mut self,
+        l: &Meta<ast::Expr>,
+        binop: &ast::BinOp,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        let type_id = TypeId::of::<Prefix>();
+        match binop {
+            ast::BinOp::Eq => self.desugared_binop(
+                type_id,
+                "eq",
+                Type::bool(),
+                (l, Type::prefix()),
+                (r, Type::prefix()),
+            ),
+            _ => {
+                ice!("Operator {binop} is not implemented for Prefix")
+            }
+        }
+    }
+
     fn binop_and(
         &mut self,
         l: &Meta<ast::Expr>,
@@ -876,7 +899,7 @@ impl<'r> Lowerer<'r> {
         let lbl_cont = self.label_store.next(current_label);
         let lbl_other = self
             .label_store
-            .wrap_internal(current_label, Identifier::from("and_other"));
+            .wrap_internal(current_label, Identifier::from("or_other"));
 
         let val = self.expr(l);
         let tmp = self.assign_to_var(val, Type::bool());

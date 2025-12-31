@@ -210,14 +210,6 @@ pub enum Instruction {
         /// Pointer to the drop implementation of the type
         drop: Option<unsafe extern "C" fn(*mut ())>,
     },
-
-    /// Compare chunks of memory
-    MemCmp {
-        to: Var,
-        size: Operand,
-        left: Operand,
-        right: Operand,
-    },
 }
 
 #[derive(Clone, Debug)]

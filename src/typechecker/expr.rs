@@ -7,12 +7,14 @@ use crate::{
     ice,
     parser::meta::{Meta, MetaId},
     typechecker::{
+        Obligation,
         scope::DeclarationKind,
         types::{MustBeSigned, Primitive},
     },
 };
 
 use super::{
+    TypeChecker, TypeResult,
     scope::{
         Declaration, ResolvedName, ScopeRef, ScopeType, TypeOrStub, ValueKind,
     },
@@ -20,7 +22,6 @@ use super::{
         EnumVariant, Function, FunctionDefinition, Signature, Type,
         TypeDefinition, TypeName,
     },
-    TypeChecker, TypeResult,
 };
 
 /// The context for type checking expressions
@@ -103,9 +104,7 @@ impl TypeChecker {
         self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
 
         for stmt in &block.stmts {
-            if diverged {
-                return Err(self.error_unreachable_expression(stmt));
-            }
+            // TODO: emit message for diverging statements
             diverged |= self.stmt(scope, ctx, stmt)?;
         }
 
@@ -123,11 +122,7 @@ impl TypeChecker {
             return Ok(diverged);
         };
 
-        // Here we have a last expression but the previous expressions diverged
-        // that makes this expression unreachable.
-        if diverged {
-            return Err(self.error_unreachable_expression(expr));
-        }
+        // TODO: emit message for diverging statements
         diverged |= self.expr(scope, ctx, expr)?;
 
         // Store the same type info on the block as on the expression
@@ -329,49 +324,44 @@ impl TypeChecker {
                 self.record_fields(scope, ctx, field_types, record, id)
             }
             TypedRecord(path, record) => {
-                let last_ident = path.idents.last().unwrap();
-                let type_name = self.resolve_type_path(scope, path, &[])?;
-                let ty = self.resolve_type(&type_name);
+                let mut idents = path.idents.iter();
+                let (ident, declaration) =
+                    self.resolve_module_part_of_path(scope, &mut idents)?;
 
-                let Type::Name(type_name) = &ty else {
-                    return Err(self.error_simple(
-                        format!(
-                            "Expected a named record type, but found `{last_ident}`"
-                        ),
-                        "not a named record type",
-                        last_ident.id,
-                    ));
-                };
-
-                let type_def = self.type_info.resolve_type_name(type_name);
-
-                let TypeDefinition::Record(_, record_fields) = &type_def
+                let DeclarationKind::Type(TypeOrStub::Type(type_def)) =
+                    &declaration.kind
                 else {
                     return Err(self.error_simple(
                         format!(
-                            "Expected a named record type, but found `{last_ident}`"
+                            "Expected a record type, but found `{ident}`"
                         ),
-                        "not a named record type",
-                        last_ident.id,
+                        "not a record type",
+                        ident.id,
+                    ));
+                };
+
+                let ty = type_def.instantiate(|| self.fresh_var());
+                let Type::Name(type_name) = &ty else { ice!() };
+                let Some(instantiated_fields) =
+                    type_def.record_fields(&type_name.arguments)
+                else {
+                    return Err(self.error_simple(
+                        format!(
+                            "Expected a record type, but found `{ident}`"
+                        ),
+                        "not a record type",
+                        ident.id,
                     ));
                 };
 
                 let diverges = self.record_fields(
                     scope,
                     ctx,
-                    record_fields.clone(),
+                    instantiated_fields,
                     record,
                     id,
                 )?;
 
-                // Infer the type based on the given expression
-                let field_types: Vec<_> = record
-                    .fields
-                    .iter()
-                    .map(|(s, _)| (s.clone(), self.fresh_var()))
-                    .collect();
-                let rec = self.fresh_record(field_types);
-                self.unify(&ctx.expected_type, &rec, id, None)?;
                 self.unify(&ctx.expected_type, &ty, id, None)?;
 
                 Ok(diverges)
@@ -533,49 +523,17 @@ impl TypeChecker {
                             let ctx = ctx.with_type(ty.clone());
                             diverges |= self.expr(scope, &ctx, expr)?;
 
-                            // But that type needs a `to_string` method
-                            let res = self.get_method(
-                                &ty,
-                                &Meta {
-                                    id: MetaId(0),
-                                    node: "to_string".into(),
+                            // But that type needs a `to_string` method, which
+                            // we are going to try to resolve later.
+                            self.obligations.push(
+                                Obligation::ResolveMethod {
+                                    id: part.id,
+                                    receiver: ty.clone(),
+                                    ident: "to_string".into(),
+                                    parameter_types: vec![ty.clone()],
+                                    return_type: Type::string(),
                                 },
                             );
-
-                            match res {
-                                Some(function) => {
-                                    let sig = &function.signature;
-                                    let mut correct = true;
-                                    correct &= sig.parameter_types.len() == 1;
-                                    correct &= self
-                                        .unify(
-                                            &ty,
-                                            &sig.parameter_types[0],
-                                            expr.id,
-                                            None,
-                                        )
-                                        .is_ok();
-                                    correct &= self
-                                        .unify(
-                                            &sig.return_type,
-                                            &Type::string(),
-                                            expr.id,
-                                            None,
-                                        )
-                                        .is_ok();
-                                    if !correct {
-                                        return Err(self.error_simple("the `to_string` method of this type does not have the right signature", "does not have a valid `to_string` method", expr.id));
-                                    }
-                                    self.type_info
-                                        .function_calls
-                                        .insert(part.id, function);
-                                }
-                                None => return Err(self.error_simple(
-                                    "type does not have a `to_string` method",
-                                    "does not have a `to_string` method",
-                                    expr.id,
-                                )),
-                            }
                         }
                     }
                 }
@@ -595,6 +553,7 @@ impl TypeChecker {
 
         let t = match lit.node {
             String(_) => Type::string(),
+            Char(_) => Type::char(),
             Asn(_) => Type::asn(),
             IpAddress(_) => Type::ip_addr(),
             Bool(_) => Type::bool(),
@@ -881,19 +840,18 @@ impl TypeChecker {
 
                 let ty = self.resolve_type(&ctx.expected_type);
                 let comparable = match ty {
-                    Type::IntVar(_, _)
-                    | Type::Never
-                    | Type::Record(..)
-                    | Type::RecordVar(..) => true,
+                    // TODO: Is never really comparable?
+                    Type::IntVar(_, _) | Type::FloatVar(_) | Type::Never => {
+                        true
+                    }
+                    Type::Record(..) | Type::RecordVar(..) => false,
                     Type::Name(type_name) => {
                         let type_def =
                             self.type_info.resolve_type_name(&type_name);
-                        match type_def {
-                            TypeDefinition::Enum(_, _)
-                            | TypeDefinition::Record(_, _)
-                            | TypeDefinition::Primitive(_) => true,
-                            TypeDefinition::Runtime(_, _) => false,
-                        }
+
+                        // This could be relaxed in the future but we only
+                        // support comparing primitives now.
+                        matches!(type_def, TypeDefinition::Primitive(_))
                     }
                     _ => false,
                 };
@@ -954,7 +912,7 @@ impl TypeChecker {
         })
     }
 
-    fn get_method(
+    pub(super) fn get_method(
         &mut self,
         ty: &Type,
         method: &Meta<Identifier>,
@@ -1187,6 +1145,10 @@ impl TypeChecker {
             DeclarationKind::Type(_) => {
                 Err(self.error_expected_value(ident, &dec))
             }
+            // A type param is not a valid value
+            DeclarationKind::TypeParam(_) => {
+                Err(self.error_expected_value(ident, &dec))
+            }
             // We ended on a function, which means there can be no identifiers left
             DeclarationKind::Function(Some(func_dec))
             | DeclarationKind::Method(Some(func_dec)) => {
@@ -1255,7 +1217,7 @@ impl TypeChecker {
                     fields,
                 }))
             }
-            DeclarationKind::Variant(ty, variant) => {
+            DeclarationKind::Variant(Some((ty, variant))) => {
                 if let Some(_field) = idents.next() {
                     todo!("make a nice error for variant cannot have field")
                 }
@@ -1264,7 +1226,8 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
-            DeclarationKind::Function(None)
+            DeclarationKind::Variant(None)
+            | DeclarationKind::Function(None)
             | DeclarationKind::Method(None) => {
                 ice!("These should be declared at this point")
             }
@@ -1288,6 +1251,19 @@ impl TypeChecker {
             | DeclarationKind::Variant(..)
             | DeclarationKind::Module => {
                 Err(self.error_expected_type(ident, declaration))
+            }
+            DeclarationKind::TypeParam(ident) => {
+                if !params.is_empty() {
+                    return Err(self.error_simple(
+                        format!(
+                            "expected 0 type parameters, got {}",
+                            params.len()
+                        ),
+                        "expected 0 type parameters".to_string(),
+                        path.id,
+                    ));
+                }
+                Ok(Type::ExplicitVar(ident))
             }
             DeclarationKind::Type(type_or_stub) => {
                 let num_params = match type_or_stub {
@@ -1328,16 +1304,13 @@ impl TypeChecker {
     ) -> TypeResult<Type> {
         let ty = self.type_info.resolve(ty);
 
-        let type_def;
+        let fields_vec;
         let fields = match &ty {
             Type::Record(fields) | Type::RecordVar(_, fields) => Some(fields),
             Type::Name(name) => {
-                type_def = self.type_info.resolve_type_name(name);
-                if let TypeDefinition::Record(_, fields) = &type_def {
-                    Some(fields)
-                } else {
-                    None
-                }
+                let type_def = self.type_info.resolve_type_name(name);
+                fields_vec = type_def.record_fields(&name.arguments);
+                fields_vec.as_ref()
             }
             _ => None,
         };
@@ -1391,9 +1364,7 @@ impl TypeChecker {
                 variant,
             } => {
                 let ty = type_def.instantiate(|| self.fresh_var());
-                let Type::Name(type_name) = &ty else {
-                    unreachable!()
-                };
+                let Type::Name(type_name) = &ty else { ice!() };
 
                 let original_name = type_def.type_name();
                 let subs: Vec<_> = original_name

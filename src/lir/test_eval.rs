@@ -1,10 +1,15 @@
 use std::sync::Arc;
 
 use super::{eval::Memory, value::IrValue};
-use crate::{library, pipeline::LoweredToLir, src, FileTree, Runtime};
+use crate::{
+    FileTree, Runtime, library, pipeline::LoweredToLir, runtime::OptCtx, src,
+};
 
 #[track_caller]
-fn compile(s: FileTree, rt: &Runtime) -> LoweredToLir<'_> {
+fn compile<Ctx: OptCtx>(
+    s: FileTree,
+    rt: &Runtime<Ctx>,
+) -> LoweredToLir<'_, Ctx> {
     // We run this multiple times and only want to init the
     // first time, so ignore failures.
     #[cfg(feature = "logger")]
@@ -290,7 +295,7 @@ fn anonymous_record() {
 fn typed_record() {
     let s = src!(
         "
-        type Range {
+        record Range {
             low: u32,
             high: u32,
         }
@@ -330,8 +335,8 @@ fn typed_record() {
 fn nested_record() {
     let s = src!(
         "
-        type Foo { x: Bar, y: Bar }
-        type Bar { a: i32, b: i32 }
+        record Foo { x: Bar, y: Bar }
+        record Bar { a: i32, b: i32 }
 
         filtermap main(x: i32) {
             let bar = Bar { a: 20, b: x };

@@ -13,12 +13,27 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        rust: [1.84.0, stable, beta, nightly]
+        rust: [1.85.0, stable, beta, nightly]
 
         # Test with no features, default features ("") and all features.
         # Ordered fewest features to most features.
         args: ["--no-default-features", "", "--all-features"]
+
+        include:
+          # Run all variations on x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-gnu
+
+          # Run a static build on x86_64-unknown-linux-musl for stable Rust
+          # only to save some cycles.
+          - target: x86_64-unknown-linux-musl
+            rust: stable
     steps:
+    - name: Run apt-get update
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      run: sudo apt-get update
+    - name: Install musl
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      run: sudo apt-get install -y musl-dev
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
@@ -27,12 +42,9 @@ jobs:
       uses: hecrj/setup-rust-action@v1
       with:
         rust-version: ${{ matrix.rust }}
-    # - if: matrix.rust == 'stable'
-    #   run: rustup component add clippy
-    # - if: matrix.rust == 'stable'
-    #   run: cargo clippy -- -D warnings
-    - run: cargo build --verbose ${{ matrix.args }}
-    - run: cargo test --verbose ${{ matrix.args }}
+        targets: ${{ matrix.target }}
+    - run: cargo build --target=${{ matrix.target }} --verbose ${{ matrix.args }}
+    - run: cargo test --target=${{ matrix.target }} --verbose ${{ matrix.args }}
   valgrind:
     name: Test with Valgrind
     runs-on: ${{ matrix.os }}

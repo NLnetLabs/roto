@@ -1,11 +1,11 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
 
-use crate::{library, Library};
+use crate::{Library, Val, library};
 
 macro_rules! int_docs {
     ($t:ty) => {&{
@@ -141,6 +141,12 @@ fn ip_addr_methods() -> Library {
             fn to_canonical(self) -> IpAddr {
                 self.to_canonical()
             }
+
+            /// The IPv4 address pointing to localhost: `127.0.0.1`
+            const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);
+
+            /// The IPv6 address pointing to localhost: `::1`
+            const LOCALHOSTV6: IpAddr = IpAddr::from(Ipv6Addr::LOCALHOST);
         }
     }
 }
@@ -274,6 +280,12 @@ pub fn built_ins() -> Library {
         #[value]
         type f64 = f64;
 
+        /// A character in a `String`
+        ///
+        /// A `char` represents a Unicode code point.
+        #[value]
+        type char = char;
+
         /// An ASN: an Autonomous System Number
         ///
         /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32).
@@ -341,6 +353,7 @@ pub fn built_ins() -> Library {
         include!(to_string_impl!(i64));
         include!(to_string_impl!(f32));
         include!(to_string_impl!(f64));
+        include!(to_string_impl!(char));
         include!(to_string_impl!(IpAddr));
         include!(to_string_impl!(Prefix));
         include!(to_string_impl!(Asn));
@@ -360,17 +373,73 @@ pub fn built_ins() -> Library {
             /// 192.169.0.0 / 16
             /// ```
             fn new(ip: IpAddr, len: u8) -> Prefix {
-                Prefix::new(ip, len).unwrap()
+                Prefix::new_relaxed(ip, len).unwrap()
+            }
+
+            /// Returns the IP address part of a prefix.
+            fn addr(self) -> IpAddr {
+                self.addr()
+            }
+
+            /// Returns the smallest address of the prefix.
+            ///
+            /// This is the same as `Prefix.addr`.
+            fn min_addr(self) -> IpAddr {
+                self.min_addr()
+            }
+
+            /// Returns the largest address of the prefix.
+            fn max_addr(self) -> IpAddr {
+                self.max_addr()
+            }
+
+            /// Returns the length part of a prefix.
+            fn len(self) -> u8 {
+                self.len()
+            }
+
+            /// Check whether those prefixes are the same
+            fn eq(self, other: Self) -> bool {
+                self == other
             }
         }
 
         include!(ip_addr_methods());
         include!(string_methods());
 
-        /// The IPv4 address pointing to localhost: `127.0.0.1`
-        const LOCALHOSTV4: IpAddr = IpAddr::from(Ipv4Addr::LOCALHOST);
+        /// A mutable string type
+        ///
+        /// It is possible to mutate this type in place, allowing for faster
+        /// manipulation. In particular, adding `char`s or `String` to the end
+        /// of this type is much cheaper than using `+` or `String.append`.
+        #[clone] type StringBuf = Val<Arc<Mutex<String>>>;
 
-        /// The IPv6 address pointing to localhost: `::1`
-        const LOCALHOSTV6: IpAddr = IpAddr::from(Ipv6Addr::LOCALHOST);
+        impl Val<Arc<Mutex<String>>> {
+            /// Create a new empty `StringBuf`
+            fn new() -> Self {
+                Val(Default::default())
+            }
+
+            /// Create a `StringBuf` with an initial `String`
+            fn from(s: Arc<str>) -> Self {
+                Val(Arc::new(Mutex::new(s.as_ref().to_owned())))
+            }
+
+            /// Add a `char` to the end of this `StringBuf`
+            fn push_char(self, c: char) {
+                self.lock().unwrap().push(c);
+            }
+
+            /// Add a `String` to the end of this `StringBuf`
+            fn push_string(self, s: Arc<str>) {
+                self.lock().unwrap().push_str(&s);
+            }
+
+            /// Get the underlying `String` of this `StringBuf`
+            fn as_string(self) -> Arc<str> {
+                let s = self.lock().unwrap();
+                (&**s).into()
+            }
+        }
     }
 }

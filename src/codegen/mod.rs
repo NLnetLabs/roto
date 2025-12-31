@@ -4,40 +4,36 @@
 //! then does the rest.
 
 use std::{
-    any::{type_name, Any, TypeId},
-    collections::HashMap,
-    marker::PhantomData,
-    mem::ManuallyDrop,
-    sync::Arc,
+    any::Any, collections::HashMap, ffi::c_void, fmt::Debug,
+    marker::PhantomData, mem::ManuallyDrop, sync::Arc,
 };
 
 use crate::{
+    Runtime,
     ast::Identifier,
     ice,
     label::{LabelRef, LabelStore},
     lir::{
-        self, value::IrType, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind,
+        self, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind, value::IrType,
     },
     runtime::{
-        context::ContextDescription, ty::Reflect, ConstantValue,
-        RuntimeConstant, RuntimeFunctionRef,
+        ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
+        RuntimeFunctionRef, context::Context,
     },
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         types,
     },
-    Runtime,
+    value::Value,
 };
-use check::{
-    check_roto_type_reflect, FunctionRetrievalError, RotoFunc, TypeMismatch,
-};
+use check::{FunctionRetrievalError, RotoFunc, check_roto_type_reflect};
 use cranelift::{
     codegen::{
         entity::EntityRef,
         ir::{
-            condcodes::IntCC, types::*, AbiParam, Block, InstBuilder,
-            MemFlags, StackSlotData, StackSlotKind, Value,
+            self, AbiParam, Block, InstBuilder, MemFlags, StackSlotData,
+            StackSlotKind, condcodes::IntCC, types::*,
         },
         isa::TargetIsa,
         settings::{self, Configurable as _},
@@ -51,7 +47,7 @@ use cranelift::{
     prelude::{FloatCC, Signature},
 };
 use cranelift_codegen::ir::{SigRef, StackSlot};
-use log::info;
+use libc::size_t;
 
 pub mod check;
 pub mod testing;
@@ -120,7 +116,7 @@ impl SharedModuleData {
 }
 
 // Just a simple debug to print _something_.
-impl std::fmt::Debug for SharedModuleData {
+impl Debug for SharedModuleData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("SharedModuleData").finish()
     }
@@ -130,17 +126,17 @@ unsafe impl Send for ModuleData {}
 unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
-pub struct Module {
+pub struct Module<C: OptCtx> {
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
-
-    context_description: ContextDescription,
 
     /// The inner cranelift module
     inner: SharedModuleData,
 
     /// Info from the typechecker for checking types against Rust types
     type_info: TypeInfo,
+
+    _ctx: PhantomData<C>,
 }
 
 /// A function extracted from Roto
@@ -149,7 +145,7 @@ pub struct Module {
 /// [`Package::get_function`](crate::Package::get_function).
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TypedFunc<Ctx, F> {
     func: *const u8,
     return_by_ref: bool,
@@ -162,47 +158,75 @@ pub struct TypedFunc<Ctx, F> {
     _ty: PhantomData<(Ctx, F)>,
 }
 
+impl<Ctx, F> Debug for TypedFunc<Ctx, F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypedFunc")
+            .field("func", &self.func)
+            .finish()
+    }
+}
+
 /// SAFETY: These implementations are safe because we don't modify anything
 /// the pointer points to and the pointer will stay valid as long as we hold
 /// on to the `ModuleData`, which is stored in the `TypedFunc`.
 unsafe impl<Ctx, F> Send for TypedFunc<Ctx, F> {}
 unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 
-impl<Ctx: 'static, F: RotoFunc> TypedFunc<Ctx, F> {
-    pub fn call_tuple(&self, ctx: &mut Ctx, args: F::Args) -> F::Return {
-        unsafe { F::invoke::<Ctx>(ctx, args, self.func, self.return_by_ref) }
+impl<C: OptCtx, F: RotoFunc> TypedFunc<C, F> {
+    pub fn call_tuple(&self, ctx: &mut C::Ctx, args: F::Args) -> F::Return {
+        unsafe {
+            F::invoke::<C::Ctx>(ctx, args, self.func, self.return_by_ref)
+        }
     }
 }
 
 macro_rules! call_impl {
     ($($ty:ident),*) => {
-        impl<Ctx: 'static, $($ty,)* Return> TypedFunc<Ctx, fn($($ty,)*) -> Return>
+        impl<$($ty,)* Return> TypedFunc<NoCtx, fn($($ty,)*) -> Return>
         where
-            $($ty: Reflect,)*
-            Return: Reflect
+            $($ty: Value,)*
+            Return: Value
         {
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
-            pub fn call(&self, ctx: &mut Ctx, $($ty: $ty,)*) -> Return {
+            pub fn call(&self, $($ty: $ty,)*) -> Return {
+                self.call_tuple(&mut NoCtx, ($($ty,)*))
+            }
+
+            #[allow(non_snake_case)]
+            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
+                move |$($ty,)*| self.call($($ty,)*)
+            }
+        }
+
+        impl<C: Context, $($ty,)* Return> TypedFunc<Ctx<C>, fn($($ty,)*) -> Return>
+        where
+            $($ty: Value,)*
+            Return: Value
+        {
+            #[allow(non_snake_case)]
+            #[allow(clippy::too_many_arguments)]
+            pub fn call(&self, ctx: &mut C, $($ty: $ty,)*) -> Return {
                 self.call_tuple(ctx, ($($ty,)*))
             }
 
             #[allow(non_snake_case)]
-            pub fn into_func(self) -> impl Fn(&mut Ctx, $($ty,)*) -> Return {
+            pub fn into_func(self) -> impl Fn(&mut C, $($ty,)*) -> Return {
                 move |ctx, $($ty,)*| self.call(ctx, $($ty,)*)
             }
         }
-    }
+
+     }
 }
 
 call_impl!();
-call_impl!(A);
-call_impl!(A, B);
-call_impl!(A, B, C);
-call_impl!(A, B, C, D);
-call_impl!(A, B, C, D, E);
-call_impl!(A, B, C, D, E, F);
-call_impl!(A, B, C, D, E, F, G);
+call_impl!(A1);
+call_impl!(A1, A2);
+call_impl!(A1, A2, A3);
+call_impl!(A1, A2, A3, A4);
+call_impl!(A1, A2, A3, A4, A5);
+call_impl!(A1, A2, A3, A4, A5, A6);
+call_impl!(A1, A2, A3, A4, A5, A7, A8);
 
 pub struct FunctionInfo {
     id: FuncId,
@@ -248,8 +272,6 @@ struct ModuleBuilder {
 
     /// Signature to use for calls to `init_string`
     init_string_signature: Signature,
-
-    context_description: ContextDescription,
 }
 
 struct FuncGen<'c> {
@@ -279,14 +301,15 @@ struct FuncGen<'c> {
 // point, or at least be configurable.
 const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
-pub fn codegen(
-    runtime: &Runtime,
+pub fn codegen<Ctx: OptCtx>(
+    runtime: &Runtime<Ctx>,
     ir: &[lir::Function],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
-    context_description: ContextDescription,
-) -> Module {
+) -> Module<Ctx> {
+    let runtime = &runtime.rt;
+
     // The ISA is the Instruction Set Architecture. We always compile for
     // the system we run on, so we use `cranelift_native` to get the ISA
     // for the current system. We enable building for speed only. Size is
@@ -301,6 +324,21 @@ pub fn codegen(
         cranelift::module::default_libcall_names(),
     );
 
+    // This is a fix for cranelift not finding the memcpy libcall when it is
+    // compiled with static linking (e.g. with musl).
+    //
+    // We might need to add more symbols in the future, but for now, this passes
+    // the tests.
+    builder.symbol(
+        "memcpy",
+        libc::memcpy
+            as unsafe extern "C" fn(
+                *mut c_void,
+                *const c_void,
+                size_t,
+            ) -> *mut c_void as *const u8,
+    );
+
     for func_ref in runtime_functions.keys() {
         let f = runtime.get_function(*func_ref);
         builder.symbol(
@@ -311,26 +349,17 @@ pub fn codegen(
 
     let jit = JITModule::new(builder);
 
+    let pointer_ty = AbiParam::new(isa.pointer_type());
     let mut drop_signature = jit.make_signature();
-    drop_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
+    drop_signature.params.push(pointer_ty);
 
     let mut clone_signature = jit.make_signature();
-    clone_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
-    clone_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
+    clone_signature.params.push(pointer_ty);
+    clone_signature.params.push(pointer_ty);
 
     let mut init_string_signature = jit.make_signature();
-    init_string_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
-    init_string_signature
-        .params
-        .push(AbiParam::new(isa.pointer_type()));
+    init_string_signature.params.push(pointer_ty);
+    init_string_signature.params.push(pointer_ty);
     init_string_signature
         .params
         .push(AbiParam::new(cranelift::codegen::ir::types::I32));
@@ -348,7 +377,6 @@ pub fn codegen(
         drop_signature,
         clone_signature,
         init_string_signature,
-        context_description,
     };
 
     for constant in runtime.constants().values() {
@@ -558,18 +586,22 @@ impl ModuleBuilder {
 
         self.inner.define_function(func_id, &mut ctx).unwrap();
 
-        let capstone = self.isa.to_capstone().unwrap();
-        info!(
-            "\n{}",
-            ctx.compiled_code()
-                .unwrap()
-                .disassemble(None, &capstone)
-                .unwrap()
-        );
+        #[cfg(feature = "disas")]
+        {
+            use log::info;
+            let capstone = self.isa.to_capstone().unwrap();
+            info!(
+                "\n{}",
+                ctx.compiled_code()
+                    .unwrap()
+                    .disassemble(None, &capstone)
+                    .unwrap()
+            );
+        }
         self.inner.clear_context(&mut ctx);
     }
 
-    fn finalize(mut self) -> Module {
+    fn finalize<Ctx: OptCtx>(mut self) -> Module<Ctx> {
         self.inner.finalize_definitions().unwrap();
         Module {
             functions: self.functions,
@@ -579,7 +611,7 @@ impl ModuleBuilder {
                 self.registered_fns,
             ),
             type_info: self.type_info,
-            context_description: self.context_description,
+            _ctx: PhantomData,
         }
     }
 
@@ -588,7 +620,7 @@ impl ModuleBuilder {
         match ty {
             IrType::Bool | IrType::U8 | IrType::I8 => I8,
             IrType::U16 | IrType::I16 => I16,
-            IrType::U32 | IrType::I32 | IrType::Asn => I32,
+            IrType::U32 | IrType::I32 | IrType::Asn | IrType::Char => I32,
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
@@ -1002,28 +1034,6 @@ impl<'c> FuncGen<'c> {
                     );
                 }
             }
-            lir::Instruction::MemCmp {
-                to,
-                size,
-                left,
-                right,
-            } => {
-                let (left, _) = self.operand(left);
-                let (right, _) = self.operand(right);
-                let (size, _) = self.operand(size);
-
-                // We could pass more precise alignment to cranelift, but
-                // values of 1 should just work.
-                let val = self.builder.call_memcmp(
-                    self.module.isa.frontend_config(),
-                    left,
-                    right,
-                    size,
-                );
-
-                let var = self.variable(to, I32);
-                self.def(var, val);
-            }
             lir::Instruction::ConstantAddress { to, name } => {
                 let ty = self.module.cranelift_type(&IrType::Pointer);
                 let const_ptr = self.module.constants.get(name).unwrap();
@@ -1087,11 +1097,11 @@ impl<'c> FuncGen<'c> {
     }
 
     /// Define a variable with a value
-    fn def(&mut self, var: Variable, val: Value) {
+    fn def(&mut self, var: Variable, val: ir::Value) {
         self.builder.def_var(var, val);
     }
 
-    fn operand(&mut self, val: &Operand) -> (Value, Type) {
+    fn operand(&mut self, val: &Operand) -> (ir::Value, Type) {
         match val {
             lir::Operand::Place(p) => {
                 let (var, ty) = self.module.variable_map.get(p).map_or_else(
@@ -1137,6 +1147,7 @@ impl<'c> FuncGen<'c> {
             IrValue::I32(x) => (I32, *x as i64),
             IrValue::I64(x) => (I64, *x),
             IrValue::Asn(x) => (I32, x.into_u32() as i64),
+            IrValue::Char(x) => (I32, *x as u32 as i64),
             IrValue::Pointer(x) => (pointer_ty, *x as i64),
             _ => return None,
         })
@@ -1163,7 +1174,12 @@ impl<'c> FuncGen<'c> {
         var
     }
 
-    fn int_cmp(&mut self, left: Value, right: Value, op: &IntCmp) -> Value {
+    fn int_cmp(
+        &mut self,
+        left: ir::Value,
+        right: ir::Value,
+        op: &IntCmp,
+    ) -> ir::Value {
         let cc = match op {
             IntCmp::Eq => IntCC::Equal,
             IntCmp::Ne => IntCC::NotEqual,
@@ -1181,10 +1197,10 @@ impl<'c> FuncGen<'c> {
 
     fn float_cmp(
         &mut self,
-        left: Value,
-        right: Value,
+        left: ir::Value,
+        right: ir::Value,
         op: &FloatCmp,
-    ) -> Value {
+    ) -> ir::Value {
         let cc = match op {
             FloatCmp::Eq => FloatCC::Equal,
             FloatCmp::Ne => FloatCC::NotEqual,
@@ -1197,8 +1213,8 @@ impl<'c> FuncGen<'c> {
     }
 }
 
-impl Module {
-    pub fn get_function<Ctx: 'static, F: RotoFunc>(
+impl<Ctx: OptCtx> Module<Ctx> {
+    pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
@@ -1212,16 +1228,6 @@ impl Module {
 
         let sig = &function_info.signature;
         let id = function_info.id;
-
-        if self.context_description.type_id != TypeId::of::<Ctx>() {
-            return Err(FunctionRetrievalError::TypeMismatch(
-                "context type".into(),
-                TypeMismatch {
-                    rust_ty: type_name::<Ctx>().into(),
-                    roto_ty: self.context_description.type_name.into(),
-                },
-            ));
-        }
 
         F::check_args(&mut self.type_info, &sig.parameter_types)?;
 
