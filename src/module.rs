@@ -60,7 +60,7 @@ impl Parsed {
             let ast = match Parser::parse(i, &mut spans, &file.contents) {
                 Ok(ast) => ast,
                 Err(err) => {
-                    errors.push(RotoError::Parse(err));
+                    errors.push(RotoError::Parse(*err));
                     continue;
                 }
             };

@@ -5,8 +5,11 @@
 //! There is currently no way that the parser can recover from invalid syntax.
 //! Therefore, we can only report one parse error.
 
-use crate::ast::{
-    Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
+use crate::{
+    ast::{
+        Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
+    },
+    parser::error::Hint,
 };
 use error::ParseErrorKind;
 use token::{Keyword, Lexer, Token};
@@ -26,7 +29,7 @@ mod test_expressions;
 #[cfg(test)]
 mod test_sections;
 
-type ParseResult<T> = Result<T, ParseError>;
+type ParseResult<T> = Result<T, Box<ParseError>>;
 
 pub struct Parser<'source, 'spans> {
     file: usize,
@@ -47,12 +50,16 @@ impl<'source> Parser<'source, '_> {
                     self.file_length..self.file_length,
                 ),
                 note: None,
-            }),
+                hints: Vec::new(),
+            }
+            .into()),
             Some((Err(()), span)) => Err(ParseError {
                 kind: ParseErrorKind::InvalidToken,
                 location: Span::new(self.file, span),
                 note: None,
-            }),
+                hints: Vec::new(),
+            }
+            .into()),
             Some((Ok(token), span)) => {
                 Ok((token, Span::new(self.file, span)))
             }
@@ -92,7 +99,7 @@ impl<'source> Parser<'source, '_> {
         if next == token {
             Ok(span)
         } else {
-            Err(ParseError::expected(token, next, span))
+            Err(ParseError::expected(token, next, span).into())
         }
     }
 
@@ -167,13 +174,39 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             lexer: Lexer::new(input),
             spans,
         };
-        let out = parser(&mut p)?;
+        let out = match parser(&mut p) {
+            Ok(out) => out,
+            Err(mut err) => {
+                if let Some(almost_keyword) = p.lexer.almost_keyword {
+                    let ident = almost_keyword.0;
+                    let range = almost_keyword.1;
+
+                    let location = Span {
+                        file,
+                        start: range.start,
+                        end: range.end,
+                    };
+
+                    let text = match almost_keyword.2 {
+                        Some(suggestion) => format!(
+                            "`{ident}` is not a valid keyword. You probably meant `{suggestion}`."
+                        ),
+                        None => format!("`{ident}` is not a valid keyword."),
+                    };
+
+                    err.hints.push(Hint { location, text })
+                }
+                return Err(err);
+            }
+        };
         if let Some((_, s)) = p.lexer.next() {
             return Err(ParseError {
                 kind: ParseErrorKind::FailedToParseEntireInput,
                 location: Span::new(file, s),
                 note: None,
-            });
+                hints: Vec::new(),
+            }
+            .into());
         }
         Ok(out)
     }
@@ -201,6 +234,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
                 self.file_length..self.file_length,
             ),
             note: None,
+            hints: Vec::new(),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
             Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
@@ -225,7 +259,8 @@ impl<'source, 'spans> Parser<'source, 'spans> {
                     "a function, filter, filtermap or import",
                     token,
                     span,
-                ));
+                )
+                .into());
             }
         };
         Ok(expr)
@@ -287,14 +322,15 @@ impl Parser<'_, '_> {
                 );
                 let err = ParseError::expected("an identifier", &token, span)
                     .with_note(note);
-                return Err(err);
+                return Err(err.into());
             }
             _ => {
                 return Err(ParseError::expected(
                     "an identifier",
                     token,
                     span,
-                ));
+                )
+                .into());
             }
         };
         let ident = Identifier::from(ident);
