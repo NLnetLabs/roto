@@ -31,7 +31,7 @@ impl<C: OptCtx> TestCase<C> {
 pub(crate) fn get_tests<Ctx: OptCtx>(
     module: &mut Module<Ctx>,
 ) -> impl Iterator<Item = TestCase<Ctx>> + use<'_, Ctx> {
-    let tests: Vec<_> = module
+    let mut tests: Vec<_> = module
         .functions
         .keys()
         .filter(|x| {
@@ -41,6 +41,8 @@ pub(crate) fn get_tests<Ctx: OptCtx>(
         })
         .map(Clone::clone)
         .collect();
+
+    tests.sort();
 
     tests.into_iter().map(|name| {
         TestCase::new(
