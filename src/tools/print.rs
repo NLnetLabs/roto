@@ -43,6 +43,7 @@ pub fn print_highlighted(s: &str) {
             | Token::Eq
             | Token::EqEq
             | Token::Hyphen
+            | Token::HyphenHyphen
             | Token::Period
             | Token::Pipe
             | Token::PipePipe
@@ -50,6 +51,8 @@ pub fn print_highlighted(s: &str) {
             | Token::QuestionMark
             | Token::SemiColon
             | Token::Slash
+            | Token::SlashSlash
+            | Token::SlashStar
             | Token::Star
             | Token::AngleLeft
             | Token::AngleRight

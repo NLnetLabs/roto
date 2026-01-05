@@ -5,6 +5,8 @@ use std::{fmt::Display, ops::ControlFlow};
 
 use unicode_ident::{is_xid_continue, is_xid_start};
 
+use crate::ast::Identifier;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token<'s> {
     Ident(&'s str),
@@ -21,6 +23,7 @@ pub enum Token<'s> {
     Eq,
     EqEq,
     Hyphen,
+    HyphenHyphen,
     Period,
     Pipe,
     PipePipe,
@@ -28,6 +31,8 @@ pub enum Token<'s> {
     QuestionMark,
     SemiColon,
     Slash,
+    SlashSlash,
+    SlashStar,
     Star,
 
     // === Delimiters ===
@@ -98,6 +103,8 @@ pub struct Lexer<'a> {
     input: &'a str,
     original_length: usize,
     peeked: Option<(Result<Token<'a>, ()>, Range<usize>)>,
+    pub almost_keyword:
+        Option<(Identifier, Range<usize>, Option<&'static str>)>,
 }
 
 impl<'a> Lexer<'a> {
@@ -139,6 +146,7 @@ impl<'s> Lexer<'s> {
             input,
             original_length: input.len(),
             peeked: None,
+            almost_keyword: None,
         }
     }
 
@@ -204,6 +212,12 @@ impl<'s> Lexer<'s> {
             [b'>', b'='] => Token::AngleRightEq,
             [b'<', b'='] => Token::AngleLeftEq,
             [b'-', b'>'] => Token::Arrow,
+
+            // These are added for better diagnostics
+            [b'/', b'/'] => Token::SlashSlash,
+            [b'/', b'*'] => Token::SlashStar,
+            [b'-', b'-'] => Token::HyphenHyphen,
+
             _ => return ControlFlow::Continue(()),
         };
 
@@ -554,9 +568,35 @@ impl<'s> Lexer<'s> {
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
             "false" => return ControlFlow::Break((Token::Bool(false), span)),
-            x => return ControlFlow::Break((Token::Ident(x), span)),
+            x => {
+                self.record_almost_keyword(x, span.clone());
+                return ControlFlow::Break((Token::Ident(x), span));
+            }
         };
         ControlFlow::Break((Token::Keyword(kw), span))
+    }
+
+    fn record_almost_keyword(&mut self, x: &str, span: Range<usize>) {
+        let suggestion = match x {
+            "for" => None,
+            "loop" => None,
+            "enum" => Some("variant"),
+            "struct" => Some("record"),
+            "class" => Some("record"),
+            "data" => Some("record"),
+            "use" => Some("import"),
+            "switch" => Some("match"),
+            "var" => Some("let"),
+            "local" => Some("let"),
+            "function" => Some("fn"),
+            "fun" => Some("fn"),
+            "func" => Some("fn"),
+            "def" => Some("fn"),
+            _ => return,
+        };
+
+        let ident = Identifier::from(x);
+        self.almost_keyword = Some((ident, span, suggestion));
     }
 }
 
@@ -577,6 +617,7 @@ impl Display for Token<'_> {
             Token::Eq => "=",
             Token::EqEq => "==",
             Token::Hyphen => "-",
+            Token::HyphenHyphen => "--",
             Token::Period => ".",
             Token::Pipe => "|",
             Token::PipePipe => "||",
@@ -584,6 +625,8 @@ impl Display for Token<'_> {
             Token::QuestionMark => "?",
             Token::SemiColon => ";",
             Token::Slash => "/",
+            Token::SlashSlash => "//",
+            Token::SlashStar => "/*",
             Token::Star => "*",
 
             // Delimiters

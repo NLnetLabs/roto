@@ -1,0 +1,14 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/parse_errors/struct.roto
+---
+Error: Parse error: expected a function, filter, filtermap or import but got 'struct'
+   ╭─[ tests/scripts/parse_errors/struct.roto:1:1 ]
+   │
+ 1 │ struct Foo {
+   │ ───┬──  
+   │    ╰──── expected a function, filter, filtermap or import
+   │    │    
+   │    ╰──── `struct` is not a valid keyword. You probably meant `record`.
+───╯

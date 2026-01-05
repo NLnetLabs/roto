@@ -1,0 +1,3 @@
+function foo(x: i32) {
+    print(x);
+}

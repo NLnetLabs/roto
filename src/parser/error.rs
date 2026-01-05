@@ -9,6 +9,13 @@ pub struct ParseError {
     pub location: Span,
     pub kind: ParseErrorKind,
     pub note: Option<String>,
+    pub hints: Vec<Hint>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Hint {
+    pub location: Span,
+    pub text: String,
 }
 
 impl ParseError {
@@ -24,6 +31,7 @@ impl ParseError {
             },
             location: span,
             note: None,
+            hints: Vec::new(),
         }
     }
 
@@ -41,6 +49,7 @@ impl ParseError {
             },
             location: span,
             note: None,
+            hints: Vec::new(),
         }
     }
 
@@ -53,6 +62,7 @@ impl ParseError {
             },
             location: span,
             note: None,
+            hints: Vec::new(),
         }
     }
 
@@ -68,6 +78,7 @@ impl ParseError {
             },
             location: span,
             note: None,
+            hints: Vec::new(),
         }
     }
 
@@ -178,6 +189,21 @@ impl ParseErrorKind {
                 format!("invalid {description}")
             }
             Self::Custom { label, .. } => label.clone(),
+        }
+    }
+}
+
+impl ParseErrorKind {
+    pub fn hint(&self) -> Option<String> {
+        match self {
+            ParseErrorKind::Expected { got, .. } => {
+                if got == "//" || got == "/*" || got == "--" {
+                    Some(format!("`Use `#` for comments instead of `{got}`"))
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }
