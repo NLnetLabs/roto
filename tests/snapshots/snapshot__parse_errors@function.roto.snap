@@ -1,0 +1,14 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/parse_errors/function.roto
+---
+Error: Parse error: expected a function, filter, filtermap or import but got 'function'
+   ╭─[ tests/scripts/parse_errors/function.roto:1:1 ]
+   │
+ 1 │ function foo(x: i32) {
+   │ ────┬───  
+   │     ╰───── expected a function, filter, filtermap or import
+   │     │     
+   │     ╰───── `function` is not a valid keyword. You probably meant `fn`.
+───╯
