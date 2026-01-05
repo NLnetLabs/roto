@@ -140,6 +140,10 @@ impl RotoReport {
                     .with_message(format!("Parse error: {}", error))
                     .with_label(label);
 
+                    if let Some(hint) = error.kind.hint() {
+                        report = report.with_help(hint);
+                    }
+
                     for hint in &error.hints {
                         let label = Label::new((
                             self.filename(hint.location),

@@ -23,6 +23,7 @@ pub enum Token<'s> {
     Eq,
     EqEq,
     Hyphen,
+    HyphenHyphen,
     Period,
     Pipe,
     PipePipe,
@@ -30,6 +31,8 @@ pub enum Token<'s> {
     QuestionMark,
     SemiColon,
     Slash,
+    SlashSlash,
+    SlashStar,
     Star,
 
     // === Delimiters ===
@@ -209,6 +212,12 @@ impl<'s> Lexer<'s> {
             [b'>', b'='] => Token::AngleRightEq,
             [b'<', b'='] => Token::AngleLeftEq,
             [b'-', b'>'] => Token::Arrow,
+
+            // These are added for better diagnostics
+            [b'/', b'/'] => Token::SlashSlash,
+            [b'/', b'*'] => Token::SlashStar,
+            [b'-', b'-'] => Token::HyphenHyphen,
+
             _ => return ControlFlow::Continue(()),
         };
 
@@ -608,6 +617,7 @@ impl Display for Token<'_> {
             Token::Eq => "=",
             Token::EqEq => "==",
             Token::Hyphen => "-",
+            Token::HyphenHyphen => "--",
             Token::Period => ".",
             Token::Pipe => "|",
             Token::PipePipe => "||",
@@ -615,6 +625,8 @@ impl Display for Token<'_> {
             Token::QuestionMark => "?",
             Token::SemiColon => ";",
             Token::Slash => "/",
+            Token::SlashSlash => "//",
+            Token::SlashStar => "/*",
             Token::Star => "*",
 
             // Delimiters

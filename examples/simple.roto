@@ -1,5 +1,3 @@
-enum Foo {}
-
 # checks whether ip addr is 0.0.0.0
 fn is_zero(x: IpAddr) -> bool {
     x == 0.0.0.0
@@ -13,6 +11,7 @@ filtermap main(x: IpAddr) {
     }
 }
 
+-- blabla
 test is_zero_true {
     if is_zero(1.1.1.1) {
         reject

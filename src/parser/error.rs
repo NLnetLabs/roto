@@ -193,6 +193,21 @@ impl ParseErrorKind {
     }
 }
 
+impl ParseErrorKind {
+    pub fn hint(&self) -> Option<String> {
+        match self {
+            ParseErrorKind::Expected { got, .. } => {
+                if got == "//" || got == "/*" || got == "--" {
+                    Some(format!("`Use `#` for comments instead of `{got}`"))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for ParseErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
