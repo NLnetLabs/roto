@@ -22,6 +22,10 @@ pub struct FunctionDescription {
 unsafe impl Send for FunctionDescription {}
 unsafe impl Sync for FunctionDescription {}
 
+#[diagnostic::on_unimplemented(
+    note = "All arguments and the return type of this function implement `Value`.",
+    note = "You might have forgotten to wrap one of the arguments in `Val<T>`."
+)]
 pub trait RegisterableFn<A, R>: Send + 'static {
     /// The type of a Rust function wrapping a function of this type
     type RustWrapper;
