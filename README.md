@@ -4,6 +4,7 @@ Roto
 [![CI](https://github.com/NLnetLabs/roto/workflows/ci/badge.svg)](https://github.com/NLnetLabs/roto/actions?query=workflow%3Aci)
 [![docs.rs](https://img.shields.io/docsrs/roto?label=docs.rs)](https://docs.rs/roto)
 [![Documentation Status](https://app.readthedocs.org/projects/roto/badge/?version=latest)](https://roto.docs.nlnetlabs.nl/)
+[![Discuss on Discourse](https://img.shields.io/badge/Discourse-NLnet_Labs-orange?logo=Discourse)](https://community.nlnetlabs.nl/)
 [![Mastodon Follow](https://img.shields.io/mastodon/follow/114692612288811644?domain=social.nlnetlabs.nl&style=social)](https://social.nlnetlabs.nl/@nlnetlabs)
 
 Roto is an embedded scripting language for Rust applications that is fast, safe
@@ -116,8 +117,9 @@ functionality that compromises the security of your application.
 ## Learn more
 
 - To learn how to use and embed Roto, you can read the [documentation].
-- The API docs for the latest version are available on [docs.rs]
-- Some examples are available in the examples folder of the Roto repository.
+- The API docs for the latest version are available on [docs.rs].
+- If you have questions, you can ask them on [Discourse](https://community.nlnetlabs.nl/c/roto/7).
+- Some examples are available in the `examples/` folder of the Roto repository.
 
 ## Contributing
 
