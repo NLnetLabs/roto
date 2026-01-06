@@ -118,23 +118,27 @@ functionality that compromises the security of your application.
 
 - To learn how to use and embed Roto, you can read the [documentation].
 - The API docs for the latest version are available on [docs.rs].
-- If you have questions, you can ask them on [Discourse](https://community.nlnetlabs.nl/c/roto/7).
+- If you have questions, you can ask them on the [community forum].
 - Some examples are available in the `examples/` folder of the Roto repository.
 
 ## Contributing
 
 If you have comments, proposed changes, or would like to contribute,
-please open an issue in the [GitHub repository]. In particular, if you
+please open an thread on the [community forum]. In particular, if you
 would like to use the crate but it is missing functionality for your use
 case, we would love to hear from you!
+
+See [CONTRIBUTING.md] for more information.
+
+## License
+
+Roto is distributed under the terms of the BSD-3-clause license.
+See LICENSE for details.
 
 [Rotonda]: https://github.com/NlnetLabs/rotonda
 [GitHub repository]: https://github.com/NLnetLabs/routecore
 [Documentation]: https://roto.docs.nlnetlabs.nl/
 [crate]: https://crates.io/crates/roto
 [docs.rs]: https://docs.rs/roto
-
-## License
-
-Roto is distributed under the terms of the BSD-3-clause license.
-See LICENSE for details.
+[community forum]: https://community.nlnetlabs.nl/c/roto/7
+[CONTRIBUTING.md]: ./CONTRIBUTING.md

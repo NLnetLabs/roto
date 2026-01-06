@@ -20,4 +20,4 @@ help:
 	uv run $(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 update-std:
-	cargo run --features cli -- doc > $(SOURCEDIR)/reference/02_std.md
+	cargo run --features cli -- doc > $(SOURCEDIR)/reference/std
