@@ -51,7 +51,7 @@ use libc::size_t;
 
 pub mod check;
 pub mod testing;
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod tests;
 
 struct ModuleData {
@@ -1104,7 +1104,8 @@ impl<'c> FuncGen<'c> {
     fn operand(&mut self, val: &Operand) -> (ir::Value, Type) {
         match val {
             lir::Operand::Place(p) => {
-                let (var, ty) = self.module.variable_map.get(p).unwrap_or_else(|| {
+                let (var, ty) =
+                    self.module.variable_map.get(p).unwrap_or_else(|| {
                         ice!(
                             "did not find {:?} in {:#?}",
                             p,

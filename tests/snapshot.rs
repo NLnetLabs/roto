@@ -2,6 +2,7 @@ use insta::{assert_snapshot, glob};
 use roto::{FileTree, Runtime};
 
 #[test]
+#[cfg(not(miri))]
 fn parse_errors() {
     let root = std::env::current_dir().unwrap();
     glob!("scripts/parse_errors/", "*.roto", |path| {
@@ -20,6 +21,7 @@ fn parse_errors() {
 }
 
 #[test]
+#[cfg(not(miri))]
 fn type_errors() {
     let root = std::env::current_dir().unwrap();
     glob!("scripts/type_errors/", "*.roto", |path| {

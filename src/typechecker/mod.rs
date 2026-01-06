@@ -126,7 +126,7 @@ mod function;
 pub mod info;
 pub mod scope;
 pub mod scoped_display;
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod tests;
 pub mod types;
 mod unionfind;
