@@ -294,6 +294,16 @@ fn to_tokens(
                             }
                             syn::FnArg::Typed(pat_type) => {
                                 let ty = &pat_type.ty;
+
+                                // OutPtr is special and does not implement Value.
+                                // We do not need to be super precise in skipping it, because
+                                // these checks are only here for better diagnostics.
+                                if let syn::Type::Path(type_path) = &**ty
+                                    && let Some(segment) = type_path.path.segments.last()
+                                    && segment.ident == "OutPtr" {
+                                    return quote!();
+                                }
+
                                 quote!(#ty)
                             }
                         };
@@ -399,7 +409,7 @@ fn to_tokens(
                             #ident_str,
                             #doc,
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
-                            #expr,
+                            #ident,
                             #roto_sig,
                             vec![#(#vtables),*],
                             #location,
