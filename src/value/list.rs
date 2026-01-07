@@ -422,12 +422,14 @@ impl RawList {
         self.len = 0;
     }
 
-    /// Drop all the elements in the RawList with a given drop function
+    /// Drop all the elements in the RawList with a given drop function.
+    ///
+    /// This should only be called from `RawList::drop`.
     ///
     /// # Safety
     ///
-    /// The `drop_fn` must contain a function that takes value of the element
-    /// type `T`. The function is not allowed to use its context pointer.
+    ///  - The `drop_fn` must contain a function that takes value of the element
+    ///    type `T`.
     ///
     unsafe fn drop_elements_with(&mut self, drop_fn: DropFn) {
         let len = self.len;

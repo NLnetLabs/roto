@@ -1,5 +1,6 @@
 use std::ptr::NonNull;
 
+/// A placeholder type alias representing the type parameter of the extern "C" functions
 type T = ();
 
 /// A Roto clone function
@@ -8,6 +9,15 @@ pub type CloneFn = unsafe extern "C" fn(*mut T, *const T);
 /// A Roto drop function
 pub type DropFn = unsafe extern "C" fn(NonNull<T>);
 
+/// Vtable of Roto values
+///
+/// This struct can be generated for every Roto value and contains the functions that
+/// are available for all types. This type can be used to work with values of unknown
+/// types.
+///
+/// If a registered function asks for this value, the compiler will ensure that the vtable
+/// of the correct type is generated on demand. This should generally not be constructed
+/// or modified.
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct VTable {
