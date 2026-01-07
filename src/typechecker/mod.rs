@@ -332,18 +332,14 @@ impl TypeChecker {
         // skip them, but we should override the documentation.
         if let Some(other) =
             self.type_info.scope_graph.resolve_name(scope, &ident, true)
-        {
-            if let DeclarationKind::Type(TypeOrStub::Type(
+            && let DeclarationKind::Type(TypeOrStub::Type(
                 TypeDefinition::Primitive(_) | TypeDefinition::List(_),
             )) = other.kind
-            {
-                let dec = self
-                    .type_info
-                    .scope_graph
-                    .get_declaration_mut(other.name);
-                dec.doc = doc;
-                return Ok(());
-            }
+        {
+            let dec =
+                self.type_info.scope_graph.get_declaration_mut(other.name);
+            dec.doc = doc;
+            return Ok(());
         }
 
         let ty = TypeDefinition::Runtime(name, type_id);

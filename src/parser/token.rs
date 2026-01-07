@@ -354,10 +354,10 @@ impl<'s> Lexer<'s> {
             rest = &self.input[current_idx..];
 
             // If we have `10..` or `10._hello` or `10.hello` we should treat this as an integer
-            if let Some(c) = rest.chars().next() {
-                if is_xid_start(c) || c == '.' || c == '_' {
-                    return ControlFlow::Continue(());
-                }
+            if let Some(c) = rest.chars().next()
+                && (is_xid_start(c) || c == '.' || c == '_')
+            {
+                return ControlFlow::Continue(());
             }
 
             current_idx += rest

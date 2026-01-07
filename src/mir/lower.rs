@@ -209,7 +209,7 @@ impl<'r> Lowerer<'r> {
         self.function_like(
             &function.ident,
             &function.params,
-            &ret,
+            ret,
             &function.body,
         )
     }

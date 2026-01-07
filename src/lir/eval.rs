@@ -255,7 +255,10 @@ impl Allocation {
             offset + val.len() <= self.inner.len(),
             "memory access out of bounds"
         );
-        assert!(offset % val.len() == 0, "memory access is unaligned");
+        assert!(
+            offset.is_multiple_of(val.len()),
+            "memory access is unaligned"
+        );
 
         self.inner[offset..offset + val.len()].copy_from_slice(val);
     }
@@ -265,7 +268,7 @@ impl Allocation {
             offset + size <= self.inner.len(),
             "memory access out of bounds"
         );
-        assert!(offset % size == 0, "memory access is unaligned");
+        assert!(offset.is_multiple_of(size), "memory access is unaligned");
 
         &self.inner[offset..offset + size]
     }

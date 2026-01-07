@@ -575,7 +575,7 @@ fn call_runtime_method() {
     let rt = Runtime::from_lib(library! {
         impl u32 {
             fn is_even(self) -> bool {
-                self % 2 == 0
+                self.is_multiple_of(2)
             }
         }
     })

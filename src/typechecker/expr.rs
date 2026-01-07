@@ -1322,13 +1322,12 @@ impl TypeChecker {
             _ => None,
         };
 
-        if let Some(fields) = fields {
-            if let Some((_, t)) =
+        if let Some(fields) = fields
+            && let Some((_, t)) =
                 fields.iter().find(|(s, _)| s.node == field.node)
-            {
-                return Ok(t.clone());
-            };
-        }
+        {
+            return Ok(t.clone());
+        };
 
         Err(self.error_no_field_on_type(&ty, field))
     }
