@@ -240,17 +240,17 @@ impl RotoReport {
 
 impl std::error::Error for RotoReport {}
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 macro_rules! src {
     ($code:literal) => {
         $crate::FileTree::test_file(file!(), $code, line!() as usize - 1)
     };
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 pub(crate) use src;
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 macro_rules! source_file {
     ($module_name:literal, $code:literal) => {
         $crate::SourceFile {
@@ -263,7 +263,7 @@ macro_rules! source_file {
     };
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 pub(crate) use source_file;
 
 impl Parsed {

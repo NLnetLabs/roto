@@ -26,7 +26,7 @@ mod value;
 #[cfg(feature = "cli")]
 pub use cli::cli;
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 pub(crate) use pipeline::{source_file, src};
 
 pub use crate::value::List;

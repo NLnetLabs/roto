@@ -454,7 +454,11 @@ impl RawList {
     fn with_capacity(capacity: usize, vtable: VTable) -> Self {
         // Create a dangling non-null pointer with the right alignment
         // SAFETY: Align cannot be zero, so a pointer constructed with it won't be null.
-        let ptr = unsafe { NonNull::new_unchecked(vtable.align() as *mut T) };
+        let ptr = unsafe {
+            NonNull::new_unchecked(std::ptr::without_provenance_mut(
+                vtable.align(),
+            ))
+        };
 
         // Zero-sized types need some special treatment, because they don't
         // require any allocations. The capacity is therefore always
