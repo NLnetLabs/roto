@@ -90,7 +90,7 @@ pub use value::{Value, val::Val, verdict::Verdict};
 /// Types are declared with a `type` alias style syntax. The declaration must
 /// be  annotated with either `#[clone]` or `#[copy]`. Only types implementing
 /// `Copy` can be marked with `#[copy]`. Since the Rust type (the right-hand
-/// side) must implement [`Reflect`], you should wrap any custom type in `Val`.
+/// side) must implement [`Value`], you should wrap any custom type in `Val`.
 ///
 /// ```rust
 /// # #[derive(Clone, Copy)]

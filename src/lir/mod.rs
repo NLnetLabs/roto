@@ -25,7 +25,7 @@ pub mod lower;
 mod print;
 pub mod value;
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test_eval;
 
 use crate::{
