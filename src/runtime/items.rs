@@ -27,6 +27,10 @@ pub enum Item {
 ///
 /// In practice, implementors of this trait can be passed to [`Runtime::add`] and
 /// [`Runtime::from_lib`].
+///
+/// [`Runtime`]: super::Runtime
+/// [`Runtime::add`]: super::Runtime
+/// [`Runtime::from_lib`]: super::Runtime
 pub trait Registerable: Sized {
     /// Create a library containing this item.
     fn into_lib(self) -> Library {
@@ -383,7 +387,7 @@ impl Constant {
     /// Construct a new [`Constant`].
     ///
     /// The value to be registered is passed as `val` and must implement
-    /// [`Reflect`], like any registerable type.
+    /// [`Value`], like any registerable type.
     ///
     /// The `name` must be a valid Roto identifier. The `doc` parameter is the
     /// docstring that will be displayed in the documentation that Roto can

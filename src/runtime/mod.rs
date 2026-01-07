@@ -57,7 +57,7 @@ use crate::{
 ///
 /// ## Registering context type
 ///
-/// - [`Runtime::register_context_type`]
+/// - [`Runtime::with_context_type`]
 ///
 /// ## Printing documentation
 ///
