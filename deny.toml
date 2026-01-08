@@ -18,18 +18,34 @@ ignore = []
 # See https://spdx.org/licenses/ for list of possible licenses
 # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
 allow = [
+    # This is our own license, therefore obviously compatible
     "BSD-3-Clause",
+
+    # MIT is permissive and OSI-approved.
+    # See https://interoperable-europe.ec.europa.eu/licence/compatibility-check/MIT/BSD-3-Clause
     "MIT",
+
+    # Apache 2.0 is permissive and OSI-approved.
+    # See https://interoperable-europe.ec.europa.eu/licence/compatibility-check/Apache-2.0/BSD-3-Clause
     "Apache-2.0",
 
     # The LLVM-exception allows any copying of parts of the software that ends up
     # in the final binary, so more permissive than plain Apache 2.0.
-    # This is used by cranelift crates.
+    # See https://interoperable-europe.ec.europa.eu/licence/compatibility-check/Apache-2.0/BSD-3-Clause
+    #
+    # Used by all cranelift crates.
     "Apache-2.0 WITH LLVM-exception",
 
+    # The zlib license is a permissive OSI-approved license.
+    # It is compatible with BSD-3-Clause based on this source:
+    # See https://interoperable-europe.ec.europa.eu/licence/compatibility-check/Zlib/BSD-3-Clause
+    #
     # Used by foldhash, which we depend on via hashbrown via cranelift.
     "Zlib",
 
+    # The Unicode 3.0 license is a permissive OSI-approved license based on the MIT license.
+    # See https://unicode.org/faq/unicode_license
+    #
     # Used by unicode-ident.
     "Unicode-3.0",
 ]
