@@ -109,6 +109,19 @@ jobs:
         # We don't check advisories
         command: check bans licenses sources
 
+  cargo-shear:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@main
+    - name: Install cargo-shear
+      run: cargo binstall --no-confirm cargo-shear
+    - run: cargo shear
+
   miri:
     name: Test with MIRI
     runs-on: ubuntu-latest
