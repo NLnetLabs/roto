@@ -6,6 +6,7 @@
 :maxdepth: 1
 Asn <Asn/index>
 IpAddr <IpAddr/index>
+List[T] <List[T]/index>
 Option[T] <Option[T]/index>
 Prefix <Prefix/index>
 String <String/index>

@@ -773,6 +773,36 @@ Variant types can be generic over other types by taking type parameters.
 .. note::
     Variant types are also used to model optional values. See :ref:`lang_optionals`.
 
+.. _lang_lists:
+
+Lists
+-----
+
+A list is a growable array of items. In Roto, all elements of a list must be of the
+same type. Therefore, the type of a list has a type parameter: ``List[T]``. You can
+create lists with ``[`` and ``]`` with expressions separated by commas.
+
+.. code-block:: roto
+
+  let my_list: List[i32] = [1, 2, 3];
+  let first: i32? = my_list.get(0);
+  match first {
+      Some(first) => print(f"First element was: {first}"),
+      None => print("No elements!"),
+  }
+
+The ``+`` operator can be used to concatenate two lists.
+
+.. code-block:: roto
+
+  let a = ["one", "two", "three"];
+  let b = ["four", "five", "six"];
+  let concatenated = a + b;
+
+See :roto:ref:`List[T]` for all methods available on lists. Lists are passed by reference,
+meaning that if we assign a list ``a`` to a variable ``b`` and we modify ``a`` then ``b``
+will see the same modifications.
+
 Modules
 -------
 
