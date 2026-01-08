@@ -116,7 +116,7 @@ use types::{
 
 use self::{
     error::TypeError,
-    types::{Function, Signature, default_types},
+    types::{Signature, default_types},
 };
 
 mod cycle;
@@ -150,8 +150,6 @@ enum Obligation {
 /// Most type checking steps are methods on this type.
 #[derive(Clone)]
 pub struct TypeChecker {
-    /// The list of built-in functions, methods and static methods.
-    functions: Vec<Function>,
     pub(crate) type_info: TypeInfo,
     match_counter: usize,
     if_else_counter: usize,
@@ -170,13 +168,13 @@ pub fn typecheck(
 ) -> TypeResult<TypeInfo> {
     let mut type_checker = runtime.type_checker.clone();
     type_checker.declare_context(runtime)?;
-    type_checker.check_module_tree(module_tree)
+    let info = type_checker.check_module_tree(module_tree)?;
+    Ok(info)
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
         let mut checker = TypeChecker {
-            functions: Vec::new(),
             type_info: TypeInfo::new(),
             match_counter: 0,
             if_else_counter: 0,
@@ -277,6 +275,7 @@ impl TypeChecker {
 
             self.type_info.types.insert(name, ty);
         }
+
         Ok(())
     }
 
@@ -333,18 +332,14 @@ impl TypeChecker {
         // skip them, but we should override the documentation.
         if let Some(other) =
             self.type_info.scope_graph.resolve_name(scope, &ident, true)
-        {
-            if let DeclarationKind::Type(TypeOrStub::Type(
-                TypeDefinition::Primitive(_),
+            && let DeclarationKind::Type(TypeOrStub::Type(
+                TypeDefinition::Primitive(_) | TypeDefinition::List(_),
             )) = other.kind
-            {
-                let dec = self
-                    .type_info
-                    .scope_graph
-                    .get_declaration_mut(other.name);
-                dec.doc = doc;
-                return Ok(());
-            }
+        {
+            let dec =
+                self.type_info.scope_graph.get_declaration_mut(other.name);
+            dec.doc = doc;
+            return Ok(());
         }
 
         let ty = TypeDefinition::Runtime(name, type_id);
@@ -366,16 +361,10 @@ impl TypeChecker {
         ident: Identifier,
         id: RuntimeFunctionRef,
         parameter_names: Vec<Identifier>,
-        parameter_types: Vec<Type>,
-        return_type: Type,
+        signature: Signature,
         doc: String,
         method: bool,
     ) -> Result<(), String> {
-        let ty = Type::Function(
-            parameter_types.clone(),
-            Box::new(return_type.clone()),
-        );
-
         // TODO: Figure out some what to make nice spans for built-in types
         let ident = Meta {
             node: ident,
@@ -383,11 +372,17 @@ impl TypeChecker {
         };
         let def = FunctionDefinition::Runtime(id);
 
-        // TODO: Remove unwraps here
-        let name = if method {
+        if method {
             self.type_info
                 .scope_graph
-                .insert_method(scope, &ident, def, parameter_names, doc, &ty)
+                .insert_method(
+                    scope,
+                    &ident,
+                    def,
+                    parameter_names,
+                    doc,
+                    signature.clone(),
+                )
                 .map_err(|_| "name is declared twice")?
         } else {
             self.type_info
@@ -398,22 +393,10 @@ impl TypeChecker {
                     def,
                     parameter_names,
                     doc,
-                    &ty,
+                    signature.clone(),
                 )
                 .map_err(|_| "name is declared twice")?
         };
-
-        let signature = Signature {
-            parameter_types,
-            return_type,
-        };
-
-        self.functions.push(Function::new(
-            name,
-            &[],
-            signature.clone(),
-            FunctionDefinition::Runtime(id),
-        ));
 
         self.type_info
             .runtime_function_signatures
@@ -452,6 +435,9 @@ impl TypeChecker {
                 Self::rust_type_to_roto_type(runtime, a)?,
                 Self::rust_type_to_roto_type(runtime, r)?,
             )),
+            TypeDescription::List(t) => {
+                Ok(Type::list(Self::rust_type_to_roto_type(runtime, t)?))
+            }
             TypeDescription::Val(_) => {
                 let name = runtime
                     .get_runtime_type(ty.type_id)
@@ -848,25 +834,25 @@ impl TypeChecker {
             for expr in &module.ast.declarations {
                 match expr {
                     ast::Declaration::Function(x) => {
-                        let ty = self.function_type(scope, x)?;
+                        let signature = self.function_type(scope, x)?;
                         self.insert_function(
                             scope,
                             x.ident.clone(),
                             FunctionDefinition::Roto,
                             x.params.0.iter().map(|(i, _)| i.node).collect(),
                             String::new(),
-                            &ty,
+                            signature,
                         )?;
                     }
                     ast::Declaration::FilterMap(x) => {
-                        let ty = self.filter_map_type(scope, x)?;
+                        let signature = self.filter_map_type(scope, x)?;
                         self.insert_function(
                             scope,
                             x.ident.clone(),
                             FunctionDefinition::Roto,
                             x.params.0.iter().map(|(i, _)| i.node).collect(),
                             String::new(),
-                            &ty,
+                            signature,
                         )?;
                     }
                     ast::Declaration::Test(_) => continue,
@@ -971,13 +957,12 @@ impl TypeChecker {
         for &(_, module) in modules {
             for expr in &module.ast.declarations {
                 if let ast::Declaration::FilterMap(f) = &expr {
-                    let ty = self.type_info.type_of(&f.ident);
-                    let Type::Function(_, return_type) = &ty else {
-                        ice!("filtermap should always have a function type")
-                    };
+                    let signature =
+                        self.type_info.function_signature(&f.ident);
+                    let return_type = signature.return_type;
 
                     let Type::Name(TypeName { name: _, arguments }) =
-                        &**return_type
+                        &return_type
                     else {
                         ice!(
                             "return type of a filtermap should always be a verdict"
@@ -1115,20 +1100,19 @@ impl TypeChecker {
         definition: FunctionDefinition,
         parameter_names: Vec<Identifier>,
         doc: String,
-        ty: impl Borrow<Type>,
+        signature: Signature,
     ) -> TypeResult<()> {
-        let ty = ty.borrow();
         match self.type_info.scope_graph.insert_function(
             scope,
             &k,
             definition,
             parameter_names,
             doc,
-            ty,
+            signature.clone(),
         ) {
             Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
-                self.type_info.expr_types.insert(k.id, ty.clone());
+                self.type_info.function_signatures.insert(k.id, signature);
                 Ok(())
             }
             Err(old) => Err(self.error_declared_twice(&k, old)),
@@ -1306,6 +1290,18 @@ impl TypeChecker {
                 }
                 Name(b)
             }
+            // Function types can be unified if their parameters and return types
+            // can be unified
+            (
+                Function(a_params, a_ret),
+                ref b @ Function(ref b_params, ref b_ret),
+            ) => {
+                for (a_param, b_param) in a_params.iter().zip(b_params) {
+                    self.unify_inner(a_param, b_param)?;
+                }
+                self.unify_inner(&a_ret, b_ret)?;
+                b.clone()
+            }
             // Anything else cannot be unified.
             (_a, _b) => {
                 return None;
@@ -1367,7 +1363,7 @@ impl TypeChecker {
     }
 
     /// Evaluate a type expression into a [`Type`]
-    fn evaluate_type_expr(
+    pub fn evaluate_type_expr(
         &self,
         scope: ScopeRef,
         ty: &ast::TypeExpr,

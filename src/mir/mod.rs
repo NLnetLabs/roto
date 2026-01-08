@@ -117,6 +117,7 @@ pub enum Value {
     CallRuntime {
         func_ref: runtime::RuntimeFunctionRef,
         args: Vec<Var>,
+        type_params: Vec<Type>,
     },
 }
 

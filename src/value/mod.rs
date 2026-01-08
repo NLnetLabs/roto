@@ -23,13 +23,20 @@ use crate::{
     runtime::layout::Layout,
 };
 
-use option::RotoOption;
-use val::Val;
-use verdict::Verdict;
+pub use dyn_val::DynVal;
+pub(crate) use list::ErasedList;
+pub use list::boundary::List;
+pub use option::RotoOption;
+pub use val::Val;
+pub use verdict::Verdict;
+pub use vtable::VTable;
 
-pub mod option;
-pub mod val;
-pub mod verdict;
+mod dyn_val;
+pub mod list;
+mod option;
+mod val;
+mod verdict;
+mod vtable;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TypeDescription {
@@ -41,6 +48,10 @@ pub enum TypeDescription {
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
+
+    /// `List<T>`
+    List(TypeId),
+
     /// `Val<T>`
     Val(TypeId),
 }
@@ -119,12 +130,14 @@ impl TypeRegistry {
 /// The [`Value::AsParam`] then specifies how this value is passed to a Roto
 /// function. Most primitives are simply passed by value, but many other types
 /// are passed by `*mut Value::Transformed`.
-#[sealed]
 #[diagnostic::on_unimplemented(
     note = "`Value` is implemented for Roto's built-in types and `Val<T>`.",
     note = "You cannot implement `Value` for your own types but you can wrap them in `Val<T>`."
 )]
+#[sealed(pub(crate))]
 pub trait Value: Sized + 'static {
+    const SAFE: bool = true;
+
     /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed: Clone;
 
@@ -340,6 +353,104 @@ impl Value for Prefix {
 impl Value for Arc<str> {
     type Transformed = Self;
     type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+#[sealed]
+impl Value for ErasedList {
+    const SAFE: bool = false;
+
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+#[sealed]
+impl<T: Value> Value for List<T> {
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        let t = T::resolve().type_id;
+
+        let desc = TypeDescription::List(t);
+        TypeRegistry::store::<Self>(desc)
+    }
+}
+
+#[sealed]
+impl Value for VTable {
+    type Transformed = Self;
+
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+impl Param<DynVal> for DynVal {
+    fn as_param(value: &mut DynVal) -> Self {
+        *value
+    }
+
+    fn to_value(self) -> DynVal {
+        self
+    }
+
+    fn from_ir_value(
+        _mem: &mut Memory,
+        _value: IrValue,
+    ) -> Result<Self, IrValueDoesNotMatchType> {
+        todo!()
+    }
+}
+
+#[sealed]
+impl Value for DynVal {
+    const SAFE: bool = false;
+
+    type Transformed = Self;
+
+    type AsParam = Self;
 
     fn transform(self) -> Self::Transformed {
         self

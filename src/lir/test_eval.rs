@@ -91,7 +91,7 @@ impl MemVal {
 
     fn padding(&self, offset: usize) -> usize {
         let align = self.alignment();
-        if offset % align > 0 {
+        if !offset.is_multiple_of(align) {
             align - (offset % align)
         } else {
             0
@@ -421,7 +421,7 @@ fn u32_method() {
     let rt = Runtime::from_lib(library! {
         impl u32 {
             fn is_even(x: u32) -> bool {
-                x % 2 == 0
+                x.is_multiple_of(2)
             }
         }
     })

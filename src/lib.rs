@@ -29,6 +29,7 @@ pub use cli::cli;
 #[cfg(test)]
 pub(crate) use pipeline::{source_file, src};
 
+pub use crate::value::List;
 pub use codegen::{TypedFunc, check::RotoFunc};
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub(crate) use pipeline::RotoError;
@@ -45,7 +46,7 @@ pub use runtime::{
         Use,
     },
 };
-pub use value::{Value, val::Val, verdict::Verdict};
+pub use value::{Val, Value, Verdict};
 
 /// Create a list of items to be registered.
 ///

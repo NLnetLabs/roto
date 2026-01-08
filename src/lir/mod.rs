@@ -87,6 +87,9 @@ pub enum Instruction {
     /// Get the address of a constant
     ConstantAddress { to: Var, name: ResolvedName },
 
+    /// Get the address of a function
+    FunctionAddress { to: Var, name: Identifier },
+
     /// Create string
     InitString {
         to: Var,
@@ -97,7 +100,7 @@ pub enum Instruction {
     /// Call a function.
     Call {
         to: Option<(Var, IrType)>,
-        ctx: Operand,
+        ctx: Option<Operand>,
         func: Identifier,
         args: Vec<Operand>,
         return_ptr: Option<Var>,
@@ -300,9 +303,12 @@ pub struct Function {
     pub public: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signature {
     pub parameters: Vec<(Identifier, IrType)>,
+
+    /// Whether this function takes a context pointer
+    pub context: bool,
 
     /// Whether this function takes a pointer for the return value
     /// passed as an argument

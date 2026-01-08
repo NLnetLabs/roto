@@ -260,6 +260,7 @@ impl Type {
             TypeDescription::Val(_) => true,
             TypeDescription::Option(_) => false,
             TypeDescription::Verdict(_, _) => false,
+            TypeDescription::List(_) => false,
         };
 
         if !is_allowed {
@@ -305,7 +306,9 @@ pub struct Function {
     pub(crate) doc: String,
     pub(crate) params: Vec<Identifier>,
     pub(crate) func: FunctionDescription,
+    pub(crate) sig: Option<String>,
     pub(crate) location: Location,
+    pub(crate) vtables: Vec<Identifier>,
 }
 
 impl Function {
@@ -337,11 +340,11 @@ impl Function {
     ///     location!(),
     /// ).unwrap();
     /// ```
-    pub fn new<A, R>(
+    pub fn new<A, R, O>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         params: Vec<&str>,
-        func: impl RegisterableFn<A, R>,
+        func: impl RegisterableFn<A, R, O>,
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
@@ -353,7 +356,39 @@ impl Function {
             ident: name,
             doc: doc.as_ref().into(),
             params: params.into_iter().map(|p| p.into()).collect(),
+            sig: None,
             func,
+            vtables: Vec::new(),
+            location,
+        })
+    }
+
+    /// Create a new generic Roto function
+    ///
+    /// This is very dangerous, since the generic signature must match up with the given
+    /// function. At the moment, there are not enough guard rails in place to expose this
+    /// functionality to downstream users, so this function is kept private.
+    pub(crate) unsafe fn new_generic<A, R, O>(
+        name: impl Into<Identifier>,
+        doc: impl AsRef<str>,
+        params: Vec<&str>,
+        func: impl RegisterableFn<A, R, O>,
+        sig: &str,
+        vtables: Vec<&str>,
+        location: Location,
+    ) -> Result<Self, RegistrationError> {
+        let name = name.into();
+        Rt::check_name(&location, name)?;
+
+        let func = FunctionDescription::of(func);
+
+        Ok(Self {
+            ident: name,
+            doc: doc.as_ref().into(),
+            params: params.into_iter().map(|p| p.into()).collect(),
+            sig: Some(sig.to_owned()),
+            func,
+            vtables: vtables.into_iter().map(|p| p.into()).collect(),
             location,
         })
     }

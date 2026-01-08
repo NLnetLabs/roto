@@ -3,6 +3,7 @@ mod drops;
 
 use std::collections::{HashMap, VecDeque};
 
+use crate::value::VTable;
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
     ice,
@@ -66,6 +67,7 @@ struct Lowerer<'c, 'r> {
 /// - a variable of a reference type becomes `Location::Pointer` with offset 0
 /// - a variable of any type with some projection becomes a `Location::Pointer`
 ///   with some offset.
+#[derive(Debug)]
 enum Location {
     Var(Var),
     Pointer { base: Var, offset: usize },
@@ -180,6 +182,7 @@ impl Lowerer<'_, '_> {
                     Some((x, ty))
                 })
                 .collect(),
+            context: true,
             return_ptr,
             return_type: return_ir_type,
         };
@@ -300,8 +303,14 @@ impl Lowerer<'_, '_> {
                 };
                 op
             }
-            mir::Value::CallRuntime { func_ref, args } => {
-                let Some(op) = self.call_runtime(func_ref, args, &ty) else {
+            mir::Value::CallRuntime {
+                func_ref,
+                args,
+                type_params,
+            } => {
+                let Some(op) =
+                    self.call_runtime(func_ref, type_params, args, &ty)
+                else {
                     return;
                 };
                 op
@@ -354,7 +363,7 @@ impl Lowerer<'_, '_> {
 
         self.emit(Instruction::Call {
             to: to.clone(),
-            ctx: ctx.into(),
+            ctx: Some(ctx.into()),
             func,
             args,
             return_ptr: out_ptr.clone(),
@@ -370,9 +379,15 @@ impl Lowerer<'_, '_> {
     fn call_runtime(
         &mut self,
         func_ref: RuntimeFunctionRef,
-        args: Vec<mir::Var>,
+        type_params: Vec<Type>,
+        mir_args: Vec<mir::Var>,
         return_type: &Type,
     ) -> Option<Operand> {
+        // Take the signature of the function and substitute the type parameters in
+        let f = self.ctx.runtime.get_function(func_ref);
+        let sig = self.ctx.type_info.runtime_function_signature(func_ref);
+        let sig = sig.substitute(&type_params);
+
         let layout = self
             .ctx
             .type_info
@@ -380,23 +395,138 @@ impl Lowerer<'_, '_> {
             .unwrap_or_else(|| Layout::new(0, 1));
         let out_ptr = self.new_stack_slot(layout);
 
+        let mut args = Vec::new();
         let mut parameters = Vec::new();
+
+        // The first argument is always the return pointer.
+        args.push(Operand::Place(out_ptr.clone()));
         parameters.push(("ret".into(), IrType::Pointer));
 
-        let sig = self.ctx.type_info.runtime_function_signature(func_ref);
-        parameters.extend(sig.parameter_types.iter().enumerate().filter_map(
-            |(i, ty)| Some((i.to_string().into(), self.lower_type(ty)?)),
-        ));
+        // Then we can have the requested vtables. The vtables
+        // have indices that correspond to the type parameters
+        // in type_params.
+        //
+        // The vtable we construct corresponds to the VTable type and
+        // contains the layout, clone_fn and drop_fn.
+        for (i, type_idx) in f.vtables.iter().enumerate() {
+            let Some(ty) = type_params.get(*type_idx) else {
+                ice!("vtable index is out of bounds")
+            };
+
+            let clone_func_addr = if self.needs_clone(ty) {
+                let type_id = self.ctx.type_info.type_id(ty);
+                let tmp = self.new_tmp(IrType::Pointer);
+                self.emit(Instruction::FunctionAddress {
+                    to: tmp.clone(),
+                    name: format!("::generated::clone_{type_id}").into(),
+                });
+                // We need to make sure that the clone function will be generated.
+                self.ctx.clones_to_generate.push_back(ty.clone());
+                tmp.into()
+            } else {
+                Operand::Value(crate::lir::IrValue::Pointer(0))
+            };
+
+            let drop_func_addr = if self.needs_drop(ty) {
+                let type_id = self.ctx.type_info.type_id(ty);
+                let tmp = self.new_tmp(IrType::Pointer);
+                self.emit(Instruction::FunctionAddress {
+                    to: tmp.clone(),
+                    name: format!("::generated::drop_{type_id}").into(),
+                });
+                // We need to make sure that the drop function will be generated.
+                self.ctx.drops_to_generate.push_back(ty.clone());
+                tmp.into()
+            } else {
+                Operand::Value(crate::lir::IrValue::Pointer(0))
+            };
+
+            let vtable_layout = Layout::of::<VTable>();
+            let base = self.new_stack_slot(vtable_layout);
+
+            let ty_layout = self
+                .ctx
+                .type_info
+                .layout_of(ty, self.ctx.runtime)
+                .unwrap_or(Layout::of::<()>());
+
+            let mut builder = LayoutBuilder::new();
+
+            let offset = builder.add(&Layout::of::<usize>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(
+                dst,
+                Operand::Value(crate::lir::IrValue::Pointer(
+                    ty_layout.size(),
+                )),
+            );
+
+            let offset = builder.add(&Layout::of::<usize>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(
+                dst,
+                Operand::Value(crate::lir::IrValue::Pointer(
+                    ty_layout.align(),
+                )),
+            );
+
+            let offset = builder.add(&Layout::of::<*mut ()>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(dst, clone_func_addr);
+
+            let offset = builder.add(&Layout::of::<*mut ()>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(dst, drop_func_addr);
+
+            args.push(base.into());
+            parameters.push((format!("vtable_{i}").into(), IrType::Pointer));
+        }
+
+        let dyn_vals = &self.ctx.runtime.get_function(func_ref).dyn_vals;
+        let parameter_types = sig.parameter_types;
+
+        // After the vtables we get to the actual parameters.
+        for (i, arg) in mir_args.into_iter().enumerate() {
+            let arg = self.var(arg);
+
+            let ty = &parameter_types[i];
+
+            // If the argument is not a DynVal, it's easy, we treat it as a normal value,
+            // but if it is a DynVal, we have to ensure that the value is stored on a
+            // stack slot and that we pass a pointer to it to the function.
+            if !dyn_vals[i] {
+                args.push(arg.into());
+                parameters.push((
+                    i.to_string().into(),
+                    self.lower_type(ty).unwrap(),
+                ));
+                continue;
+            }
+
+            let elem_layout =
+                self.ctx.type_info.layout_of(ty, self.ctx.runtime).unwrap();
+
+            // We have to ensure that the value is passed by pointer, so
+            // we make a stack slot for it.
+            let stack_slot = self.new_stack_slot(elem_layout);
+            self.move_val(
+                Location::Pointer {
+                    base: stack_slot.clone(),
+                    offset: 0,
+                },
+                arg.into(),
+                ty,
+            );
+            args.push(stack_slot.into());
+            parameters.push((i.to_string().into(), IrType::Pointer));
+        }
 
         let ir_signature = Signature {
             parameters,
+            context: false,
             return_ptr: true,
             return_type: None,
         };
-
-        let args = std::iter::once(Operand::Place(out_ptr.clone()))
-            .chain(args.iter().map(|a| self.var(a.clone()).into()))
-            .collect();
 
         self.ctx.runtime_functions.insert(func_ref, ir_signature);
 
@@ -1043,6 +1173,9 @@ impl Lowerer<'_, '_> {
                         _ => break 'prim,
                     });
                 }
+            }
+            if let TypeDefinition::List(_) = type_def {
+                return Some(IrType::Pointer);
             }
             if let TypeDefinition::Runtime(_, _) = type_def {
                 return Some(IrType::Pointer);

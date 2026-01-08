@@ -255,7 +255,10 @@ impl Allocation {
             offset + val.len() <= self.inner.len(),
             "memory access out of bounds"
         );
-        assert!(offset % val.len() == 0, "memory access is unaligned");
+        assert!(
+            offset.is_multiple_of(val.len()),
+            "memory access is unaligned"
+        );
 
         self.inner[offset..offset + val.len()].copy_from_slice(val);
     }
@@ -265,7 +268,7 @@ impl Allocation {
             offset + size <= self.inner.len(),
             "memory access out of bounds"
         );
-        assert!(offset % size == 0, "memory access is unaligned");
+        assert!(offset.is_multiple_of(size), "memory access is unaligned");
 
         &self.inner[offset..offset + size]
     }
@@ -393,6 +396,9 @@ pub fn eval(
                 let val = eval_operand(&vars, val);
                 vars.insert(to.clone(), val.clone());
             }
+            Instruction::FunctionAddress { .. } => {
+                panic!("Getting a function address on eval is not supported.")
+            }
             Instruction::ConstantAddress { to, name } => {
                 let x = constants.get(name).unwrap();
                 let x = x.ptr();
@@ -432,14 +438,17 @@ pub fn eval(
                             .clone(),
                     );
                 }
-                let ctx_val = eval_operand(&vars, ctx);
-                vars.insert(
-                    Var {
-                        scope: f.scope,
-                        kind: VarKind::Context,
-                    },
-                    ctx_val.clone(),
-                );
+
+                if let Some(ctx) = ctx {
+                    let ctx_val = eval_operand(&vars, ctx);
+                    vars.insert(
+                        Var {
+                            scope: f.scope,
+                            kind: VarKind::Context,
+                        },
+                        ctx_val.clone(),
+                    );
+                }
 
                 let names = f.ir_signature.parameters.iter().map(|p| p.0);
 

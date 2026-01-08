@@ -8,8 +8,13 @@ use std::{
 };
 
 use crate::{
-    Context, FileTree, NoCtx, Runtime, Val, Verdict, file_tree::FileSpec,
-    library, pipeline::Package, runtime::OptCtx, source_file, src,
+    Context, FileTree, List, NoCtx, Runtime,
+    file_tree::FileSpec,
+    library,
+    pipeline::Package,
+    runtime::OptCtx,
+    source_file, src,
+    value::{Val, Verdict},
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -570,7 +575,7 @@ fn call_runtime_method() {
     let rt = Runtime::from_lib(library! {
         impl u32 {
             fn is_even(self) -> bool {
-                self % 2 == 0
+                self.is_multiple_of(2)
             }
         }
     })
@@ -4051,4 +4056,364 @@ fn stringbuf() {
         .unwrap();
     let res = f.call("hello".into());
     assert_eq!(res, "\"hello\"".into());
+}
+
+#[test]
+fn list_basic() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let list = List.new();
+            list.push(5);
+            list.get(0)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, Some(5));
+}
+
+#[test]
+fn list_push_twice() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let list = List.new();
+            list.push(5);
+            list.push(10);
+            list.push(15);
+
+            list.get(0)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, Some(5));
+}
+
+#[test]
+fn list_get_many() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let list = List.new();
+            list.push(5);
+            list.push(10);
+            list.push(15);
+            list.push(20);
+
+            let a = list.get(0)?
+                + list.get(1)?
+                + list.get(2)?
+                + list.get(3)?;
+
+            Some(a)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, Some(50));
+}
+
+#[test]
+fn list_len() {
+    let s = src!(
+        r#"
+        fn main() -> u64 {
+            let list = List.new();
+            list.push(1);
+            list.push(2);
+            list.push(3);
+            list.len()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u64>("main").unwrap();
+    let res = f.call();
+    assert_eq!(res, 3);
+}
+
+#[test]
+fn list_is_empty_1() {
+    let s = src!(
+        r#"
+        fn main() -> bool {
+            let list = List.new();
+            list.is_empty()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> bool>("main").unwrap();
+    let res = f.call();
+    assert!(res);
+}
+
+#[test]
+fn list_is_empty_2() {
+    let s = src!(
+        r#"
+        fn main() -> bool {
+            let list = List.new();
+            list.push(5);
+            list.is_empty()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> bool>("main").unwrap();
+    let res = f.call();
+    assert!(!res);
+}
+
+#[test]
+fn list_of_strings_1() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            let list = List.new();
+            list.push("hello");
+
+            list.get(0)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> Option<Arc<str>>>("main")
+        .unwrap();
+    let res = f.call();
+    assert_eq!(res, Some("hello".into()));
+}
+
+#[test]
+fn list_of_strings_2() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            let list = List.new();
+            list.push("hello");
+            list.push("world");
+
+            Some(f"{list.get(0)?} {list.get(1)?}")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> Option<Arc<str>>>("main")
+        .unwrap();
+    let res = f.call();
+    assert_eq!(res, Some("hello world".into()));
+}
+
+#[test]
+fn list_through_script() {
+    let s = src!(
+        r#"
+        fn main(x: List[u64]) -> List[u64] {
+            x.push(3);
+            x.push(4);
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(List<u64>) -> List<u64>>("main")
+        .unwrap();
+
+    let x = List::new();
+    x.push(1);
+    x.push(2);
+    let res = f.call(x);
+    assert_eq!(res.to_vec(), vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn list_of_lists() {
+    let s = src!(
+        r#"
+        fn main() -> List[List[u64]] {
+            let x = List.new();
+
+            let a = List.new();
+            a.push(1);
+            a.push(2);
+
+            let b = List.new();
+            b.push(3);
+            b.push(4);
+
+            x.push(a);
+            x.push(b);
+
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<List<u64>>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(
+        res.to_vec().iter().map(|l| l.to_vec()).collect::<Vec<_>>(),
+        vec![vec![1, 2], vec![3, 4]]
+    );
+}
+
+#[test]
+fn list_literal() {
+    let s = src!(
+        r#"
+        fn main() -> List[u64] {
+            [1, 2, 3, 4]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<u64>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn list_concat() {
+    let s = src!(
+        r#"
+        fn main() -> List[u64] {
+            [1, 2, 3, 4].concat([5, 6, 7, 8])
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<u64>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+}
+
+#[test]
+fn list_concat_strings() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            ["a", "b"].concat(["c", "d"])
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<Arc<str>> =
+        ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_swap() {
+    let s = src!(
+        r#"
+        fn main() -> List[i32] {
+            let x = [1, 2, 3, 4];
+            x.swap(1, 2);
+            x.swap(0, 3);
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<i32>>("main").unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<i32> = vec![4, 3, 2, 1];
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_plus_strings() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            ["a", "b"] + ["c", "d"]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<Arc<str>> =
+        ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_of_options() {
+    let s = src!(
+        r#"
+        fn main() -> List[i32?] {
+            [Some(1), None, Some(2), None]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<Option<i32>>>("main")
+        .unwrap();
+
+    let res = f.call();
+
+    let expected = vec![Some(1), None, Some(2), None];
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
+fn list_of_option_of_strings() {
+    let s = src!(
+        r#"
+        fn main() -> List[String?] {
+            [Some("hello"), None, Some("bonjour"), None]
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<Option<Arc<str>>>>("main")
+        .unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<Option<Arc<str>>> =
+        vec![Some("hello".into()), None, Some("bonjour".into()), None];
+    assert_eq!(res.to_vec(), expected);
 }

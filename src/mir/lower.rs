@@ -25,6 +25,7 @@ use crate::{
             EnumVariant, FunctionDefinition, Signature, Type, TypeDefinition,
         },
     },
+    value::ErasedList,
 };
 
 pub struct Lowerer<'r> {
@@ -65,15 +66,14 @@ impl<'r> Lowerer<'r> {
         label_store: &'r mut LabelStore,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
-        let ty = type_info.type_of(function_name);
-        let Type::Function(_, return_type) = ty else {
-            ice!()
-        };
+        let signature = type_info.function_signature(function_name);
+        let return_type = signature.return_type;
+
         Self {
             tmp_idx: 0,
             type_info,
             runtime,
-            return_type: (*return_type).clone(),
+            return_type,
             function_scope,
             blocks: Vec::new(),
             stack_slots: Vec::new(),
@@ -192,10 +192,8 @@ impl<'r> Lowerer<'r> {
             ..
         } = fm;
 
-        let Type::Function(_, ret) = self.type_info.type_of(ident) else {
-            ice!("The type of a filter(map) must be a function");
-        };
-        self.function_like(ident, params, &ret, body)
+        let signature = self.type_info.function_signature(ident);
+        self.function_like(ident, params, &signature.return_type, body)
     }
 
     fn function(self, function: &ast::FunctionDeclaration) -> Function {
@@ -206,15 +204,12 @@ impl<'r> Lowerer<'r> {
             ice!();
         };
 
-        let Type::Function(_, ret) = self.type_info.resolve(&func_dec.ty)
-        else {
-            ice!("A function must have a function type");
-        };
+        let ret = &func_dec.signature.return_type;
 
         self.function_like(
             &function.ident,
             &function.params,
-            &ret,
+            ret,
             &function.body,
         )
     }
@@ -261,6 +256,7 @@ impl<'r> Lowerer<'r> {
         }
 
         let signature = Signature {
+            types: Vec::new(),
             parameter_types: parameter_types
                 .iter()
                 .map(|x| &x.1)
@@ -370,7 +366,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Record(record) | ast::Expr::TypedRecord(_, record) => {
                 self.record(id, record)
             }
-            ast::Expr::List(_list) => todo!(),
+            ast::Expr::List(list) => self.list(id, list),
             ast::Expr::Not(expr) => self.not(expr),
             ast::Expr::Negate(expr) => self.negate(expr),
             ast::Expr::Assign(expr, field) => self.assign(expr, field),
@@ -534,6 +530,7 @@ impl<'r> Lowerer<'r> {
             self.do_assign(Place::new(tmp.clone(), ty.clone()), ty, receiver);
             args.push(tmp);
         }
+
         args.extend(arguments.iter().map(|a| {
             let ty = self.type_info.type_of(a);
             let op = self.expr(a);
@@ -548,7 +545,13 @@ impl<'r> Lowerer<'r> {
 
         match func.definition {
             FunctionDefinition::Runtime(func_ref) => {
-                Value::CallRuntime { func_ref, args }
+                let type_params = func.signature.types.clone();
+
+                Value::CallRuntime {
+                    func_ref,
+                    args,
+                    type_params,
+                }
             }
             FunctionDefinition::Roto => Value::Call { func: name, args },
         }
@@ -674,6 +677,70 @@ impl<'r> Lowerer<'r> {
         Value::Negate(var, ty)
     }
 
+    fn list(&mut self, id: MetaId, list: &[Meta<ast::Expr>]) -> Value {
+        let ty = self.type_info.type_of(id);
+        let ty = self.type_info.resolve(&ty);
+        let Type::Name(name) = &ty else { ice!() };
+        let type_def = self.type_info.resolve_type_name(name);
+        let TypeDefinition::List(_) = type_def else {
+            ice!()
+        };
+        let inner = name.arguments[0].clone();
+
+        let tmp = self.tmp(ty.clone());
+
+        let func_ref = self.find_method(TypeId::of::<ErasedList>(), "new");
+        self.emit(Instruction::Assign {
+            to: Place {
+                var: tmp.clone(),
+                root_ty: ty.clone(),
+                projection: Vec::new(),
+            },
+            ty: ty.clone(),
+            value: Value::CallRuntime {
+                func_ref,
+                args: Vec::new(),
+                type_params: vec![inner.clone()],
+            },
+        });
+
+        let unit_tmp = self.tmp(Type::unit());
+        for expr in list {
+            let list_var = Value::Clone(Place::new(tmp.clone(), ty.clone()));
+            let list_var = self.assign_to_var(list_var, ty.clone());
+            self.remove_live_variable(&list_var);
+
+            let elem = self.expr(expr);
+            let elem_ty = self.type_info.type_of(expr);
+            let elem_var = self.undropped_tmp();
+            self.vars.push((elem_var.clone(), elem_ty.clone()));
+
+            self.do_assign(
+                Place::new(elem_var.clone(), elem_ty.clone()),
+                elem_ty,
+                elem,
+            );
+
+            let func_ref =
+                self.find_method(TypeId::of::<ErasedList>(), "push");
+            self.emit(Instruction::Assign {
+                to: Place {
+                    var: unit_tmp.clone(),
+                    root_ty: Type::unit(),
+                    projection: Vec::new(),
+                },
+                ty: Type::unit(),
+                value: Value::CallRuntime {
+                    func_ref,
+                    args: vec![list_var, elem_var],
+                    type_params: vec![inner.clone()],
+                },
+            });
+        }
+
+        Value::Move(tmp)
+    }
+
     fn assign(
         &mut self,
         path: &Meta<ast::Path>,
@@ -738,6 +805,10 @@ impl<'r> Lowerer<'r> {
             return self.binop_prefix(l, binop, r);
         }
 
+        if self.type_info.is_list_type(&l_ty) {
+            return self.binop_list(l_ty, l, binop, r);
+        }
+
         if *binop == ast::BinOp::And {
             return self.binop_and(l, r);
         }
@@ -771,6 +842,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
                 "eq",
+                Vec::new(),
                 Type::bool(),
                 (l, Type::string()),
                 (r, Type::string()),
@@ -779,6 +851,7 @@ impl<'r> Lowerer<'r> {
                 let val = self.desugared_binop(
                     type_id,
                     "eq",
+                    Vec::new(),
                     Type::bool(),
                     (l, Type::string()),
                     (r, Type::string()),
@@ -789,6 +862,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Add => self.desugared_binop(
                 type_id,
                 "append",
+                Vec::new(),
                 Type::string(),
                 (l, Type::string()),
                 (r, Type::string()),
@@ -810,6 +884,7 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
                 "eq",
+                Vec::new(),
                 Type::bool(),
                 (l, Type::ip_addr()),
                 (r, Type::ip_addr()),
@@ -818,6 +893,7 @@ impl<'r> Lowerer<'r> {
                 let val = self.desugared_binop(
                     type_id,
                     "eq",
+                    Vec::new(),
                     Type::bool(),
                     (l, Type::ip_addr()),
                     (r, Type::ip_addr()),
@@ -830,6 +906,7 @@ impl<'r> Lowerer<'r> {
                 self.desugared_binop(
                     type_id,
                     "new",
+                    Vec::new(),
                     Type::prefix(),
                     (l, Type::ip_addr()),
                     (r, Type::u8()),
@@ -852,12 +929,35 @@ impl<'r> Lowerer<'r> {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
                 "eq",
+                Vec::new(),
                 Type::bool(),
                 (l, Type::prefix()),
                 (r, Type::prefix()),
             ),
             _ => {
                 ice!("Operator {binop} is not implemented for Prefix")
+            }
+        }
+    }
+
+    fn binop_list(
+        &mut self,
+        ty: Type,
+        l: &Meta<ast::Expr>,
+        binop: &ast::BinOp,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        match binop {
+            ast::BinOp::Add => self.desugared_binop(
+                TypeId::of::<ErasedList>(),
+                "concat",
+                vec![ty.clone()],
+                ty.clone(),
+                (l, ty.clone()),
+                (r, ty.clone()),
+            ),
+            _ => {
+                ice!("Operator {binop} is not implemented for List")
             }
         }
     }
@@ -922,6 +1022,7 @@ impl<'r> Lowerer<'r> {
         &mut self,
         kind: TypeId,
         name: &str,
+        type_params: Vec<Type>,
         return_type: Type,
         (l, l_ty): (&Meta<ast::Expr>, Type),
         (r, r_ty): (&Meta<ast::Expr>, Type),
@@ -934,7 +1035,7 @@ impl<'r> Lowerer<'r> {
         let r = self.assign_to_var(r, r_ty);
 
         let tmp = self.tmp(return_type.clone());
-        let val = self.call_runtime(func_ref, vec![l, r]);
+        let val = self.call_runtime(func_ref, type_params, vec![l, r]);
         self.do_assign(
             Place::new(tmp.clone(), return_type.clone()),
             return_type,
@@ -947,12 +1048,17 @@ impl<'r> Lowerer<'r> {
     fn call_runtime(
         &mut self,
         func_ref: RuntimeFunctionRef,
+        type_params: Vec<Type>,
         args: Vec<Var>,
     ) -> Value {
         for var in &args {
             self.remove_live_variable(var);
         }
-        Value::CallRuntime { func_ref, args }
+        Value::CallRuntime {
+            func_ref,
+            args,
+            type_params,
+        }
     }
 
     fn if_else(
@@ -1167,8 +1273,11 @@ impl<'r> Lowerer<'r> {
 
             let new_string = self.assign_to_var(new_string, Type::string());
 
-            let val =
-                self.call_runtime(func_ref, vec![string.clone(), new_string]);
+            let val = self.call_runtime(
+                func_ref,
+                Vec::new(),
+                vec![string.clone(), new_string],
+            );
 
             self.stack_slots
                 .last_mut()

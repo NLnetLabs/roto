@@ -76,7 +76,7 @@ impl Parser<'_, '_> {
         Ok((field_name, ty))
     }
 
-    fn type_parameters(&mut self) -> ParseResult<Vec<Meta<Identifier>>> {
+    pub fn type_parameters(&mut self) -> ParseResult<Vec<Meta<Identifier>>> {
         let params = if self.peek_is(Token::SquareLeft) {
             self.separated(
                 Token::SquareLeft,

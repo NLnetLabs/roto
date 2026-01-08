@@ -18,6 +18,7 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{self, EnumVariant, Primitive, Type, TypeDefinition},
     },
+    value::ErasedList,
 };
 
 use super::Lowerer;
@@ -111,15 +112,10 @@ impl Lowerer<'_, '_> {
 
         // Finally, this might be a complex Roto type for which we generate a
         // drop function
-        let ctx = Var {
-            scope: self.function_scope,
-            kind: VarKind::Context,
-        };
-
         let type_id = self.ctx.type_info.type_id(ty);
         self.emit(Instruction::Call {
             to: None,
-            ctx: ctx.into(),
+            ctx: None,
             func: format!("::generated::clone_{type_id}").into(),
             args: vec![from.clone().into()],
             return_ptr: Some(to),
@@ -220,6 +216,7 @@ impl Lowerer<'_, '_> {
         lowerer.generate_clone_body(ident, scope, ty);
 
         let signature = types::Signature {
+            types: Vec::new(),
             parameter_types: vec![ty.clone()],
             return_type: ty.clone(),
         };
@@ -227,6 +224,7 @@ impl Lowerer<'_, '_> {
         // We need a unified signature for all types, so we always expect pointers
         let ir_signature = Signature {
             parameters: vec![("val".into(), IrType::Pointer)],
+            context: false,
             return_ptr: true,
             return_type: None,
         };
@@ -344,6 +342,9 @@ impl Lowerer<'_, '_> {
                         );
 
                         self.emit_return(None);
+                    }
+                    TypeDefinition::List(_) => {
+                        ice!("list clone should have been handled above");
                     }
                     TypeDefinition::Enum(_, _) => {
                         ice!("enum clone should have been handled above");
@@ -491,6 +492,9 @@ impl Lowerer<'_, '_> {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
                         Some(TypeId::of::<Arc<str>>())
+                    }
+                    TypeDefinition::List(_) => {
+                        Some(TypeId::of::<ErasedList>())
                     }
                     _ => None,
                 }

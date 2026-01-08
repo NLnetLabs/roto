@@ -43,7 +43,7 @@ impl Layout {
         assert!(align.is_power_of_two());
 
         // Note: assert_eq! is not const
-        assert!(size % align == 0);
+        assert!(size.is_multiple_of(align));
 
         Self { size, align }
     }

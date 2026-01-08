@@ -91,11 +91,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
 
             fn aspath_origin(rr: Val<RotondaRoute>, to_match: Asn) -> bool {
-                if let Some(hoppath) = rr.attributes().get::<HopPath>() {
-                    if let Some(Hop::Asn(asn)) = hoppath.origin() {
+                if let Some(hoppath) = rr.attributes().get::<HopPath>()
+                    && let Some(Hop::Asn(asn)) = hoppath.origin() {
                         return *asn == to_match;
                     }
-                }
 
                 false
             }
