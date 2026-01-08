@@ -52,11 +52,14 @@ enum Command {
 /// with the runtime that the host application provides.
 ///
 /// This CLI provides the following subcommands:
+///
 ///  - `doc`: generate documentation
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
 ///  - `run`: run a function of a script
-pub fn cli(rt: &Runtime<impl OptCtx>) {
+///
+/// This function exits the program and does not return.
+pub fn cli(rt: &Runtime<impl OptCtx>) -> ! {
     match cli_inner(rt) {
         Ok(()) => std::process::exit(0),
         Err(err) => {

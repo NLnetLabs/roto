@@ -28,7 +28,7 @@ Finally, we call the extracted Roto function with the ``call`` method (step 4).
             Err(err) => {
                 panic!("{err}");
             }
-        }
+        };
 
         // Step 3: Extract the function
         let func = pkg

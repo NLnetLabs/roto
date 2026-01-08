@@ -1,3 +1,5 @@
+.. _rust_interop:
+
 Rust Interoperability
 =====================
 

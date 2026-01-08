@@ -359,7 +359,7 @@ strings and format strings.
 .. code-block:: roto
 
     let x = 10;
-    print(f"Twice x is {2 * x});
+    print(f"Twice x is {2 * x}");
 
     print(f"x is {if x > 100 {
         "big"
@@ -374,10 +374,6 @@ duplicating them: ``{{``, ``}}``.
 
     print(f"x is {{ x }}")
     # will print the string "x is { x }"
-
-.. note::
-    There are some minor issues around type inference with format strings. See
-    `issue 244 <https://github.com/NLnetLabs/roto/issues/244>`_.
 
 .. _lang_locals:
 
@@ -508,7 +504,7 @@ limitations.
     the full path to the ``variant`` constructor, but only the name. So
     ``Option.None`` is not allowed as a pattern, but ``None`` is. This will
     probably change once ``match`` expressions become more general.
-    
+
 
 .. _lang_while:
 
@@ -552,7 +548,7 @@ This function can then be called like so:
 
 A function can contain multiple expressions. The last expression is returned if
 it is not terminated by a ``;``. The return can also be made explicit with the
-``return`` keyword. This function is equivalent to the previous example. 
+``return`` keyword. This function is equivalent to the previous example.
 
 .. code-block:: roto
 
@@ -783,7 +779,7 @@ Modules
 A Roto script can be split over multiple files. To do this, we have to create
 a folder with the name of the script and create a Roto file directly in it
 called ``pkg.roto``. This file is the root of our script. The contents of
-``pkg.roto`` will form the ``pkg`` module. No other files in the directory 
+``pkg.roto`` will form the ``pkg`` module. No other files in the directory
 can be called ``pkg.roto``.
 
 Files adjacent to ``pkg.roto`` are sub-modules of ``pkg``. For example, a file
@@ -837,7 +833,7 @@ module. Multiple ``super`` keywords can appear at the start of a path.
 
 .. code-block:: roto
 
-    # in pkg.roto   
+    # in pkg.roto
     foo.square
 
     # in foo.roto
@@ -852,7 +848,7 @@ module. Multiple ``super`` keywords can appear at the start of a path.
 There are 3 special identifiers that can only be used at the start of a path
 and automatically make the path an absolute path:
 
-- ``pkg`` for the current package 
+- ``pkg`` for the current package
 - ``std`` for the Roto standard library
 - ``dep`` for dependencies (not implemented yet, but the identifier is reserved)
 
@@ -867,7 +863,7 @@ with the ``import`` keyword. The ``import`` keyword is followed by a path. The
 item the path references will be available by name in the current scope.
 
 .. code-block:: roto
-    
+
     import foo.square;
 
     fn fourth_power(x: i32) -> i32 {
@@ -881,7 +877,7 @@ An ``import`` does not need to be at the top-level, they can be in any scope.
 We can rewrite the previous example as follows.
 
 .. code-block:: roto
- 
+
     fn fourth_power(x: i32) -> i32 {
         import foo.square;
         square(square(x))
@@ -918,7 +914,7 @@ The ``Option`` type is a ``variant`` type with 2 constructors: ``None`` and
 ``Some``. A value of ``T?`` is constructed with either ``Option.None`` or
 ``Option.Some(t)`` where ``t`` is a value of type ``T``.
 
-Like any enum it is possible to match on a value of type ``T?``
+Like any variant type it is possible to match on a value of type ``T?``
 
 .. code-block:: roto
 
@@ -927,7 +923,7 @@ Like any enum it is possible to match on a value of type ``T?``
         None -> 0,
     }
 
-In addition, there is a ``?`` operator, which will evaluate to the value of 
+In addition, there is a ``?`` operator, which will evaluate to the value of
 ``Some`` or return ``Option.None``. That is, if ``x`` is of type ``T?``, then
 ``x?`` is equivalent to the following match expression:
 
@@ -937,6 +933,39 @@ In addition, there is a ``?`` operator, which will evaluate to the value of
         Some(x) -> x,
         None -> return Option.None,
     }
+
+Tests
+-----
+
+Tests are written with the ``test`` keyword followed by an identifier and a block.
+The name must be unique. Inside the block you can write any Roto code that you
+want but it must return a ``Verdict[(), ()]``. If the test returns with
+``accept``, the test passes, it it returns with ``reject``, the test fails.
+
+Tests look a lot like functions with a few crucial differences: they cannot be
+called directly and they do not have any arguments. Instead, Roto's test runner
+finds the tests and runs them.
+
+.. code-block:: roto
+
+    fn add(x: u32, y: u32) -> u32 {
+        x + y
+    }
+
+    test test_add_function {
+        if add(10, 20) == 30 {
+            accept
+        } else {
+            reject
+        }
+    }
+
+If you're using Roto as a binary or with the `generated CLI <generate_cli>`__,
+you can run the tests with the ``test`` subcommand:
+
+.. code-block:: console
+
+    $ roto test
 
 Next steps
 ----------

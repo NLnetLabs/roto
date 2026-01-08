@@ -680,7 +680,15 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     let compound_types = vec![
         VariantType {
             name: "Option",
-            doc: "An optional value.",
+            doc: "An optional value.\n\
+            \n\
+            The `Option[T]` is a variant type with two constructors: `Some(T)` \
+            and `None`. To get the value of an `Option`, you can either match \
+            on it or use the `?` operator.\n\
+            \n\
+            The notation `T?` is shorthand for `Option[T]`.\n\
+            \n\
+            For more information, see [the language reference](#lang_optionals).",
             params: vec!["T"],
             variants: vec![
                 ("Some", vec![Type::ExplicitVar("T".into())]),
@@ -689,7 +697,12 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         },
         VariantType {
             name: "Verdict",
-            doc: "The verdict that a filter reaches about a value, that is, whether to accept or reject it.",
+            doc: "The verdict that a filter reaches about a value, that is, \
+            whether to accept or reject it.\n\
+            \n\
+            There are special keywords `accept` and `reject` to construct a \
+            `Verdict`. For more information, see \
+            [the language reference](#lang_filtermap).",
             params: vec!["A", "R"],
             variants: vec![
                 ("Accept", vec![Type::ExplicitVar("A".into())]),
