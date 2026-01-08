@@ -175,12 +175,15 @@ impl RotoReport {
 
                     let labels = error.labels.iter().map(|l| {
                         let s = self.spans.get(l.id);
-                        Label::new((self.filename(s), s.character_range(file_text)))
-                            .with_message(&l.message)
-                            .with_color(match l.level {
-                                Level::Error => Color::Red,
-                                Level::Info => Color::Blue,
-                            })
+                        Label::new((
+                            self.filename(s),
+                            s.character_range(file_text),
+                        ))
+                        .with_message(&l.message)
+                        .with_color(match l.level {
+                            Level::Error => Color::Red,
+                            Level::Info => Color::Blue,
+                        })
                     });
 
                     let span = self.spans.get(error.location);

@@ -75,7 +75,7 @@ jobs:
       uses: hecrj/setup-rust-action@v1
       with:
         rust-version: stable
-    - run: cargo fmt --all
+    - run: cargo fmt --all --check
 
   doc:
     name: Check rustdoc warnings
