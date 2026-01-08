@@ -89,7 +89,7 @@ python -m http.server
 ```
 
 We have extended Sphinx a bit to make it better for our use case. First, we have
-Roto syntax higlighting. Second, you can link to Roto types with ``
+Roto syntax highlighting. Second, you can link to Roto types with ``
 :roto:ref:`TypeName` ``.
 
 You can submit your changes in a pull request. A preview version of the updated
@@ -152,7 +152,7 @@ accompanied by a `SAFETY` comment and each `unsafe` function should have a
 "Safety" section in its documentation. We generally do not rely on `unsafe` just
 to achieve better performance.
 
-## Maintainance
+## Maintenance
 
 This section is meant for maintainers of Roto, not for all contributors.
 

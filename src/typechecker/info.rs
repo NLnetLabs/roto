@@ -265,7 +265,7 @@ impl TypeInfo {
     ///  - The minimum layout of any type is a size of 0 and an alignment of 1
     ///  - Each primitive has a size and alignment equal to itself.
     ///  - Each composite type has the alignment of the most-aligned field in it.
-    ///  - Fields are layed out in order, each padded to their alignment.
+    ///  - Fields are laid out in order, each padded to their alignment.
     ///  - The size **must** be a multiple of the alignment.
     ///
     /// For enums we use the `#[repr(C, u8)]` representation, because other the

@@ -77,6 +77,15 @@ jobs:
         rust-version: stable
     - run: cargo fmt --all --check
 
+  spelling:
+      name: Spell Check with Typos
+      runs-on: ubuntu-latest
+      steps:
+      - name: Checkout Actions Repository
+        uses: actions/checkout@v5
+      - name: Spell Check Repo
+        uses: crate-ci/typos@v1.42.0
+
   doc:
     name: Check rustdoc warnings
     runs-on: ubuntu-latest
