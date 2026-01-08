@@ -744,9 +744,9 @@ types, we can ``match`` on them.
         let z = Number.Nan;
 
         match x {
-            Int(i) => print(f"int: {i}"),
-            Float(f) => print(f"float: {f}"),
-            Nan => print(f"nan!"),
+            Int(i) -> print(f"int: {i}"),
+            Float(f) -> print(f"float: {f}"),
+            Nan -> print(f"nan!"),
         }
     }
 
@@ -787,8 +787,8 @@ create lists with ``[`` and ``]`` with expressions separated by commas.
   let my_list: List[i32] = [1, 2, 3];
   let first: i32? = my_list.get(0);
   match first {
-      Some(first) => print(f"First element was: {first}"),
-      None => print("No elements!"),
+      Some(first) -> print(f"First element was: {first}"),
+      None -> print("No elements!"),
   }
 
 The ``+`` operator can be used to concatenate two lists.
