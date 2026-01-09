@@ -246,7 +246,7 @@ def setup(app):
                         parse_node=parse_cmd_args_node)
     app.add_css_file('css/dark.css')
     app.add_css_file('css/light.css')
-    
+
 # -- Options for copybutton extension ----------------------------------------
 
 # Configure this so the prompt will not be copied to the clipboard. Also
@@ -282,6 +282,7 @@ class RotoLexer(RegexLexer):
                         'return',
                         'std',
                         'super',
+                        'test',
                         'variant',
                         'while',
                     ),
@@ -289,7 +290,7 @@ class RotoLexer(RegexLexer):
                 ),
                 token.Keyword
             ),
-            (words(('+', '-', '/', '*', '==', '>=', '>', '<=', '<', '=', '&&', '||')), token.Operator),
+            (words(('+', '-', '/', '*', '==', '>=', '>', '<=', '<', '=', '&&', '||', '?')), token.Operator),
             (words(('{', '}', '(', ')', '[', ']', ':', '.', ';', ',')), token.Punctuation),
             (r'[a-zA-Z_][a-zA-Z0-9_]*', token.Name),
             (r'[0-9]', token.Number),
