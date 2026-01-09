@@ -13,6 +13,12 @@ use crate::{
 };
 
 /// A registerable item
+///
+/// <div class="warning">
+///
+/// This type is usually constructed by the [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub enum Item {
     Function(Function),
@@ -45,8 +51,12 @@ pub trait Registerable: Sized {
 
 /// A collection of registerable items.
 ///
+/// <div class="warning">
+///
 /// This type can be constructed manually via [`Library::new`] and
 /// [`Library::add`] or via the [`library!`](crate::library) macro.
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Library {
     pub(crate) items: Vec<Item>,
@@ -110,7 +120,12 @@ impl<T: Registerable> Registerable for Vec<T> {
 
 /// A module containing other items
 ///
-/// Can be constructed with [`Module::new`].
+/// <div class="warning">
+///
+/// Usually, this type is not constructed directly, but created by the
+/// [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Module {
     pub(crate) ident: Identifier,
@@ -171,6 +186,13 @@ impl From<Module> for Item {
 /// Use one of the [`Type::clone`] or [`Type::copy`] constructors to construct
 /// this type. [`Type::copy`] will generally be more performant than
 /// [`Type::clone`], so you should prefer that if the type implements [`Copy`].
+///
+/// <div class="warning">
+///
+/// Usually, this type is not constructed directly, but created by the
+/// [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Type {
     pub(crate) ident: Identifier,
@@ -299,7 +321,12 @@ impl From<Type> for Item {
 
 /// A function that can be registered.
 ///
-/// Can be constructed with `Function::new`.
+/// <div class="warning">
+///
+/// Usually, this type is not constructed directly, but created by the
+/// [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Function {
     pub(crate) ident: Identifier,
@@ -408,7 +435,12 @@ impl From<Function> for Item {
 
 /// A constant value
 ///
-/// Can be constructed with [`Constant::new`]
+/// <div class="warning">
+///
+/// Usually, this type is not constructed directly, but created by the
+/// [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub(crate) ident: Identifier,
@@ -478,7 +510,12 @@ impl From<Constant> for Item {
 
 /// An impl block, which adds methods to a type.
 ///
-/// Can be constructed with [`Impl::new`].
+/// <div class="warning">
+///
+/// Usually, this type is not constructed directly, but created by the
+/// [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Impl {
     pub(crate) ty: TypeId,
@@ -527,7 +564,12 @@ impl From<Impl> for Item {
 
 /// A use item, representing an import of items.
 ///
-/// Can be constructed with [`Use::new`].
+/// <div class="warning">
+///
+/// Usually, this type is not constructed directly, but created by the
+/// [`library!`](crate::library) macro
+///
+/// </div>
 #[derive(Clone, Debug)]
 pub struct Use {
     pub(crate) imports: Vec<Vec<String>>,
