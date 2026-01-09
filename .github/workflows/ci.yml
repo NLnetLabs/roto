@@ -44,6 +44,25 @@ jobs:
     - run: cargo build --target=${{ matrix.target }} --verbose ${{ matrix.args }}
     - run: cargo test --target=${{ matrix.target }} --verbose ${{ matrix.args }}
 
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Install Rust
+      uses: hecrj/setup-rust-action@v1
+      with:
+        rust-version: stable
+    - run: |
+        set -e
+        for example in examples/*.rs; do
+          filename=${example#"examples/"}
+          name=${filename%".rs"}
+          cargo run --example $name
+        done;
+
   clippy:
     name: clippy
     runs-on: ubuntu-latest
