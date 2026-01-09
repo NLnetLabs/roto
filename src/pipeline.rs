@@ -56,8 +56,13 @@ pub(crate) enum RotoError {
 /// The report can be printed with the regular [`std::fmt::Display`].
 #[derive(Default)]
 pub struct RotoReport {
+    /// Files that were used during compilation.
+    ///
+    /// These are used to print diagnostics.
     pub files: Vec<SourceFile>,
     pub(crate) errors: Vec<RotoError>,
+
+    /// Spans of AST nodes.
     pub spans: Spans,
 }
 
@@ -93,6 +98,7 @@ pub struct Package<Ctx: OptCtx> {
 }
 
 impl RotoReport {
+    /// Write this report to a type implementing [`fmt::Write`].
     pub fn write(&self, mut f: impl fmt::Write, color: bool) -> fmt::Result {
         use ariadne::{Color, Label, Report, ReportKind};
 
@@ -410,6 +416,7 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
 }
 
 impl<Ctx: OptCtx> Package<Ctx> {
+    /// Return an iterator with all the tests in this [`Package`].
     pub fn get_tests(
         &mut self,
     ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
@@ -417,6 +424,7 @@ impl<Ctx: OptCtx> Package<Ctx> {
         codegen::testing::get_tests(&mut self.module)
     }
 
+    /// Get a function from this [`Package`].
     pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
@@ -426,6 +434,7 @@ impl<Ctx: OptCtx> Package<Ctx> {
 }
 
 impl Package<NoCtx> {
+    /// Run all tests in this [`Package`] without context.
     #[allow(clippy::result_unit_err)]
     pub fn run_tests(&mut self) -> Result<(), ()> {
         codegen::testing::run_tests(&mut self.module, NoCtx)
@@ -433,6 +442,7 @@ impl Package<NoCtx> {
 }
 
 impl<C: Context> Package<Ctx<C>> {
+    /// Run all tests in this [`Package`] with context.
     #[allow(clippy::result_unit_err)]
     pub fn run_tests(&mut self, ctx: C) -> Result<(), ()> {
         codegen::testing::run_tests(&mut self.module, Ctx(ctx))

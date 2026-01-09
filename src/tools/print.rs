@@ -15,6 +15,9 @@ mod ansi {
     pub const ITALIC: &str = "\x1b[3m";
 }
 
+/// Print highlighted Roto code to the terminal
+///
+/// The syntax highlighting is simple and based solely on the lexer.
 pub fn print_highlighted(s: &str) {
     let mut lexer = Lexer::new(s);
     let mut last_end = 0;

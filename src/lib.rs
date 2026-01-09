@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
 
 // Needed for the roto macros
 extern crate self as roto;
@@ -39,7 +40,7 @@ pub use roto_macros::{
 };
 pub use runtime::{
     Ctx, NoCtx, RegistrationError, Runtime,
-    context::Context,
+    context::{Context, ContextDescription},
     func::RegisterableFn,
     items::{
         Constant, Function, Impl, Item, Library, Module, Registerable, Type,
@@ -242,6 +243,9 @@ pub mod __internal {
     use crate::Value;
     pub use crate::runtime::context::ContextField;
 
+    /// Stub function that can be used as an assertion that a type implements [`Value`].
+    ///
+    /// This is used by [`library!`](crate::library).
     pub fn implements_value<T: Value>() {}
 }
 
@@ -271,8 +275,13 @@ pub(crate) use ice;
 /// Generally constructed with the [`location!`] macro.
 #[derive(Debug, Clone)]
 pub struct Location {
+    /// Path of the file
     pub file: &'static str,
+
+    /// Line number of the location
     pub line: u32,
+
+    /// Column number of the location
     pub column: u32,
 }
 

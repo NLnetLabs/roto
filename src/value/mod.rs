@@ -136,8 +136,6 @@ impl TypeRegistry {
 )]
 #[sealed(pub(crate))]
 pub trait Value: Sized + 'static {
-    const SAFE: bool = true;
-
     /// Intermediate type that can be used to convert a type to a Roto type
     type Transformed: Clone;
 
@@ -150,10 +148,12 @@ pub trait Value: Sized + 'static {
     /// Transform this a Roto value back into this type
     fn untransform(transformed: Self::Transformed) -> Self;
 
+    /// Turn the transformed value into a proper Roto function parameter.
     fn as_param(transformed: &mut Self::Transformed) -> Self::AsParam {
         Self::AsParam::as_param(transformed)
     }
 
+    /// Turn a Roto function parameter into a transformed value.
     fn to_value(param: Self::AsParam) -> Self::Transformed {
         Self::AsParam::to_value(param)
     }
@@ -171,6 +171,7 @@ pub trait Value: Sized + 'static {
     /// The information is also returned for direct use.
     fn resolve() -> Ty;
 
+    /// Return the name of this type.
     fn name() -> &'static str {
         std::any::type_name::<Self>()
     }
@@ -369,8 +370,6 @@ impl Value for Arc<str> {
 
 #[sealed]
 impl Value for ErasedList {
-    const SAFE: bool = false;
-
     type Transformed = Self;
     type AsParam = *mut Self;
 
@@ -446,8 +445,6 @@ impl Param<DynVal> for DynVal {
 
 #[sealed]
 impl Value for DynVal {
-    const SAFE: bool = false;
-
     type Transformed = Self;
 
     type AsParam = Self;

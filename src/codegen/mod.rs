@@ -173,6 +173,7 @@ unsafe impl<Ctx, F> Send for TypedFunc<Ctx, F> {}
 unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 
 impl<C: OptCtx, F: RotoFunc> TypedFunc<C, F> {
+    /// Call this function with a tuple representing its arguments
     pub fn call_tuple(&self, ctx: &mut C::Ctx, args: F::Args) -> F::Return {
         unsafe {
             F::invoke::<C::Ctx>(ctx, args, self.func, self.return_by_ref)
@@ -187,12 +188,14 @@ macro_rules! call_impl {
             $($ty: Value,)*
             Return: Value
         {
+            /// Call this function.
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
             pub fn call(&self, $($ty: $ty,)*) -> Return {
                 self.call_tuple(&mut NoCtx, ($($ty,)*))
             }
 
+            /// Turn this into an `impl Fn` type, to use it as a regular function.
             #[allow(non_snake_case)]
             pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
                 move |$($ty,)*| self.call($($ty,)*)
@@ -204,12 +207,14 @@ macro_rules! call_impl {
             $($ty: Value,)*
             Return: Value
         {
+            /// Call this function.
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
             pub fn call(&self, ctx: &mut C, $($ty: $ty,)*) -> Return {
                 self.call_tuple(ctx, ($($ty,)*))
             }
 
+            /// Turn this into an `impl Fn` type, to use it as a regular function.
             #[allow(non_snake_case)]
             pub fn into_func(self) -> impl Fn(&mut C, $($ty,)*) -> Return {
                 move |ctx, $($ty,)*| self.call(ctx, $($ty,)*)

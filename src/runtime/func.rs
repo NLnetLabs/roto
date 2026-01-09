@@ -31,6 +31,7 @@ pub struct FunctionDescription {
 unsafe impl Send for FunctionDescription {}
 unsafe impl Sync for FunctionDescription {}
 
+/// Trait implemented by functions that can be registered in a `runtime`.
 #[diagnostic::on_unimplemented(
     note = "All arguments and the return type of this function implement `Value`.",
     note = "You might have forgotten to wrap one of the arguments in `Val<T>`."
@@ -39,12 +40,19 @@ pub trait RegisterableFn<A, R, MaybeOutPtr>: Send + 'static {
     /// The type of a Rust function wrapping a function of this type
     type RustWrapper;
 
+    /// The trampoline function calling this function when called from Roto.
     const TRAMPOLINE: Self::RustWrapper;
 
+    /// The pointer to this function.
     fn ptr(self) -> Arc<Box<dyn Any>>;
+
+    /// The `TypeId`s of the parameter types of this function.
     fn parameter_types(&self) -> Vec<TypeId>;
+
+    /// The `TypeId` of the return type of this function.
     fn return_type() -> TypeId;
 
+    /// The IR function that wraps this function that will be called by the LIR evaluator.
     fn ir_function(&self) -> RustIrFunction;
 }
 

@@ -21,11 +21,22 @@ use crate::{
 /// </div>
 #[derive(Clone, Debug)]
 pub enum Item {
+    /// A function
     Function(Function),
+
+    /// A type
     Type(Type),
+
+    /// A module
     Module(Module),
+
+    /// A constant
     Constant(Constant),
+
+    /// An impl block
     Impl(Impl),
+
+    /// A use statement
     Use(Use),
 }
 
@@ -160,6 +171,7 @@ impl Module {
         })
     }
 
+    /// Add items to this module.
     pub fn add(&mut self, items: impl Registerable) {
         self.children.extend(items.into_lib().items)
     }
