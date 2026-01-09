@@ -1,5 +1,194 @@
 # Changelog
 
+## 0.10.0
+
+Released 2026-01-14.
+
+### Meta
+
+- We now have a `CONTRIBUTING.md`, `TESTING.md` and `SECURITY.md`. (#333)
+
+### Language
+
+#### Breaking changes
+
+- Changed the `type` keyword to `record`. (#297)
+
+```roto
+# Roto 0.9.0
+type Vec2 {
+    x: f32,
+    y: f32,
+}
+
+# Roto 0.10.0
+record Vec2 {
+    x: f32,
+    y: f32,
+}
+```
+- The `LOCALHOSTV4` and `LOCALHOSTV6` constants are not longer global but live
+  under `IpAddr` as associated constants. (#292)
+
+#### Added
+
+- Lists are now supported! See the documentation for more information. (#301)
+
+```roto
+let x: List[i32] = [1, 2, 3];
+let y = [4, 5, 6];
+let z = x + y;
+```
+
+- Roto now has `variant` types. These are much like `enum` types in Rust. (#293)
+
+```roto
+variant Either[L, R] {
+    Left(L),
+    Right(R),
+}
+```
+
+- Record types can now have type parameters. (#298)
+
+```roto
+record Pair[A, B] {
+    a: A,
+    b: B,
+}
+```
+
+- In addition to `while` loops, there are now `for` loops to iterate over lists. (#346)
+
+```roto
+let total = 0;
+for x in [1, 2, 3, 4] {
+    total = total + x;
+}
+```
+
+- The `StringBuf` type was added to allow building strings character by
+  character more efficiently. (#300)
+
+```roto
+let buf = StringBuf.new();
+buf.push_char('H');
+buf.push_string("ello, World");
+buf.push_char('!');
+let s: String = buf.as_string();
+```
+
+- The `char` type was added, representing a single Unicode code point. (#300)
+
+```roto
+let a: char = 'a';
+```
+
+- The repository now contains a basic Sublime Text grammar. This can be used 
+  for syntax highlighting in Sublime Text, VS Code, Typst and other
+  applications. (#291)
+
+- If you use common keywords from other languages, Roto will now hint about what
+  the appropriate Roto keyword is. (#322)
+
+- If you try to use `//` or `--` for comments, Roto will hint that you should
+  use `#`. (#322)
+
+#### Bug fixes
+
+- Error messages with non-ASCII characters now display correctly. Thanks @LevitatingBusinessMan! (#325)
+- Type errors are now slightly more informative by printing the id's associated
+  with type variables, instead of printing just an `_`. (#308)
+
+### Crate
+
+#### Breaking changes
+
+- The MSRV is now 1.85. (#288)
+- The context of a `Runtime` is now a type parameter of the `Runtime` type. (#274)
+- The `Reflect` trait has been renamed to `Value`. (#304)
+- `Runtime` and `Package` now have a type parameter `C`, which can be either `NoCtx` or
+  `Ctx<T>`, representing whether it has a context type. (#274)
+- The method `Runtime::register_context_type` has been replaced with
+  `Runtime::with_context_type` with slightly different behaviour. Instead of
+  taking a mutable reference to the runtime, it takes it by value and returns
+  it. (#274)
+
+```rust
+// Roto 0.9.0
+let mut rt = Runtime::new();
+rt.register_context_type::<MyContext>();
+
+// Roto 0.10.0
+let rt = Runtime::new().with_context_type::<MyContext>();
+```
+
+- `Package::get_function` no longer has a type parameter for the context type. (#274)
+
+```rust
+// Roto 0.9.0
+let f = pkg.get_function::<MyContext, fn(i32) -> i32>();
+
+// Roto 0.10.0
+let f = pkg.get_function::<fn(i32) -> i32>();
+```
+
+- Calling a `TypedFunc` without a context no longer requires the annoying first
+  argument `&mut ()`. (#274)
+
+```rust
+// Roto 0.9.0
+let f = pkg.get_function::<(), fn(i32) -> i32>();
+f.call(&mut (), 5)
+
+// Roto 0.10.0
+let f = pkg.get_function::<fn(i32) -> i32>();
+f.call(5)
+```
+
+- Similarly, the `Package::run_tests` method no longer takes an argument if there is no context argument.
+
+```rust
+// Roto 0.9.0
+pkg.run_tests(());
+
+// Roto 0.10.0
+pkg.run_tests();
+```
+
+#### Added
+
+- It's now possible to register associated constants. (#292)
+
+```rust
+let lib = library! {
+    type MyType = Val<MyType>;
+    impl Val<MyType> {
+        /// Associated constant FOO!
+        const FOO: usize = 0;
+    }
+}
+```
+
+- The `RotoFunc` trait is now exposed. (#299)
+- The `selinux-fix` feature flag is added to allow running Roto under SE Linux
+  systems. This might become the default behaviour in the future. Thanks
+  @LevitatingBusinessMan! (#279)
+
+#### Bug fixes
+
+- Fixed a bug which prevented registering types in a module. (#315)
+- The `library!` macro will emit more precise errors when it fails to parse. (#306)
+- The `library!` macro will be more precise in reporting the actual problems
+  when trait resolution fails on the generated code. (#318)
+- Tests are now sorted before being run. (#319)
+- We removed some unused dependencies from our dependency tree, though this only
+  concerned dev-dependencies. (#337)
+
+### Documentation
+
+- Documentation was extended and improved a lot in many PRs.
+
 ## 0.9.0
 
 Released 2025-10-15.
