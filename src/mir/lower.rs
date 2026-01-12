@@ -377,6 +377,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::While(condition, block) => {
                 self.r#while(condition, block)
             }
+            ast::Expr::For(name, expr, body) => self.r#for(name, expr, body),
             ast::Expr::QuestionMark(expr) => self.question_mark(expr),
             ast::Expr::FString(parts) => self.f_string(parts),
         }
@@ -1141,6 +1142,160 @@ impl<'r> Lowerer<'r> {
         let val = self.block(block);
         let _ = self.assign_to_var(val, Type::unit());
         self.emit_jump(lbl_condition);
+
+        self.new_block(lbl_cont);
+        Value::Const(Literal::Unit, Type::unit())
+    }
+
+    fn r#for(
+        &mut self,
+        name: &Meta<Identifier>,
+        expr: &Meta<ast::Expr>,
+        body: &Meta<ast::Block>,
+    ) -> Value {
+        let lbl_current = self.current_label();
+        let lbl_cont = self.label_store.next(lbl_current);
+
+        // We will be creating the following blocks in pseudocode:
+        //
+        // lbl_current:
+        //   ...
+        //   idx = 0
+        //   jump lbl_condition
+        //
+        // lbl_increment:
+        //   idx += 1
+        //   jump lbl_condition
+        //
+        // lbl_condition:
+        //   opt_elem = list.get(idx);
+        //   if some:
+        //       jump lbl_body
+        //   else:
+        //       jump lbl_cont
+        //
+        // lbl_body:
+        //   jump lbl_increment
+
+        let lbl_increment = self
+            .label_store
+            .wrap_internal(lbl_current, Identifier::from("for-increment"));
+        let lbl_condition = self
+            .label_store
+            .wrap_internal(lbl_current, Identifier::from("for-condition"));
+        let lbl_body = self
+            .label_store
+            .wrap_internal(lbl_current, Identifier::from("for-body"));
+
+        let elem_ty = self.type_info.type_of(name);
+        let opt_elem_ty = Type::option(&elem_ty);
+        let opt_elem_var = self.undropped_tmp();
+        self.vars.push((opt_elem_var.clone(), opt_elem_ty.clone()));
+
+        // This is the setup for the iteration. We evaluate the expression for
+        // the list and set the index to 0.
+        let list_ty = self.type_info.type_of(expr);
+        let list_value = self.expr(expr);
+        let list_var = self.assign_to_var(list_value, list_ty.clone());
+        let index_var = self.assign_to_var(
+            Value::Const(Literal::Integer(0), Type::u64()),
+            Type::u64(),
+        );
+
+        // We do not want to increment on the first iteration, so we jump to the condition.
+        self.emit_jump(lbl_condition);
+
+        // This block increments the index variable and jumps to the condition.
+        {
+            self.new_block(lbl_increment);
+            let one_var = self.assign_to_var(
+                Value::Const(Literal::Integer(1), Type::u64()),
+                Type::u64(),
+            );
+            let new_index = Value::BinOp {
+                left: index_var.clone(),
+                binop: ast::BinOp::Add,
+                ty: Type::u64(),
+                right: one_var.clone(),
+            };
+            self.emit_assign(
+                Place::new(index_var.clone(), Type::u64()),
+                Type::u64(),
+                new_index,
+            );
+            self.emit_jump(lbl_condition);
+        }
+
+        // This block gets the value at the given index and breaks out of the loop if the
+        // result is None.
+        {
+            self.new_block(lbl_condition);
+
+            let func_ref =
+                self.find_method(TypeId::of::<ErasedList>(), "get");
+            let new_list_var = self.assign_to_var(
+                Value::Clone(Place::new(list_var, list_ty.clone())),
+                list_ty.clone(),
+            );
+            self.remove_live_variable(&new_list_var);
+            self.emit(Instruction::Assign {
+                to: Place::new(opt_elem_var.clone(), opt_elem_ty.clone()),
+                ty: opt_elem_ty.clone(),
+                value: Value::CallRuntime {
+                    func_ref,
+                    args: vec![new_list_var, index_var],
+                    type_params: vec![elem_ty.clone()],
+                },
+            });
+
+            let discriminant = self.undropped_tmp();
+            self.emit_assign(
+                Place::new(discriminant.clone(), Type::u8()),
+                Type::u8(),
+                Value::Discriminant(opt_elem_var.clone()),
+            );
+            self.emit_switch(
+                discriminant,
+                vec![(0, lbl_body)],
+                Some(lbl_cont),
+            );
+        }
+
+        self.new_block(lbl_body);
+        self.stack_slots.push(Vec::new());
+        let resolved_name = self.type_info.resolved_name(name);
+        let elem_var = Var {
+            scope: resolved_name.scope,
+            kind: VarKind::Explicit(resolved_name.ident),
+        };
+        self.vars.push((elem_var.clone(), elem_ty.clone()));
+
+        let slot = self.stack_slots.last_mut().unwrap();
+
+        slot.push((opt_elem_var.clone(), opt_elem_ty.clone()));
+        slot.push((elem_var.clone(), elem_ty.clone()));
+
+        self.do_assign(
+            Place::new(elem_var, elem_ty.clone()),
+            elem_ty,
+            // This clone is unfortunate, but the best that the IR currently allows.
+            // This could become a move in the future.
+            Value::Clone(Place {
+                var: opt_elem_var,
+                root_ty: opt_elem_ty,
+                projection: vec![Projection::VariantField("Some".into(), 0)],
+            }),
+        );
+
+        let val = self.block(body);
+        let _ = self.assign_to_var(val, Type::unit());
+
+        let to_drop = self.stack_slots.pop().unwrap();
+        for (var, ty) in to_drop.into_iter().rev() {
+            self.emit_drop(Place::new(var, ty.clone()), ty);
+        }
+
+        self.emit_jump(lbl_increment);
 
         self.new_block(lbl_cont);
         Value::Const(Literal::Unit, Type::unit())

@@ -154,6 +154,7 @@ pub struct TypeChecker {
     match_counter: usize,
     if_else_counter: usize,
     while_counter: usize,
+    for_counter: usize,
     /// Set of obligations that we have to satisfy at the end of type checking
     /// a function
     obligations: Vec<Obligation>,
@@ -179,6 +180,7 @@ impl TypeChecker {
             match_counter: 0,
             if_else_counter: 0,
             while_counter: 0,
+            for_counter: 0,
             obligations: Vec::new(),
         };
         checker.declare_builtin_types().unwrap();

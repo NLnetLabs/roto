@@ -486,6 +486,28 @@ impl TypeChecker {
 
                 Ok(diverges)
             }
+            For(name, e, b) => {
+                let element_ty = self.fresh_var();
+                let list_ty = Type::list(&element_ty);
+
+                let mut diverges =
+                    self.expr(scope, &ctx.with_type(list_ty), e)?;
+
+                let idx = self.for_counter;
+                self.for_counter += 1;
+
+                let body_scope = self
+                    .type_info
+                    .scope_graph
+                    .wrap(scope, ScopeType::ForBody(idx));
+
+                self.insert_var(body_scope, name.clone(), element_ty)?;
+
+                diverges |= self.block(body_scope, ctx, b)?;
+                self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
+
+                Ok(diverges)
+            }
             QuestionMark(expr) => {
                 let opt_ty = Type::option(ctx.expected_type.clone());
                 let diverges =
