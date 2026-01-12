@@ -100,6 +100,9 @@ pub trait OptCtx: 'static + Clone {
     fn try_to_no_ctx() -> Option<NoCtx>;
 }
 
+/// A type indicating that a context type `T` is being used.
+///
+/// This is one of the two types implementing `OptCtx`.
 #[derive(Clone)]
 pub struct Ctx<T>(pub T);
 
@@ -116,6 +119,9 @@ impl<T: Context> OptCtx for Ctx<T> {
     }
 }
 
+/// A type indicating that no context type is being used.
+///
+/// This is one of the two types implementing `OptCtx`.
 #[derive(Clone)]
 pub struct NoCtx;
 
@@ -178,6 +184,9 @@ impl Runtime<NoCtx> {
         Ok(rt)
     }
 
+    /// Add a context type to this `runtime`
+    ///
+    /// Takes `self` by value to return `Runtime` with a new changed type parameter `C`.
     pub fn with_context_type<C: Context + 'static>(
         mut self,
     ) -> Result<Runtime<Ctx<C>>, String> {
@@ -290,11 +299,15 @@ impl<C: OptCtx> Runtime<C> {
         self.rt.constants()
     }
 
+    /// Run a CLI based on this runtime.
     #[cfg(feature = "cli")]
     pub fn cli(&self) {
         crate::cli(self)
     }
 
+    /// Try to obtain a `Runtime` that does not have a context.
+    ///
+    /// This is useful to turn a `Runtime` with a genenic `C` parameter into `Runtime<NoCtx>`.
     pub fn try_without_ctx(self) -> Option<Runtime<NoCtx>> {
         C::try_to_no_ctx().map(|_| Runtime {
             rt: self.rt,

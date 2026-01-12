@@ -16,6 +16,7 @@ pub unsafe trait Context: 'static + Clone {
     /// Return the fields of this struct, their offsets and their types
     fn fields() -> Vec<ContextField>;
 
+    /// Return the [`ContextDescription`] of this [`Context`] type.
     fn description() -> ContextDescription {
         ContextDescription {
             type_id: TypeId::of::<Self>(),
@@ -25,19 +26,35 @@ pub unsafe trait Context: 'static + Clone {
     }
 }
 
+/// Description of `Context` type
 #[derive(Clone)]
 pub struct ContextDescription {
+    /// [`TypeId`] of this type.
     pub type_id: TypeId,
+
+    /// Name of this type.
     pub type_name: &'static str,
+
+    /// Fields of this type.
     pub fields: Vec<ContextField>,
 }
 
+/// Description of a field of a [`Context`] type
 #[derive(Clone, Debug)]
 pub struct ContextField {
+    /// Name of the field
     pub name: &'static str,
+
+    /// Offset of the field in its enclosing type
     pub offset: usize,
+
+    /// Name of the type of the field
     pub type_name: &'static str,
+
+    /// [`TypeId`] of the type of the field
     pub type_id: TypeId,
+
+    /// Docstring of the field
     pub docstring: String,
 }
 

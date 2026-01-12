@@ -296,6 +296,7 @@ class RotoLexer(RegexLexer):
             (r'[0-9]', token.Number),
             (r'\s+', token.Text.Whitespace),
             (r'"', token.String, "string"),
+            (r"'\w'", token.String),
         ],
         'string': [
             (r'[^"]', token.String),

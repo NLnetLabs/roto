@@ -12,11 +12,14 @@
 #[must_use]
 pub enum Verdict<A, R> {
     // WARNING: Roto relies on the order of these variants
+    /// The data is accepted and should be kept
     Accept(A),
+    /// The data is rejected and should be filtered out
     Reject(R),
 }
 
 impl<A, R> Verdict<A, R> {
+    /// Turn this [`Verdict`] into a [`Result`].
     pub fn into_result(self) -> Result<A, R> {
         match self {
             Verdict::Accept(x) => Ok(x),
@@ -26,6 +29,7 @@ impl<A, R> Verdict<A, R> {
 }
 
 impl<A> Verdict<A, ()> {
+    /// Turn this [`Verdict`] into an [`Option`] if its `Reject` type is `()`.
     pub fn into_option(self) -> Option<A> {
         match self {
             Self::Accept(x) => Some(x),

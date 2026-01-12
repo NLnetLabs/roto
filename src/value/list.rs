@@ -271,6 +271,7 @@ pub mod boundary {
     }
 
     impl<T: Clone + Value> List<T> {
+        /// Convert this [`List`] into a regular [`Vec`].
         pub fn to_vec(&self) -> Vec<T> {
             let guard = self.inner.0.lock().unwrap();
 

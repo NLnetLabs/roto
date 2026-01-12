@@ -33,6 +33,7 @@ pub struct Module {
 }
 
 impl FileTree {
+    /// Parse the files in the [`FileTree`] returning the AST.
     pub fn parse(self) -> Result<Parsed, RotoReport> {
         Parsed::from_files(self)
     }

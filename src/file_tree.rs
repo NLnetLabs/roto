@@ -12,20 +12,32 @@ fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
 /// A filename with its contents
 #[derive(Clone, Debug)]
 pub struct SourceFile {
+    /// The filename of the file.
+    ///
+    /// This should include the full path to the file, since this is used in diagnostics.
     pub name: String,
+
+    /// Name of the module that this file represents.
+    ///
+    /// This usually matches the file name.
     pub module_name: String,
+
+    /// Contents of the file.
     pub contents: String,
+
     /// The line offset that should be added to the location in error
     /// messages.
     ///
     /// This is used to add the offset of a string of source text in a test,
     /// so that Roto errors can refer to locations in Rust files accurately.
     pub location_offset: usize,
+
     /// Subfiles (only for `mod.roto` files)
     pub children: Vec<usize>,
 }
 
 impl SourceFile {
+    /// Return the name of the file for diagnostics.
     pub fn name(&self) -> String {
         if self.location_offset > 0 {
             format!("{}@{}", self.name, self.location_offset)
@@ -34,6 +46,7 @@ impl SourceFile {
         }
     }
 
+    /// Read a [`Path`] into a [`SourceFile`].
     pub fn read(path: &Path) -> Result<Self, RotoReport> {
         Self::read_internal(path).map_err(|e| read_error(path, e))
     }
@@ -76,6 +89,7 @@ pub struct FileTree {
 }
 
 impl FileTree {
+    /// Compile the files in a [`FileTree`] and return the compiled [`Package`].
     pub fn compile<Ctx: OptCtx>(
         self,
         rt: &Runtime<Ctx>,
@@ -94,11 +108,18 @@ impl FileTree {
 /// be used to create complex scripts programmatically from Rust, without
 /// writing scripts to disk.
 pub enum FileSpec {
+    /// A single file; the leaf of a file tree.
     File(SourceFile),
+
+    /// A directory with a `mod.roto` file and some child modules.
     Directory(SourceFile, Vec<FileSpec>),
 }
 
 impl FileTree {
+    /// Read a [`FileTree`] based on a path.
+    ///
+    /// If the path refers to a file, only that file will be read. If the path
+    /// instead refers to a directory, that directory will be read recursively.
     pub fn read(path: impl AsRef<Path>) -> Result<Self, RotoReport> {
         let path = path.as_ref();
         if path
@@ -113,12 +134,18 @@ impl FileTree {
         }
     }
 
+    /// Read a single file script
     pub fn single_file(path: impl AsRef<Path>) -> Result<Self, RotoReport> {
         let mut file = SourceFile::read(path.as_ref())?;
         file.module_name = "pkg".into();
         Ok(FileTree { files: vec![file] })
     }
 
+    /// Crea a fake file for testing purposes.
+    ///
+    /// The location offset should refer to the file offset of the string that
+    /// contains the contents. This ensures that proper diagnostics can be
+    /// created for this test file.
     pub fn test_file(
         file: &str,
         source: &str,
@@ -135,6 +162,9 @@ impl FileTree {
         }
     }
 
+    /// Read the files specified in a [`FileSpec`].
+    ///
+    /// No automatic discovery of files with be done.
     pub fn file_spec(file_spec: FileSpec) -> FileTree {
         fn inner(
             parent: usize,
