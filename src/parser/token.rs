@@ -580,7 +580,6 @@ impl<'s> Lexer<'s> {
 
     fn record_almost_keyword(&mut self, x: &str, span: Range<usize>) {
         let suggestion = match x {
-            "for" => None,
             "loop" => None,
             "enum" => Some("variant"),
             "struct" => Some("record"),

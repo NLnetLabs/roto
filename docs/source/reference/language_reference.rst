@@ -734,7 +734,7 @@ limitations.
 While loops
 ^^^^^^^^^^^
 
-A while loop takes a condition and a block. It will keep executing the block
+A ``while`` loop takes a condition and a block. It will keep executing the block
 until the condition evaluates to ``false``.
 
 .. code-block:: roto
@@ -744,9 +744,27 @@ until the condition evaluates to ``false``.
         i = i + 1;
     }
 
-A while loop is an expression of the type ``()``. Like with ``if``, ``while``
-does not require parentheses around the condition.
+A ``while`` loop is an expression of the type ``()``. Like with ``if``,
+``while`` does not require parentheses around the condition.
 
+.. _lang_for:
+
+For loops
+^^^^^^^^^
+
+A ``for`` loop can be used to iterate over the elements in a list. The variable
+created by the loop is available only within the loop and received a copy of the
+data in the list.
+
+.. code-block:: roto
+
+    let total = 0;
+    for x in [1, 2, 3, 4] {
+        total = total + x;
+    }
+
+A ``for`` loop is an expression of the type ``()``. Like with ``if``, ``while``
+does not require parentheses around the condition.
 
 Functions
 ---------
