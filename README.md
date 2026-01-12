@@ -77,12 +77,14 @@ Some limitations are only present because we haven't come around to
 implementing them yet. Most limitations can be found in the issue tracker, but
 we've summarized some important missing features here.
 
-- Lists are not supported yet. ([#102](https://github.com/NLnetLabs/roto/issues/102))
-- It's not yet possible to declare your own `enum` types.
-  ([#188](https://github.com/NLnetLabs/roto/issues/188))
-- It's not yet possible to declare types with generics and write
-  generic functions. ([#189](https://github.com/NLnetLabs/roto/issues/189) and
-  [#190](https://github.com/NLnetLabs/roto/issues/190))
+- It's not yet possible to write generic functions.
+  ([#190](https://github.com/NLnetLabs/roto/issues/190))
+- It's not yet possible to create global constants.
+  ([#344](https://github.com/NLnetLabs/roto/issues/344))
+- Functions are not yet first-class, meaning that they cannot be passed around
+  as values. ([#122](https://github.com/NLnetLabs/roto/issues/122))
+- Roto does not have maps/dictionaries yet.
+  ([#345](https://github.com/NLnetLabs/roto/issues/345))
 
 ## Memory safety
 
