@@ -1,7 +1,7 @@
 Roto
 ====
 
-[![CI](https://github.com/NLnetLabs/roto/workflows/ci/badge.svg)](https://github.com/NLnetLabs/roto/actions?query=workflow%3Aci)
+[![CI](https://github.com/NLnetLabs/roto/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/NLnetLabs/roto/actions?query=workflow%3Aci)
 [![docs.rs](https://img.shields.io/docsrs/roto?label=docs.rs)](https://docs.rs/roto)
 [![Documentation Status](https://app.readthedocs.org/projects/roto/badge/?version=latest)](https://roto.docs.nlnetlabs.nl/)
 [![Discuss on Discourse](https://img.shields.io/badge/Discourse-NLnet_Labs-orange?logo=Discourse)](https://community.nlnetlabs.nl/)
