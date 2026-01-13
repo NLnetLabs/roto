@@ -4417,3 +4417,93 @@ fn list_of_option_of_strings() {
         vec![Some("hello".into()), None, Some("bonjour".into()), None];
     assert_eq!(res.to_vec(), expected);
 }
+
+#[test]
+fn for_loop() {
+    let s = src!(
+        r#"
+        fn main() -> u64 {
+            let total = 0;
+            for x in [1, 2, 3, 4] {
+                total = total + x;
+            }
+            total
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u64>("main").unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res, 10);
+}
+
+#[test]
+fn for_loop_strings() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            let total = "";
+            for x in ["a", "b", "c", "d"] {
+                total = total + x;
+            }
+            total
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Arc<str>>("main").unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res, "abcd".into());
+}
+
+#[test]
+fn empty_for_loop() {
+    let s = src!(
+        r#"
+        fn main() -> u64 {
+            let total = 0;
+            for x in [] {
+                total = total + x;
+            }
+            total
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u64>("main").unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res, 0);
+}
+
+#[test]
+fn cartesian_for_loop() {
+    let s = src!(
+        r#"
+        fn main() -> u64 {
+            let total = 0;
+            for x in [1, 2, 3, 4] {
+                for y in [1, 2, 3, 4] {
+                    total = total + x * y;
+                }
+            }
+            total
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u64>("main").unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res, 100);
+}

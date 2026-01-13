@@ -169,8 +169,11 @@ pub enum Expr {
     /// An if or if-else expression
     IfElse(Box<Meta<Expr>>, Meta<Block>, Option<Meta<Block>>),
 
-    /// A while expression
+    /// A while-loop expression
     While(Box<Meta<Expr>>, Meta<Block>),
+
+    /// A for-loop expression
+    For(Meta<Identifier>, Box<Meta<Expr>>, Meta<Block>),
 
     /// Question mark operator
     QuestionMark(Box<Meta<Expr>>),

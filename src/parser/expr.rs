@@ -150,6 +150,28 @@ impl Parser<'_, '_> {
 
                 // Semicolon is allowed but not mandatory after while
                 self.next_is(Token::SemiColon);
+            } else if self.peek_is(Token::Keyword(Keyword::For)) {
+                let expr = self.for_expr()?;
+                if self.peek_is(Token::CurlyRight) {
+                    let end = self.take(Token::CurlyRight)?;
+                    let span = start.merge(end);
+                    return Ok(self.spans.add(
+                        span,
+                        Block {
+                            imports,
+                            stmts,
+                            last: Some(Box::new(expr)),
+                        },
+                    ));
+                }
+                let stmt = Meta {
+                    id: expr.id,
+                    node: Stmt::Expr(expr),
+                };
+                stmts.push(stmt);
+
+                // Semicolon is allowed but not mandatory after while
+                self.next_is(Token::SemiColon);
             } else {
                 let expr = self.expr()?;
                 if self.next_is(Token::SemiColon) {
@@ -539,6 +561,10 @@ impl Parser<'_, '_> {
             return self.while_expr();
         }
 
+        if self.peek_is(Token::Keyword(Keyword::For)) {
+            return self.for_expr();
+        }
+
         if matches!(
             self.peek(),
             Some(
@@ -642,6 +668,20 @@ impl Parser<'_, '_> {
 
         let span = start.merge(self.spans.get(&block));
         Ok(self.spans.add(span, Expr::While(Box::new(cond), block)))
+    }
+
+    /// Parse a for expression
+    fn for_expr(&mut self) -> ParseResult<Meta<Expr>> {
+        let start = self.take(Token::Keyword(Keyword::For))?;
+        let ident = self.identifier()?;
+        self.take(Token::Keyword(Keyword::In))?;
+        let cond = self.expr_no_records()?;
+        let block = self.block()?;
+
+        let span = start.merge(self.spans.get(&block));
+        Ok(self
+            .spans
+            .add(span, Expr::For(ident, Box::new(cond), block)))
     }
 
     /// Parse a match expression

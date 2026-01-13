@@ -81,6 +81,7 @@ pub enum Keyword {
     Else,
     Filter,
     FilterMap,
+    For,
     Fn,
     If,
     Import,
@@ -549,6 +550,7 @@ impl<'s> Lexer<'s> {
             "else" => Keyword::Else,
             "filter" => Keyword::Filter,
             "filtermap" => Keyword::FilterMap,
+            "for" => Keyword::For,
             "fn" => Keyword::Fn,
             "if" => Keyword::If,
             "import" => Keyword::Import,
@@ -578,7 +580,6 @@ impl<'s> Lexer<'s> {
 
     fn record_almost_keyword(&mut self, x: &str, span: Range<usize>) {
         let suggestion = match x {
-            "for" => None,
             "loop" => None,
             "enum" => Some("variant"),
             "struct" => Some("record"),
@@ -669,6 +670,7 @@ impl Keyword {
             Keyword::Else => "else",
             Keyword::Filter => "filter",
             Keyword::FilterMap => "filtermap",
+            Keyword::For => "for",
             Keyword::Fn => "fn",
             Keyword::If => "if",
             Keyword::Import => "import",

@@ -114,6 +114,7 @@ pub enum ScopeType {
     Then(usize),
     Else(usize),
     WhileBody(usize),
+    ForBody(usize),
     Module(ModuleScope),
     Function(Identifier),
     MatchArm(usize, Option<usize>),
@@ -495,6 +496,9 @@ impl ScopeGraph {
                 }
                 ScopeType::WhileBody(idx) => {
                     format!("$while_body_{idx}")
+                }
+                ScopeType::ForBody(idx) => {
+                    format!("$for_body_{idx}")
                 }
                 ScopeType::Type(name) => name.as_str().to_string(),
                 ScopeType::TypeParams => "$type_params".into(),
