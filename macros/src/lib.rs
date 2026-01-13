@@ -612,7 +612,13 @@ fn flatten_use_tree(tree: &syn::UseTree) -> Vec<Vec<String>> {
 
 fn param_name(pat: &syn::Pat) -> Option<String> {
     match pat {
-        syn::Pat::Ident(ident) => Some(ident.ident.to_string()),
+        syn::Pat::Ident(ident) => {
+            let s = ident.ident.to_string();
+            Some(match s.strip_suffix('_') {
+                Some(s) => s.to_string(),
+                None => s,
+            })
+        }
         syn::Pat::Paren(paren) => param_name(&paren.pat),
         syn::Pat::Reference(reference) => param_name(&reference.pat),
         syn::Pat::TupleStruct(pat) => {
