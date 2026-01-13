@@ -14,7 +14,7 @@ Concatenate this list with another, returning the result.
 The arguments are not mutated by this function.
 ````
 
-````{roto:function} get(out: List[T], this: u64) -> Option[T]
+````{roto:function} get(self: List[T], idx: u64) -> Option[T]
 Get an element from the list.
 
 This function returns `None` if the index is out of bounds.

@@ -379,15 +379,23 @@ impl Function {
     ///     location!(),
     /// ).unwrap();
     /// ```
-    pub fn new<A, R, O>(
+    pub fn new<F, A, R, O>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
-        params: Vec<&str>,
-        func: impl RegisterableFn<A, R, O>,
+        mut params: Vec<&str>,
+        func: F,
         location: Location,
-    ) -> Result<Self, RegistrationError> {
+    ) -> Result<Self, RegistrationError>
+    where
+        F: RegisterableFn<A, R, O>,
+    {
         let name = name.into();
         Rt::check_name(&location, name)?;
+
+        dbg!(name, F::HAS_OUT_PTR);
+        if F::HAS_OUT_PTR {
+            params.remove(0);
+        }
 
         let func = FunctionDescription::of(func);
 
@@ -407,17 +415,25 @@ impl Function {
     /// This is very dangerous, since the generic signature must match up with the given
     /// function. At the moment, there are not enough guard rails in place to expose this
     /// functionality to downstream users, so this function is kept private.
-    pub(crate) unsafe fn new_generic<A, R, O>(
+    pub(crate) unsafe fn new_generic<F, A, R, O>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
-        params: Vec<&str>,
-        func: impl RegisterableFn<A, R, O>,
+        mut params: Vec<&str>,
+        func: F,
         sig: &str,
         vtables: Vec<&str>,
         location: Location,
-    ) -> Result<Self, RegistrationError> {
+    ) -> Result<Self, RegistrationError>
+    where
+        F: RegisterableFn<A, R, O>,
+    {
         let name = name.into();
         Rt::check_name(&location, name)?;
+
+        dbg!(name, F::HAS_OUT_PTR);
+        if F::HAS_OUT_PTR {
+            params.remove(0);
+        }
 
         let func = FunctionDescription::of(func);
 

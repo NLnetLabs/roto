@@ -494,10 +494,10 @@ pub fn built_ins() -> Library {
             ///
             /// This function returns `None` if the index is out of bounds.
             #[sig = "fn[T](List[T], u64) -> T?"]
-            fn get(out: OutPtr<DynVal>, this: Self, idx: u64) {
+            fn get(out: OutPtr<DynVal>, self_: Self, idx: u64) {
                 // SAFETY: Roto ensures that the return type of this function
                 // matches the element type of the list.
-                unsafe { list_get(out.ptr.cast(), this, idx) }
+                unsafe { list_get(out.ptr.cast(), self_, idx) }
             }
 
             /// Swap two elements in this list at the given indices.

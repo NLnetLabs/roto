@@ -37,6 +37,9 @@ unsafe impl Sync for FunctionDescription {}
     note = "You might have forgotten to wrap one of the arguments in `Val<T>`."
 )]
 pub trait RegisterableFn<A, R, MaybeOutPtr>: Send + 'static {
+    /// Whether the first parameter is an out pointer
+    const HAS_OUT_PTR: bool;
+
     /// The type of a Rust function wrapping a function of this type
     type RustWrapper;
 
@@ -139,6 +142,8 @@ macro_rules! registerable_fn {
             $r: Value,
             F: Fn($($a,)*) -> $r + Send + 'static,
         {
+            const HAS_OUT_PTR: bool = false;
+
             type RustWrapper = extern "C" fn (*const Self, *mut $r::Transformed, $($a::AsParam),*) -> ();
 
             const TRAMPOLINE: Self::RustWrapper = {
@@ -217,6 +222,7 @@ macro_rules! registerable_fn_out_ptr {
             $r: Value,
             F: Fn(OutPtr<$r>, $($a,)*) + Send + 'static,
         {
+            const HAS_OUT_PTR: bool = true;
             type RustWrapper = extern "C" fn (*const Self, *mut $r::Transformed, $($a::AsParam),*) -> ();
 
             const TRAMPOLINE: Self::RustWrapper = {
