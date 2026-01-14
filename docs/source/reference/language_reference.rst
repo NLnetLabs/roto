@@ -174,8 +174,9 @@ Booleans
 ^^^^^^^^
 
 The boolean type in Roto is called :roto:ref:`bool` and it has two possible
-values: `true` and `false`. Booleans can be manipulated via several operators
-such as `&&` (logical and), `||` (locical or) and `not` (logical negation).
+values: ``true`` and ``false``. Booleans can be manipulated via several
+operators such as ``&&`` (logical and), ``||`` (locical or) and ``not`` (logical
+negation).
 
 .. _lang_integers:
 
@@ -286,8 +287,8 @@ Strings can contain the following escape sequences:
 +-----------------+--------------------------+-----------------+
 
 In addition, any unicode character can be represented by its scalar value. This
-can be done with `\x` followed by 2 hexadecimal digits or with `\u{...}` where
-the `...` is a hexadecimal number.
+can be done with ``\x`` followed by 2 hexadecimal digits or with ``\u{...}`` where
+the ``...`` is a hexadecimal number.
 
 Finally, Roto will ignore any whitespace after a ``\`` followed by a newline.
 
@@ -297,10 +298,11 @@ String formatting
 """""""""""""""""
 
 Roto supports a Python-like syntax for string formatting. Any string literal
-prefixed with `f` will become a format string (or "f-string"), that interpolates
-the expressions between ``{`` and ``}``. The f-string will insert a call to the
-``to_string`` method for displaying the value. Therefore, any type with a
-``to_string`` method can be put in an f-string, including registered types.
+prefixed with ``f`` will become a format string (or "f-string"), that
+interpolates the expressions between ``{`` and ``}``. The f-string will insert a
+call to the ``to_string`` method for displaying the value. Therefore, any type
+with a ``to_string`` method can be put in an f-string, including registered
+types.
 
 .. code-block:: roto
 
@@ -1038,8 +1040,8 @@ We can rewrite the previous example as follows.
         square(square(x))
     }
 
-Now the name `square` can only be used within the `fourth_power` function and
-not in any other functions we define. But we can define even more granular
+Now the name ``square`` can only be used within the ``fourth_power`` function
+and not in any other functions we define. But we can define even more granular
 imports such as in the following example, where we use a function ``foo`` from
 either module ``A`` or ``B``, depending on a boolean flag.
 

@@ -47,7 +47,7 @@ If you try to compile that script, Roto will show you the following error:
      ╭─[ hello_world.roto:2:11 ]
      │
    2 │     print(5);
-     │           ┬  
+     │           ┬
      │           ╰── expected `String`, found `{integer}`
   ───╯
 
@@ -61,5 +61,5 @@ We can also use the compiler to only check our program without running it:
 
   $ roto check hello_world.roto
 
-Now you know how to run and check Roto scripts. You can look at the :doc:`../reference/language_reference`
-to learn the rest of the language.
+Now you know how to run and check Roto scripts. You can look at the
+:doc:`../reference/language_reference` to learn the rest of the language.

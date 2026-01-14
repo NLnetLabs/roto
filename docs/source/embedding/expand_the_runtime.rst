@@ -27,12 +27,11 @@ directly.
 Add functions
 -------------
 
-Even though Roto provides a standard `print` function, you might not want
-to expose that. For instance, you might want to let scripts print to a file
-instead. We can do that quite easily with the `roto_function` macro. You can
-use this macro as an attribute macro on a function and pass it the runtime you
-want to add the function to. This function will then become available in the
-scripts you compile.
+Even though Roto provides a standard ``print`` function, you might not want to
+expose that. For instance, you might want to let scripts print to a file
+instead. We can do that quite easily with the ``library!`` macro. Any function
+declared within that macro will then become available in the scripts you
+compile.
 
 .. note::
 
@@ -282,9 +281,9 @@ Add modules
 Everything registered so far has been added to the global module. With a large
 runtime, that quickly becomes unwieldy. We can fix this by using Roto's module
 system. To do so, simply wrap the items you want to register in a Rust-like
-`mod`.
+``mod``.
 
-You can nest `mod` statements to create complex structures.
+You can nest ``mod`` statements to create complex structures.
 
 .. code-block:: rust
 
@@ -304,8 +303,8 @@ You can nest `mod` statements to create complex structures.
 
     let rt = Runtime::from_lib(lib).unwrap();
 
-The Rust code above registers the `sin` and `cos` functions in the `math` module, so
-that's how we can then access it from Roto:
+The Rust code above registers the ``sin`` and ``cos`` functions in the ``math``
+module, so that's how we can then access it from Roto:
 
 .. code-block:: roto
 
@@ -324,10 +323,10 @@ that's how we can then access it from Roto:
 Composing libraries
 -------------------
 
-We are not limited to using just a single `library!` call, but we can create
-multiple libraries and compose them using the `include!` macro inside a
-`library!`. Doing so includes a library directly in another at the point where
-the `include!` macro is used.
+We are not limited to using just a single ``library!`` call, but we can create
+multiple libraries and compose them using the ``include!`` macro inside a
+``library!``. Doing so includes a library directly in another at the point where
+the ``include!`` macro is used.
 
 .. warning::
 
