@@ -8,7 +8,7 @@ variables:
   ident: '\b[_\p{XID_Start}][_\p{XID_Continue}]*\b'
   lower_ident: '\b[[:lower:]][_\p{XID_Continue}]*\b'
   upper_ident: '\b[[:upper:]][_\p{XID_Continue}]*\b'
- 
+
 contexts:
   main:
     - include: base
@@ -24,7 +24,7 @@ contexts:
     - include: number
     - include: operator
     - include: punctuation
-    
+
     - match: '{{lower_ident}}'
       scope: variable.other.roto
 
@@ -44,10 +44,10 @@ contexts:
 
   type_name:
     - match: \b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool)\b
-      scope: storage.type
+      scope: storage.type.roto
 
     - match: '{{upper_ident}}'
-      scope: storage.type
+      scope: storage.type.roto
 
   function_def:
     - match: '\b(fn)(?:[[:space:]]+({{ident}}))?[[:space:]]*\('
@@ -55,6 +55,17 @@ contexts:
         1: storage.type.function.roto
         2: entity.name.function.roto
       push: function_def_args
+
+  list:
+    - match: '\['
+      scope: punctuation.section.sequence.begin.roto
+      push: list_body
+
+  list_body:
+    - include: base
+    - match: '\]'
+      scope: punctuation.section.sequence.end.roto
+      pop: true
 
   function_def_args:
     - include: punctuation
@@ -83,7 +94,7 @@ contexts:
     - match: \b(fn|filter|filtermap|test)\b
       scope: keyword.declaration.function.roto
 
-    - match: \b(if|else|while|return|accept|reject|match)\b
+    - match: \b(if|else|for|while|return|accept|reject|match)\b
       scope: keyword.control.roto
 
     - match: \b(import)\b
@@ -135,7 +146,7 @@ contexts:
     - meta_scope: string.quoted.double.roto
 
     - match: '\\.'
-      scope: constant.character.escape.c
+      scope: constant.character.escape.roto
 
     - match: '"'
       pop: true
