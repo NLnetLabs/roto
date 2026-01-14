@@ -30,7 +30,6 @@ use crate::{
 use check::{FunctionRetrievalError, RotoFunc, check_roto_type_reflect};
 use cranelift::{
     codegen::{
-        entity::EntityRef,
         ir::{
             self, AbiParam, Block, InstBuilder, MemFlags, StackSlotData,
             StackSlotKind, condcodes::IntCC, types::*,
@@ -544,9 +543,6 @@ impl ModuleBuilder {
 
         let mut stack_slots = Vec::new();
         for (v, t) in variables {
-            let idx = self.variable_map.len();
-            let var = Variable::new(idx);
-
             let ir_ty = match t {
                 lir::ValueOrSlot::Val(ir_ty) => *ir_ty,
                 lir::ValueOrSlot::StackSlot(layout) => {
@@ -563,8 +559,8 @@ impl ModuleBuilder {
             };
 
             let ty = self.cranelift_type(&ir_ty);
+            let var = builder.declare_var(ty);
             self.variable_map.insert(v.clone(), (var, ty));
-            builder.declare_var(var, ty);
         }
 
         let mut func_gen = FuncGen {
@@ -1190,12 +1186,10 @@ impl<'c> FuncGen<'c> {
     }
 
     fn variable(&mut self, var: &Var, ty: Type) -> Variable {
-        let len = self.module.variable_map.len();
         let (var, _ty) =
             *self.module.variable_map.entry(var.clone()).or_insert_with(
                 || {
-                    let var = Variable::new(len);
-                    self.builder.declare_var(var, ty);
+                    let var = self.builder.declare_var(ty);
                     (var, ty)
                 },
             );

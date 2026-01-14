@@ -6,10 +6,13 @@ input_file: tests/scripts/type_errors/types_with_the_same_name.roto
 Error: Type error: item `Foo` is declared multiple times
    ╭─[ tests/scripts/type_errors/types_with_the_same_name.roto:2:8 ]
    │
- 1 │ record Foo { a: u32 }
-   │        ─┬─  
-   │         ╰─── `Foo` previously declared here
  2 │ record Foo { b: u32 }
    │        ─┬─  
    │         ╰─── `Foo` redefined here
+   │
+   ├─[ tests/scripts/type_errors/types_with_the_same_name.roto:2:8 ]
+   │
+ 1 │ record Foo { a: u32 }
+   │        ─┬─  
+   │         ╰─── `Foo` previously declared here
 ───╯

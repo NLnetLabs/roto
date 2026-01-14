@@ -32,31 +32,31 @@ selinux-fix = ["cranelift-jit/selinux-fix"]
 disas = ["cranelift-codegen/disas"]
 
 [dependencies]
-ariadne = "0.5.1"
-clap = { version = "4.4.6", features = ["derive"], optional = true }
+ariadne = "0.6.0"
+clap = { version = "4.5.54", features = ["derive"], optional = true }
 env_logger = { version = "0.11", optional = true }
-unicode-ident = "1.0.18"
+unicode-ident = "1.0.22"
 inetnum = "0.1.0"
 log = "0.4"
 roto-macros = { workspace = true }
-symbol_table = { version = "0.4.0", features = ["global"] }
-rustc-literal-escaper = "0.0.4"
+symbol_table = { version = "0.5.0", features = ["global"] }
+rustc-literal-escaper = "0.0.7"
 libc = "0.2"
 sealed = "0.6.0"
 
 [dependencies.cranelift]
-version = "0.120.0"
+version = "0.127.1"
 features = ["frontend", "jit", "module", "native"]
 
 [dependencies.cranelift-codegen]
-version = "0.120.0"
+version = "0.127.1"
 
 [dependencies.cranelift-jit]
-version = "0.120.0"
+version = "0.127.1"
 
 [dev-dependencies]
-insta = { version = "1.43.1", features = ["glob"] }
-routecore = { version = "0.5", features = ["bgp", "bmp", "serde"] }
+insta = { version = "1.46.0", features = ["glob"] }
+routecore = { version = "0.6", features = ["bgp", "bmp", "serde"] }
 
 [profile.profiling]
 inherits = "release"
@@ -71,21 +71,21 @@ ignored = ["cranelift-jit"]
 members = ["macros"]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
 rust-version = "1.89"
-description = "strongly-typed, compiled language for Rotonda"
+description = "a statically-typed, compiled, embedded scripting language"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
 homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
-keywords = ["routing", "bgp"]
-categories = ["network-programming"]
+keywords = ["scripting", "language", "scripting-language", "routing", "bgp"]
+categories = ["compilers", "network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
-roto-macros = { path = "macros", version = "=0.9.0" }
+roto-macros = { path = "macros", version = "=0.10.0" }
 proc-macro2 = "1.0.86"
 quote = "1.0.37"
 syn = { version = "2.0.77", features = ["full"] }
