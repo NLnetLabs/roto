@@ -392,7 +392,6 @@ impl Function {
         let name = name.into();
         Rt::check_name(&location, name)?;
 
-        dbg!(name, F::HAS_OUT_PTR);
         if F::HAS_OUT_PTR {
             params.remove(0);
         }
@@ -430,7 +429,6 @@ impl Function {
         let name = name.into();
         Rt::check_name(&location, name)?;
 
-        dbg!(name, F::HAS_OUT_PTR);
         if F::HAS_OUT_PTR {
             params.remove(0);
         }
