@@ -21,7 +21,7 @@ To get started run
 
     $ cargo new hello_roto
 
-This will set up a new Rust project with the name `hello_roto`. You can `cd`
+This will set up a new Rust project with the name ``hello_roto``. You can ``cd``
 into the generated directory.
 
 
