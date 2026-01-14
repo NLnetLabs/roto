@@ -33,7 +33,10 @@ fn main() -> ExitCode {
     println!("is_zero(0.0.0.0) = {res:?}");
 
     println!();
-    let _ = pkg.run_tests();
+
+    if pkg.run_tests().is_err() {
+        return ExitCode::FAILURE;
+    };
 
     ExitCode::SUCCESS
 }
