@@ -76,12 +76,12 @@ edition = "2024"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
 rust-version = "1.89"
-description = "strongly-typed, compiled language for Rotonda"
+description = "a statically-typed, compiled, embedded scripting language"
 documentation = "https://docs.rs/roto/"
 repository = "https://github.com/NLnetLabs/roto/"
 homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
-keywords = ["routing", "bgp"]
-categories = ["network-programming"]
+keywords = ["scripting", "language", "scripting-language", "routing", "bgp"]
+categories = ["compilers", "network-programming"]
 readme = "README.md"
 
 [workspace.dependencies]
