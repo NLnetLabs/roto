@@ -6,11 +6,13 @@ input_file: tests/scripts/type_errors/test_declared_twice.roto
 Error: Type error: test `foo` is declared multiple times
    ╭─[ tests/scripts/type_errors/test_declared_twice.roto:5:6 ]
    │
- 1 │ test foo {
-   │      ─┬─  
-   │       ╰─── `foo` previously declared here
-   │ 
  5 │ test foo {
    │      ─┬─  
    │       ╰─── `foo` redefined here
+   │
+   ├─[ tests/scripts/type_errors/test_declared_twice.roto:5:6 ]
+   │
+ 1 │ test foo {
+   │      ─┬─  
+   │       ╰─── `foo` previously declared here
 ───╯
