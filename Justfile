@@ -51,3 +51,13 @@ doc:
     cargo run -- doc docs/source/reference/std
     cd docs && make clean
     cd docs && make html
+
+examples:
+    #!/usr/bin/env sh
+    set -e
+    for example in examples/*.rs; do
+        filename=${example#"examples/"}
+        name=${filename%".rs"}
+        echo "Running example: $name"
+        cargo run --example $name
+    done;
