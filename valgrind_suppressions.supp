@@ -12,3 +12,10 @@
 	...
 	fun:_ZN4roto5value12TypeRegistry5store17*
 }
+{
+	A leak the standard test runner
+	Memcheck:Leak
+	match-leak-kinds: all
+	...
+	fun:_ZN4test7console17run_tests_console*
+}
