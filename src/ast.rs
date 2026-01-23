@@ -304,10 +304,6 @@ pub enum BinOp {
     Gt,
     /// Greater than or equal (`>=`)
     Ge,
-    /// In
-    In,
-    /// Not in
-    NotIn,
     /// Addition (`+`)
     Add,
     /// Subtraction (`-`)
@@ -332,12 +328,10 @@ impl std::fmt::Display for BinOp {
                 Self::Le => "<",
                 Self::Gt => ">=",
                 Self::Ge => "<",
-                Self::In => "in",
                 Self::Add => "+",
                 Self::Sub => "-",
                 Self::Mul => "*",
                 Self::Div => "/",
-                Self::NotIn => "not in",
             }
         )
     }

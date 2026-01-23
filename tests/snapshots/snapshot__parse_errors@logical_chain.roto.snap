@@ -9,4 +9,6 @@ Error: Parse error: `||` cannot be chained with `&&`
  2 │     true && false || true && false;
    │                   ─┬  
    │                    ╰── cannot be chained with `&&`
+   │ 
+   │ Note: Try to disambiguate the expression with parentheses.
 ───╯

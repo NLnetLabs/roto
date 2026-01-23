@@ -930,18 +930,6 @@ impl TypeChecker {
                     Err(self.error_expected_numeric_value(left, &operand_ty))
                 }
             }
-            In | NotIn => {
-                self.unify(&ctx.expected_type, &Type::bool(), span, None)?;
-
-                let ty = self.fresh_var();
-
-                let mut diverges = false;
-                diverges |= self.expr(scope, &ctx.with_type(&ty), left)?;
-                diverges |=
-                    self.expr(scope, &ctx.with_type(Type::list(ty)), right)?;
-
-                Ok(diverges)
-            }
         }
     }
 
