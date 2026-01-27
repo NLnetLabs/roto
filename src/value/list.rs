@@ -204,6 +204,10 @@ pub mod boundary {
             }
         }
 
+        pub(crate) fn as_erased(self) -> ErasedList {
+            self.inner
+        }
+
         /// Push a new element to this [`List`]
         pub fn push(&self, elem: T) {
             let elem = T::transform(elem);
@@ -289,6 +293,16 @@ pub mod boundary {
                 .iter()
                 .map(|elem| T::untransform(elem.clone()))
                 .collect()
+        }
+    }
+
+    impl<A: Clone + Value> FromIterator<A> for List<A> {
+        fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+            let this = Self::new();
+            for elem in iter {
+                this.push(elem);
+            }
+            this
         }
     }
 }

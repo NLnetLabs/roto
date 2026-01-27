@@ -4507,3 +4507,247 @@ fn cartesian_for_loop() {
 
     assert_eq!(res, 100);
 }
+
+#[test]
+fn string_get() {
+    let s = src!(
+        r#"
+        fn main(i: u64) -> char? {
+            "hello".get(i)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(u64) -> Option<char>>("main").unwrap();
+
+    let res = f.call(2);
+    assert_eq!(res, Some('l'));
+
+    let res = f.call(0);
+    assert_eq!(res, Some('h'));
+
+    let res = f.call(10);
+    assert_eq!(res, None);
+
+    let res = f.call(5);
+    assert_eq!(res, None);
+}
+
+#[test]
+fn string_get_non_ascii() {
+    let s = src!(
+        r#"
+        fn main(i: u64) -> char? {
+            "Löwe 老虎 Léopard".get(i)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(u64) -> Option<char>>("main").unwrap();
+
+    let res = f.call(1);
+    assert_eq!(res, Some('ö'));
+
+    let res = f.call(5);
+    assert_eq!(res, Some('老'));
+
+    let res = f.call(8);
+    assert_eq!(res, Some('L'));
+
+    let res = f.call(16);
+    assert_eq!(res, None);
+}
+
+#[test]
+fn string_slice() {
+    let s = src!(
+        r#"
+        fn main(i: u64, j: u64) -> String? {
+            "hello".slice(i, j)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(u64, u64) -> Option<Arc<str>>>("main")
+        .unwrap();
+
+    let res = f.call(0, 2);
+    assert_eq!(res, Some("he".into()));
+
+    let res = f.call(0, 1);
+    assert_eq!(res, Some("h".into()));
+
+    let res = f.call(0, 5);
+    assert_eq!(res, Some("hello".into()));
+
+    let res = f.call(1, 3);
+    assert_eq!(res, Some("el".into()));
+
+    let res = f.call(0, 0);
+    assert_eq!(res, Some("".into()));
+
+    let res = f.call(1, 0);
+    assert_eq!(res, None);
+
+    let res = f.call(0, 8);
+    assert_eq!(res, None);
+}
+
+#[test]
+fn string_slice_non_ascii() {
+    let s = src!(
+        r#"
+        fn main(i: u64, j: u64) -> String? {
+            "Löwe 老虎 Léopard".slice(i, j)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(u64, u64) -> Option<Arc<str>>>("main")
+        .unwrap();
+
+    let res = f.call(0, 4);
+    assert_eq!(res, Some("Löwe".into()));
+
+    let res = f.call(5, 7);
+    assert_eq!(res, Some("老虎".into()));
+    let res = f.call(8, 15);
+    assert_eq!(res, Some("Léopard".into()));
+}
+
+#[test]
+fn string_join() {
+    let s = src!(
+        r#"
+        fn main(sep: String) -> String {
+            ["h", "e", "l", "l", "o"].join(sep)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(Arc<str>) -> Arc<str>>("main")
+        .unwrap();
+
+    let res = f.call("".into());
+    assert_eq!(res, "hello".into());
+
+    let res = f.call(" ".into());
+    assert_eq!(res, "h e l l o".into());
+}
+
+#[test]
+fn string_split() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            "one, two, three".split(", ")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(
+        res.to_vec(),
+        vec!["one".into(), "two".into(), "three".into()]
+    );
+}
+
+#[test]
+fn string_join_chars() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            String.from_chars(['h', 'e', 'l', 'l', 'o'])
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Arc<str>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "hello".into());
+}
+
+#[test]
+fn string_replace() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            # Note: there are better ways to write this in Roto!
+            "Hello $NAME".replace("$NAME", "John")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Arc<str>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "Hello John".into());
+}
+
+#[test]
+fn string_len() {
+    let s = src!(
+        r#"
+        fn main(s: String) -> u64 {
+            s.len()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(Arc<str>) -> u64>("main").unwrap();
+
+    let res = f.call("hello".into());
+    assert_eq!(res, 5);
+
+    let res = f.call("老虎".into());
+    assert_eq!(res, 2);
+}
+
+#[test]
+fn string_chars() {
+    let s = src!(
+        r#"
+        fn main() -> List[char] {
+            "Rust!".chars()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<char>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), vec!['R', 'u', 's', 't', '!']);
+}
+
+#[test]
+fn string_lines() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            "One line\nAnd another".lines()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), vec!["One line".into(), "And another".into()]);
+}

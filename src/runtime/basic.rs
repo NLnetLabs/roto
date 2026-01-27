@@ -1,4 +1,5 @@
 use std::{
+    mem,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr::NonNull,
     sync::{Arc, Mutex},
@@ -7,7 +8,7 @@ use std::{
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
-    Library, Val, library,
+    Library, List, Val, library,
     runtime::func::OutPtr,
     value::{DynVal, ErasedList, VTable, list::ffi::list_get},
 };
@@ -159,6 +160,38 @@ fn ip_addr_methods() -> Library {
 fn string_methods() -> Library {
     library! {
         impl Arc<str> {
+            /// Create a new string from a list of characters
+            ///
+            /// ```roto
+            /// String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
+            /// ```
+            #[sig = "fn(List[char]) -> String"]
+            fn from_chars(chars: ErasedList) -> Arc<str> {
+                // SAFETY: List has repr(transparent) and contains an ErasedList.
+                // The signature asserts that the ErasedList represents a List<char>.
+                let list = unsafe { std::mem::transmute::<ErasedList, List<char>>(chars) };
+                let mut out = String::new();
+                for item in list.to_vec() {
+                    out.push(item);
+                }
+                out.into()
+            }
+
+            /// Convert this string into a list of characters
+            /// ```roto
+            /// String.chars("hello") # -> ['h', 'e', 'l', 'l', 'o']
+            /// ```
+            #[sig = "fn(String) -> List[char]"]
+            fn chars(self) -> ErasedList {
+                let list = List::new();
+
+                for char in self.chars() {
+                    list.push(char);
+                }
+
+                list.as_erased()
+            }
+
             /// Append a string to another, creating a new string
             ///
             /// ```roto
@@ -228,6 +261,106 @@ fn string_methods() -> Library {
             /// Check for string equality
             fn eq(self, other: Self) -> bool {
                 self == other
+            }
+
+            /// Get the nth character from a string.
+            ///
+            /// This method uses zero-based indexing.
+            ///
+            /// ```roto
+            /// "hello".get(1)  # -> Some('e')
+            /// "hello".get(10) # -> None
+            /// "Löwe".get(2)   # -> Some('w')
+            /// ```
+            fn get(self, n: u64) -> Option<char> {
+                let n: usize = n.try_into().ok()?;
+                self.chars().nth(n)
+            }
+
+            /// Replace all occurrences of `from` with `to`
+            ///
+            /// ```roto
+            /// "In rust we trust".replace("rust", "roto") # -> "In roto we troto"
+            /// ```
+            fn replace(self, from: Self, to: Self) -> Self {
+                self.replace(&*from, &to).into()
+            }
+
+            /// Get the number of characters in this string
+            ///
+            /// Note that this might differ from the length of the string in
+            /// bytes.
+            ///
+            /// ```roto
+            /// "hi".len()   # -> 2
+            /// "老虎".len() # -> 2
+            /// ```
+            fn len(self) -> u64 {
+                self.chars().count() as u64
+            }
+
+            /// Create list of all the lines in a string.
+            ///
+            /// Line terminators are not included in the strings in the list.
+            ///
+            /// ```roto
+            /// "One line\nAnd another".lines() # -> ["One line", "And another"]
+            /// ```
+            fn lines(self) -> List<Arc<str>> {
+                self.lines().map(Into::into).collect()
+            }
+
+            /// Extract a substring
+            ///
+            /// The indices indicate the start and end of the string in number
+            /// of characters.
+            ///
+            /// The start of the range is inclusive and the end is exclusive.
+            ///
+            /// ```roto
+            /// "extraction".slice(4, 7)        # -> "act"
+            /// "Löwe 老虎 Léopard".slice(5, 7) # -> "老虎"
+            /// ```
+            fn slice(self, i: u64, j: u64) -> Option<Arc<str>> {
+                let i: usize = i.try_into().ok()?;
+                let j: usize = j.try_into().ok()?;
+
+                // If j is less than i, we return None.
+                let len = j.checked_sub(i)?;
+
+                // Create an iterator for character indices. We have to chain it
+                // with the length of the string because that index won't be
+                // returned by the char_indices iterator.
+                let mut indices = self
+                    .char_indices()
+                    .map(|(byte, _)| byte)
+                    .chain(std::iter::once(self.len()));
+
+                let byte_i = indices.nth(i)?;
+
+                // We need to determine how many characters we have to advance
+                // the iterator, which means subtracting with 1.
+                if let Some(idx) = len.checked_sub(1) {
+                    let byte_j = indices.nth(idx)?;
+                    Some(self[byte_i..byte_j].into())
+                } else {
+                    Some("".into())
+                }
+            }
+
+            /// Split a string by a separator
+            ///
+            /// ```roto
+            /// "one, two, three".split(", ") # -> ["one", "two", "three"]
+            /// ```
+            #[sig = "fn(String, String) -> List[String]"]
+            fn split(self, separator: Arc<str>) -> ErasedList {
+                let list: List<Arc<str>> = self
+                    .split(&*separator)
+                    .map(Into::into)
+                    .collect();
+
+                unsafe { mem::transmute::<List<Arc<str>>, ErasedList>(list) }
             }
         }
     }
@@ -524,6 +657,14 @@ pub fn built_ins() -> Library {
             #[sig = "fn[T](List[T]) -> bool"]
             fn is_empty(self) -> bool {
                 self.is_empty()
+            }
+
+            /// Join the strings in a list into a single string
+            #[sig = "fn(List[String], String) -> String"]
+            fn join(self, separator: Arc<str>) -> Arc<str> {
+                let list = unsafe { std::mem::transmute::<ErasedList, List<Arc<str>>>(self) };
+
+                list.to_vec().join(&separator).into()
             }
         }
     }
