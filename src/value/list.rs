@@ -291,6 +291,16 @@ pub mod boundary {
                 .collect()
         }
     }
+
+    impl<A: Clone + Value> FromIterator<A> for List<A> {
+        fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+            let this = Self::new();
+            for elem in iter {
+                this.push(elem);
+            }
+            this
+        }
+    }
 }
 
 // We use `*mut ()` and `NonNull<()>` to represent `*mut T` and
