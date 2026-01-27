@@ -1,4 +1,5 @@
 use std::{
+    mem,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr::NonNull,
     sync::{Arc, Mutex},
@@ -7,7 +8,7 @@ use std::{
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
-    Library, Val, library,
+    Library, List, Val, library,
     runtime::func::OutPtr,
     value::{DynVal, ErasedList, VTable, list::ffi::list_get},
 };
@@ -159,6 +160,17 @@ fn ip_addr_methods() -> Library {
 fn string_methods() -> Library {
     library! {
         impl Arc<str> {
+            /// Create a new string from a list of characters
+            #[sig = "fn(List[char]) -> String"]
+            fn from_chars(chars: ErasedList) -> Arc<str> {
+                let list = unsafe { std::mem::transmute::<ErasedList, List<char>>(chars) };
+                let mut out = String::new();
+                for item in list.to_vec() {
+                    out.push(item);
+                }
+                out.into()
+            }
+
             /// Append a string to another, creating a new string
             ///
             /// ```roto
@@ -228,6 +240,56 @@ fn string_methods() -> Library {
             /// Check for string equality
             fn eq(self, other: Self) -> bool {
                 self == other
+            }
+
+            /// Get the nth character from a string
+            fn get(self, n: u64) -> Option<char> {
+                let n: usize = n.try_into().ok()?;
+                self.chars().nth(n)
+            }
+
+            /// Extract a substring
+            ///
+            /// The indices indicate the start and end of the string in number
+            /// of characters.
+            ///
+            /// The start is inclusive and the end is exclusive.
+            fn slice(self, i: u64, j: u64) -> Option<Arc<str>> {
+                let i: usize = i.try_into().ok()?;
+                let j: usize = j.try_into().ok()?;
+
+                // If j is less than i, we return None.
+                let len = j.checked_sub(i)?;
+
+                // Create an iterator for character indices. We have to chain it
+                // with the length of the string because that index won't be
+                // returned by the char_indices iterator.
+                let mut indices = self
+                    .char_indices()
+                    .map(|(byte, _)| byte)
+                    .chain(std::iter::once(self.len()));
+
+                let byte_i = indices.nth(i)?;
+
+                // We need to determine how many characters we have to advance
+                // the iterator, which means subtracting with 1.
+                if let Some(idx) = len.checked_sub(1) {
+                    let byte_j = indices.nth(idx)?;
+                    Some(self[byte_i..byte_j].into())
+                } else {
+                    Some("".into())
+                }
+            }
+
+            /// Split a string by a separator
+            #[sig = "fn(String, String) -> List[String]"]
+            fn split(self, separator: Arc<str>) -> ErasedList {
+                let list: List<Arc<str>> = self
+                    .split(&*separator)
+                    .map(Into::into)
+                    .collect();
+
+                unsafe { mem::transmute::<List<Arc<str>>, ErasedList>(list) }
             }
         }
     }
@@ -524,6 +586,14 @@ pub fn built_ins() -> Library {
             #[sig = "fn[T](List[T]) -> bool"]
             fn is_empty(self) -> bool {
                 self.is_empty()
+            }
+
+            /// Join the strings in a list into a single string
+            #[sig = "fn(List[String], String) -> String"]
+            fn join(self, separator: Arc<str>) -> Arc<str> {
+                let list = unsafe { std::mem::transmute::<ErasedList, List<Arc<str>>>(self) };
+
+                list.to_vec().join(&separator).into()
             }
         }
     }
