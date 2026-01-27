@@ -20,6 +20,7 @@ mod error;
 mod expr;
 mod filter_map;
 pub mod meta;
+mod precedence;
 mod signature;
 pub mod token;
 

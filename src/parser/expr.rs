@@ -8,7 +8,7 @@ use crate::{
         MatchArm, Path, Pattern, Record, RecordType, ReturnKind, Stmt,
         TypeExpr,
     },
-    parser::ParseError,
+    parser::{ParseError, precedence::Associativity},
 };
 
 use super::{
@@ -224,7 +224,7 @@ impl Parser<'_, '_> {
 
     /// Parse an assignment expression
     fn assign_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let left = self.logical_expr(r)?;
+        let left = self.binop_expr(None, r)?;
         if self.next_is(Token::Eq) {
             let Expr::Path(path) = &*left else {
                 return Err(ParseError::custom(
@@ -233,7 +233,7 @@ impl Parser<'_, '_> {
                     self.get_span(&left),
                 ).into());
             };
-            let right = self.logical_expr(r)?;
+            let right = self.binop_expr(None, r)?;
             let span = self.merge_spans(&left, &right);
             Ok(self
                 .spans
@@ -243,177 +243,105 @@ impl Parser<'_, '_> {
         }
     }
 
-    /// Parse a logical expression
+    /// Parse a binary expression
     ///
-    /// To avoid confusion, we don't allow `&&` and `||` to be chained together.
+    /// This uses a Pratt parsing-like technique to handle precedence. The
+    /// main improvement is that this can handle "incompatible" operators. That
+    /// is, operators that we don't allow to appear within the same expression
+    /// without parentheses to determine the precedence. We use that in 2 cases:
     ///
-    /// ```ebnf
-    /// LogicalExpr ::= Comparison ( ('&&' Comparison )* | ('||' Comparison)* )
-    /// ```
-    fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let expr = self.comparison(r)?;
+    ///  - Comparison operators are not allowed to be chained.
+    ///  - `&&` and `||` cannot be mixed in the same expression.
+    ///
+    /// Otherwise, this is pretty standard precedence parsing.
+    ///
+    /// We pass in the previous operator that we parsed to this function. This
+    /// effectively puts an lower bound on the precedence of operators that we
+    /// are allowed to parse. For example, if `prev` is `+` then we are allowed
+    /// to parse `*` but not `&&`, because `*` has higher precedence and `&&`
+    /// has lower precedence.
+    ///
+    /// If we are not allowed to parse an binary operator, that means that
+    /// our caller (or its caller, etc.) will parse that operator instead.
+    ///
+    /// See the [`super::precedence`] module for more information.
+    fn binop_expr(
+        &mut self,
+        prev: Option<BinOp>,
+        r: Restrictions,
+    ) -> ParseResult<Meta<Expr>> {
+        let mut lhs = self.negation(r)?;
 
-        if self.peek_is(Token::AmpAmp) {
-            let mut exprs = vec![expr];
-            while self.next_is(Token::AmpAmp) {
-                exprs.push(self.comparison(r)?);
-            }
-            if self.peek_is(Token::PipePipe) {
-                let pipe = self.take(Token::PipePipe)?;
-                return Err(ParseError::custom(
-                    "`||` cannot be chained with `&&`",
-                    "cannot be chained with `&&`",
-                    pipe,
-                )
-                .into());
-            }
-            Ok(exprs
-                .into_iter()
-                .rev()
-                .reduce(|acc, e| {
-                    let s = self.spans.merge(&e, &acc);
-                    self.spans.add(
-                        s,
-                        Expr::BinOp(Box::new(e), BinOp::And, Box::new(acc)),
-                    )
-                })
-                .unwrap())
-        } else if self.peek_is(Token::PipePipe) {
-            let mut exprs = vec![expr];
-            while self.next_is(Token::PipePipe) {
-                exprs.push(self.comparison(r)?);
-            }
-            if self.peek_is(Token::AmpAmp) {
-                let amp = self.take(Token::AmpAmp)?;
-                return Err(ParseError::custom(
-                    "`&&` cannot be chained with `||`",
-                    "cannot be chained with `||`",
-                    amp,
-                )
-                .into());
-            }
-            Ok(exprs
-                .into_iter()
-                .rev()
-                .reduce(|acc, e| {
-                    let span = self.spans.merge(&e, &acc);
-                    self.spans.add(
-                        span,
-                        Expr::BinOp(Box::new(e), BinOp::Or, Box::new(acc)),
-                    )
-                })
-                .unwrap())
-        } else {
-            Ok(expr)
+        // Parsing left associative trees is done by this loop. If we delete
+        // it, we can't parse left associative trees anymore.
+        while let Some(operator) = self.peek_binop() {
+            // If there's no previous operator, we always continue parsing.
+            if let Some(prev) = prev {
+                let associativity = prev.relative_associativity(&operator);
+                match associativity {
+                    // The next operator is either
+                    //  - a higher precedence, or
+                    //  - the same precedence and right associative
+                    // So we should recurse down.
+                    Associativity::Right => {}
+
+                    // The next operator is either
+                    //  - a lower precedence, or
+                    //  - the same precedence and left associative.
+                    // So we should let our caller handle it.
+                    Associativity::Left => break,
+
+                    // We got a pair of incompatible operators.
+                    Associativity::Not => {
+                        // Get the span of the binary operator
+                        let (_, span) = self.next()?;
+                        let op = operator;
+                        return Err(
+                            ParseError::custom(
+                                format!("`{op}` cannot be chained with `{prev}`"),
+                                format!("cannot be chained with `{prev}`"),
+                                span,
+                            )
+                            .with_note("Try to disambiguate the expression with parentheses.")
+                            .into()
+                        );
+                    }
+                };
+            };
+
+            // Parse the binop we previously peeked
+            let _ = self.next()?;
+
+            // Pass this operator as a lower bound to the recursive call.
+            let rhs = self.binop_expr(Some(operator), r)?;
+
+            let span = self.spans.merge(&lhs, &rhs);
+            let lhs_unspanned =
+                Expr::BinOp(Box::new(lhs), operator, Box::new(rhs));
+
+            lhs = self.spans.add(span, lhs_unspanned);
         }
+
+        Ok(lhs)
     }
 
-    /// Parse a comparison expression
-    ///
-    /// ```ebnf
-    /// Comparison ::= Sum (CompareOp Sum)?
-    /// ```
-    fn comparison(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let expr = self.sum(r)?;
-
-        if let Some(op) = self.try_compare_operator()? {
-            let right = self.sum(r)?;
-            let span = self.merge_spans(&expr, &right);
-            Ok(self.spans.add(
-                span,
-                Expr::BinOp(Box::new(expr), op.node, Box::new(right)),
-            ))
-        } else {
-            Ok(expr)
-        }
-    }
-
-    /// Optionally parse a compare operator
-    ///
-    /// This method returns [`Option`], because we are never sure that there is
-    /// going to be a comparison operator. A span is included with the operator
-    /// to allow error messages to be attached to the parsed operator.
-    ///
-    /// ```ebnf
-    /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
-    /// ```
-    fn try_compare_operator(&mut self) -> ParseResult<Option<Meta<BinOp>>> {
-        let Some(tok) = self.peek() else {
-            return Ok(None);
-        };
-
-        let op = match tok {
+    fn peek_binop(&mut self) -> Option<BinOp> {
+        let op = match self.peek()? {
+            Token::AmpAmp => BinOp::And,
+            Token::PipePipe => BinOp::Or,
             Token::EqEq => BinOp::Eq,
             Token::BangEq => BinOp::Ne,
-            Token::AngleLeft => BinOp::Lt,
-            Token::AngleRight => BinOp::Gt,
             Token::AngleLeftEq => BinOp::Le,
             Token::AngleRightEq => BinOp::Ge,
-            Token::Keyword(Keyword::In) => BinOp::In,
-            Token::Keyword(Keyword::Not) => {
-                let span1 = self.take(Token::Keyword(Keyword::Not))?;
-                let span2 = self.take(Token::Keyword(Keyword::In))?;
-                let span = span1.merge(span2);
-                let x = self.spans.add(span, BinOp::NotIn);
-                return Ok(Some(x));
-            }
-            _ => return Ok(None),
+            Token::AngleLeft => BinOp::Lt,
+            Token::AngleRight => BinOp::Gt,
+            Token::Plus => BinOp::Add,
+            Token::Hyphen => BinOp::Sub,
+            Token::Star => BinOp::Mul,
+            Token::Slash => BinOp::Div,
+            _ => return None,
         };
-
-        let (_, span) = self.next()?;
-        Ok(Some(self.spans.add(span, op)))
-    }
-
-    /// Parse a sum expression
-    ///
-    /// ```ebnf
-    /// Sum ::= Term (('+' | '-') Sum)?
-    /// ```
-    fn sum(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let left = self.term(r)?;
-        if self.next_is(Token::Plus) {
-            let right = self.sum(r)?;
-            let span = self.merge_spans(&left, &right);
-            Ok(self.spans.add(
-                span,
-                Expr::BinOp(Box::new(left), BinOp::Add, Box::new(right)),
-            ))
-        } else if self.next_is(Token::Hyphen) {
-            let right = self.sum(r)?;
-            let span = self.merge_spans(&left, &right);
-            Ok(self.spans.add(
-                span,
-                Expr::BinOp(Box::new(left), BinOp::Sub, Box::new(right)),
-            ))
-        } else {
-            Ok(left)
-        }
-    }
-
-    /// Parse a term expression
-    ///
-    /// ```ebnf
-    /// Term ::= Negation (('*' | '/') Term)?
-    /// ```
-    fn term(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        let left = self.negation(r)?;
-        if self.next_is(Token::Star) {
-            let right = self.term(r)?;
-            let span = self.merge_spans(&left, &right);
-            Ok(self.spans.add(
-                span,
-                Expr::BinOp(Box::new(left), BinOp::Mul, Box::new(right)),
-            ))
-        } else if self.next_is(Token::Slash) {
-            let right = self.term(r)?;
-            let span = self.merge_spans(&left, &right);
-            Ok(self.spans.add(
-                span,
-                Expr::BinOp(Box::new(left), BinOp::Div, Box::new(right)),
-            ))
-        } else {
-            Ok(left)
-        }
+        Some(op)
     }
 
     /// Parse a negation expression
