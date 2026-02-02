@@ -160,7 +160,7 @@ fn ip_addr_methods() -> Library {
 fn string_methods() -> Library {
     library! {
         impl Arc<str> {
-            /// Create a new string from a list of characters
+            /// Create a new string from a list of characters.
             ///
             /// ```roto
             /// String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
@@ -177,9 +177,9 @@ fn string_methods() -> Library {
                 out.into()
             }
 
-            /// Convert this string into a list of characters
+            /// Convert this string into a list of characters.
             /// ```roto
-            /// String.chars("hello") # -> ['h', 'e', 'l', 'l', 'o']
+            /// "hello".chars() # -> ['h', 'e', 'l', 'l', 'o']
             /// ```
             #[sig = "fn(String) -> List[char]"]
             fn chars(self) -> ErasedList {
@@ -192,7 +192,7 @@ fn string_methods() -> Library {
                 list.as_erased()
             }
 
-            /// Append a string to another, creating a new string
+            /// Append a string to another, creating a new string.
             ///
             /// ```roto
             /// "hello".append(" ").append("world") # -> "hello world"
@@ -201,7 +201,7 @@ fn string_methods() -> Library {
                 format!("{self}{other}").into()
             }
 
-            /// Check whether a string contains another string
+            /// Check whether a string contains another string.
             ///
             /// ```roto
             /// "haystack".contains("hay")  # -> true
@@ -211,7 +211,7 @@ fn string_methods() -> Library {
                 self.contains(needle.as_ref())
             }
 
-            /// Check whether a string starts with a given prefix
+            /// Check whether a string starts with a given prefix.
             ///
             /// ```roto
             /// "haystack".starts_with("hay")   # -> true
@@ -221,7 +221,7 @@ fn string_methods() -> Library {
                 self.starts_with(prefix.as_ref())
             }
 
-            /// Check whether a string ends with a given suffix
+            /// Check whether a string ends with a given suffix.
             ///
             /// ```roto
             /// "haystack".ends_with("stack") # -> true
@@ -231,7 +231,7 @@ fn string_methods() -> Library {
                 self.ends_with(suffix.as_ref())
             }
 
-            /// Create a new string with all characters converted to lowercase
+            /// Create a new string with all characters converted to lowercase.
             ///
             /// ```roto
             /// "LOUD".to_lowercase() # -> "loud"
@@ -240,7 +240,7 @@ fn string_methods() -> Library {
                 self.to_lowercase().into()
             }
 
-            /// Create a new string with all characters converted to uppercase
+            /// Create a new string with all characters converted to uppercase.
             ///
             /// ```roto
             /// "quiet".to_uppercase() # -> "QUIET"
@@ -249,7 +249,7 @@ fn string_methods() -> Library {
                 self.to_uppercase().into()
             }
 
-            /// Repeat a string `n` times and join them
+            /// Repeat a string `n` times and join them.
             ///
             /// ```roto
             /// "ha".repeat(6) # -> "hahahahahaha"
@@ -258,7 +258,7 @@ fn string_methods() -> Library {
                 self.repeat(n as usize).into()
             }
 
-            /// Check for string equality
+            /// Check for string equality.
             fn eq(self, other: Self) -> bool {
                 self == other
             }
@@ -277,7 +277,7 @@ fn string_methods() -> Library {
                 self.chars().nth(n)
             }
 
-            /// Replace all occurrences of `from` with `to`
+            /// Replace all occurrences of `from` with `to`.
             ///
             /// ```roto
             /// "In rust we trust".replace("rust", "roto") # -> "In roto we troto"
@@ -286,7 +286,7 @@ fn string_methods() -> Library {
                 self.replace(&*from, &to).into()
             }
 
-            /// Get the number of characters in this string
+            /// Get the number of characters in this string.
             ///
             /// Note that this might differ from the length of the string in
             /// bytes.
@@ -310,7 +310,7 @@ fn string_methods() -> Library {
                 self.lines().map(Into::into).collect()
             }
 
-            /// Extract a substring
+            /// Extract a substring from this string.
             ///
             /// The indices indicate the start and end of the string in number
             /// of characters.
@@ -348,7 +348,7 @@ fn string_methods() -> Library {
                 }
             }
 
-            /// Split a string by a separator
+            /// Split a string by a separator.
             ///
             /// ```roto
             /// "one, two, three".split(", ") # -> ["one", "two", "three"]
