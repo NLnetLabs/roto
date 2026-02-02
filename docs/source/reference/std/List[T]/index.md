@@ -24,6 +24,10 @@ This function returns `None` if the index is out of bounds.
 Returns whether is list is empty.
 ````
 
+````{roto:function} join(self: List[String], separator: String) -> String
+Join the strings in a list into a single string
+````
+
 ````{roto:function} len(self: List[T]) -> u64
 Returns the length of this list.
 ````

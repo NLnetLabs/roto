@@ -16,15 +16,22 @@ with an `f`.
 
 
 ````{roto:function} append(self: String, other: String) -> String
-Append a string to another, creating a new string
+Append a string to another, creating a new string.
 
 ```roto
 "hello".append(" ").append("world") # -> "hello world"
 ```
 ````
 
+````{roto:function} chars(self: String) -> List[char]
+Convert this string into a list of characters.
+```roto
+"hello".chars() # -> ['h', 'e', 'l', 'l', 'o']
+```
+````
+
 ````{roto:function} contains(self: String, needle: String) -> bool
-Check whether a string contains another string
+Check whether a string contains another string.
 
 ```roto
 "haystack".contains("hay")  # -> true
@@ -33,7 +40,7 @@ Check whether a string contains another string
 ````
 
 ````{roto:function} ends_with(self: String, suffix: String) -> bool
-Check whether a string ends with a given suffix
+Check whether a string ends with a given suffix.
 
 ```roto
 "haystack".ends_with("stack") # -> true
@@ -42,19 +49,91 @@ Check whether a string ends with a given suffix
 ````
 
 ````{roto:function} eq(self: String, other: String) -> bool
-Check for string equality
+Check for string equality.
+````
+
+````{roto:function} from_chars(chars: List[char]) -> String
+Create a new string from a list of characters.
+
+```roto
+String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
+```
+````
+
+````{roto:function} get(self: String, n: u64) -> Option[char]
+Get the nth character from a string.
+
+This method uses zero-based indexing.
+
+```roto
+"hello".get(1)  # -> Some('e')
+"hello".get(10) # -> None
+"Löwe".get(2)   # -> Some('w')
+```
+````
+
+````{roto:function} len(self: String) -> u64
+Get the number of characters in this string.
+
+Note that this might differ from the length of the string in
+bytes.
+
+```roto
+"hi".len()   # -> 2
+"老虎".len() # -> 2
+```
+````
+
+````{roto:function} lines(self: String) -> List[String]
+Create list of all the lines in a string.
+
+Line terminators are not included in the strings in the list.
+
+```roto
+"One line\nAnd another".lines() # -> ["One line", "And another"]
+```
 ````
 
 ````{roto:function} repeat(self: String, n: u32) -> String
-Repeat a string `n` times and join them
+Repeat a string `n` times and join them.
 
 ```roto
 "ha".repeat(6) # -> "hahahahahaha"
 ```
 ````
 
+````{roto:function} replace(self: String, from: String, to: String) -> String
+Replace all occurrences of `from` with `to`.
+
+```roto
+"In rust we trust".replace("rust", "roto") # -> "In roto we troto"
+```
+````
+
+````{roto:function} slice(self: String, i: u64, j: u64) -> Option[String]
+Extract a substring from this string.
+
+The indices indicate the start and end of the string in number
+of characters.
+
+The start of the range is inclusive and the end is exclusive.
+
+```roto
+"extraction".slice(4, 7)        # -> "act"
+"Löwe 老虎 Léopard".slice(5, 7) # -> "老虎"
+```
+````
+
+````{roto:function} split(self: String, separator: String) -> List[String]
+Split a string by a separator.
+
+```roto
+"one, two, three".split(", ") # -> ["one", "two", "three"]
+```
+````
+
 ````{roto:function} starts_with(self: String, prefix: String) -> bool
-Check whether a string starts with a given prefix
+Check whether a string starts with a given prefix.
 
 ```roto
 "haystack".starts_with("hay")   # -> true
@@ -63,7 +142,7 @@ Check whether a string starts with a given prefix
 ````
 
 ````{roto:function} to_lowercase(self: String) -> String
-Create a new string with all characters converted to lowercase
+Create a new string with all characters converted to lowercase.
 
 ```roto
 "LOUD".to_lowercase() # -> "loud"
@@ -75,7 +154,7 @@ Convert this value into a `String`
 ````
 
 ````{roto:function} to_uppercase(self: String) -> String
-Create a new string with all characters converted to uppercase
+Create a new string with all characters converted to uppercase.
 
 ```roto
 "quiet".to_uppercase() # -> "QUIET"
