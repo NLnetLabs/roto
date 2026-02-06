@@ -1087,12 +1087,12 @@ impl Default for Runtime<NoCtx> {
 }
 
 pub unsafe extern "C" fn init_string(
-    s: *mut Arc<str>,
+    s: *mut crate::String,
     data: *mut u8,
     len: u32,
 ) {
     let slice = unsafe { slice::from_raw_parts(data, len as usize) };
     let str = unsafe { std::str::from_utf8_unchecked(slice) };
-    let arc = Arc::<str>::from(str);
+    let arc = crate::String::from(str);
     unsafe { ptr::write(s, arc) };
 }

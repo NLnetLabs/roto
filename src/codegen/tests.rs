@@ -14,7 +14,7 @@ use crate::{
     pipeline::Package,
     runtime::OptCtx,
     source_file, src,
-    value::{Val, Verdict},
+    value::{String, Val, Verdict},
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -821,7 +821,7 @@ fn repeat_string_manually() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<fn(Arc<str>, u64) -> Arc<str>>("repeat")
+        .get_function::<fn(String, u64) -> String>("repeat")
         .expect("No function found (or mismatched types)");
 
     let res = f.call("foo".into(), 6);
@@ -1226,7 +1226,7 @@ fn to_string() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "10 20 15.5 false 1.1.1.1 1.1.0.0/16 AS1000 foo".into());
@@ -1243,7 +1243,7 @@ fn simple_f_string() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn(Arc<str>) -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn(String) -> String>("foo").unwrap();
 
     let res = f.call("John".into());
     assert_eq!(res, "Hello John!".into());
@@ -1260,7 +1260,7 @@ fn simple_f_string_number() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn(i32) -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn(i32) -> String>("foo").unwrap();
 
     let res = f.call(10);
     assert_eq!(res, "Hello 10!".into());
@@ -1277,7 +1277,7 @@ fn complex_f_string() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "This is a string with another string which prints true, isn't that wonderful?".into());
@@ -1294,7 +1294,7 @@ fn escape_curly_in_f_string() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "Here is a single curly { and a closing one }".into());
@@ -1311,7 +1311,7 @@ fn unicode_val_in_f_string() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "Here is an uppercase A and a lowercase a.".into());
@@ -1329,7 +1329,7 @@ fn f_string_and_int_var_1() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "This should just work: 10".into());
@@ -1349,7 +1349,7 @@ fn f_string_and_int_var_2() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "This should just work: 10".into());
@@ -1367,7 +1367,7 @@ fn f_string_and_float_var_1() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "This should just work: 10".into());
@@ -1387,7 +1387,7 @@ fn f_string_and_float_var_2() {
     );
 
     let mut p = compile(s);
-    let f = p.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let f = p.get_function::<fn() -> String>("foo").unwrap();
 
     let res = f.call();
     assert_eq!(res, "This should just work: 10".into());
@@ -1672,7 +1672,7 @@ fn string() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn() -> Verdict<Arc<str>, ()>>("main")
+        .get_function::<fn() -> Verdict<String, ()>>("main")
         .unwrap();
 
     let res = f.call();
@@ -1691,7 +1691,7 @@ fn escape_string() {
 
     let mut p = compile(s);
 
-    let f = p.get_function::<fn() -> Arc<str>>("main").unwrap();
+    let f = p.get_function::<fn() -> String>("main").unwrap();
 
     let res = f.call();
     assert_eq!(res, "\t\tfoo".into());
@@ -1710,7 +1710,7 @@ fn string_append() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Arc<str>) -> Verdict<Arc<str>, ()>>("main")
+        .get_function::<fn(String) -> Verdict<String, ()>>("main")
         .unwrap();
 
     let res = f.call("Martin".into());
@@ -1729,7 +1729,7 @@ fn string_append_as_function_call() {
 
     let mut p = compile(s);
 
-    let f = p.get_function::<fn(Arc<str>) -> Arc<str>>("main").unwrap();
+    let f = p.get_function::<fn(String) -> String>("main").unwrap();
 
     let res = f.call("Martin".into());
     assert_eq!(res, "Hello Martin".into());
@@ -1749,7 +1749,7 @@ fn string_append_as_imported_function() {
 
     let mut p = compile(s);
 
-    let f = p.get_function::<fn(Arc<str>) -> Arc<str>>("main").unwrap();
+    let f = p.get_function::<fn(String) -> String>("main").unwrap();
 
     let res = f.call("Martin".into());
     assert_eq!(res, "Hello Martin".into());
@@ -1768,7 +1768,7 @@ fn string_plus_operator() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Arc<str>) -> Verdict<Arc<str>, ()>>("main")
+        .get_function::<fn(String) -> Verdict<String, ()>>("main")
         .unwrap();
 
     let res = f.call("Martin".into());
@@ -1792,7 +1792,7 @@ fn string_contains() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Arc<str>) -> Verdict<(), ()>>("main")
+        .get_function::<fn(String) -> Verdict<(), ()>>("main")
         .unwrap();
 
     let res = f.call("incompre".into());
@@ -1825,7 +1825,7 @@ fn string_starts_with() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Arc<str>) -> Verdict<(), ()>>("main")
+        .get_function::<fn(String) -> Verdict<(), ()>>("main")
         .unwrap();
 
     let res = f.call("incompre".into());
@@ -1858,7 +1858,7 @@ fn string_ends_with() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Arc<str>) -> Verdict<(), ()>>("main")
+        .get_function::<fn(String) -> Verdict<(), ()>>("main")
         .unwrap();
 
     let res = f.call("incompre".into());
@@ -1891,7 +1891,7 @@ fn string_to_lowercase_and_uppercase() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(bool, Arc<str>) -> Verdict<Arc<str>, ()>>("main")
+        .get_function::<fn(bool, String) -> Verdict<String, ()>>("main")
         .unwrap();
 
     let res = f.call(true, "WHISPER THIS!".into());
@@ -1915,7 +1915,7 @@ fn string_repeat() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Arc<str>) -> Verdict<Arc<str>, ()>>("main")
+        .get_function::<fn(String) -> Verdict<String, ()>>("main")
         .unwrap();
 
     let res = f.call("boo".into());
@@ -1967,7 +1967,7 @@ fn match_option_string() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn() -> Verdict<Arc<str>, Arc<str>>>("bar")
+        .get_function::<fn() -> Verdict<String, String>>("bar")
         .unwrap();
 
     let res = f.call();
@@ -1994,7 +1994,7 @@ fn match_on_string_with_guards() {
     let mut p = compile(s);
 
     let f = p
-        .get_function::<fn(Option<Arc<str>>, i32) -> Arc<str>>("foo")
+        .get_function::<fn(Option<String>, i32) -> String>("foo")
         .unwrap();
 
     let res = f.call(Some("hello".into()), 5);
@@ -3002,7 +3002,7 @@ fn str_equals() {
 
     let mut compiled = compile(s);
     let func = compiled
-        .get_function::<fn(Arc<str>) -> bool>("is_slash")
+        .get_function::<fn(String) -> bool>("is_slash")
         .unwrap();
 
     assert!(func.call("/".into()));
@@ -3021,7 +3021,7 @@ fn str_not_equals() {
 
     let mut compiled = compile(s);
     let func = compiled
-        .get_function::<fn(Arc<str>) -> bool>("is_not_slash")
+        .get_function::<fn(String) -> bool>("is_not_slash")
         .unwrap();
 
     assert!(func.call("foo".into()));
@@ -3152,7 +3152,7 @@ fn assignment_string() {
     );
 
     let mut compiled = compile(s);
-    let func = compiled.get_function::<fn() -> Arc<str>>("foo").unwrap();
+    let func = compiled.get_function::<fn() -> String>("foo").unwrap();
 
     assert_eq!(func.call(), "foofoofoofoo".into());
 }
@@ -3230,7 +3230,7 @@ fn sigill() {
     assert_eq!(Arc::strong_count(&a.0), 1);
 }
 
-/// The normal Rust string type will fail more often than `Arc<str>`
+/// The normal Rust string type will fail more often than `String`
 /// if we treat it wrong, so this test stress-tests Roto a bit with that
 /// type.
 #[test]
@@ -3239,7 +3239,7 @@ fn rust_string_string() {
         #[clone] type RustString = Val<String>;
 
         impl Val<String> {
-            fn new(s: Arc<str>) -> Val<String> {
+            fn new(s: String) -> Val<String> {
                 Val(s.as_ref().into())
             }
         }
@@ -3305,12 +3305,12 @@ fn string_global() {
     );
 
     let rt = Runtime::from_lib(library! {
-        const FOO: Arc<str> = "BAR".into();
+        const FOO: String = "BAR".into();
     })
     .unwrap();
 
     let mut p = compile_with_runtime(s, rt);
-    let f = p.get_function::<fn() -> Arc<str>>("use_foo").unwrap();
+    let f = p.get_function::<fn() -> String>("use_foo").unwrap();
 
     assert_eq!(f.call(), "BAR".into());
 }
@@ -3331,7 +3331,7 @@ fn layered_option_matching_none() {
     );
     let mut p = compile(s);
     let f = p
-        .get_function::<fn() -> Option<Arc<str>>>("reproducer")
+        .get_function::<fn() -> Option<String>>("reproducer")
         .expect("No function found (or mismatched types)");
 
     let res = f.call();
@@ -3350,7 +3350,7 @@ fn strings_from_if() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<fn(bool) -> Arc<str>>("foo")
+        .get_function::<fn(bool) -> String>("foo")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(false);
@@ -3407,10 +3407,10 @@ fn bool_is_not_true() {
 #[test]
 fn register_on_optstr() {
     let rt = Runtime::from_lib(library! {
-        #[clone] type OptStr = Val<Option<Arc<str>>>;
+        #[clone] type OptStr = Val<Option<String>>;
 
-        impl Val<Option<Arc<str>>> {
-            fn unwrap_or_empty(self) -> Arc<str> {
+        impl Val<Option<String>> {
+            fn unwrap_or_empty(self) -> String {
                 self.0.unwrap_or_default()
             }
         }
@@ -3427,7 +3427,7 @@ fn register_on_optstr() {
 
     let mut p = compile_with_runtime(s, rt);
     let f = p
-        .get_function::<fn(Val<Option<Arc<str>>>) -> Arc<str>>("foo")
+        .get_function::<fn(Val<Option<String>>) -> String>("foo")
         .expect("No function found (or mismatched types)");
 
     let res = f.call(Val(None));
@@ -3511,7 +3511,7 @@ fn call_runtime_function_in_f_string() {
 
     let mut p = compile_with_runtime(s, rt);
     let f = p
-        .get_function::<fn() -> Arc<str>>("foo")
+        .get_function::<fn() -> String>("foo")
         .expect("No function found (or mismatched types)");
 
     let res = f.call();
@@ -4051,9 +4051,7 @@ fn stringbuf() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg
-        .get_function::<fn(Arc<str>) -> Arc<str>>("quote")
-        .unwrap();
+    let f = pkg.get_function::<fn(String) -> String>("quote").unwrap();
     let res = f.call("hello".into());
     assert_eq!(res, "\"hello\"".into());
 }
@@ -4193,9 +4191,7 @@ fn list_of_strings_1() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg
-        .get_function::<fn() -> Option<Arc<str>>>("main")
-        .unwrap();
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
     let res = f.call();
     assert_eq!(res, Some("hello".into()));
 }
@@ -4215,9 +4211,7 @@ fn list_of_strings_2() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg
-        .get_function::<fn() -> Option<Arc<str>>>("main")
-        .unwrap();
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
     let res = f.call();
     assert_eq!(res, Some("hello world".into()));
 }
@@ -4324,11 +4318,11 @@ fn list_concat_strings() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> List<String>>("main").unwrap();
 
     let res = f.call();
 
-    let expected: Vec<Arc<str>> =
+    let expected: Vec<String> =
         ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
     assert_eq!(res.to_vec(), expected);
 }
@@ -4366,11 +4360,11 @@ fn list_plus_strings() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> List<String>>("main").unwrap();
 
     let res = f.call();
 
-    let expected: Vec<Arc<str>> =
+    let expected: Vec<String> =
         ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
     assert_eq!(res.to_vec(), expected);
 }
@@ -4408,12 +4402,12 @@ fn list_of_option_of_strings() {
 
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<fn() -> List<Option<Arc<str>>>>("main")
+        .get_function::<fn() -> List<Option<String>>>("main")
         .unwrap();
 
     let res = f.call();
 
-    let expected: Vec<Option<Arc<str>>> =
+    let expected: Vec<Option<String>> =
         vec![Some("hello".into()), None, Some("bonjour".into()), None];
     assert_eq!(res.to_vec(), expected);
 }
@@ -4455,7 +4449,7 @@ fn for_loop_strings() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> Arc<str>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
 
     let res = f.call();
 
@@ -4513,7 +4507,7 @@ fn string_get() {
     let s = src!(
         r#"
         fn main(i: u64) -> char? {
-            "hello".get(i)
+            "hello".chars().get(i)
         }
     "#
     );
@@ -4539,7 +4533,7 @@ fn string_get_non_ascii() {
     let s = src!(
         r#"
         fn main(i: u64) -> char? {
-            "Löwe 老虎 Léopard".get(i)
+            "Löwe 老虎 Léopard".chars().get(i)
         }
     "#
     );
@@ -4565,14 +4559,14 @@ fn string_slice() {
     let s = src!(
         r#"
         fn main(i: u64, j: u64) -> String? {
-            "hello".slice(i, j)
+            "hello".chars().slice(i, j)
         }
     "#
     );
 
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<fn(u64, u64) -> Option<Arc<str>>>("main")
+        .get_function::<fn(u64, u64) -> Option<String>>("main")
         .unwrap();
 
     let res = f.call(0, 2);
@@ -4602,14 +4596,14 @@ fn string_slice_non_ascii() {
     let s = src!(
         r#"
         fn main(i: u64, j: u64) -> String? {
-            "Löwe 老虎 Léopard".slice(i, j)
+            "Löwe 老虎 Léopard".chars().slice(i, j)
         }
     "#
     );
 
     let mut pkg = compile(s);
     let f = pkg
-        .get_function::<fn(u64, u64) -> Option<Arc<str>>>("main")
+        .get_function::<fn(u64, u64) -> Option<String>>("main")
         .unwrap();
 
     let res = f.call(0, 4);
@@ -4632,9 +4626,7 @@ fn string_join() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg
-        .get_function::<fn(Arc<str>) -> Arc<str>>("main")
-        .unwrap();
+    let f = pkg.get_function::<fn(String) -> String>("main").unwrap();
 
     let res = f.call("".into());
     assert_eq!(res, "hello".into());
@@ -4654,7 +4646,7 @@ fn string_split() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> List<String>>("main").unwrap();
 
     let res = f.call();
     assert_eq!(
@@ -4674,7 +4666,7 @@ fn string_join_chars() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> Arc<str>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
 
     let res = f.call();
     assert_eq!(res, "hello".into());
@@ -4692,7 +4684,7 @@ fn string_replace() {
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> Arc<str>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
 
     let res = f.call();
     assert_eq!(res, "Hello John".into());
@@ -4703,13 +4695,13 @@ fn string_len() {
     let s = src!(
         r#"
         fn main(s: String) -> u64 {
-            s.len()
+            s.chars().len()
         }
     "#
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn(Arc<str>) -> u64>("main").unwrap();
+    let f = pkg.get_function::<fn(String) -> u64>("main").unwrap();
 
     let res = f.call("hello".into());
     assert_eq!(res, 5);
@@ -4723,7 +4715,7 @@ fn string_chars() {
     let s = src!(
         r#"
         fn main() -> List[char] {
-            "Rust!".chars()
+            "Rust!".chars().list()
         }
     "#
     );
@@ -4740,13 +4732,13 @@ fn string_lines() {
     let s = src!(
         r#"
         fn main() -> List[String] {
-            "One line\nAnd another".lines()
+            "One line\nAnd another".lines().list()
         }
     "#
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> List<Arc<str>>>("main").unwrap();
+    let f = pkg.get_function::<fn() -> List<String>>("main").unwrap();
 
     let res = f.call();
     assert_eq!(res.to_vec(), vec!["One line".into(), "And another".into()]);

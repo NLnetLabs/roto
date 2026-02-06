@@ -706,9 +706,12 @@ pub fn eval(
             } => {
                 let layout = Primitive::String.layout();
                 let ptr = mem.allocate(layout.size());
-                let ptr_value = mem.get(ptr) as *mut Arc<str>;
+                let ptr_value = mem.get(ptr) as *mut crate::String;
                 unsafe {
-                    std::ptr::write(ptr_value, Arc::from(string.as_ref()))
+                    std::ptr::write(
+                        ptr_value,
+                        crate::String::from(string.as_ref()),
+                    )
                 };
                 vars.insert(to.clone(), IrValue::Pointer(ptr));
             }

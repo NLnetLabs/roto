@@ -94,7 +94,7 @@ pub enum Instruction {
     InitString {
         to: Var,
         string: String,
-        init_func: unsafe extern "C" fn(*mut Arc<str>, *mut u8, u32),
+        init_func: unsafe extern "C" fn(*mut crate::String, *mut u8, u32),
     },
 
     /// Call a function.

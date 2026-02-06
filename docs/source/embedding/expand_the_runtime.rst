@@ -241,18 +241,18 @@ then create and register the following type.
 .. code-block:: rust
 
     use std::sync::Arc;
-    use roto::Context;
+    use roto::{Context, String as RotoString};
 
     #[derive(Context)]
     struct Ctx {
-        pub first_name: Arc<str>,
-        pub last_name: Arc<str>,
+        pub first_name: RotoString,
+        pub last_name: RotoString,
     }
 
     let rt = rt.with_context_type::<Ctx>().unwrap();
 
     let mut pkg = rt.compile("script.roto").unwrap();
-    let f = pkg.get_function::<fn() -> Arc<str>>("greeting").unwrap();
+    let f = pkg.get_function::<fn() -> RotoString>("greeting").unwrap();
 
     let mut ctx = Ctx {
         first_name: "John".into(),

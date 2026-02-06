@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
-use roto::{Runtime, Val, library};
+use roto::{Runtime, String, Val, library};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct NonEmptyString {
-    s: Arc<str>,
+    s: String,
 }
 
 fn main() -> Result<(), roto::RotoReport> {
@@ -16,7 +14,7 @@ fn main() -> Result<(), roto::RotoReport> {
         #[clone] type NonEmptyString = Val<NonEmptyString>;
 
         impl Val<NonEmptyString> {
-            fn new(s: Arc<str>) -> Option<Val<NonEmptyString>> {
+            fn new(s: String) -> Option<Val<NonEmptyString>> {
                 if s.is_empty() {
                     return None;
                 }
@@ -32,7 +30,7 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))?;
 
     let func = compiled
-        .get_function::<fn(Arc<str>) -> Option<Val<NonEmptyString>>>("main")
+        .get_function::<fn(String) -> Option<Val<NonEmptyString>>>("main")
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 

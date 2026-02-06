@@ -491,7 +491,7 @@ impl Lowerer<'_, '_> {
                 match type_def {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
-                        Some(TypeId::of::<Arc<str>>())
+                        Some(TypeId::of::<crate::String>())
                     }
                     TypeDefinition::List(_) => {
                         Some(TypeId::of::<ErasedList>())

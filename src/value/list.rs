@@ -913,7 +913,7 @@ fn array_layout(elem_layout: Layout, n: usize) -> Layout {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, atomic::AtomicUsize};
+    use std::sync::atomic::AtomicUsize;
 
     use crate::Val;
 
@@ -940,10 +940,12 @@ mod tests {
 
     #[test]
     fn list_of_strings() {
+        use crate::value::String;
+
         // Create a list of string to and concat it a few times, which
         // should exercise the clone and drop implementation (especially
         // under valgrind).
-        let l = List::<Arc<str>>::new();
+        let l = List::<String>::new();
         l.push("hello".into());
         l.push("world".into());
 
