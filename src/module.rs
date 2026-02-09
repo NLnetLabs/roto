@@ -3,18 +3,20 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    FileTree, RotoError, RotoReport,
+    FileTree, RotoError, RotoReport, Runtime,
     ast::{self, Identifier},
     parser::{
         Parser,
         meta::{Meta, Span, Spans},
     },
+    runtime::{ConstantValue, OptCtx, Rt},
 };
 
 pub struct Parsed {
     pub module_tree: ModuleTree,
     pub file_tree: FileTree,
     pub spans: Spans,
+    pub literals: Vec<ConstantValue>,
 }
 
 #[derive(Default)]
@@ -34,15 +36,19 @@ pub struct Module {
 
 impl FileTree {
     /// Parse the files in the [`FileTree`] returning the AST.
-    pub fn parse(self) -> Result<Parsed, RotoReport> {
-        Parsed::from_files(self)
+    pub fn parse(
+        self,
+        runtime: &Runtime<impl OptCtx>,
+    ) -> Result<Parsed, RotoReport> {
+        Parsed::from_files(&runtime.rt, self)
     }
 }
 
 impl Parsed {
-    fn from_files(file_tree: FileTree) -> Result<Self, RotoReport> {
+    fn from_files(rt: &Rt, file_tree: FileTree) -> Result<Self, RotoReport> {
         let mut file_to_mod = BTreeMap::new();
         let mut modules = Vec::new();
+        let mut literals = Vec::new();
         let mut spans = Spans::default();
         let mut errors = Vec::new();
 
@@ -58,7 +64,13 @@ impl Parsed {
                 ident,
             );
 
-            let ast = match Parser::parse(i, &mut spans, &file.contents) {
+            let ast = match Parser::parse(
+                i,
+                &mut spans,
+                &mut literals,
+                &file.contents,
+                rt,
+            ) {
                 Ok(ast) => ast,
                 Err(err) => {
                     errors.push(RotoError::Parse(*err));
@@ -100,6 +112,7 @@ impl Parsed {
             module_tree: ModuleTree { modules },
             file_tree,
             spans,
+            literals,
         })
     }
 }

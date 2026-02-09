@@ -5,14 +5,16 @@ use crate::{
         ParseResult,
         token::{Keyword, Token},
     },
+    runtime::ConstantValue,
 };
 
 impl<'source, 'spans> Parser<'source, 'spans> {
     pub fn parse_signature(
         spans: &'spans mut Spans,
+        literals: &'spans mut Vec<ConstantValue>,
         s: &'source str,
     ) -> ParseResult<Signature> {
-        Self::run_parser(Self::signature, 0, spans, s)
+        Self::run_parser(Self::signature, 0, spans, literals, s, None)
     }
 
     fn signature(&mut self) -> ParseResult<Signature> {

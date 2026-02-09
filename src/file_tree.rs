@@ -94,7 +94,7 @@ impl FileTree {
         self,
         rt: &Runtime<Ctx>,
     ) -> Result<Package<Ctx>, RotoReport> {
-        let checked = self.parse()?.typecheck(rt)?;
+        let checked = self.parse(rt)?.typecheck(rt)?;
         let pkg = checked.lower_to_mir().lower_to_lir().codegen();
         Ok(pkg)
     }

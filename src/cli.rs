@@ -77,7 +77,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
             rt.rt.print_documentation(path).unwrap();
         }
         Command::Check { file } => {
-            FileTree::read(file)?.parse()?.typecheck(rt)?;
+            FileTree::read(file)?.parse(rt)?.typecheck(rt)?;
             println!("All ok!")
         }
         Command::Test { file } => {
@@ -90,7 +90,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
             };
 
             let mut p = FileTree::read(file)?
-                .parse()?
+                .parse(&rt)?
                 .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
@@ -112,7 +112,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
             };
 
             let mut p = FileTree::read(file)?
-                .parse()?
+                .parse(&rt)?
                 .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()

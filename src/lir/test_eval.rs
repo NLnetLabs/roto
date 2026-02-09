@@ -17,7 +17,7 @@ fn compile<Ctx: OptCtx>(
         .format_target(false)
         .try_init();
 
-    s.parse()
+    s.parse(rt)
         .unwrap()
         .typecheck(rt)
         .unwrap()

@@ -8,7 +8,7 @@ use std::fmt::Display;
 use inetnum::asn::Asn;
 use symbol_table::GlobalSymbol;
 
-use crate::parser::meta::Meta;
+use crate::{parser::meta::Meta, runtime::ConstantValue};
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
@@ -283,6 +283,7 @@ pub enum Literal {
     Integer(i64),
     Float(f64),
     Bool(bool),
+    Custom(ConstantValue),
     Unit,
 }
 

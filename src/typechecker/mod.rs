@@ -330,6 +330,14 @@ impl TypeChecker {
             id: MetaId(0),
         };
 
+        self.type_info.runtime_types.insert(
+            type_id,
+            Type::Name(TypeName {
+                name,
+                arguments: Vec::new(),
+            }),
+        );
+
         // Small edge case: the primitives are already in the typechecker, so we
         // skip them, but we should override the documentation.
         if let Some(other) =
@@ -341,6 +349,7 @@ impl TypeChecker {
             let dec =
                 self.type_info.scope_graph.get_declaration_mut(other.name);
             dec.doc = doc;
+
             return Ok(());
         }
 

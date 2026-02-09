@@ -10,9 +10,10 @@ use crate::{
         Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
     },
     parser::error::Hint,
+    runtime::{ConstantValue, Rt},
 };
 use error::ParseErrorKind;
-use token::{Keyword, Lexer, Token};
+use token::{Keyword, Token};
 
 use self::meta::{Meta, Span, Spans};
 
@@ -25,6 +26,7 @@ mod signature;
 pub mod token;
 
 pub use error::ParseError;
+pub use token::{CustomToken, Lexer, LexerHook};
 
 #[cfg(test)]
 mod test_expressions;
@@ -38,6 +40,7 @@ pub struct Parser<'source, 'spans> {
     file_length: usize,
     lexer: Lexer<'source>,
     pub spans: &'spans mut Spans,
+    literals: &'spans mut Vec<ConstantValue>,
 }
 
 /// # Helper methods
@@ -159,22 +162,30 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     pub fn parse(
         file: usize,
         spans: &'spans mut Spans,
+        literals: &'spans mut Vec<ConstantValue>,
         input: &'source str,
+        rt: &Rt,
     ) -> ParseResult<SyntaxTree> {
-        Self::run_parser(Self::tree, file, spans, input)
+        Self::run_parser(Self::tree, file, spans, literals, input, Some(rt))
     }
 
     pub fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
         file: usize,
         spans: &'spans mut Spans,
+        literals: &'spans mut Vec<ConstantValue>,
         input: &'source str,
+        rt: Option<&Rt>,
     ) -> ParseResult<T> {
         let mut p = Self {
             file,
             file_length: input.len(),
-            lexer: Lexer::new(input),
+            lexer: match rt {
+                Some(rt) => Lexer::new(input, rt),
+                None => Lexer::new_simple(input),
+            },
             spans,
+            literals,
         };
         let out = match parser(&mut p) {
             Ok(out) => out,
