@@ -573,7 +573,7 @@ impl TypeChecker {
         use ast::Literal::*;
         let span = lit.id;
 
-        let t = match lit.node {
+        let t = match &lit.node {
             String(_) => Type::string(),
             Char(_) => Type::char(),
             Asn(_) => Type::asn(),
@@ -581,6 +581,7 @@ impl TypeChecker {
             Bool(_) => Type::bool(),
             Integer(_) => self.fresh_int(),
             Float(_) => self.fresh_float(),
+            Custom(v) => self.type_info.get_runtime_type(v.type_id()),
             Unit => Type::unit(),
         };
 

@@ -24,7 +24,8 @@ use crate::{
         meta::{Span, Spans},
     },
     runtime::{
-        Ctx, NoCtx, OptCtx, Runtime, RuntimeFunctionRef, context::Context,
+        ConstantValue, Ctx, NoCtx, OptCtx, Runtime, RuntimeFunctionRef,
+        context::Context,
     },
     typechecker::{
         error::{Level, TypeError},
@@ -71,6 +72,7 @@ pub struct TypeChecked<'r, Ctx: OptCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
     runtime: &'r Runtime<Ctx>,
+    literals: Vec<ConstantValue>,
 }
 
 /// Compiler stage: MIR
@@ -79,6 +81,7 @@ pub struct LoweredToMir<'r, Ctx: OptCtx> {
     ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
+    literals: Vec<ConstantValue>,
 }
 
 /// Compiler stage: LIR
@@ -88,6 +91,7 @@ pub struct LoweredToLir<'r, Ctx: OptCtx> {
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
+    literals: Vec<ConstantValue>,
 }
 
 /// The final compiled package of script.
@@ -281,6 +285,7 @@ impl Parsed {
             file_tree,
             module_tree,
             spans,
+            literals,
         } = self;
 
         let result = crate::typechecker::typecheck(&runtime.rt, &module_tree);
@@ -300,22 +305,24 @@ impl Parsed {
             module_tree,
             type_info,
             runtime,
+            literals,
         })
     }
 }
 
 impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
-    pub fn lower_to_mir(&self) -> LoweredToMir<'r, Ctx> {
+    pub fn lower_to_mir(self) -> LoweredToMir<'r, Ctx> {
         let TypeChecked {
             module_tree,
             type_info,
             runtime,
+            literals,
         } = self;
 
         let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
         let ir = mir::lower_to_mir(
-            module_tree,
+            &module_tree,
             &runtime.rt,
             &mut type_info,
             &mut label_store,
@@ -339,6 +346,7 @@ impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
             runtime,
             label_store,
             type_info,
+            literals,
         }
     }
 }
@@ -350,6 +358,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
             ir,
             mut label_store,
             mut type_info,
+            literals,
         } = self;
 
         let mut runtime_functions = HashMap::new();
@@ -382,6 +391,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
             label_store,
             type_info,
             runtime_functions,
+            literals,
         }
     }
 }
@@ -404,12 +414,21 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
     }
 
     pub fn codegen(self) -> Package<Ctx> {
+        let LoweredToLir {
+            runtime,
+            ir,
+            runtime_functions,
+            label_store,
+            type_info,
+            literals,
+        } = self;
         let module = codegen::codegen(
-            self.runtime,
-            &self.ir.functions,
-            &self.runtime_functions,
-            self.label_store,
-            self.type_info,
+            runtime,
+            &ir.functions,
+            &runtime_functions,
+            label_store,
+            type_info,
+            literals,
         );
         Package { module }
     }

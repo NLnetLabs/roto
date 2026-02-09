@@ -1,6 +1,7 @@
 use core::f32;
 use std::{
     net::IpAddr,
+    ops::ControlFlow,
     sync::{
         Arc,
         atomic::{AtomicI32, AtomicUsize, Ordering},
@@ -8,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    Context, FileTree, List, NoCtx, Runtime,
+    Context, CustomToken, FileTree, List, NoCtx, Runtime,
     file_tree::FileSpec,
     library,
     pipeline::Package,
@@ -27,12 +28,13 @@ fn compile(f: FileTree) -> Package<NoCtx> {
 #[track_caller]
 fn compile_with_runtime<Ctx: OptCtx>(
     f: FileTree,
-    runtime: Runtime<Ctx>,
+    rt: Runtime<Ctx>,
 ) -> Package<Ctx> {
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
-    let res = f.parse().and_then(|x| x.typecheck(&runtime)).map(|x| {
+    let x = f.parse(&rt);
+    let res = x.and_then(|x| x.typecheck(&rt)).map(|x| {
         let x = x.lower_to_mir().lower_to_lir();
         x.codegen()
     });
@@ -4506,4 +4508,105 @@ fn cartesian_for_loop() {
     let res = f.call();
 
     assert_eq!(res, 100);
+}
+
+#[test]
+fn custom_lexer() {
+    #[derive(Clone)]
+    struct Foo(u32);
+
+    let lib = library! {
+        #[clone] type Foo = Val<Foo>;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap().with_lexer_hook(|lex| {
+        let input = lex.input();
+
+        let Some(rest) = input.strip_prefix("FOO") else {
+            return ControlFlow::Continue(());
+        };
+
+        let digit_idx =
+            rest.find(|c: char| !c.is_numeric()).unwrap_or(rest.len());
+
+        let Ok(n) = rest[..digit_idx].parse() else {
+            return ControlFlow::Continue(());
+        };
+
+        let foo = Foo(n);
+        let val = CustomToken::new(Val(foo));
+
+        let (_tok, span) = lex.bump(3 + digit_idx);
+
+        ControlFlow::Break((val, span))
+    });
+
+    let s = src!(
+        r#"
+        fn main() -> Foo {
+            FOO123
+        }
+    "#
+    );
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res.0.0, 123);
+}
+
+#[test]
+fn unit_lexer() {
+    #[derive(Clone)]
+    struct Length(f64);
+
+    let lib = library! {
+        #[clone] type Length = Val<Length>;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap().with_lexer_hook(|lex| {
+        let input = lex.input();
+
+        let digit_idx =
+            input.find(|c: char| !c.is_numeric()).unwrap_or(input.len());
+
+        let Ok(n) = input[..digit_idx].parse::<f64>() else {
+            return ControlFlow::Continue(());
+        };
+
+        let rest = &input[digit_idx..];
+        let alpha_idx = rest
+            .find(|c: char| !c.is_alphanumeric())
+            .unwrap_or(rest.len());
+
+        let unit = &rest[..alpha_idx];
+        let mult = match unit {
+            "km" => 1000.0,
+            "m" => 1.0,
+            "mm" => 0.001,
+            _ => return ControlFlow::Continue(()),
+        };
+
+        let foo = Length(n * mult);
+        let val = CustomToken::new(Val(foo));
+
+        let (_tok, span) = lex.bump(digit_idx + alpha_idx);
+
+        ControlFlow::Break((val, span))
+    });
+
+    let s = src!(
+        r#"
+        fn main() -> Length {
+            10km
+        }
+    "#
+    );
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> Val<Length>>("main").unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res.0.0, 10000.0);
 }
