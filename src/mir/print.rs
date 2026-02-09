@@ -271,6 +271,7 @@ impl Printable for Literal {
             Literal::Integer(i) => i.to_string(),
             Literal::Float(f) => f.to_string(),
             Literal::Bool(b) => b.to_string(),
+            Literal::Custom(_) => "ConstantValue(...)".into(),
             Literal::Unit => "()".into(),
         }
     }

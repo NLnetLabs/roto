@@ -7,7 +7,8 @@ use super::{
 
 fn parse_expr(s: &str) -> ParseResult<Meta<Expr>> {
     let mut spans = Spans::default();
-    Parser::run_parser(Parser::expr, 0, &mut spans, s)
+    let mut literals = Vec::new();
+    Parser::run_parser(Parser::expr, 0, &mut spans, &mut literals, s, None)
 }
 
 #[test]

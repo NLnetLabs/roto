@@ -34,6 +34,7 @@ use crate::ast::{Declaration, Identifier};
 pub use crate::value::List;
 pub use codegen::{TypedFunc, check::RotoFunc};
 pub use file_tree::{FileSpec, FileTree, SourceFile};
+pub use parser::{CustomToken, Lexer, LexerHook};
 pub(crate) use pipeline::RotoError;
 pub use pipeline::{Package, RotoReport};
 pub use roto_macros::{
@@ -300,7 +301,15 @@ impl std::fmt::Display for Location {
 pub fn has_main_function(script: &str) -> parser::ParseResult<bool> {
     let file = 0;
     let mut spans = parser::meta::Spans::default();
-    let ast = parser::Parser::parse(file, &mut spans, script)?;
+    let mut literals = Vec::new();
+    let rt = Runtime::new();
+    let ast = parser::Parser::parse(
+        file,
+        &mut spans,
+        &mut literals,
+        script,
+        &rt.rt,
+    )?;
 
     for item in &ast.declarations {
         if let Declaration::Function(ast::FunctionDeclaration {

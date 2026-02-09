@@ -13,7 +13,7 @@ fn typecheck_with_runtime(
     loaded: FileTree,
     rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
-    let res = loaded.parse();
+    let res = loaded.parse(&rt);
 
     let res = match res {
         Ok(res) => res,

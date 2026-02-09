@@ -55,6 +55,8 @@ pub mod testing;
 mod tests;
 
 struct ModuleData {
+    _literals: Vec<ConstantValue>,
+
     /// The functions in this module can reference constants. The values of
     /// these constants are stored in this HashMap. So, as long as the function
     /// are around, we have to keep these constants around. That is why they
@@ -99,12 +101,14 @@ impl std::ops::Deref for JITModuleWrapper {
 impl ModuleData {
     fn new(
         cranelift_jit: JITModule,
+        literals: Vec<ConstantValue>,
         constants: HashMap<ResolvedName, ConstantValue>,
         roto_constants: HashMap<ResolvedName, RotoConstant>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self {
             cranelift_jit: JITModuleWrapper(ManuallyDrop::new(cranelift_jit)),
+            _literals: literals,
             _constants: constants,
             _roto_constants: roto_constants,
             _registered_fns: registered_fns,
@@ -121,12 +125,14 @@ pub struct SharedModuleData(Arc<ModuleData>);
 impl SharedModuleData {
     fn new(
         cranelift_jit: JITModule,
+        literals: Vec<ConstantValue>,
         constants: HashMap<ResolvedName, ConstantValue>,
         roto_constants: HashMap<ResolvedName, RotoConstant>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self(Arc::new(ModuleData::new(
             cranelift_jit,
+            literals,
             constants,
             roto_constants,
             registered_fns,
@@ -291,6 +297,8 @@ struct ModuleBuilder {
 
     roto_constants: HashMap<ResolvedName, RotoConstant>,
 
+    literals: Vec<ConstantValue>,
+
     registered_fns: Vec<Arc<Box<dyn Any>>>,
 
     /// The set of public functions and their signatures.
@@ -367,6 +375,7 @@ pub fn codegen<Ctx: OptCtx>(
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
+    literals: Vec<ConstantValue>,
 ) -> Module<Ctx> {
     let runtime = &runtime.rt;
 
@@ -432,6 +441,7 @@ pub fn codegen<Ctx: OptCtx>(
     let mut module = ModuleBuilder {
         runtime_constants: HashMap::new(),
         roto_constants: HashMap::new(),
+        literals,
         functions: HashMap::new(),
         registered_fns: Vec::new(),
         runtime_functions: HashMap::new(),
@@ -770,6 +780,7 @@ impl ModuleBuilder {
             functions: self.functions,
             inner: SharedModuleData::new(
                 self.inner,
+                self.literals,
                 self.runtime_constants,
                 self.roto_constants,
                 self.registered_fns,
