@@ -11,7 +11,6 @@ use std::{
     any::TypeId,
     borrow::Borrow,
     fmt::{Debug, Display, Write},
-    sync::Arc,
 };
 
 use super::{

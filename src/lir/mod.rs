@@ -39,7 +39,7 @@ use crate::{
 };
 pub use eval::Memory;
 pub use lower::lower_to_lir;
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 pub use value::{IrType, IrValue};
 
 /// Human-readable place

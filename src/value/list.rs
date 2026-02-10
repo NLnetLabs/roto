@@ -204,10 +204,6 @@ pub mod boundary {
             }
         }
 
-        pub(crate) fn as_erased(self) -> ErasedList {
-            self.inner
-        }
-
         /// Push a new element to this [`List`]
         pub fn push(&self, elem: T) {
             let elem = T::transform(elem);

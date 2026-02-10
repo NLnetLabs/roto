@@ -1,6 +1,6 @@
 mod match_expr;
 
-use std::{any::TypeId, net::IpAddr, sync::Arc};
+use std::{any::TypeId, net::IpAddr};
 
 use inetnum::addr::Prefix;
 
