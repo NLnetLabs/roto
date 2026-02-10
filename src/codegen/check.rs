@@ -10,9 +10,7 @@ use crate::{
     },
     value::{TypeDescription, TypeRegistry, Value},
 };
-use std::{
-    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
-};
+use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
 #[derive(Debug)]
 pub enum FunctionRetrievalError {

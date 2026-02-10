@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashSet, sync::Arc};
+use std::{any::TypeId, collections::HashSet};
 
 use crate::{
     ast::Identifier,

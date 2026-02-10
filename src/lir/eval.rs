@@ -15,7 +15,7 @@ use crate::{
     runtime::{ConstantValue, Rt, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
 };
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 /// Memory for the IR evaluation
 ///
