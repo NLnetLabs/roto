@@ -291,6 +291,16 @@ pub mod boundary {
                 .collect()
         }
     }
+
+    impl<A: Clone + Value> FromIterator<A> for List<A> {
+        fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+            let this = Self::new();
+            for elem in iter {
+                this.push(elem);
+            }
+            this
+        }
+    }
 }
 
 // We use `*mut ()` and `NonNull<()>` to represent `*mut T` and
@@ -899,7 +909,7 @@ fn array_layout(elem_layout: Layout, n: usize) -> Layout {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, atomic::AtomicUsize};
+    use std::sync::atomic::AtomicUsize;
 
     use crate::Val;
 
@@ -926,10 +936,12 @@ mod tests {
 
     #[test]
     fn list_of_strings() {
+        use crate::value::String;
+
         // Create a list of string to and concat it a few times, which
         // should exercise the clone and drop implementation (especially
         // under valgrind).
-        let l = List::<Arc<str>>::new();
+        let l = List::<String>::new();
         l.push("hello".into());
         l.push("world".into());
 

@@ -2,7 +2,11 @@
 
 use std::sync::Arc;
 
-use crate::{library, runtime::items::Registerable as _, value::Val};
+use crate::{
+    library,
+    runtime::items::Registerable as _,
+    value::{String, Val},
+};
 
 use super::Runtime;
 use roto_macros::{roto_function, roto_method, roto_static_method};
@@ -167,7 +171,7 @@ fn function_and_constant_with_the_same_name_2() {
 fn register_option_arc_str() {
     // Cannot register Option
     let _ = library! {
-        #[clone] type OptStr = Option<Arc<str>>;
+        #[clone] type OptStr = Option<String>;
     };
 }
 
@@ -175,7 +179,7 @@ fn register_option_arc_str() {
 fn register_val_option_arc_str() {
     // But with Val it's fine
     Runtime::from_lib(library! {
-        #[clone] type OptStr = Val<Option<Arc<str>>>;
+        #[clone] type OptStr = Val<Option<String>>;
     })
     .unwrap();
 }
@@ -186,10 +190,10 @@ fn register_val_option_arc_str() {
 #[test]
 fn unwrap_or_empty() {
     let ty = library! {
-        #[clone] type OptStr = Val<Option<Arc<str>>>;
+        #[clone] type OptStr = Val<Option<String>>;
 
-        impl Val<Option<Arc<str>>> {
-            fn unwrap_or_empty(x: Option<Arc<str>>) -> Arc<str> {
+        impl Val<Option<String>> {
+            fn unwrap_or_empty(x: Option<String>) -> String {
                 x.unwrap_or_default()
             }
         }

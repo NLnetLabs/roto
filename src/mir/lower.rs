@@ -1,6 +1,6 @@
 mod match_expr;
 
-use std::{any::TypeId, net::IpAddr, sync::Arc};
+use std::{any::TypeId, net::IpAddr};
 
 use inetnum::addr::Prefix;
 
@@ -838,7 +838,7 @@ impl<'r> Lowerer<'r> {
         binop: &ast::BinOp,
         r: &Meta<ast::Expr>,
     ) -> Value {
-        let type_id = TypeId::of::<Arc<str>>();
+        let type_id = TypeId::of::<crate::String>();
         match binop {
             ast::BinOp::Eq => self.desugared_binop(
                 type_id,
@@ -1407,7 +1407,7 @@ impl<'r> Lowerer<'r> {
         let string_val = make_string("".into());
         let string = self.assign_to_var(string_val, Type::string());
 
-        let type_id = TypeId::of::<Arc<str>>();
+        let type_id = TypeId::of::<crate::String>();
         let func_ref = self.find_method(type_id, "append");
 
         for part in parts {

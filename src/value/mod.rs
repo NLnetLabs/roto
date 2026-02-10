@@ -12,7 +12,7 @@ use std::{
     any::{TypeId, type_name},
     collections::HashMap,
     net::IpAddr,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{LazyLock, Mutex},
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
@@ -27,6 +27,7 @@ pub use dyn_val::DynVal;
 pub(crate) use list::ErasedList;
 pub use list::boundary::List;
 pub use option::RotoOption;
+pub use string::{String, StringBytes, StringChars, StringLines};
 pub use val::Val;
 pub use verdict::Verdict;
 pub use vtable::VTable;
@@ -34,6 +35,7 @@ pub use vtable::VTable;
 mod dyn_val;
 pub mod list;
 mod option;
+mod string;
 mod val;
 mod verdict;
 mod vtable;
@@ -351,7 +353,61 @@ impl Value for Prefix {
 }
 
 #[sealed]
-impl Value for Arc<str> {
+impl Value for String {
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+#[sealed]
+impl Value for StringBytes {
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+#[sealed]
+impl Value for StringChars {
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+#[sealed]
+impl Value for StringLines {
     type Transformed = Self;
     type AsParam = *mut Self;
 

@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use super::{eval::Memory, value::IrValue};
 use crate::{
     FileTree, Runtime, library, pipeline::LoweredToLir, runtime::OptCtx, src,
+    value::String,
 };
 
 #[track_caller]
@@ -451,7 +450,7 @@ fn string_global() {
     );
 
     let rt = Runtime::from_lib(library! {
-        const FOO: Arc<str> = "BAR".into();
+        const FOO: String = "BAR".into();
     })
     .unwrap();
 

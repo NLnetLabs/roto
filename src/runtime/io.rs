@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::{Runtime, library, runtime::OptCtx};
+use crate::{Runtime, library, runtime::OptCtx, value::String};
 
 impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Add functions using I/O to the runtime.
@@ -13,7 +11,7 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
     pub fn add_io_functions(&mut self) {
         self.add(library! {
             /// Print a string to stdout
-            fn print(s: Arc<str>) {
+            fn print(s: String) {
                 println!("{s}");
             }
         })

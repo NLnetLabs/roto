@@ -39,7 +39,7 @@ use crate::{
 };
 pub use eval::Memory;
 pub use lower::lower_to_lir;
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 pub use value::{IrType, IrValue};
 
 /// Human-readable place
@@ -94,7 +94,7 @@ pub enum Instruction {
     InitString {
         to: Var,
         string: String,
-        init_func: unsafe extern "C" fn(*mut Arc<str>, *mut u8, u32),
+        init_func: unsafe extern "C" fn(*mut crate::String, *mut u8, u32),
     },
 
     /// Call a function.
