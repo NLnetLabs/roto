@@ -33,6 +33,7 @@ pub(crate) use pipeline::{source_file, src};
 pub use crate::value::List;
 pub use codegen::{TypedFunc, check::RotoFunc};
 pub use file_tree::{FileSpec, FileTree, SourceFile};
+pub use parser::{CustomToken, Lexer, LexerHook};
 pub(crate) use pipeline::RotoError;
 pub use pipeline::{Package, RotoReport};
 pub use roto_macros::{

@@ -12,13 +12,18 @@ pub mod layout;
 pub mod tests;
 
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, path::Path, ptr,
-    slice, str, sync::Arc,
+    any::TypeId,
+    collections::{HashMap, HashSet},
+    marker::PhantomData,
+    ops::{ControlFlow, Range},
+    path::Path,
+    ptr, slice, str,
+    sync::Arc,
 };
 
 use crate::{
-    ast,
-    parser::{Parser, meta::Spans},
+    CustomToken, ast,
+    parser::{Parser, meta::Spans, token::LexerHook},
     typechecker::scope::{DeclarationKind, ScopeType},
     value::{DynVal, Ty, TypeDescription, TypeRegistry},
 };
@@ -82,6 +87,7 @@ pub(crate) struct Rt {
     types: Vec<RuntimeType>,
     functions: Vec<RuntimeFunction>,
     constants: HashMap<ResolvedName, RuntimeConstant>,
+    lexer_hook: Option<LexerHook>,
 }
 
 impl<Ctx: OptCtx> std::fmt::Debug for Runtime<Ctx> {
@@ -164,6 +170,7 @@ impl Runtime<NoCtx> {
             types: Default::default(),
             functions: Default::default(),
             constants: Default::default(),
+            lexer_hook: None,
         };
         rt.add(basic::built_ins()).unwrap();
         Self {
@@ -279,6 +286,50 @@ impl<C: OptCtx> Runtime<C> {
         self.rt.add(items)
     }
 
+    /// Add a lexer hook to this runtime.
+    ///
+    /// **WARNING: A faulty lexer hook can break Roto entirely. Be very careful
+    /// with this feature.**
+    ///
+    /// The function passed to this methoed will get called as part of the
+    /// lexing procedure and can be used to add custom literal syntax for your
+    /// own types to Roto. One could for instance add syntax for IP addresses
+    /// (`192.168.0.1`) or lengths (`1km`).
+    ///
+    /// This function gets a reference to the [`Lexer`] instance and can then
+    /// inspect the remaining part of the input with [`Lexer::input`]. If the
+    /// remaining input starts with a substring that should become a token,
+    /// this function should first call [`Lexer::bump`] to consume that part of
+    /// the string and then return with `ControlFlow::Break`. Otherwise, it
+    /// should return with [`ControlFlow::Continue`].
+    ///
+    /// In general you should follow these rules:
+    ///
+    ///  - The custom lexing cannot be ambiguous with the rest of Roto's syntax.
+    ///    If it is, then Roto will only be able to parse the custom syntax and
+    ///    won't be able to parse the built-in syntax anymore.
+    ///
+    ///  - You should be as conservative as possible in what you accept. For
+    ///    example, if you want a custom literal with a prefix `FOO` followed
+    ///    by some digits (e.g. `FOO123`), you should check that it is not
+    ///    followed by more characters, like `FOO123BAR`.
+    ///
+    ///  - You should not allow whitespace within literals.
+    ///
+    ///  - Roto will check that any value that you return is of a type that
+    ///    you registered.
+    pub fn with_lexer_hook(
+        mut self,
+        hook: impl Fn(&mut Lexer<'_>) -> ControlFlow<(CustomToken, Range<usize>)>
+        + 'static,
+    ) -> Self {
+        if self.rt.lexer_hook.is_some() {
+            panic!("Can only have one lexer hook");
+        }
+        self.rt.lexer_hook = Some(Arc::new(hook));
+        self
+    }
+
     /// Get the context type, if any.
     pub fn context(&self) -> &Option<ContextDescription> {
         self.rt.context()
@@ -349,6 +400,14 @@ impl Rt {
     /// Get the registered constants.
     pub fn constants(&self) -> &HashMap<ResolvedName, RuntimeConstant> {
         &self.constants
+    }
+
+    pub fn lexer_hook(&self) -> Option<LexerHook> {
+        self.lexer_hook.clone()
+    }
+
+    pub fn custom_type_ids(&self) -> HashSet<TypeId> {
+        self.types.iter().map(|t| t.type_id).collect()
     }
 }
 
@@ -472,23 +531,42 @@ pub struct RuntimeConstant {
 }
 
 #[derive(Clone)]
-pub struct ConstantValue(Arc<dyn Send + Sync + 'static>);
+pub struct ConstantValue {
+    val: Arc<dyn Send + Sync + 'static>,
+    id: TypeId,
+}
+
+impl From<CustomToken> for ConstantValue {
+    fn from(value: CustomToken) -> Self {
+        Self {
+            id: value.type_id(),
+            val: value.val,
+        }
+    }
+}
 
 impl std::fmt::Debug for ConstantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Constant")
-            .field(&Arc::as_ptr(&self.0))
+            .field(&Arc::as_ptr(&self.val))
             .finish()
     }
 }
 
 impl ConstantValue {
     pub fn new<T: Send + Sync + 'static>(x: T) -> Self {
-        Self(Arc::new(x))
+        Self {
+            val: Arc::new(x),
+            id: TypeId::of::<T>(),
+        }
     }
 
     pub fn ptr(&self) -> *const () {
-        Arc::as_ptr(&self.0) as *const ()
+        Arc::as_ptr(&self.val) as *const ()
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        self.id
     }
 }
 
@@ -850,7 +928,8 @@ impl Rt {
 
     fn parse_sig(s: &str) -> ast::Signature {
         let mut spans = Spans::default();
-        Parser::parse_signature(&mut spans, s).unwrap()
+        let mut literals = Vec::new();
+        Parser::parse_signature(&mut spans, &mut literals, s).unwrap()
     }
 
     fn declare_constants(
@@ -1046,7 +1125,7 @@ impl Rt {
     }
 
     fn check_name_internal(name: Identifier) -> Result<(), String> {
-        let mut lexer = Lexer::new(name.as_str());
+        let mut lexer = Lexer::new_simple(name.as_str());
         let Some((Ok(tok), _)) = lexer.next() else {
             return Err(format!(
                 "Name {name:?} is not a valid Roto identifier"

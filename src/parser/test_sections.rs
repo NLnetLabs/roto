@@ -7,12 +7,14 @@ use super::{ParseResult, meta::Spans};
 
 fn parse_function(s: &str) -> ParseResult<Declaration> {
     let mut spans = Spans::default();
-    Parser::run_parser(Parser::root, 0, &mut spans, s)
+    let mut literals = Vec::new();
+    Parser::run_parser(Parser::root, 0, &mut spans, &mut literals, s, None)
 }
 
 fn parse(s: &str) -> ParseResult<SyntaxTree> {
     let mut spans = Spans::default();
-    Parser::run_parser(Parser::tree, 0, &mut spans, s)
+    let mut literals = Vec::new();
+    Parser::run_parser(Parser::tree, 0, &mut spans, &mut literals, s, None)
 }
 
 #[test]

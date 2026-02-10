@@ -56,6 +56,8 @@ mod tests;
 struct ModuleData {
     cranelift_jit: ManuallyDrop<JITModule>,
 
+    _literals: Vec<ConstantValue>,
+
     /// The functions in this module can reference constants. The values of
     /// these constants are stored in this HashMap. So, as long as the function
     /// are around, we have to keep these constants around. That is why they
@@ -70,11 +72,13 @@ struct ModuleData {
 impl ModuleData {
     fn new(
         cranelift_jit: JITModule,
+        literals: Vec<ConstantValue>,
         constants: HashMap<ResolvedName, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self {
             cranelift_jit: ManuallyDrop::new(cranelift_jit),
+            _literals: literals,
             _constants: constants,
             _registered_fns: registered_fns,
         }
@@ -103,11 +107,13 @@ pub struct SharedModuleData(Arc<ModuleData>);
 impl SharedModuleData {
     fn new(
         cranelift_jit: JITModule,
+        literals: Vec<ConstantValue>,
         constants: HashMap<ResolvedName, ConstantValue>,
         registered_fns: Vec<Arc<Box<dyn Any>>>,
     ) -> Self {
         Self(Arc::new(ModuleData::new(
             cranelift_jit,
+            literals,
             constants,
             registered_fns,
         )))
@@ -239,6 +245,8 @@ pub struct FunctionInfo {
 }
 
 struct ModuleBuilder {
+    literals: Vec<ConstantValue>,
+
     constants: HashMap<ResolvedName, ConstantValue>,
 
     registered_fns: Vec<Arc<Box<dyn Any>>>,
@@ -311,6 +319,7 @@ pub fn codegen<Ctx: OptCtx>(
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
+    literals: Vec<ConstantValue>,
 ) -> Module<Ctx> {
     let runtime = &runtime.rt;
 
@@ -369,6 +378,7 @@ pub fn codegen<Ctx: OptCtx>(
         .push(AbiParam::new(cranelift::codegen::ir::types::I32));
 
     let mut module = ModuleBuilder {
+        literals,
         constants: HashMap::new(),
         functions: HashMap::new(),
         registered_fns: Vec::new(),
@@ -613,6 +623,7 @@ impl ModuleBuilder {
             functions: self.functions,
             inner: SharedModuleData::new(
                 self.inner,
+                self.literals,
                 self.constants,
                 self.registered_fns,
             ),

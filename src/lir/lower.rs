@@ -882,6 +882,51 @@ impl Lowerer<'_, '_> {
                 ice!("should be a type error");
             }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
+            Literal::Custom(c) => {
+                let ptr_var = self.new_tmp(IrType::Pointer);
+                let val = IrValue::Pointer(c.ptr() as usize);
+
+                self.emit_assign(
+                    ptr_var.clone(),
+                    val.into(),
+                    IrType::Pointer,
+                );
+
+                let by_reference = self.is_reference_type(ty)?;
+                let (to, loc) = match by_reference {
+                    true => {
+                        let layout = self
+                            .ctx
+                            .type_info
+                            .layout_of(ty, self.ctx.runtime)
+                            .unwrap();
+
+                        let to = self.new_stack_slot(layout);
+                        let loc = Location::Pointer {
+                            base: to.clone(),
+                            offset: 0,
+                        };
+                        (to, loc)
+                    }
+                    false => {
+                        let ir_ty = self.lower_type(ty)?;
+                        let to = self.new_tmp(ir_ty);
+                        let loc = Location::Var(to.clone());
+                        (to, loc)
+                    }
+                };
+
+                self.call_clone_of(
+                    loc,
+                    Location::Pointer {
+                        base: ptr_var,
+                        offset: 0,
+                    },
+                    ty,
+                );
+
+                to.into()
+            }
             Literal::Unit => return None,
         })
     }

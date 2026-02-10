@@ -9,6 +9,7 @@ use crate::{
         TypeExpr,
     },
     parser::{ParseError, precedence::Associativity},
+    runtime::ConstantValue,
 };
 
 use super::{
@@ -801,6 +802,11 @@ impl Parser<'_, '_> {
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
+            Token::Custom(x) => {
+                let c = ConstantValue::from(x);
+                self.literals.push(c.clone());
+                Literal::Custom(c)
+            }
             t => {
                 return Err(ParseError::expected("a literal", t, span).into());
             }

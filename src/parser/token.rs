@@ -1,11 +1,17 @@
 //! Lexer for Roto scripts
 
 use core::{ops::Range, str};
-use std::{fmt::Display, ops::ControlFlow};
+use std::{
+    any::TypeId,
+    collections::HashSet,
+    fmt::{Debug, Display},
+    ops::ControlFlow,
+    sync::Arc,
+};
 
 use unicode_ident::{is_xid_continue, is_xid_start};
 
-use crate::ast::Identifier;
+use crate::{ast::Identifier, runtime::Rt};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token<'s> {
@@ -61,6 +67,44 @@ pub enum Token<'s> {
 
     /// An f-string start token signals to the parser that an f-string is coming up
     FStringStart,
+
+    /// A custom Runtime-specified lexer hook.
+    Custom(CustomToken),
+}
+
+/// A token created by a lexer hook.
+#[derive(Clone)]
+pub struct CustomToken {
+    pub(crate) val: Arc<dyn Send + Sync + 'static>,
+    id: TypeId,
+}
+
+impl Debug for CustomToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CustomToken")
+            .field(&Arc::as_ptr(&self.val))
+            .finish()
+    }
+}
+impl CustomToken {
+    /// Create a new token
+    pub fn new<T: Send + Sync + 'static>(x: T) -> Self {
+        Self {
+            val: Arc::new(x),
+            id: TypeId::of::<T>(),
+        }
+    }
+
+    /// Get the type id of the value this token was constructed with.
+    pub fn type_id(&self) -> TypeId {
+        self.id
+    }
+}
+
+impl PartialEq for CustomToken {
+    fn eq(&self, _other: &Self) -> bool {
+        false
+    }
 }
 
 pub enum FStringToken<'s> {
@@ -100,23 +144,37 @@ pub enum Keyword {
     While,
 }
 
+/// Roto's lexer
 pub struct Lexer<'a> {
     input: &'a str,
     original_length: usize,
     peeked: Option<(Result<Token<'a>, ()>, Range<usize>)>,
-    pub almost_keyword:
+    pub(crate) almost_keyword:
         Option<(Identifier, Range<usize>, Option<&'static str>)>,
+    hook: Option<LexerHook>,
+    custom_type_ids: HashSet<TypeId>,
 }
 
+/// A function to give to the runtime to augment the lexer for custom literals.
+pub type LexerHook = Arc<
+    dyn for<'b> Fn(
+        &mut Lexer<'b>,
+    ) -> ControlFlow<(CustomToken, Range<usize>)>,
+>;
+
 impl<'a> Lexer<'a> {
-    pub fn next(&mut self) -> Option<(Result<Token<'a>, ()>, Range<usize>)> {
+    pub(crate) fn next(
+        &mut self,
+    ) -> Option<(Result<Token<'a>, ()>, Range<usize>)> {
         if self.peeked.is_some() {
             return self.peeked.take();
         }
         self.next_inner()
     }
 
-    pub fn peek(&mut self) -> &Option<(Result<Token<'a>, ()>, Range<usize>)> {
+    pub(crate) fn peek(
+        &mut self,
+    ) -> &Option<(Result<Token<'a>, ()>, Range<usize>)> {
         if self.peeked.is_none() {
             self.peeked = self.next_inner();
         }
@@ -142,16 +200,39 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'s> Lexer<'s> {
-    pub fn new(input: &'s str) -> Self {
+    pub(crate) fn new(input: &'s str, rt: &Rt) -> Self {
+        let hook = rt.lexer_hook();
+        let custom_type_ids = rt.custom_type_ids();
         Self {
             input,
             original_length: input.len(),
             peeked: None,
             almost_keyword: None,
+            hook,
+            custom_type_ids,
         }
     }
 
-    fn bump(&mut self, n: usize) -> (&'s str, Range<usize>) {
+    pub(crate) fn new_simple(input: &'s str) -> Self {
+        Self {
+            input,
+            original_length: input.len(),
+            peeked: None,
+            almost_keyword: None,
+            hook: None,
+            custom_type_ids: HashSet::new(),
+        }
+    }
+
+    /// Get the _remaining_ input string of the lexer
+    pub fn input(&self) -> &str {
+        self.input
+    }
+
+    /// Move the lexer forward by `n` bytes.
+    ///
+    /// Returns the string and its corresponding range.
+    pub fn bump(&mut self, n: usize) -> (&'s str, Range<usize>) {
         let start = self.original_length - self.input.len();
         let (a, b) = self.input.split_at(n);
         self.input = b;
@@ -168,6 +249,22 @@ impl<'s> Lexer<'s> {
 
         if self.is_empty() {
             return ControlFlow::Continue(());
+        }
+
+        // This is doing a clone that should be unnecessary, but as a proof of
+        // concept, this works.
+        if let Some(f) = self.hook.as_ref().map(|x| x.clone()) {
+            f(self)
+                .map_break(|t| {
+                    if !self.custom_type_ids.contains(&t.0.type_id()) {
+                        // There's not much we can do here. The implementer of
+                        // the lexer hook made a mistake. Panicking is the best
+                        // option.
+                        panic!("Custom lexer returned an invalid type.");
+                    }
+                    t
+                })
+                .map_break(|(t, r)| (Token::Custom(t), r))?;
         }
 
         self.ipv6()?;
@@ -417,7 +514,7 @@ impl<'s> Lexer<'s> {
         ControlFlow::Break((Token::FStringStart, span))
     }
 
-    pub fn f_string_part(
+    pub(crate) fn f_string_part(
         &mut self,
     ) -> Option<(FStringToken<'s>, Range<usize>)> {
         let mut chars = self.input.chars().enumerate();
@@ -656,6 +753,8 @@ impl Display for Token<'_> {
             Token::Bool(false) => "false",
 
             Token::FStringStart => "f\"",
+
+            Token::Custom(x) => &format!("Custom({x:?})"),
         };
 
         f.write_str(s)
