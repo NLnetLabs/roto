@@ -237,28 +237,89 @@ impl StringLines {
     /// `i` is greater than `j`.
     pub fn slice(&self, i: usize, j: usize) -> Option<String> {
         // If j is less than i, we return None.
-        j.checked_sub(i)?;
+        let num = j.checked_sub(i)?;
 
-        let mut iter = self.0.0.lines();
+        let s = &self.0.0;
+
+        // Append the length of the string as an index so that we don't go
+        // out of bounds on the last line. This can be thought of a putting
+        // an extra newline on the end, which we can't do without allocating.
+        let end = if s.ends_with('\n') {
+            None
+        } else {
+            Some(s.len())
+        };
+
+        let mut iter = s.match_indices('\n').map(|(byte, _)| byte + 1);
 
         // This is essentially a manual `Iterator::skip` implementation, except
         // that we return `None` if `i` is out of bounds.
+        let mut start_idx = 0;
         for _ in 0..i {
-            iter.next()?;
+            let idx = iter.next()?;
+            start_idx = idx;
         }
+
+        if num == 0 {
+            return Some(String::new(""));
+        }
+
+        let mut iter = iter.chain(end);
 
         // Same as above but for `Iterator::take`
-        let mut s = std::string::String::new();
+        let mut end_idx = start_idx;
         for _ in i..j {
-            s.push_str(iter.next()?);
+            let idx = iter.next()?;
+            end_idx = idx;
         }
 
-        Some(s.into())
+        Some(self.0.0[start_idx..end_idx].into())
     }
 
     /// Get a list of lines
     pub fn list(&self) -> List<String> {
         // TODO: This could be optimized
         self.0.0.lines().map(Into::into).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn string_line_slice() {
+        use super::String;
+
+        let s = String::from("1\n2\n3\n4\n").lines();
+
+        assert_eq!(s.slice(0, 0), Some("".into()));
+        assert_eq!(s.slice(0, 1), Some("1\n".into()));
+        assert_eq!(s.slice(0, 2), Some("1\n2\n".into()));
+        assert_eq!(s.slice(1, 3), Some("2\n3\n".into()));
+        assert_eq!(s.slice(1, 4), Some("2\n3\n4\n".into()));
+        assert_eq!(s.slice(1, 5), None);
+
+        let s = String::from("1\n2\n3\n4").lines();
+
+        assert_eq!(s.slice(0, 0), Some("".into()));
+        assert_eq!(s.slice(0, 1), Some("1\n".into()));
+        assert_eq!(s.slice(0, 2), Some("1\n2\n".into()));
+        assert_eq!(s.slice(1, 3), Some("2\n3\n".into()));
+        assert_eq!(s.slice(1, 4), Some("2\n3\n4".into()));
+        assert_eq!(s.slice(1, 5), None);
+
+        let s = String::from("1\n2\n3\n4\n\n").lines();
+
+        assert_eq!(s.slice(0, 0), Some("".into()));
+        assert_eq!(s.slice(0, 1), Some("1\n".into()));
+        assert_eq!(s.slice(0, 2), Some("1\n2\n".into()));
+        assert_eq!(s.slice(1, 3), Some("2\n3\n".into()));
+        assert_eq!(s.slice(1, 5), Some("2\n3\n4\n\n".into()));
+        assert_eq!(s.slice(1, 6), None);
+
+        let s = String::from("").lines();
+
+        assert_eq!(s.slice(0, 0), Some("".into()));
+        assert_eq!(s.slice(0, 1), Some("".into()));
+        assert_eq!(s.slice(1, 1), None);
     }
 }

@@ -4743,3 +4743,22 @@ fn string_lines() {
     let res = f.call();
     assert_eq!(res.to_vec(), vec!["One line".into(), "And another".into()]);
 }
+
+#[test]
+fn string_line_slice() {
+    let s = src!(
+        r#"
+        fn main(i: u64, j: u64) -> String? {
+            "1\n2\n3\n4\n".lines().slice(i, j)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(u64, u64) -> Option<String>>("main")
+        .unwrap();
+
+    let res = f.call(0, 2);
+    assert_eq!(res, Some("1\n2\n".into()));
+}
