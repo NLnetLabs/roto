@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use roto::{Runtime, Val, Verdict, library};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct AddrRange {
     min: IpAddr,
     max: IpAddr,

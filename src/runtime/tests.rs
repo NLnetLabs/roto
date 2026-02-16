@@ -49,7 +49,7 @@ fn invalid_static_method_name() {
 #[test]
 #[should_panic]
 fn invalid_clone_type_name() {
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     struct Foo;
 
     let _ = library! {
@@ -60,7 +60,7 @@ fn invalid_clone_type_name() {
 #[test]
 #[should_panic]
 fn invalid_copy_type_name() {
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq)]
     struct Foo;
 
     let _ = library! {

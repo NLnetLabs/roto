@@ -228,12 +228,12 @@ impl Type {
     /// ```rust
     /// use roto::{Type, Val, location};
     ///
-    /// #[derive(Clone)]
+    /// #[derive(Clone, PartialEq)]
     /// struct Foo(i32);
     ///
     /// Type::clone::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
     /// ```
-    pub fn clone<T: Value + Clone>(
+    pub fn clone<T: Value + Clone + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -256,12 +256,12 @@ impl Type {
     /// ```rust
     /// use roto::{Type, Val, location};
     ///
-    /// #[derive(Clone, Copy)]
+    /// #[derive(Clone, Copy, PartialEq)]
     /// struct Foo(i32);
     ///
     /// Type::copy::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
     /// ```
-    pub fn copy<T: Value + Copy>(
+    pub fn copy<T: Value + Copy + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -270,7 +270,7 @@ impl Type {
     }
 
     /// For internal use only, might lead to unexpected behaviour if used incorrectly
-    pub(crate) fn value<T: Value + Copy>(
+    pub(crate) fn value<T: Value + Copy + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -278,7 +278,7 @@ impl Type {
         Self::new::<T>(name, doc, Movability::Value, location)
     }
 
-    fn new<T: Value>(
+    fn new<T: Value + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         movability: Movability,

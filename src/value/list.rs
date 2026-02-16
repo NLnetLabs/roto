@@ -114,6 +114,7 @@ pub mod ffi {
 pub mod boundary {
     use std::{
         alloc::Layout, marker::PhantomData, mem::ManuallyDrop, ptr::NonNull,
+        sync::Arc,
     };
 
     use crate::{
@@ -150,6 +151,49 @@ pub mod boundary {
                 inner: self.inner.clone(),
                 _phantom: self._phantom,
             }
+        }
+    }
+
+    impl<T: Value> PartialEq for List<T>
+    where
+        T::Transformed: PartialEq,
+    {
+        fn eq(&self, other: &Self) -> bool {
+            // We could have reused the ErasedList implementation of PartialEq,
+            // however, this implementation uses more of Rust's knowledge of
+            // the type and probably allows for much more optimization.
+
+            // This is both an optimization and necessary because we cannot lock
+            // the same mutex twice.
+            if Arc::ptr_eq(&self.inner.0, &other.inner.0) {
+                return true;
+            }
+
+            let this = self.inner.0.lock().unwrap();
+
+            // SAFETY: The rawlist represents a slice of T::Transformed so
+            // we can safely construct a slice from it's parts as long as we
+            // hold the lock.
+            let this = unsafe {
+                std::slice::from_raw_parts::<T::Transformed>(
+                    this.ptr.cast().as_ptr(),
+                    this.len,
+                )
+            };
+
+            let other = self.inner.0.lock().unwrap();
+
+            // SAFETY: The rawlist represents a slice of T::Transformed so
+            // we can safely construct a slice from it's parts as long as we
+            // hold the lock.
+            let other = unsafe {
+                std::slice::from_raw_parts::<T::Transformed>(
+                    other.ptr.cast().as_ptr(),
+                    other.len,
+                )
+            };
+
+            this == other
         }
     }
 
@@ -271,6 +315,36 @@ type T = ();
 
 #[derive(Clone)]
 pub(crate) struct ErasedList(Arc<Mutex<RawList>>);
+
+impl PartialEq for ErasedList {
+    fn eq(&self, other: &Self) -> bool {
+        // This is both an optimization and necessary because we cannot lock
+        // the same mutex twice.
+        if Arc::ptr_eq(&self.0, &other.0) {
+            return true;
+        }
+
+        let this = self.0.lock().unwrap();
+        let other = other.0.lock().unwrap();
+
+        if this.len != other.len {
+            return false;
+        }
+
+        for i in 0..self.len() {
+            let _elem1 = this.get(i).unwrap();
+            let _elem2 = other.get(i).unwrap();
+
+            let is_eq = false; // TODO
+
+            if !is_eq {
+                return false;
+            }
+        }
+
+        true
+    }
+}
 
 impl ErasedList {
     pub fn new(vtable: VTable) -> Self {
@@ -936,6 +1010,12 @@ mod tests {
             fn clone(&self) -> Self {
                 COUNT.fetch_add(1, Relaxed);
                 Self
+            }
+        }
+
+        impl PartialEq for Counter {
+            fn eq(&self, _other: &Self) -> bool {
+                true
             }
         }
 

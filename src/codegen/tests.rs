@@ -614,7 +614,7 @@ fn int_var() {
 
 #[test]
 fn issue_52() {
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq, Eq)]
     struct Foo {
         _x: i32,
     }
@@ -645,7 +645,7 @@ fn issue_52() {
 
 #[test]
 fn register_with_non_registered_type() {
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq, Eq)]
     struct Foo {
         _x: i32,
     }
@@ -1404,6 +1404,12 @@ fn arc_type() {
     struct CloneDrop {
         clones: &'static AtomicUsize,
         drops: &'static AtomicUsize,
+    }
+
+    impl PartialEq for CloneDrop {
+        fn eq(&self, _other: &Self) -> bool {
+            false
+        }
     }
 
     impl Clone for CloneDrop {
@@ -2873,7 +2879,7 @@ fn mutate() {
 
 #[test]
 fn return_vec() {
-    #[derive(Clone, Debug, Default)]
+    #[derive(Clone, Debug, Default, PartialEq)]
     #[allow(dead_code)]
     struct MyType {
         v: Vec<u8>,
@@ -2904,12 +2910,12 @@ fn return_vec() {
 
 #[test]
 fn name_collision() {
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     struct A {
         _x: u32,
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     struct B {
         _x: u32,
     }
@@ -2957,7 +2963,7 @@ fn name_collision() {
 
 #[test]
 fn refcounting_in_a_recursive_function() {
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     struct Foo;
 
     let rt = Runtime::from_lib(library! {
@@ -3178,6 +3184,7 @@ fn let_declaration_is_by_value() {
 
 #[test]
 fn sigill() {
+    #[derive(PartialEq)]
     struct Arcane(Arc<()>);
 
     impl Clone for Arcane {
@@ -3593,7 +3600,7 @@ fn register_type_in_module() {
     "#
     );
 
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     struct Foo(u32);
 
     let rt = Runtime::from_lib(library! {
