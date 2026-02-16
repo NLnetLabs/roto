@@ -127,7 +127,7 @@ impl std::fmt::Debug for String {
 }
 
 /// A view into a string indexed by bytes.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct StringBytes(StringData);
 
@@ -158,7 +158,7 @@ impl StringBytes {
 }
 
 /// A view into a string indexed by code points.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct StringChars(StringData);
 
@@ -216,7 +216,7 @@ impl StringChars {
 }
 
 /// A view into a string indexed by lines.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct StringLines(StringData);
 

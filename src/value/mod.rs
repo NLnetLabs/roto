@@ -28,6 +28,7 @@ pub(crate) use list::ErasedList;
 pub use list::boundary::List;
 pub use option::RotoOption;
 pub use string::{String, StringBytes, StringChars, StringLines};
+pub use string_buf::StringBuf;
 pub use val::Val;
 pub use verdict::Verdict;
 pub use vtable::{CloneFn, DropFn, VTable};
@@ -36,6 +37,7 @@ mod dyn_val;
 pub mod list;
 mod option;
 mod string;
+mod string_buf;
 mod val;
 mod verdict;
 mod vtable;
@@ -292,7 +294,7 @@ impl<T> Param<Val<T>> for *mut T {
 }
 
 #[sealed]
-impl<T: 'static + Clone> Value for Val<T> {
+impl<T: 'static + Clone + PartialEq> Value for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
 

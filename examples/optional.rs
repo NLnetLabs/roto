@@ -1,7 +1,7 @@
 use roto::{Runtime, String, Val, library};
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct NonEmptyString {
     s: String,
 }
