@@ -274,6 +274,9 @@ struct ModuleBuilder {
     /// Signature to use for calls to `drop`
     drop_signature: Signature,
 
+    /// Signature to use for calls to `eq`
+    eq_signature: Signature,
+
     /// Signature to use for calls to `init_string`
     init_string_signature: Signature,
 }
@@ -295,6 +298,9 @@ struct FuncGen<'c> {
 
     /// Signature to use for calls to `drop`
     drop_signature: SigRef,
+
+    /// Signature to use for calls to `eq`
+    eq_signature: SigRef,
 
     /// Signature to use for calls to `init_string`
     init_string_signature: SigRef,
@@ -361,6 +367,11 @@ pub fn codegen<Ctx: OptCtx>(
     clone_signature.params.push(pointer_ty);
     clone_signature.params.push(pointer_ty);
 
+    let mut eq_signature = jit.make_signature();
+    eq_signature.params.push(pointer_ty);
+    eq_signature.params.push(pointer_ty);
+    eq_signature.returns.push(AbiParam::new(I8));
+
     let mut init_string_signature = jit.make_signature();
     init_string_signature.params.push(pointer_ty);
     init_string_signature.params.push(pointer_ty);
@@ -380,6 +391,7 @@ pub fn codegen<Ctx: OptCtx>(
         type_info,
         drop_signature,
         clone_signature,
+        eq_signature,
         init_string_signature,
     };
 
@@ -568,6 +580,7 @@ impl ModuleBuilder {
                 .import_signature(self.drop_signature.clone()),
             clone_signature: builder
                 .import_signature(self.clone_signature.clone()),
+            eq_signature: builder.import_signature(self.eq_signature.clone()),
             init_string_signature: builder
                 .import_signature(self.init_string_signature.clone()),
             module: self,
@@ -1032,6 +1045,29 @@ impl<'c> FuncGen<'c> {
                     clone,
                     &[dest, src],
                 );
+            }
+            lir::Instruction::Eq {
+                to,
+                left,
+                right,
+                eq_fn,
+            } => {
+                let (left, _) = self.operand(left);
+                let (right, _) = self.operand(right);
+
+                let var = self.variable(to, I8);
+
+                let pointer_ty = self.module.isa.pointer_type();
+                let eq_fn = self
+                    .ins()
+                    .iconst(pointer_ty, *eq_fn as *mut u8 as usize as i64);
+                let inst = self.builder.ins().call_indirect(
+                    self.eq_signature,
+                    eq_fn,
+                    &[left, right],
+                );
+
+                self.def(var, self.builder.inst_results(inst)[0]);
             }
             lir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {

@@ -339,6 +339,19 @@ impl Printable for Instruction {
             } => {
                 format!("mem::drop({}, with={drop:?})", var.print(printer))
             }
+            Eq {
+                to,
+                left,
+                right,
+                eq_fn,
+            } => {
+                format!(
+                    "{} = eq({}, {}, with={eq_fn:?})",
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
+                )
+            }
             Drop { var, drop: None } => {
                 format!("mem::drop({}, noop)", var.print(printer))
             }

@@ -119,9 +119,9 @@ pub mod boundary {
 
     use crate::{
         Value,
-        runtime::{extern_clone, extern_drop},
+        runtime::{extern_clone, extern_drop, extern_eq},
         value::{
-            VTable,
+            EqFn, VTable,
             vtable::{CloneFn, DropFn},
         },
     };
@@ -197,7 +197,10 @@ pub mod boundary {
         }
     }
 
-    impl<T: Value> List<T> {
+    impl<T: Value> List<T>
+    where
+        T::Transformed: PartialEq,
+    {
         /// Create a new empty [`List`]
         pub fn new() -> Self {
             let drop_fn: Option<DropFn> =
@@ -207,6 +210,8 @@ pub mod boundary {
             let clone_fn: Option<CloneFn> =
                 Some(extern_clone::<T::Transformed>);
 
+            let eq_fn: EqFn = extern_eq::<T::Transformed>;
+
             let layout = Layout::new::<T::Transformed>();
             Self {
                 inner: ErasedList::new(VTable::new(
@@ -214,6 +219,7 @@ pub mod boundary {
                     layout.align(),
                     clone_fn,
                     drop_fn,
+                    eq_fn,
                 )),
                 _phantom: PhantomData,
             }
@@ -279,7 +285,10 @@ pub mod boundary {
         }
     }
 
-    impl<T: Value> Default for List<T> {
+    impl<T: Value> Default for List<T>
+    where
+        T::Transformed: PartialEq,
+    {
         fn default() -> Self {
             Self::new()
         }
@@ -331,11 +340,16 @@ impl PartialEq for ErasedList {
             return false;
         }
 
-        for i in 0..self.len() {
-            let _elem1 = this.get(i).unwrap();
-            let _elem2 = other.get(i).unwrap();
+        for i in 0..this.len() {
+            let elem1 = this.get(i).unwrap();
+            let elem2 = other.get(i).unwrap();
 
-            let is_eq = false; // TODO
+            // SAFETY: These values are valid because they are within the length of
+            // the list. Note that this is of course not really safe, because the
+            // types need to be the same, but we can't enforce that here.
+            let is_eq = unsafe {
+                (this.vtable.eq_fn)(elem1.as_ptr(), elem2.as_ptr())
+            };
 
             if !is_eq {
                 return false;

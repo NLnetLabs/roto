@@ -7,6 +7,9 @@ pub type CloneFn = unsafe extern "C" fn(*mut T, *const T);
 /// A Roto drop function
 pub type DropFn = unsafe extern "C" fn(*mut T);
 
+/// A Roto drop function
+pub type EqFn = unsafe extern "C" fn(*const T, *const T) -> bool;
+
 /// Vtable of Roto values
 ///
 /// This struct can be generated for every Roto value and contains the functions that
@@ -31,6 +34,9 @@ pub struct VTable {
     ///
     /// It should only be `None` for types that can be trivially dropped.
     pub drop_fn: Option<DropFn>,
+
+    /// Determines whether two values of this type are equal
+    pub eq_fn: EqFn,
 }
 
 impl VTable {
@@ -39,12 +45,14 @@ impl VTable {
         align: usize,
         clone_fn: Option<CloneFn>,
         drop_fn: Option<DropFn>,
+        eq_fn: EqFn,
     ) -> Self {
         Self {
             size,
             align,
             clone_fn,
             drop_fn,
+            eq_fn,
         }
     }
 
