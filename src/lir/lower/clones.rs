@@ -18,7 +18,7 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{self, EnumVariant, Primitive, Type, TypeDefinition},
     },
-    value::ErasedList,
+    value::{CloneFn, ErasedList},
 };
 
 use super::Lowerer;
@@ -480,10 +480,7 @@ impl Lowerer<'_, '_> {
     }
 
     /// Returns the clone function of a registered type
-    fn get_runtime_clone(
-        &mut self,
-        ty: &Type,
-    ) -> Option<unsafe extern "C" fn(*const (), *mut ())> {
+    fn get_runtime_clone(&mut self, ty: &Type) -> Option<CloneFn> {
         let id = match ty {
             Type::Name(type_name) => {
                 let type_def =

@@ -20,7 +20,7 @@ use crate::{
     ast,
     parser::{Parser, meta::Spans},
     typechecker::scope::{DeclarationKind, ScopeType},
-    value::{DynVal, Ty, TypeDescription, TypeRegistry},
+    value::{CloneFn, DropFn, DynVal, Ty, TypeDescription, TypeRegistry},
 };
 use context::ContextDescription;
 use func::FunctionDescription;
@@ -366,27 +366,24 @@ pub enum Movability {
 
 #[derive(Clone, Debug)]
 pub struct CloneDrop {
-    pub clone: unsafe extern "C" fn(*const (), *mut ()),
-    pub drop: unsafe extern "C" fn(*mut ()),
+    pub clone: CloneFn,
+    pub drop: DropFn,
 }
 
 pub(crate) unsafe extern "C" fn extern_clone<T: Clone>(
-    from: *const (),
     to: *mut (),
+    from: *const (),
 ) {
-    let from = from as *const T;
-    let to = to as *mut T;
-
-    let from = unsafe { &*from };
+    let to = to.cast::<T>();
+    let from = unsafe { &*from.cast::<T>() };
 
     // *to is uninitialized so we *must* use std::ptr::write instead of using
     // a pointer assignment.
     unsafe { std::ptr::write(to, from.clone()) };
 }
 
-unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
-    let x = x as *mut T;
-    unsafe { std::ptr::drop_in_place(x) };
+pub(crate) unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
+    unsafe { x.cast::<T>().drop_in_place() };
 }
 
 #[derive(Clone, Debug)]

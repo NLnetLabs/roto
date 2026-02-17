@@ -686,7 +686,7 @@ pub fn eval(
 
                 let to = mem.get(to);
                 let from = mem.get(from);
-                unsafe { (clone_fn)(from, to) }
+                unsafe { (clone_fn)(to, from) }
             }
             Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {

@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 /// A placeholder type alias representing the type parameter of the extern "C" functions
 type T = ();
 
@@ -7,7 +5,7 @@ type T = ();
 pub type CloneFn = unsafe extern "C" fn(*mut T, *const T);
 
 /// A Roto drop function
-pub type DropFn = unsafe extern "C" fn(NonNull<T>);
+pub type DropFn = unsafe extern "C" fn(*mut T);
 
 /// Vtable of Roto values
 ///

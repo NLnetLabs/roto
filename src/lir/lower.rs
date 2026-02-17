@@ -3,7 +3,7 @@ mod drops;
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::value::VTable;
+use crate::value::{CloneFn, VTable};
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
     ice,
@@ -1055,12 +1055,7 @@ impl Lowerer<'_, '_> {
         self.emit(Instruction::Write { to, val })
     }
 
-    fn emit_clone(
-        &mut self,
-        to: Operand,
-        from: Operand,
-        clone_fn: unsafe extern "C" fn(*const (), *mut ()),
-    ) {
+    fn emit_clone(&mut self, to: Operand, from: Operand, clone_fn: CloneFn) {
         self.emit(Instruction::Clone { to, from, clone_fn })
     }
 

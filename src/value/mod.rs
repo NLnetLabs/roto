@@ -29,7 +29,7 @@ pub use list::boundary::List;
 pub use option::RotoOption;
 pub use val::Val;
 pub use verdict::Verdict;
-pub use vtable::VTable;
+pub use vtable::{CloneFn, DropFn, VTable};
 
 mod dyn_val;
 pub mod list;

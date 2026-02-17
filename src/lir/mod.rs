@@ -36,6 +36,7 @@ use crate::{
         self,
         scope::{ResolvedName, ScopeRef},
     },
+    value::{CloneFn, DropFn},
 };
 pub use eval::Memory;
 pub use lower::lower_to_lir;
@@ -201,7 +202,7 @@ pub enum Instruction {
         to: Operand,
         from: Operand,
         /// Pointer to the clone implementation of the type
-        clone_fn: unsafe extern "C" fn(*const (), *mut ()),
+        clone_fn: CloneFn,
     },
 
     /// Drop a value
@@ -211,7 +212,7 @@ pub enum Instruction {
     Drop {
         var: Operand,
         /// Pointer to the drop implementation of the type
-        drop: Option<unsafe extern "C" fn(*mut ())>,
+        drop: Option<DropFn>,
     },
 }
 

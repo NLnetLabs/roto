@@ -1030,7 +1030,7 @@ impl<'c> FuncGen<'c> {
                 self.builder.ins().call_indirect(
                     self.clone_signature,
                     clone,
-                    &[src, dest],
+                    &[dest, src],
                 );
             }
             lir::Instruction::Drop { var, drop } => {
