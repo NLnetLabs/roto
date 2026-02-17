@@ -36,7 +36,7 @@ use crate::{
         self,
         scope::{ResolvedName, ScopeRef},
     },
-    value::{CloneFn, DropFn},
+    value::{CloneFn, DropFn, EqFn},
 };
 pub use eval::Memory;
 pub use lower::lower_to_lir;
@@ -203,6 +203,15 @@ pub enum Instruction {
         from: Operand,
         /// Pointer to the clone implementation of the type
         clone_fn: CloneFn,
+    },
+
+    /// Eq a value with a Rust clone function
+    Eq {
+        to: Var,
+        left: Operand,
+        right: Operand,
+        /// Pointer to the eq implementation of the type
+        eq_fn: EqFn,
     },
 
     /// Drop a value

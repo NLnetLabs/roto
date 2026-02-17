@@ -4541,3 +4541,165 @@ fn cloning_a_record_with_a_copy_field() {
     let res = f.call();
     assert_eq!(res, 5);
 }
+
+#[test]
+fn record_equality() {
+    let s = src!(
+        r#"
+        record Foo {
+            a: i64,
+            b: String,
+        }
+
+        fn main(check_eq: bool) -> bool {
+            let x = Foo {
+                a: 5,
+                b: "hi",
+            };
+
+            let y = Foo {
+                a: 5,
+                b: "hi",
+            };
+
+            if check_eq {
+                x == y
+            } else {
+                x != y
+            }
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
+
+    assert!(f.call(true));
+    assert!(!f.call(false));
+}
+
+#[test]
+fn record_inequality() {
+    let s = src!(
+        r#"
+        record Foo {
+            a: i64,
+            b: String,
+        }
+
+        fn main(check_eq: bool) -> bool {
+            let x = Foo {
+                a: 5,
+                b: "hi",
+            };
+
+            let y = Foo {
+                a: 5,
+                b: "bye",
+            };
+
+            if check_eq {
+                x == y
+            } else {
+                x != y
+            }
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
+
+    assert!(!f.call(true));
+    assert!(f.call(false));
+}
+
+#[test]
+fn option_equality() {
+    let s = src!(
+        r#"
+        fn main(a: u64?, b: u64?) -> bool {
+            a == b
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(Option<u64>, Option<u64>) -> bool>("main")
+        .unwrap();
+
+    assert!(f.call(None, None));
+    assert!(f.call(Some(10), Some(10)));
+    assert!(f.call(Some(20), Some(20)));
+    assert!(!f.call(Some(10), None));
+    assert!(!f.call(None, Some(10)));
+    assert!(!f.call(Some(20), Some(10)));
+}
+
+#[test]
+fn option_inequality() {
+    let s = src!(
+        r#"
+        fn main(a: u64?, b: u64?) -> bool {
+            a != b
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(Option<u64>, Option<u64>) -> bool>("main")
+        .unwrap();
+
+    assert!(!f.call(None, None));
+    assert!(!f.call(Some(10), Some(10)));
+    assert!(!f.call(Some(20), Some(20)));
+    assert!(f.call(Some(10), None));
+    assert!(f.call(None, Some(10)));
+    assert!(f.call(Some(20), Some(10)));
+}
+
+#[test]
+fn list_equality() {
+    let s = src!(
+        r#"
+        fn main(choice: bool) -> bool {
+            let x = if choice {
+                [1, 2, 3]
+            } else {
+                [1, 2, 4]
+            };
+            [1, 2, 3] == x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
+
+    assert!(f.call(true));
+    assert!(!f.call(false));
+}
+
+#[test]
+fn list_inequality() {
+    let s = src!(
+        r#"
+        fn main(choice: bool) -> bool {
+            let x = if choice {
+                [1, 2, 3]
+            } else {
+                [1, 2, 4]
+            };
+            [1, 2, 3] != x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
+
+    assert!(!f.call(true));
+    assert!(f.call(false));
+}

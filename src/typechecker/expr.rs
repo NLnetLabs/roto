@@ -885,32 +885,6 @@ impl TypeChecker {
                 diverges |= self.expr(scope, &ctx, left)?;
                 diverges |= self.expr(scope, &ctx, right)?;
 
-                let ty = self.resolve_type(&ctx.expected_type);
-                let comparable = match ty {
-                    // TODO: Is never really comparable?
-                    Type::IntVar(_, _) | Type::FloatVar(_) | Type::Never => {
-                        true
-                    }
-                    Type::Record(..) | Type::RecordVar(..) => false,
-                    Type::Name(type_name) => {
-                        let type_def =
-                            self.type_info.resolve_type_name(&type_name);
-
-                        // This could be relaxed in the future but we only
-                        // support comparing primitives now.
-                        matches!(type_def, TypeDefinition::Primitive(_))
-                    }
-                    _ => false,
-                };
-
-                if !comparable {
-                    return Err(self.error_simple(
-                        "type cannot be compared",
-                        "cannot be compared",
-                        span,
-                    ));
-                }
-
                 Ok(diverges)
             }
             Add | Sub | Mul | Div => {
