@@ -4507,3 +4507,30 @@ fn cartesian_for_loop() {
 
     assert_eq!(res, 100);
 }
+
+#[test]
+fn cloning_a_record_with_a_copy_field() {
+    let s = src!(
+        r#"
+        record Foo {
+            a: i64,
+            b: String,
+        }
+
+        fn main() -> i64 {
+            let x = Foo {
+                a: 5,
+                b: "hi",
+            };
+            let y = x;
+            y.a
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> i64>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 5);
+}

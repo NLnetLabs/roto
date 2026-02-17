@@ -373,10 +373,6 @@ impl Lowerer<'_, '_> {
 
             let new_offset = builder.add(&layout);
 
-            if !self.needs_clone(ty) {
-                continue;
-            }
-
             let to = Location::Pointer {
                 base: return_var.clone(),
                 offset: new_offset,
