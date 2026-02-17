@@ -31,7 +31,7 @@ pub use string::{String, StringBytes, StringChars, StringLines};
 pub use string_buf::StringBuf;
 pub use val::Val;
 pub use verdict::Verdict;
-pub use vtable::{CloneFn, DropFn, VTable};
+pub use vtable::{CloneFn, DropFn, EqFn, VTable};
 
 mod dyn_val;
 pub mod list;

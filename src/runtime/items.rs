@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
-use crate::value::TypeDescription;
+use crate::runtime::extern_eq;
+use crate::value::{EqFn, TypeDescription};
 use crate::{
     Location, Value,
     ast::Identifier,
@@ -213,6 +214,7 @@ pub struct Type {
     pub(crate) type_id: TypeId,
     pub(crate) layout: Layout,
     pub(crate) movability: Movability,
+    pub(crate) eq_fn: EqFn,
     pub(crate) location: Location,
 }
 
@@ -307,6 +309,10 @@ impl Type {
             });
         }
 
+        // `T` is alright here because for custom types the T will always be the
+        // same as T::Transformed This way we get a more comprehensible API.
+        let eq_fn = extern_eq::<T>;
+
         Ok(Self {
             ident: name,
             rust_name: std::any::type_name::<T>(),
@@ -314,6 +320,7 @@ impl Type {
             type_id: ty.type_id,
             layout: ty.layout,
             movability,
+            eq_fn,
             location,
         })
     }
