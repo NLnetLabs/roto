@@ -416,6 +416,22 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_expected_int_value(
+        &self,
+        expr: &Meta<Expr>,
+        ty: &Type,
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "expected an integer value, found type `{}`",
+                ty.display(&self.type_info),
+            ),
+            location: expr.id,
+            labels: vec![Label::error("not an integer value", expr.id)],
+    }
+    }
+
+
     pub fn error_expected_value_path(
         &self,
         ident: &Meta<Identifier>,

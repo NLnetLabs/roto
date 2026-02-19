@@ -339,6 +339,7 @@ impl Parser<'_, '_> {
             Token::Hyphen => BinOp::Sub,
             Token::Star => BinOp::Mul,
             Token::Slash => BinOp::Div,
+            Token::Percent => BinOp::Mod,
             _ => return None,
         };
         Some(op)

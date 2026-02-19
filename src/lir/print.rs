@@ -262,6 +262,14 @@ impl Printable for Instruction {
                     right.print(printer),
                 )
             }
+            Mod { to, left, right } => {
+                format!(
+                    "{} = {} % {}",
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
+                )
+            }
             Jump(to) => {
                 format!("jump {}", to.print(printer))
             }

@@ -53,6 +53,12 @@ fn test_logical_expr_4() {
     parse_expr(s).unwrap();
 }
 
+#[test]
+fn test_modulo_expr() {
+    let s = "a = 5 % 4";
+    parse_expr(s).unwrap();
+}
+
 //------------ Compute Expressions parsing ----------------------------------
 
 #[test]

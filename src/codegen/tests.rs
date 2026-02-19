@@ -751,6 +751,31 @@ fn remainder() {
 }
 
 #[test]
+fn modulo() {
+    let s = src!(
+        "
+        fn mod(x: i32, y: i32) -> i32 {
+            x % y
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn(i32, i32) -> i32>("mod")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(5, 4);
+    assert_eq!(res, 1);
+
+    let res = f.call(-3, 2);
+    assert_eq!(res, 1);
+
+    let res = f.call(10_000, 30);
+    assert_eq!(res, 10);
+}
+
+#[test]
 fn factorial() {
     let s = src!(
         "

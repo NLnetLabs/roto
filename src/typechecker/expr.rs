@@ -930,6 +930,24 @@ impl TypeChecker {
                     Err(self.error_expected_numeric_value(left, &operand_ty))
                 }
             }
+
+            Mod => {
+                let operand_ty = self.fresh_var();
+                let new_ctx = ctx.with_type(operand_ty.clone());
+
+                let mut diverges = false;
+                diverges |= self.expr(scope, &new_ctx, left)?;
+
+                if self.type_info.is_int_type(&operand_ty) {
+                    diverges |= self.expr(scope, &new_ctx, right)?;
+
+                    self.unify(&ctx.expected_type, &operand_ty, span, None)?;
+
+                    Ok(diverges)
+                } else {
+                    Err(self.error_expected_int_value(left, &operand_ty))
+                }
+            }
         }
     }
 

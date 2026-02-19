@@ -947,6 +947,14 @@ impl<'c> FuncGen<'c> {
                 let val = self.ins().fdiv(l, r);
                 self.def(var, val)
             }
+            lir::Instruction::Mod { to, left, right } => {
+                let (l, left_ty) = self.operand(left);
+                let (r, _) = self.operand(right);
+
+                let var = self.variable(to, left_ty);
+                let val = self.ins().urem(l, r);
+                self.def(var, val);
+            }
             lir::Instruction::Initialize { to, bytes, layout } => {
                 let pointer_ty = self.module.isa.pointer_type();
                 let slot =
