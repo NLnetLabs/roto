@@ -959,6 +959,7 @@ impl Lowerer<'_, '_> {
                     to: to.clone(),
                     left,
                     right,
+                    signed: kind == IntKind::Signed,
                 }),
                 _ => ice!(),
             }
@@ -997,11 +998,6 @@ impl Lowerer<'_, '_> {
                     right,
                 }),
                 ast::BinOp::Div => self.emit(Instruction::FDiv {
-                    to: to.clone(),
-                    left,
-                    right,
-                }),
-                ast::BinOp::Mod => self.emit(Instruction::Mod {
                     to: to.clone(),
                     left,
                     right,

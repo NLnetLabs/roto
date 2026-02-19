@@ -751,10 +751,10 @@ fn remainder() {
 }
 
 #[test]
-fn modulo() {
+fn modulo_signed() {
     let s = src!(
         "
-        fn mod(x: i32, y: i32) -> i32 {
+        fn mod(x: i8, y: i8) -> i8 {
             x % y
         }
     "
@@ -762,17 +762,46 @@ fn modulo() {
 
     let mut p = compile(s);
     let f = p
-        .get_function::<fn(i32, i32) -> i32>("mod")
+        .get_function::<fn(i8, i8) -> i8>("mod")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5, 4);
-    assert_eq!(res, 1);
+    for i in i8::MIN..i8::MAX {
+        for j in i8::MIN..i8::MAX {
+            if j == 0 {
+                continue;
+            }
+            let out = i.wrapping_rem(j);
+            let res = f.call(i, j);
+            assert_eq!(res, out);
+        }
+    }
+}
 
-    let res = f.call(-3, 2);
-    assert_eq!(res, 1);
+#[test]
+fn modulo_unsigned() {
+    let s = src!(
+        "
+        fn mod(x: u8, y: u8) -> u8 {
+            x % y
+        }
+    "
+    );
 
-    let res = f.call(10_000, 30);
-    assert_eq!(res, 10);
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn(u8, u8) -> u8>("mod")
+        .expect("No function found (or mismatched types)");
+
+    for i in u8::MIN..u8::MAX {
+        for j in u8::MIN..u8::MAX {
+            if j == 0 {
+                continue;
+            }
+            let out = i % j;
+            let res = f.call(i, j);
+            assert_eq!(res, out);
+        }
+    }
 }
 
 #[test]
