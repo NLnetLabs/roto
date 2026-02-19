@@ -64,7 +64,7 @@ pub fn print_highlighted(s: &str) {
             | Token::RoundLeft
             | Token::RoundRight
             | Token::SquareLeft
-            | Token::SquareRight 
+            | Token::SquareRight
             | Token::Percent => ansi::GRAY,
             Token::Keyword(_) => ansi::BLUE,
             Token::String(_) => ansi::GREEN,

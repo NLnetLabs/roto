@@ -632,14 +632,30 @@ pub fn eval(
                 let right = eval_operand(&vars, right);
 
                 let res = match (left, right) {
-                    (IrValue::U8(l), IrValue::U8(r)) => IrValue::U8(l.rem_euclid(*r)),
-                    (IrValue::U16(l), IrValue::U16(r)) => IrValue::U16(l.rem_euclid(*r)),
-                    (IrValue::U32(l), IrValue::U32(r)) => IrValue::U32(l.rem_euclid(*r)),
-                    (IrValue::U64(l), IrValue::U64(r)) => IrValue::U64(l.rem_euclid(*r)),
-                    (IrValue::I8(l), IrValue::I8(r)) => IrValue::I8(l.rem_euclid(*r)),
-                    (IrValue::I16(l), IrValue::I16(r)) => IrValue::I16(l.rem_euclid(*r)),
-                    (IrValue::I32(l), IrValue::I32(r)) => IrValue::I32(l.rem_euclid(*r)),
-                    (IrValue::I64(l), IrValue::I64(r)) => IrValue::I64(l.rem_euclid(*r)),
+                    (IrValue::U8(l), IrValue::U8(r)) => {
+                        IrValue::U8(l.rem_euclid(*r))
+                    }
+                    (IrValue::U16(l), IrValue::U16(r)) => {
+                        IrValue::U16(l.rem_euclid(*r))
+                    }
+                    (IrValue::U32(l), IrValue::U32(r)) => {
+                        IrValue::U32(l.rem_euclid(*r))
+                    }
+                    (IrValue::U64(l), IrValue::U64(r)) => {
+                        IrValue::U64(l.rem_euclid(*r))
+                    }
+                    (IrValue::I8(l), IrValue::I8(r)) => {
+                        IrValue::I8(l.rem_euclid(*r))
+                    }
+                    (IrValue::I16(l), IrValue::I16(r)) => {
+                        IrValue::I16(l.rem_euclid(*r))
+                    }
+                    (IrValue::I32(l), IrValue::I32(r)) => {
+                        IrValue::I32(l.rem_euclid(*r))
+                    }
+                    (IrValue::I64(l), IrValue::I64(r)) => {
+                        IrValue::I64(l.rem_euclid(*r))
+                    }
                     _ => panic!(),
                 };
                 vars.insert(to.clone(), res);

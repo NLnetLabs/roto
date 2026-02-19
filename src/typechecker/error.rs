@@ -428,9 +428,8 @@ impl TypeChecker {
             ),
             location: expr.id,
             labels: vec![Label::error("not an integer value", expr.id)],
+        }
     }
-    }
-
 
     pub fn error_expected_value_path(
         &self,

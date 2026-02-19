@@ -160,7 +160,7 @@ pub enum Instruction {
         right: Operand,
     },
 
-    /// Modulo 
+    /// Modulo
     Mod {
         to: Var,
         left: Operand,
