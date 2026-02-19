@@ -18,7 +18,7 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{self, EnumVariant, Primitive, Type, TypeDefinition},
     },
-    value::ErasedList,
+    value::{DropFn, ErasedList},
 };
 
 impl Lowerer<'_, '_> {
@@ -371,10 +371,7 @@ impl Lowerer<'_, '_> {
     }
 
     /// Returns the drop function of a registered type
-    fn get_runtime_drop(
-        &mut self,
-        ty: &Type,
-    ) -> Option<unsafe extern "C" fn(*mut ())> {
+    fn get_runtime_drop(&mut self, ty: &Type) -> Option<DropFn> {
         let id = match ty {
             Type::Name(type_name) => {
                 let type_def =

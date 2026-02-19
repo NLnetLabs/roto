@@ -18,7 +18,7 @@ use crate::{
         scoped_display::TypeDisplay,
         types::{self, EnumVariant, Primitive, Type, TypeDefinition},
     },
-    value::ErasedList,
+    value::{CloneFn, ErasedList},
 };
 
 use super::Lowerer;
@@ -32,8 +32,8 @@ impl Lowerer<'_, '_> {
     ///  - Call `::generated_clone_{type_id}` for complex types.
     ///  - Call the runtime drop function for registered types.
     ///
-    /// This function also checks whether the value needs to be dropped in the
-    /// first place.
+    /// This function also checks whether the value needs to be cloned in the
+    /// first place and does a more efficient operation if not.
     pub fn call_clone_of(&mut self, to: Location, from: Location, ty: &Type) {
         match (to, from) {
             // This is a not-by-reference type so we'll just assign it.
@@ -87,9 +87,9 @@ impl Lowerer<'_, '_> {
     ///  - Do a memcpy for simple primitives or types that do not need custom
     ///    clones.
     ///  - Call `::generated_clone_{type_id}` for complex types.
-    ///  - Call the runtime drop function for registered types.
+    ///  - Call the runtime clone function for registered types.
     ///
-    /// This function also checks whether the value needs to be dropped in the
+    /// This function also checks whether the value needs to be cloned in the
     /// first place.
     pub fn call_clone_function(&mut self, from: Var, to: Var, ty: &Type) {
         // The easy case, we don't need to clone this.
@@ -111,7 +111,7 @@ impl Lowerer<'_, '_> {
         }
 
         // Finally, this might be a complex Roto type for which we generate a
-        // drop function
+        // clone function
         let type_id = self.ctx.type_info.type_id(ty);
         self.emit(Instruction::Call {
             to: None,
@@ -121,8 +121,8 @@ impl Lowerer<'_, '_> {
             return_ptr: Some(to),
         });
 
-        // When that happens we also need to make sure that drop function will
-        // be generated.
+        // When that happens we also need to make sure that the clone function
+        // will be generated.
         self.ctx.clones_to_generate.push_back(ty.clone());
     }
 
@@ -321,12 +321,13 @@ impl Lowerer<'_, '_> {
 
                 match type_def {
                     // We handled String above, the other primitives don't need to be
-                    // dropped.
+                    // cloned. And we'd never generate a clone method for them because
+                    // they can be memcpy'd
                     TypeDefinition::Primitive(_) => {
                         self.emit_return(None);
                     }
                     // If we get here with a runtime type, it implements Copy, so
-                    // doesn't need to be dropped.
+                    // doesn't need to be cloned.
                     TypeDefinition::Runtime(_, _) => {
                         let size = self
                             .ctx
@@ -372,10 +373,6 @@ impl Lowerer<'_, '_> {
             };
 
             let new_offset = builder.add(&layout);
-
-            if !self.needs_clone(ty) {
-                continue;
-            }
 
             let to = Location::Pointer {
                 base: return_var.clone(),
@@ -480,10 +477,7 @@ impl Lowerer<'_, '_> {
     }
 
     /// Returns the clone function of a registered type
-    fn get_runtime_clone(
-        &mut self,
-        ty: &Type,
-    ) -> Option<unsafe extern "C" fn(*const (), *mut ())> {
+    fn get_runtime_clone(&mut self, ty: &Type) -> Option<CloneFn> {
         let id = match ty {
             Type::Name(type_name) => {
                 let type_def =

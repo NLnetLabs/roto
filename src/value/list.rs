@@ -118,7 +118,7 @@ pub mod boundary {
 
     use crate::{
         Value,
-        runtime::extern_clone,
+        runtime::{extern_clone, extern_drop},
         value::{
             VTable,
             vtable::{CloneFn, DropFn},
@@ -156,41 +156,12 @@ pub mod boundary {
     impl<T: Value> List<T> {
         /// Create a new empty [`List`]
         pub fn new() -> Self {
-            /// Wrapper around a Rust clone function that has the ABI of a Roto function.
-            ///
-            /// # Safety
-            ///
-            /// The same safety concerns apply as `extern_drop`.
-            ///
-            unsafe extern "C" fn drop<T>(x: NonNull<()>) {
-                let x = x.cast::<T>();
+            let drop_fn: Option<DropFn> =
+                std::mem::needs_drop::<T::Transformed>()
+                    .then_some(extern_drop::<T::Transformed> as DropFn);
 
-                // SAFETY: This function is supposed to drop the value under
-                // the pointer, so we do that :)
-                unsafe {
-                    std::ptr::drop_in_place(x.as_ptr());
-                }
-            }
-
-            /// Wrapper around a Rust clone function that has the ABI of a Roto function.
-            ///
-            /// # Safety
-            ///
-            /// The same safety concerns apply as `extern_clone`.
-            ///
-            unsafe extern "C" fn clone<T: Clone>(
-                to: *mut (),
-                from: *const (),
-            ) {
-                // SAFETY: This function is supposed to drop the value under
-                // the pointer, so we do that.
-                unsafe { extern_clone::<T>(from, to) };
-            }
-
-            let drop_fn = std::mem::needs_drop::<T::Transformed>()
-                .then_some(drop::<T::Transformed> as DropFn);
-
-            let clone_fn = Some(clone::<T::Transformed> as CloneFn);
+            let clone_fn: Option<CloneFn> =
+                Some(extern_clone::<T::Transformed>);
 
             let layout = Layout::new::<T::Transformed>();
             Self {
@@ -444,11 +415,11 @@ impl RawList {
 
             // SAFETY: We stay within the allocation because we stay within the
             // length and therefore within the capacity of the list.
-            let non_null = unsafe { self.ptr.byte_add(offset) };
+            let ptr = unsafe { self.ptr.byte_add(offset).as_ptr() };
 
             // SAFETY: We give drop_fn the pointer of the value to drop as
             // argument.
-            unsafe { (drop_fn)(non_null) }
+            unsafe { (drop_fn)(ptr) }
         }
     }
 
@@ -551,7 +522,7 @@ impl RawList {
                     let offset = self.vtable.size() * (self.offset + i);
 
                     // SAFETY: We only access addresses we've already written to
-                    let src = unsafe { self.ptr.byte_add(offset) };
+                    let src = unsafe { self.ptr.byte_add(offset).as_ptr() };
 
                     // SAFETY: We drop we've just written to
                     unsafe { (drop_fn)(src) }
