@@ -1,6 +1,6 @@
 use roto::{Runtime, Val, Verdict, library};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct Vec2 {
     x: i32,
     y: i32,

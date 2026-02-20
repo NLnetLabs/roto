@@ -1,7 +1,7 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     ptr::NonNull,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use inetnum::{addr::Prefix, asn::Asn};
@@ -9,7 +9,7 @@ use inetnum::{addr::Prefix, asn::Asn};
 use crate::{
     Library, Val, library,
     runtime::func::OutPtr,
-    value::{DynVal, ErasedList, VTable, list::ffi::list_get},
+    value::{DynVal, ErasedList, StringBuf, VTable, list::ffi::list_get},
 };
 
 macro_rules! int_docs {
@@ -428,33 +428,32 @@ pub fn built_ins() -> Library {
         /// It is possible to mutate this type in place, allowing for faster
         /// manipulation. In particular, adding `char`s or `String` to the end
         /// of this type is much cheaper than using `+` or `String.append`.
-        #[clone] type StringBuf = Val<Arc<Mutex<String>>>;
+        #[clone] type StringBuf = Val<StringBuf>;
 
-        impl Val<Arc<Mutex<String>>> {
+        impl Val<StringBuf> {
             /// Create a new empty `StringBuf`
             fn new() -> Self {
-                Val(Default::default())
+                Val(StringBuf::new())
             }
 
             /// Create a `StringBuf` with an initial `String`
             fn from(s: Arc<str>) -> Self {
-                Val(Arc::new(Mutex::new(s.as_ref().to_owned())))
+                Val(StringBuf::from(s))
             }
 
             /// Add a `char` to the end of this `StringBuf`
             fn push_char(self, c: char) {
-                self.lock().unwrap().push(c);
+                self.0.push_char(c);
             }
 
             /// Add a `String` to the end of this `StringBuf`
             fn push_string(self, s: Arc<str>) {
-                self.lock().unwrap().push_str(&s);
+                self.0.push_string(s);
             }
 
             /// Get the underlying `String` of this `StringBuf`
             fn as_string(self) -> Arc<str> {
-                let s = self.lock().unwrap();
-                (&**s).into()
+                self.0.as_string()
             }
         }
 

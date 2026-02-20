@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
-use crate::value::TypeDescription;
+use crate::runtime::extern_eq;
+use crate::value::{EqFn, TypeDescription};
 use crate::{
     Location, Value,
     ast::Identifier,
@@ -213,6 +214,7 @@ pub struct Type {
     pub(crate) type_id: TypeId,
     pub(crate) layout: Layout,
     pub(crate) movability: Movability,
+    pub(crate) eq_fn: EqFn,
     pub(crate) location: Location,
 }
 
@@ -228,12 +230,12 @@ impl Type {
     /// ```rust
     /// use roto::{Type, Val, location};
     ///
-    /// #[derive(Clone)]
+    /// #[derive(Clone, PartialEq)]
     /// struct Foo(i32);
     ///
     /// Type::clone::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
     /// ```
-    pub fn clone<T: Value + Clone>(
+    pub fn clone<T: Value + Clone + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -256,12 +258,12 @@ impl Type {
     /// ```rust
     /// use roto::{Type, Val, location};
     ///
-    /// #[derive(Clone, Copy)]
+    /// #[derive(Clone, Copy, PartialEq)]
     /// struct Foo(i32);
     ///
     /// Type::copy::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
     /// ```
-    pub fn copy<T: Value + Copy>(
+    pub fn copy<T: Value + Copy + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -270,7 +272,7 @@ impl Type {
     }
 
     /// For internal use only, might lead to unexpected behaviour if used incorrectly
-    pub(crate) fn value<T: Value + Copy>(
+    pub(crate) fn value<T: Value + Copy + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         location: Location,
@@ -278,7 +280,7 @@ impl Type {
         Self::new::<T>(name, doc, Movability::Value, location)
     }
 
-    fn new<T: Value>(
+    fn new<T: Value + PartialEq>(
         name: impl Into<Identifier>,
         doc: impl AsRef<str>,
         movability: Movability,
@@ -307,6 +309,10 @@ impl Type {
             });
         }
 
+        // `T` is alright here because for custom types the T will always be the
+        // same as T::Transformed This way we get a more comprehensible API.
+        let eq_fn = extern_eq::<T>;
+
         Ok(Self {
             ident: name,
             rust_name: std::any::type_name::<T>(),
@@ -314,6 +320,7 @@ impl Type {
             type_id: ty.type_id,
             layout: ty.layout,
             movability,
+            eq_fn,
             location,
         })
     }

@@ -360,6 +360,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
             runtime_functions: &mut runtime_functions,
             drops_to_generate: VecDeque::new(),
             clones_to_generate: VecDeque::new(),
+            eq_to_generate: VecDeque::new(),
         };
         let ir = lir::lower_to_lir(&mut ctx, ir);
 

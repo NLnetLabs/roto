@@ -721,6 +721,28 @@ pub fn eval(
                     unsafe { (drop)(p) }
                 }
             }
+            Instruction::Eq {
+                to,
+                left,
+                right,
+                eq_fn,
+            } => {
+                let &IrValue::Pointer(left) = eval_operand(&vars, left)
+                else {
+                    panic!()
+                };
+
+                let &IrValue::Pointer(right) = eval_operand(&vars, right)
+                else {
+                    panic!()
+                };
+
+                let left = mem.get(left);
+                let right = mem.get(right);
+                let res = unsafe { (eq_fn)(left, right) };
+
+                vars.insert(to.clone(), IrValue::Bool(res));
+            }
             Instruction::InitString {
                 to,
                 string,

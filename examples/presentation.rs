@@ -19,7 +19,7 @@ mod hidden {
     };
 
     #[allow(dead_code)]
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     pub enum RotondaRoute {
         Ipv4Unicast(RouteWorkshop<Ipv4UnicastNlri>),
         Ipv6Unicast(RouteWorkshop<Ipv6UnicastNlri>),

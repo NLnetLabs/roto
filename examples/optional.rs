@@ -3,7 +3,7 @@ use std::sync::Arc;
 use roto::{Runtime, Val, library};
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct NonEmptyString {
     s: Arc<str>,
 }
