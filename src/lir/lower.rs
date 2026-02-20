@@ -955,6 +955,12 @@ impl Lowerer<'_, '_> {
                     right,
                     signed: kind == IntKind::Signed,
                 }),
+                ast::BinOp::Mod => self.emit(Instruction::Mod {
+                    to: to.clone(),
+                    left,
+                    right,
+                    signed: kind == IntKind::Signed,
+                }),
                 _ => ice!(),
             }
 

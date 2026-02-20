@@ -34,6 +34,7 @@ pub enum Token<'s> {
     SlashSlash,
     SlashStar,
     Star,
+    Percent,
 
     // === Delimiters ===
     AngleLeft,
@@ -255,6 +256,7 @@ impl<'s> Lexer<'s> {
             b')' => Token::RoundRight,
             b'<' => Token::AngleLeft,
             b'>' => Token::AngleRight,
+            b'%' => Token::Percent,
             _ => return ControlFlow::Continue(()),
         };
 
@@ -629,6 +631,7 @@ impl Display for Token<'_> {
             Token::SlashSlash => "//",
             Token::SlashStar => "/*",
             Token::Star => "*",
+            Token::Percent => "%",
 
             // Delimiters
             Token::AngleLeft => "<",

@@ -52,7 +52,7 @@ impl BinOp {
             | Self::Le
             | Self::Gt
             | Self::Ge => Precedence::Comparison,
-            Self::Mul | Self::Div => Precedence::MulDiv,
+            Self::Mul | Self::Div | Self::Mod => Precedence::MulDiv,
             Self::Add | Self::Sub => Precedence::AddSub,
         }
     }

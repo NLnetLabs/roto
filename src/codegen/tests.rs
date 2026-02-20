@@ -751,6 +751,60 @@ fn remainder() {
 }
 
 #[test]
+fn modulo_signed() {
+    let s = src!(
+        "
+        fn mod(x: i8, y: i8) -> i8 {
+            x % y
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn(i8, i8) -> i8>("mod")
+        .expect("No function found (or mismatched types)");
+
+    for i in i8::MIN..i8::MAX {
+        for j in i8::MIN..i8::MAX {
+            if j == 0 {
+                continue;
+            }
+            let out = i.wrapping_rem(j);
+            let res = f.call(i, j);
+            assert_eq!(res, out);
+        }
+    }
+}
+
+#[test]
+fn modulo_unsigned() {
+    let s = src!(
+        "
+        fn mod(x: u8, y: u8) -> u8 {
+            x % y
+        }
+    "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn(u8, u8) -> u8>("mod")
+        .expect("No function found (or mismatched types)");
+
+    for i in u8::MIN..u8::MAX {
+        for j in u8::MIN..u8::MAX {
+            if j == 0 {
+                continue;
+            }
+            let out = i % j;
+            let res = f.call(i, j);
+            assert_eq!(res, out);
+        }
+    }
+}
+
+#[test]
 fn factorial() {
     let s = src!(
         "

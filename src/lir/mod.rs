@@ -161,6 +161,14 @@ pub enum Instruction {
         right: Operand,
     },
 
+    /// Modulo
+    Mod {
+        to: Var,
+        signed: bool,
+        left: Operand,
+        right: Operand,
+    },
+
     /// Floating point division
     FDiv {
         to: Var,

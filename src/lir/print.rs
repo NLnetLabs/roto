@@ -262,6 +262,20 @@ impl Printable for Instruction {
                     right.print(printer),
                 )
             }
+            Mod {
+                to,
+                signed,
+                left,
+                right,
+            } => {
+                format!(
+                    "{} = {} % {} ({})",
+                    to.print(printer),
+                    left.print(printer),
+                    right.print(printer),
+                    if *signed { "signed" } else { "unsigned" },
+                )
+            }
             Jump(to) => {
                 format!("jump {}", to.print(printer))
             }
