@@ -262,6 +262,16 @@ pub mod boundary {
                 .collect()
         }
     }
+
+    impl<T: Value> From<Vec<T>> for List<T> {
+        fn from(source_vec: Vec<T>) -> Self {
+            let me = Self::new();
+            for element in source_vec {
+                me.push(element);
+            }
+            me
+        }
+    }
 }
 
 // We use `*mut ()` and `NonNull<()>` to represent `*mut T` and
