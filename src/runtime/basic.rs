@@ -479,6 +479,29 @@ pub fn built_ins() -> Library {
                 unsafe { self.push(ptr) };
             }
 
+            #[sig = "fn[T](List[T], T) -> bool"]
+            fn contains(self, item: DynVal) -> bool {
+                // SAFETY: Roto ensures we don't get a null value
+                let ptr = unsafe { NonNull::new_unchecked(item.0) };
+
+                // SAFETY: The Roto signature ensures that the types match up
+                // between the list and the element. We get item by value so we
+                // can pass it to contains_owned.
+                unsafe { self.contains_owned(ptr) }
+            }
+
+            #[sig = "fn[T](List[T], T) -> u64?"]
+            fn index(self, item: DynVal) -> Option<u64> {
+                // SAFETY: Roto ensures we don't get a null value
+                let ptr = unsafe { NonNull::new_unchecked(item.0) };
+
+                // SAFETY: The Roto signature ensures that the types match up
+                // between the list and the element. We get item by value so we
+                // can pass it to contains_owned.
+                let idx_usize = unsafe { self.index_owned(ptr) };
+                idx_usize.map(|i| i as u64)
+            }
+
             /// Concatenate this list with another, returning the result.
             ///
             /// The arguments are not mutated by this function.

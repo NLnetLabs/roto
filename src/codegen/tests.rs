@@ -4749,3 +4749,85 @@ fn anonymous_record_inequality() {
     assert!(!f.call(true));
     assert!(f.call(false));
 }
+
+#[test]
+fn list_contains_int() {
+    let s = src!(
+        r#"
+        fn main(x: i32) -> bool {
+            [1, 2, 3].contains(x)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(i32) -> bool>("main").unwrap();
+
+    assert!(!f.call(0));
+    assert!(f.call(1));
+    assert!(f.call(2));
+    assert!(f.call(3));
+    assert!(!f.call(4));
+}
+
+#[test]
+fn list_contains_string() {
+    let s = src!(
+        r#"
+        fn main(x: String) -> bool {
+            ["Terts", "Jasper", "Luuk"].contains(x)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(Arc<str>) -> bool>("main").unwrap();
+
+    assert!(!f.call("Alex".into()));
+    assert!(f.call("Terts".into()));
+    assert!(f.call("Jasper".into()));
+    assert!(f.call("Luuk".into()));
+    assert!(!f.call("Martin".into()));
+}
+
+#[test]
+fn list_index_int() {
+    let s = src!(
+        r#"
+        fn main(x: i32) -> u64? {
+            [10, 20, 30].index(x)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(i32) -> Option<u64>>("main").unwrap();
+
+    assert_eq!(f.call(0), None);
+    assert_eq!(f.call(10), Some(0));
+    assert_eq!(f.call(20), Some(1));
+    assert_eq!(f.call(30), Some(2));
+    assert_eq!(f.call(40), None);
+}
+
+#[test]
+fn list_index_string() {
+    let s = src!(
+        r#"
+        fn main(x: String) -> u64? {
+            ["Terts", "Jasper", "Luuk"].index(x)
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(Arc<str>) -> Option<u64>>("main")
+        .unwrap();
+
+    assert_eq!(f.call("Alex".into()), None);
+    assert_eq!(f.call("Terts".into()), Some(0));
+    assert_eq!(f.call("Jasper".into()), Some(1));
+    assert_eq!(f.call("Luuk".into()), Some(2));
+    assert_eq!(f.call("Martin".into()), None);
+}
