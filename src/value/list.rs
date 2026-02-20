@@ -251,6 +251,24 @@ pub mod boundary {
             Some(T::untransform(transformed.clone()))
         }
 
+        /// Check whether this list contains a certain value.
+        pub fn contains(&self, item: &T) -> bool {
+            let item_ptr = NonNull::from_ref(item).cast::<()>();
+
+            // SAFETY: We have a valid value behind the pointer and forget
+            // the value to ensure that we give ownership.
+            unsafe { self.inner.contains(item_ptr) }
+        }
+
+        /// Returns the index of the first element that is equal to the given value.
+        pub fn index(&self, item: &T) -> Option<usize> {
+            let item_ptr = NonNull::from_ref(item).cast::<()>();
+
+            // SAFETY: We have a valid value behind the pointer and forget
+            // the value to ensure that we give ownership.
+            unsafe { self.inner.index(item_ptr) }
+        }
+
         /// Concatenate two lists, returning the result.
         ///
         /// The `self` and `other` lists will be not be modified.
@@ -411,6 +429,80 @@ impl ErasedList {
 
     pub fn get(&self, idx: usize) -> Option<NonNull<T>> {
         self.0.lock().unwrap().get(idx)
+    }
+
+    /// Check whether a list contains a value.
+    ///
+    /// # Safety
+    ///
+    ///  - The `item_ptr` must point to a value of the same type as is in the list.
+    ///  - There must be no mutables references to that value.
+    ///  - The caller is responsible for dropping that value.
+    pub unsafe fn contains(&self, item_ptr: NonNull<T>) -> bool {
+        // SAFETY: We require that the item_ptr points to the same type as in
+        // the list.
+        unsafe { self.0.lock().unwrap().contains(item_ptr) }
+    }
+
+    /// Check whether a list contains a value.
+    ///
+    /// # Safety
+    ///
+    ///  - The `item_ptr` must point to a value of the same type as is in the list.
+    ///  - There must be no references to that value.
+    ///  - The value cannot be used after this function.
+    pub unsafe fn contains_owned(&self, item_ptr: NonNull<T>) -> bool {
+        let raw = self.0.lock().unwrap();
+
+        // SAFETY: We require that the item_ptr points to the same type as in
+        // the list.
+        let res = unsafe { raw.contains(item_ptr) };
+
+        if let Some(drop_fn) = raw.vtable.drop_fn {
+            // SAFETY: The value is valid because we require it to be and we
+            // haven't dropped it yet, because contains doesn't take
+            // ownership.
+            unsafe { drop_fn(item_ptr.as_ptr()) };
+        }
+
+        res
+    }
+
+    /// Returns the index of the first element that is equal to the given value.
+    ///
+    /// # Safety
+    ///
+    ///  - The `item_ptr` must point to a value of the same type as is in the list.
+    ///  - There must be no mutables references to that value.
+    ///  - The caller is responsible for dropping that value.
+    pub unsafe fn index(&self, item_ptr: NonNull<T>) -> Option<usize> {
+        // SAFETY: We require that the item_ptr points to the same type as in
+        // the list.
+        unsafe { self.0.lock().unwrap().index(item_ptr) }
+    }
+
+    /// Returns the index of the first element that is equal to the given value.
+    ///
+    /// # Safety
+    ///
+    ///  - The `item_ptr` must point to a value of the same type as is in the list.
+    ///  - There must be no references to that value.
+    ///  - The value cannot be used after this function.
+    pub unsafe fn index_owned(&self, item_ptr: NonNull<T>) -> Option<usize> {
+        let raw = self.0.lock().unwrap();
+
+        // SAFETY: We require that the item_ptr points to the same type as in
+        // the list.
+        let res = unsafe { raw.index(item_ptr) };
+
+        if let Some(drop_fn) = raw.vtable.drop_fn {
+            // SAFETY: The value is valid because we require it to be and we
+            // haven't dropped it yet, because contains doesn't take
+            // ownership.
+            unsafe { drop_fn(item_ptr.as_ptr()) };
+        }
+
+        res
     }
 
     pub fn swap(&self, i: usize, j: usize) {
@@ -770,6 +862,54 @@ impl RawList {
         Some(ptr)
     }
 
+    /// Check whether the list contains a value.
+    ///
+    /// # Safety
+    ///
+    ///  - The `item_ptr` must point to a value of the same type as is in the list.
+    ///  - There must be no mutables references to that value.
+    ///  - The caller is responsible for dropping that value.
+    unsafe fn contains(&self, item: NonNull<T>) -> bool {
+        for i in 0..self.len() {
+            let elem = self.get(i).unwrap();
+
+            // SAFETY: The element is valid because we got it from the list and
+            // the item is valid because we require it to be.
+            let is_eq =
+                unsafe { (self.vtable.eq_fn)(elem.as_ptr(), item.as_ptr()) };
+
+            if is_eq {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Returns the index of the first element that is equal to the given value.
+    ///
+    /// # Safety
+    ///
+    ///  - The `item_ptr` must point to a value of the same type as is in the list.
+    ///  - There must be no mutables references to that value.
+    ///  - The caller is responsible for dropping that value.
+    unsafe fn index(&self, item: NonNull<T>) -> Option<usize> {
+        for i in 0..self.len() {
+            let elem = self.get(i).unwrap();
+
+            // SAFETY: The element is valid because we got it from the list and
+            // the item is valid because we require it to be.
+            let is_eq =
+                unsafe { (self.vtable.eq_fn)(elem.as_ptr(), item.as_ptr()) };
+
+            if is_eq {
+                return Some(i);
+            }
+        }
+
+        None
+    }
+
     fn swap(&self, i: usize, j: usize) {
         if i >= self.len || j >= self.len {
             return;
@@ -1086,5 +1226,63 @@ mod tests {
         list.swap(0, 3);
 
         assert_eq!(list.to_vec(), vec![4, 3, 2, 1])
+    }
+
+    #[test]
+    fn contains_int() {
+        let list = List::<i32>::new();
+
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        assert!(!list.contains(&0));
+        assert!(list.contains(&1));
+        assert!(list.contains(&2));
+        assert!(list.contains(&3));
+        assert!(!list.contains(&4));
+    }
+
+    #[test]
+    fn contains_str() {
+        let list = List::<Arc<str>>::new();
+
+        list.push("Alpha".into());
+        list.push("Beta".into());
+        list.push("Gamma".into());
+
+        assert!(list.contains(&"Alpha".into()));
+        assert!(list.contains(&"Beta".into()));
+        assert!(list.contains(&"Gamma".into()));
+        assert!(!list.contains(&"Delta".into()));
+    }
+
+    #[test]
+    fn index_int() {
+        let list = List::<i32>::new();
+
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        assert_eq!(list.index(&0), None);
+        assert_eq!(list.index(&1), Some(0));
+        assert_eq!(list.index(&2), Some(1));
+        assert_eq!(list.index(&3), Some(2));
+        assert_eq!(list.index(&4), None);
+    }
+
+    #[test]
+    fn index_str() {
+        let list = List::<Arc<str>>::new();
+
+        list.push("Alpha".into());
+        list.push("Beta".into());
+        list.push("Gamma".into());
+
+        assert_eq!(list.index(&"Alpha".into()), Some(0));
+        assert_eq!(list.index(&"Beta".into()), Some(1));
+        assert_eq!(list.index(&"Gamma".into()), Some(2));
+        assert_eq!(list.index(&"Delta".into()), None);
     }
 }
