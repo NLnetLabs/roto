@@ -18,7 +18,10 @@ The standalone compiler can be installed using cargo:
 Editor support
 --------------
 
-Here is a list of known third party extensions for adding Roto highlighting to editors:
+Editors with tree-sitter support
+""""""""""""""""""""""""""""""""
+
+Here is a list of known third party extensions for adding Roto highlighting to other editors:
 
 - `Zed <https://zed.dev/extensions/roto>`__
 
@@ -37,3 +40,14 @@ Here is the relevant documentation on adding a new language for a few common edi
   We plan on implementing an LSP for Roto in the future. We will unfortunately
   not be able to maintain plugins for editors that do not support tree-sitter
   and LSP.
+
+Sublime Text
+""""""""""""
+
+For Roto syntax highlighting we provide the syntax file `roto.sublime-syntax <https://github.com/NLnetLabs/roto/blob/main/tooling/sublime/roto.sublime-syntax>`__. Grab a copy of it and place it inside your users Sublime Text packages configuration folder:
+
+.. code-block:: console
+
+  curl https://raw.githubusercontent.com/NLnetLabs/roto/refs/heads/main/tooling/sublime/roto.sublime-syntax > ~/.config/sublime-text/Packages/User/roto.sublime-syntax
+
+Roto should now be available for highlighting. For further information take a look at the `Sublime Text documentation <https://www.sublimetext.com/docs/packages.html>`__.
