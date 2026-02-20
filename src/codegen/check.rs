@@ -23,8 +23,8 @@ pub enum FunctionRetrievalError {
 
 #[derive(Debug)]
 pub struct TypeMismatch {
-    pub rust_ty: String,
-    pub roto_ty: String,
+    pub rust_type: String,
+    pub roto_type: String,
 }
 
 impl Display for FunctionRetrievalError {
@@ -50,13 +50,16 @@ impl Display for FunctionRetrievalError {
             }
             FunctionRetrievalError::TypeMismatch(
                 ctx,
-                TypeMismatch { rust_ty, roto_ty },
+                TypeMismatch {
+                    rust_type,
+                    roto_type,
+                },
             ) => {
                 writeln!(
                     f,
                     "The types for {ctx} of the function do not match"
                 )?;
-                writeln!(f, "Expected `{roto_ty}` got `{rust_ty}`.")
+                writeln!(f, "Expected `{roto_type}` got `{rust_type}`.")
             }
         }
     }
@@ -99,14 +102,14 @@ fn check_roto_type(
 
     let Some(rust_ty) = TypeRegistry::get(rust_ty) else {
         return Err(TypeMismatch {
-            rust_ty: "unknown".into(),
-            roto_ty: roto_ty.display(type_info).to_string(),
+            rust_type: "unknown".into(),
+            roto_type: roto_ty.display(type_info).to_string(),
         });
     };
 
     let error_message = TypeMismatch {
-        rust_ty: rust_ty.rust_name.to_string(),
-        roto_ty: roto_ty.display(type_info).to_string(),
+        rust_type: rust_ty.rust_name.to_string(),
+        roto_type: roto_ty.display(type_info).to_string(),
     };
 
     let mut roto_ty = type_info.resolve(roto_ty);
