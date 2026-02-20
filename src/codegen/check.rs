@@ -23,8 +23,8 @@ pub enum FunctionRetrievalError {
 
 #[derive(Debug)]
 pub struct TypeMismatch {
-    pub rust_ty: String,
-    pub roto_ty: String,
+    pub rust_type: String,
+    pub roto_type: String,
 }
 
 impl Display for FunctionRetrievalError {
@@ -50,13 +50,16 @@ impl Display for FunctionRetrievalError {
             }
             FunctionRetrievalError::TypeMismatch(
                 ctx,
-                TypeMismatch { rust_ty, roto_ty },
+                TypeMismatch {
+                    rust_type,
+                    roto_type,
+                },
             ) => {
                 writeln!(
                     f,
                     "The types for {ctx} of the function do not match"
                 )?;
-                writeln!(f, "Expected `{roto_ty}` got `{rust_ty}`.")
+                writeln!(f, "Expected `{roto_type}` got `{rust_type}`.")
             }
         }
     }
@@ -66,17 +69,17 @@ impl std::error::Error for FunctionRetrievalError {}
 
 pub fn check_roto_type_reflect<T: Value>(
     type_info: &mut TypeInfo,
-    roto_ty: &Type,
+    roto_type: &Type,
 ) -> Result<(), TypeMismatch> {
-    let rust_ty = TypeRegistry::resolve::<T>().type_id;
-    check_roto_type(type_info, rust_ty, roto_ty)
+    let rust_type = TypeRegistry::resolve::<T>().type_id;
+    check_roto_type(type_info, rust_type, roto_type)
 }
 
 #[allow(non_snake_case)]
 fn check_roto_type(
     type_info: &mut TypeInfo,
-    rust_ty: TypeId,
-    roto_ty: &Type,
+    rust_type: TypeId,
+    roto_type: &Type,
 ) -> Result<(), TypeMismatch> {
     // TODO: Convert this to consts when TypeId::of is const on stable
     let BOOL: TypeId = TypeId::of::<bool>();
@@ -97,39 +100,39 @@ fn check_roto_type(
     let PREFIX: TypeId = TypeId::of::<Prefix>();
     let STRING: TypeId = TypeId::of::<Arc<str>>();
 
-    let Some(rust_ty) = TypeRegistry::get(rust_ty) else {
+    let Some(rust_type) = TypeRegistry::get(rust_type) else {
         return Err(TypeMismatch {
-            rust_ty: "unknown".into(),
-            roto_ty: roto_ty.display(type_info).to_string(),
+            rust_type: "unknown".into(),
+            roto_type: roto_type.display(type_info).to_string(),
         });
     };
 
     let error_message = TypeMismatch {
-        rust_ty: rust_ty.rust_name.to_string(),
-        roto_ty: roto_ty.display(type_info).to_string(),
+        rust_type: rust_type.rust_name.to_string(),
+        roto_type: roto_type.display(type_info).to_string(),
     };
 
-    let mut roto_ty = type_info.resolve(roto_ty);
+    let mut roto_type = type_info.resolve(roto_type);
 
-    if let Type::IntVar(_, _) = roto_ty {
-        roto_ty = Type::named("i32", Vec::new());
+    if let Type::IntVar(_, _) = roto_type {
+        roto_type = Type::named("i32", Vec::new());
     }
 
-    if let Type::FloatVar(_) = roto_ty {
-        roto_ty = Type::named("f64", Vec::new());
+    if let Type::FloatVar(_) = roto_type {
+        roto_type = Type::named("f64", Vec::new());
     }
 
-    match rust_ty.description {
+    match rust_type.description {
         TypeDescription::Leaf => {
-            if rust_ty.type_id == UNIT {
-                return if roto_ty == Type::Unit {
+            if rust_type.type_id == UNIT {
+                return if roto_type == Type::Unit {
                     Ok(())
                 } else {
                     Err(error_message)
                 };
             }
 
-            let expected_name = match rust_ty.type_id {
+            let expected_name = match rust_type.type_id {
                 x if x == BOOL => "bool",
                 x if x == CHAR => "char",
                 x if x == U8 => "u8",
@@ -149,14 +152,14 @@ fn check_roto_type(
                 _ => panic!(),
             };
             let expected_roto = Type::named(expected_name, Vec::new());
-            if expected_roto == roto_ty {
+            if expected_roto == roto_type {
                 Ok(())
             } else {
                 Err(error_message)
             }
         }
         TypeDescription::Val(_) => {
-            let Type::Name(type_name) = roto_ty else {
+            let Type::Name(type_name) = roto_type else {
                 return Err(error_message);
             };
 
@@ -166,14 +169,14 @@ fn check_roto_type(
                 return Err(error_message);
             };
 
-            if rust_ty.type_id != id {
+            if rust_type.type_id != id {
                 return Err(error_message);
             }
 
             Ok(())
         }
         TypeDescription::Verdict(rust_accept, rust_reject) => {
-            let Type::Name(type_name) = &roto_ty else {
+            let Type::Name(type_name) = &roto_type else {
                 return Err(error_message);
             };
 
@@ -194,8 +197,8 @@ fn check_roto_type(
             check_roto_type(type_info, rust_reject, roto_reject)?;
             Ok(())
         }
-        TypeDescription::Option(rust_ty) => {
-            let Type::Name(type_name) = &roto_ty else {
+        TypeDescription::Option(rust_type) => {
+            let Type::Name(type_name) = &roto_type else {
                 return Err(error_message);
             };
 
@@ -208,13 +211,13 @@ fn check_roto_type(
                 return Err(error_message);
             }
 
-            let [roto_ty] = &type_name.arguments[..] else {
+            let [roto_type] = &type_name.arguments[..] else {
                 return Err(error_message);
             };
-            check_roto_type(type_info, rust_ty, roto_ty)
+            check_roto_type(type_info, rust_type, roto_type)
         }
-        TypeDescription::List(rust_ty) => {
-            let Type::Name(type_name) = &roto_ty else {
+        TypeDescription::List(rust_type) => {
+            let Type::Name(type_name) = &roto_type else {
                 return Err(error_message);
             };
 
@@ -227,10 +230,10 @@ fn check_roto_type(
                 return Err(error_message);
             }
 
-            let [roto_ty] = &type_name.arguments[..] else {
+            let [roto_type] = &type_name.arguments[..] else {
                 return Err(error_message);
             };
-            check_roto_type(type_info, rust_ty, roto_ty)
+            check_roto_type(type_info, rust_type, roto_type)
         }
     }
 }
