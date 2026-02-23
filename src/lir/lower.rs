@@ -1,9 +1,10 @@
 mod clones;
 mod drops;
+mod eq;
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::value::{CloneFn, VTable};
+use crate::value::{CloneFn, EqFn, VTable};
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
     ice,
@@ -44,6 +45,8 @@ pub struct LowerCtx<'c> {
     pub drops_to_generate: VecDeque<Type>,
     /// Clone functions to generate at the end of lowering
     pub clones_to_generate: VecDeque<Type>,
+    /// Eq functions to generate at the end of lowering
+    pub eq_to_generate: VecDeque<Type>,
 }
 
 struct Lowerer<'c, 'r> {
@@ -89,6 +92,9 @@ impl Lowerer<'_, '_> {
 
         let drop_functions = Self::generate_drops(ctx);
         functions.extend(drop_functions);
+
+        let eq_functions = Self::generate_eqs(ctx);
+        functions.extend(eq_functions);
 
         Lir { functions }
     }
@@ -441,6 +447,18 @@ impl Lowerer<'_, '_> {
                 Operand::Value(crate::lir::IrValue::Pointer(0))
             };
 
+            let eq_func_addr = {
+                let type_id = self.ctx.type_info.type_id(ty);
+                let tmp = self.new_tmp(IrType::Pointer);
+                self.emit(Instruction::FunctionAddress {
+                    to: tmp.clone(),
+                    name: format!("::generated::eq_{type_id}").into(),
+                });
+                // We need to make sure that the drop function will be generated.
+                self.ctx.eq_to_generate.push_back(ty.clone());
+                tmp.into()
+            };
+
             let vtable_layout = Layout::of::<VTable>();
             let base = self.new_stack_slot(vtable_layout);
 
@@ -477,6 +495,10 @@ impl Lowerer<'_, '_> {
             let offset = builder.add(&Layout::of::<*mut ()>());
             let dst = self.offset(base.clone(), offset as u32).into();
             self.emit_write(dst, drop_func_addr);
+
+            let offset = builder.add(&Layout::of::<*mut ()>());
+            let dst = self.offset(base.clone(), offset as u32).into();
+            self.emit_write(dst, eq_func_addr);
 
             args.push(base.into());
             parameters.push((format!("vtable_{i}").into(), IrType::Pointer));
@@ -896,27 +918,12 @@ impl Lowerer<'_, '_> {
         let left = self.var(left).into();
         let right = self.var(right).into();
 
-        if ty == Type::bool() {
-            if binop == BinOp::Eq {
-                let to = self.new_tmp(IrType::Bool);
-                self.emit(Instruction::IntCmp {
-                    to: to.clone(),
-                    cmp: IntCmp::Eq,
-                    left,
-                    right,
-                });
-                return to.into();
-            }
-            if binop == BinOp::Ne {
-                let to = self.new_tmp(IrType::Bool);
-                self.emit(Instruction::IntCmp {
-                    to: to.clone(),
-                    cmp: IntCmp::Ne,
-                    left,
-                    right,
-                });
-                return to.into();
-            }
+        if binop == BinOp::Eq {
+            return self.call_eq_of(false, left, right, &ty);
+        }
+
+        if binop == BinOp::Ne {
+            return self.call_eq_of(true, left, right, &ty);
         }
 
         if let Some((kind, _size)) = self.ctx.type_info.get_int_type(&ty) {
@@ -1063,6 +1070,21 @@ impl Lowerer<'_, '_> {
 
     fn emit_clone(&mut self, to: Operand, from: Operand, clone_fn: CloneFn) {
         self.emit(Instruction::Clone { to, from, clone_fn })
+    }
+
+    fn emit_eq(
+        &mut self,
+        to: Var,
+        left: Operand,
+        right: Operand,
+        eq_fn: EqFn,
+    ) {
+        self.emit(Instruction::Eq {
+            to,
+            left,
+            right,
+            eq_fn,
+        })
     }
 
     fn emit_memcpy(&mut self, to: Operand, from: Operand, size: u32) {

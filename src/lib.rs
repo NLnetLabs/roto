@@ -95,7 +95,7 @@ pub use value::{Val, Value, Verdict};
 /// side) must implement [`Value`], you should wrap any custom type in `Val`.
 ///
 /// ```rust
-/// # #[derive(Clone, Copy)]
+/// # #[derive(Clone, Copy, PartialEq)]
 /// # struct Foo;
 /// # use roto::Val;
 /// # roto::library! {
@@ -113,9 +113,9 @@ pub use value::{Val, Value, Verdict};
 /// closures can use variables from their environment.
 ///
 /// ```rust
-/// # #[derive(Clone)]
+/// # #[derive(Clone, PartialEq)]
 /// # struct Foo;
-/// # #[derive(Clone)]
+/// # #[derive(Clone, PartialEq)]
 /// # struct Bar;
 /// # use roto::Val;
 /// # roto::library! {
@@ -139,7 +139,7 @@ pub use value::{Val, Value, Verdict};
 /// ## Constants
 ///
 /// ```rust
-/// # #[derive(Clone)]
+/// # #[derive(Clone, PartialEq)]
 /// # struct Foo(i32);
 /// # use roto::Val;
 /// # roto::library! {
@@ -173,7 +173,7 @@ pub use value::{Val, Value, Verdict};
 /// </div>
 ///
 /// ```rust
-/// # #[derive(Clone)]
+/// # #[derive(Clone, PartialEq)]
 /// # struct Foo;
 /// # use roto::Val;
 /// # roto::library! {

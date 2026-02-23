@@ -1,6 +1,6 @@
 mod match_expr;
 
-use std::{any::TypeId, net::IpAddr, sync::Arc};
+use std::{any::TypeId, sync::Arc};
 
 use inetnum::addr::Prefix;
 
@@ -794,16 +794,38 @@ impl<'r> Lowerer<'r> {
         let l_ty = self.type_info.type_of(l);
         let r_ty = self.type_info.type_of(r);
 
+        if *binop == ast::BinOp::Eq {
+            let left = self.expr(l);
+            let left = self.assign_to_var(left, l_ty.clone());
+            let right = self.expr(r);
+            let right = self.assign_to_var(right, r_ty);
+            return Value::BinOp {
+                left,
+                binop: ast::BinOp::Eq,
+                ty: l_ty,
+                right,
+            };
+        }
+
+        if *binop == ast::BinOp::Ne {
+            let left = self.expr(l);
+            let left = self.assign_to_var(left, l_ty.clone());
+            let right = self.expr(r);
+            let right = self.assign_to_var(right, r_ty);
+            return Value::BinOp {
+                left,
+                binop: ast::BinOp::Ne,
+                ty: l_ty,
+                right,
+            };
+        }
+
         if l_ty == Type::string() {
             return self.binop_str(l, binop, r);
         }
 
         if l_ty == Type::ip_addr() {
             return self.binop_ip_addr(l, binop, r);
-        }
-
-        if l_ty == Type::prefix() {
-            return self.binop_prefix(l, binop, r);
         }
 
         if self.type_info.is_list_type(&l_ty) {
@@ -840,26 +862,6 @@ impl<'r> Lowerer<'r> {
     ) -> Value {
         let type_id = TypeId::of::<Arc<str>>();
         match binop {
-            ast::BinOp::Eq => self.desugared_binop(
-                type_id,
-                "eq",
-                Vec::new(),
-                Type::bool(),
-                (l, Type::string()),
-                (r, Type::string()),
-            ),
-            ast::BinOp::Ne => {
-                let val = self.desugared_binop(
-                    type_id,
-                    "eq",
-                    Vec::new(),
-                    Type::bool(),
-                    (l, Type::string()),
-                    (r, Type::string()),
-                );
-                let var = self.assign_to_var(val, Type::bool());
-                Value::Not(var)
-            }
             ast::BinOp::Add => self.desugared_binop(
                 type_id,
                 "append",
@@ -880,28 +882,7 @@ impl<'r> Lowerer<'r> {
         binop: &ast::BinOp,
         r: &Meta<ast::Expr>,
     ) -> Value {
-        let type_id = TypeId::of::<IpAddr>();
         match binop {
-            ast::BinOp::Eq => self.desugared_binop(
-                type_id,
-                "eq",
-                Vec::new(),
-                Type::bool(),
-                (l, Type::ip_addr()),
-                (r, Type::ip_addr()),
-            ),
-            ast::BinOp::Ne => {
-                let val = self.desugared_binop(
-                    type_id,
-                    "eq",
-                    Vec::new(),
-                    Type::bool(),
-                    (l, Type::ip_addr()),
-                    (r, Type::ip_addr()),
-                );
-                let var = self.assign_to_var(val, Type::bool());
-                Value::Not(var)
-            }
             ast::BinOp::Div => {
                 let type_id = TypeId::of::<Prefix>();
                 self.desugared_binop(
@@ -915,28 +896,6 @@ impl<'r> Lowerer<'r> {
             }
             _ => {
                 ice!("Operator {binop} is not implemented for IpAddr")
-            }
-        }
-    }
-
-    fn binop_prefix(
-        &mut self,
-        l: &Meta<ast::Expr>,
-        binop: &ast::BinOp,
-        r: &Meta<ast::Expr>,
-    ) -> Value {
-        let type_id = TypeId::of::<Prefix>();
-        match binop {
-            ast::BinOp::Eq => self.desugared_binop(
-                type_id,
-                "eq",
-                Vec::new(),
-                Type::bool(),
-                (l, Type::prefix()),
-                (r, Type::prefix()),
-            ),
-            _ => {
-                ice!("Operator {binop} is not implemented for Prefix")
             }
         }
     }
