@@ -6,25 +6,13 @@ on:
   pull_request:
 jobs:
   test:
-    name: test
-    runs-on: ${{ matrix.os }}
+    name: test (${{ matrix.rust }}, ${{ matrix.args }})
+    runs-on: docker
     strategy:
       matrix:
-        os: [ubuntu-latest]
         rust: [1.89.0, stable, beta, nightly]
-
-        # Test with no features, default features ("") and all features.
-        # Ordered fewest features to most features.
         args: ["--no-default-features", "", "--all-features"]
-
-        include:
-          # Run all variations on x86_64-unknown-linux-gnu
-          - target: x86_64-unknown-linux-gnu
-
-          # Run a static build on x86_64-unknown-linux-musl for stable Rust
-          # only to save some cycles.
-          - target: x86_64-unknown-linux-musl
-            rust: stable
+        target: [x86_64-unknown-linux-gnu]
     steps:
     - name: Run apt-get update
       if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -37,24 +25,51 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: ${{ matrix.rust }}
+        toolchain: ${{ matrix.rust }}
+        targets: ${{ matrix.target }}
+    - run: cargo build --target=${{ matrix.target }} --verbose ${{ matrix.args }}
+    - run: cargo test --target=${{ matrix.target }} --verbose ${{ matrix.args }}
+
+  test-musl:
+    name: test-musl (${{ matrix.args }})
+    runs-on: docker
+    strategy:
+      matrix:
+        rust: [stable]
+        args: ["--no-default-features", "", "--all-features"]
+        target: [x86_64-unknown-linux-musl]
+    steps:
+    - name: Run apt-get update
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      run: apt-get update
+    - name: Install musl
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      run: apt-get install -y musl-dev
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Install Rust
+      uses: https://github.com/dtolnay/rust-toolchain@v1
+      with:
+        toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
     - run: cargo build --target=${{ matrix.target }} --verbose ${{ matrix.args }}
     - run: cargo test --target=${{ matrix.target }} --verbose ${{ matrix.args }}
 
   examples:
-    runs-on: ubuntu-latest
+    runs-on: docker
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: stable
+        toolchain: stable
     - run: |
         set -e
         for example in examples/*.rs; do
@@ -64,8 +79,8 @@ jobs:
         done;
 
   clippy:
-    name: clippy
-    runs-on: ubuntu-latest
+    name: clippy (${{ matrix.args }})
+    runs-on: docker
     strategy:
       matrix:
         # Test with no features, default features ("") and all features.
@@ -77,28 +92,30 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: stable
+        toolchain: stable
+        components: clippy
     - run: cargo clippy --all ${{ matrix.args }}
 
   fmt:
     name: fmt
-    runs-on: ubuntu-latest
+    runs-on: docker
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: stable
+        toolchain: stable
+        components: rustfmt
     - run: cargo fmt --all --check
 
   spelling:
       name: Spell Check with Typos
-      runs-on: ubuntu-latest
+      runs-on: docker
       steps:
       - name: Checkout Actions Repository
         uses: actions/checkout@v5
@@ -107,7 +124,7 @@ jobs:
 
   doc:
     name: Check rustdoc warnings
-    runs-on: ubuntu-latest
+    runs-on: docker
     strategy:
       matrix:
         # Test with no features, default features ("") and all features.
@@ -119,76 +136,75 @@ jobs:
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: stable
+        toolchain: stable
     - name: Run rustdoc
       run: RUSTDOCFLAGS="-D warnings" cargo doc ${{ matrix.args }}
 
   cargo-deny:
-    runs-on: ubuntu-latest
+    runs-on: docker
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - uses: EmbarkStudios/cargo-deny-action@v2
+    - uses: https://github.com/EmbarkStudios/cargo-deny-action@v2
       with:
         # We don't check advisories
         command: check bans licenses sources
 
   cargo-shear:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: false
-    - name: Install cargo-binstall
-      uses: cargo-bins/cargo-binstall@main
-    - name: Install cargo-shear
-      run: cargo binstall --no-confirm cargo-shear
-    - run: cargo shear
-
-  miri:
-    name: Test with MIRI
-    runs-on: ubuntu-latest
+    runs-on: docker
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: nightly
+        toolchain: stable
+    - name: Install cargo-binstall
+      uses: https://github.com/cargo-bins/cargo-binstall@main
+    - name: Install cargo-shear
+      run: cargo binstall --no-confirm cargo-shear
+    - name: Run cargo-shear
+      run: cargo shear
+
+  miri:
+    name: Test with MIRI
+    runs-on: docker
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Install Rust
+      uses: https://github.com/dtolnay/rust-toolchain@v1
+      with:
+        toolchain: nightly
         components: miri
     - name: Run MIRI
       run: MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test
 
   valgrind:
     name: Test with Valgrind
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        rust: [stable]
+    runs-on: docker
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         persist-credentials: false
     - name: Install Rust
-      uses: hecrj/setup-rust-action@v1
+      uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
-        rust-version: ${{ matrix.rust }}
+        toolchain: stable
     - name: Run apt-get update
-      run: sudo apt-get update
+      run: apt-get update
     - name: Install Valgrind
-      run: sudo apt-get install -y valgrind
-    - name: Install Just
-      run: sudo apt-get install -y just
+      run: apt-get install -y valgrind
     - name: Install cargo-valgrind
       run: cargo install cargo-valgrind
     - name: Run Valgrind
-      run: just valgrind
+      run: VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test --all-targets -- {{TEST}}
