@@ -1,7 +1,7 @@
-use super::{Block, Function, Instruction, Lir, Operand, Var, VarKind};
+use super::{Block, Instruction, Item, Lir, Operand, Var, VarKind};
 use crate::{
     ir_printer::{IrPrinter, Printable},
-    lir::ValueOrSlot,
+    lir::{ItemKind, ValueOrSlot},
     typechecker::scoped_display::TypeDisplay,
 };
 
@@ -13,7 +13,7 @@ impl Printable for Lir {
     }
 }
 
-impl Printable for Function {
+impl Printable for Item {
     fn print(&self, printer: &IrPrinter) -> String {
         use std::fmt::Write;
         let mut s = String::new();
@@ -24,28 +24,40 @@ impl Printable for Function {
             label_store: printer.label_store,
         };
 
-        let _ = write!(
-            &mut s,
-            "fn {}({}) {}{{",
-            self.name,
-            self.ir_signature
-                .parameters
-                .iter()
-                .map(|(a, t)| {
-                    let a = a.print(&printer);
-                    let t = t.display(printer.type_info);
-                    format!("{a}: {t}")
-                })
-                .collect::<Vec<_>>()
-                .join(", "),
-            self.ir_signature
-                .return_type
-                .map(|t| {
-                    let t = t.display(printer.type_info);
-                    format!("-> {t} ")
-                })
-                .unwrap_or_default(),
-        );
+        match &self.kind {
+            ItemKind::Constant { ty, .. } => {
+                let _ = write!(
+                    &mut s,
+                    "const {}: {} = {{",
+                    self.name,
+                    ty.display(printer.type_info)
+                );
+            }
+            ItemKind::Function { ir_signature, .. } => {
+                let _ = write!(
+                    &mut s,
+                    "fn {}({}) {}{{",
+                    self.name,
+                    ir_signature
+                        .parameters
+                        .iter()
+                        .map(|(a, t)| {
+                            let a = a.print(&printer);
+                            let t = t.display(printer.type_info);
+                            format!("{a}: {t}")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    ir_signature
+                        .return_type
+                        .map(|t| {
+                            let t = t.display(printer.type_info);
+                            format!("-> {t} ")
+                        })
+                        .unwrap_or_default(),
+                );
+            }
+        }
 
         s.push('\n');
         for (var, ty) in &self.variables {

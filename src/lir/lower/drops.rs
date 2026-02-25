@@ -4,7 +4,7 @@ use crate::{
     ast::Identifier,
     ice,
     lir::{
-        Block, Function, Instruction, IrType, Operand, Signature, Var,
+        Block, Instruction, IrType, Item, ItemKind, Operand, Signature, Var,
         VarKind,
         lower::{LowerCtx, Lowerer},
     },
@@ -109,7 +109,7 @@ impl Lowerer<'_, '_> {
     /// time this function returns. Since types can contain other types that we
     /// haven't generated the drop function for, it might need to generate more
     /// drop functions along the way.
-    pub fn generate_drops(ctx: &mut LowerCtx<'_>) -> Vec<Function> {
+    pub fn generate_drops(ctx: &mut LowerCtx<'_>) -> Vec<Item> {
         // We collect all the generated functions in here.
         let mut functions = Vec::new();
 
@@ -135,7 +135,7 @@ impl Lowerer<'_, '_> {
         functions
     }
 
-    fn generate_drop(ctx: &mut LowerCtx<'_>, ty: &Type) -> Function {
+    fn generate_drop(ctx: &mut LowerCtx<'_>, ty: &Type) -> Item {
         let type_id = ctx.type_info.type_id(ty);
 
         let ident = format!("::generated::drop_{type_id}").into();
@@ -148,6 +148,7 @@ impl Lowerer<'_, '_> {
         let mut lowerer = Lowerer {
             ctx,
             tmp_idx: 0,
+            force_reference_return: false,
             // The drop fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
@@ -174,15 +175,17 @@ impl Lowerer<'_, '_> {
 
         let entry_block = lowerer.blocks[0].label;
 
-        Function {
+        Item {
             name: ident,
             scope,
-            signature,
-            ir_signature,
+            kind: ItemKind::Function {
+                signature,
+                ir_signature,
+            },
             entry_block,
             variables: lowerer.variables,
             blocks: lowerer.blocks,
-            public: false,
+            public: true,
         }
     }
 
