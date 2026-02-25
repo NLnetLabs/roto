@@ -4,7 +4,7 @@ use crate::{
     ast::Identifier,
     ice,
     lir::{
-        Block, Function, Instruction, Signature, Var, VarKind,
+        Block, Instruction, Item, ItemKind, Signature, Var, VarKind,
         lower::{Location, LowerCtx},
         value::IrType,
     },
@@ -166,7 +166,7 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    pub fn generate_clones(ctx: &mut LowerCtx<'_>) -> Vec<Function> {
+    pub fn generate_clones(ctx: &mut LowerCtx<'_>) -> Vec<Item> {
         // We collect all the generated functions in here.
         let mut functions = Vec::new();
 
@@ -192,7 +192,7 @@ impl Lowerer<'_, '_> {
         functions
     }
 
-    fn generate_clone(ctx: &mut LowerCtx<'_>, ty: &Type) -> Function {
+    fn generate_clone(ctx: &mut LowerCtx<'_>, ty: &Type) -> Item {
         let type_id = ctx.type_info.type_id(ty);
 
         let ident = format!("::generated::clone_{type_id}").into();
@@ -231,11 +231,13 @@ impl Lowerer<'_, '_> {
 
         let entry_block = lowerer.blocks[0].label;
 
-        Function {
+        Item {
             name: ident,
             scope,
-            signature,
-            ir_signature,
+            kind: ItemKind::Function {
+                signature,
+                ir_signature,
+            },
             entry_block,
             variables: lowerer.variables,
             blocks: lowerer.blocks,

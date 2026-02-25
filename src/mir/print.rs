@@ -1,22 +1,23 @@
 use crate::{
     ast::{BinOp, Literal},
     ir_printer::{IrPrinter, Printable},
+    mir::ItemType,
     typechecker::{scope::ResolvedName, scoped_display::TypeDisplay},
 };
 
 use super::{
-    Block, Function, Instruction, Mir, Place, Projection, Value, Var, VarKind,
+    Block, Instruction, Item, Mir, Place, Projection, Value, Var, VarKind,
 };
 
 impl Printable for Mir {
     fn print(&self, printer: &IrPrinter) -> String {
         let strings: Vec<_> =
-            self.functions.iter().map(|f| f.print(printer)).collect();
+            self.items.iter().map(|f| f.print(printer)).collect();
         strings.join("\n")
     }
 }
 
-impl Printable for Function {
+impl Printable for Item {
     fn print(&self, printer: &IrPrinter) -> String {
         use std::fmt::Write;
         let mut s = String::new();
@@ -27,16 +28,28 @@ impl Printable for Function {
             label_store: printer.label_store,
         };
 
-        let _ = write!(
-            &mut s,
-            "fn {}({}) {{",
-            self.name,
-            self.parameters
-                .iter()
-                .map(|a| a.print(&printer))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        match &self.ty {
+            ItemType::Constant { ty } => {
+                let _ = write!(
+                    &mut s,
+                    "const {}: {} = {{",
+                    self.name,
+                    ty.display(printer.type_info)
+                );
+            }
+            ItemType::Function { parameters, .. } => {
+                let _ = write!(
+                    &mut s,
+                    "fn {}({}) {{",
+                    self.name,
+                    parameters
+                        .iter()
+                        .map(|a| a.print(&printer))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
+        }
 
         s.push('\n');
         for (var, ty) in &self.variables {

@@ -1,8 +1,8 @@
 //! Dead code elimination on the MIR
 
-use crate::{ice, label::LabelRef};
+use crate::{ice, label::LabelRef, mir::Item};
 
-use super::{Block, Function, Instruction, Mir};
+use super::{Block, Instruction, Mir};
 
 #[derive(Default)]
 struct State(Vec<LabelRef>);
@@ -34,29 +34,28 @@ impl State {
 
 impl Mir {
     pub fn eliminate_dead_code(&mut self) {
-        for function in &mut self.functions {
-            process_function(function)
+        for item in &mut self.items {
+            process_item(item)
         }
     }
 }
 
-fn process_function(function: &mut Function) {
+fn process_item(item: &mut Item) {
     let mut state = State::new();
 
-    state.add(function.blocks[0].label);
+    state.add(item.blocks[0].label);
 
     // We can't turn this into a for loop because the length of the state
     // increases over time.
     let mut i = 0;
     while i < state.len() {
         let lbl = state.get(i);
-        let block =
-            function.blocks.iter_mut().find(|b| b.label == lbl).unwrap();
+        let block = item.blocks.iter_mut().find(|b| b.label == lbl).unwrap();
         process_block(&mut state, block);
         i += 1;
     }
 
-    function.blocks.retain(|b| state.contains(&b.label));
+    item.blocks.retain(|b| state.contains(&b.label));
 }
 
 /// Truncate each block to its reachable instructions and add reachable blocks

@@ -29,6 +29,7 @@ use crate::{
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
+        scope::ResolvedName,
     },
 };
 
@@ -70,6 +71,7 @@ pub struct RotoReport {
 pub struct TypeChecked<'r, Ctx: OptCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
+    order: Vec<ResolvedName>,
     runtime: &'r Runtime<Ctx>,
 }
 
@@ -285,7 +287,7 @@ impl Parsed {
 
         let result = crate::typechecker::typecheck(&runtime.rt, &module_tree);
 
-        let type_info = match result {
+        let (type_info, order) = match result {
             Ok(type_info) => type_info,
             Err(error) => {
                 return Err(RotoReport {
@@ -299,6 +301,7 @@ impl Parsed {
         Ok(TypeChecked {
             module_tree,
             type_info,
+            order,
             runtime,
         })
     }
@@ -309,6 +312,7 @@ impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
         let TypeChecked {
             module_tree,
             type_info,
+            order,
             runtime,
         } = self;
 

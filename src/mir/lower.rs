@@ -5,7 +5,7 @@ use std::{any::TypeId, net::IpAddr};
 use inetnum::addr::Prefix;
 
 use super::{
-    Block, Function, Instruction, Mir, Place, Projection, Value, Var, VarKind,
+    Block, Instruction, Item, Mir, Place, Projection, Value, Var, VarKind,
 };
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
     ice,
     ir_printer::{IrPrinter, Printable},
     label::{LabelRef, LabelStore},
+    mir::ItemType,
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
     runtime::{Rt, RuntimeFunctionRef},
@@ -132,13 +133,13 @@ impl<'r> Lowerer<'r> {
         tree: &ModuleTree,
         label_store: &mut LabelStore,
     ) -> Mir {
-        let mut functions = Vec::new();
+        let mut items = Vec::new();
 
         for m in &tree.modules {
             for d in &m.ast.declarations {
                 match d {
                     ast::Declaration::FilterMap(x) => {
-                        functions.push(
+                        items.push(
                             Lowerer::new(
                                 runtime,
                                 type_info,
@@ -149,7 +150,7 @@ impl<'r> Lowerer<'r> {
                         );
                     }
                     ast::Declaration::Function(x) => {
-                        functions.push(
+                        items.push(
                             Lowerer::new(
                                 runtime,
                                 type_info,
@@ -162,7 +163,7 @@ impl<'r> Lowerer<'r> {
                     // We give tests special names, so that they can't be referenced from Roto.
                     // It's a bit of a hack, but works well enough.
                     ast::Declaration::Test(x) => {
-                        functions.push(
+                        items.push(
                             Lowerer::new(
                                 runtime,
                                 type_info,
@@ -180,11 +181,11 @@ impl<'r> Lowerer<'r> {
                 }
             }
         }
-        Mir { functions }
+        Mir { items }
     }
 
     /// Lower a filtermap
-    fn filter_map(self, fm: &ast::FilterMap) -> Function {
+    fn filter_map(self, fm: &ast::FilterMap) -> Item {
         let ast::FilterMap {
             ident,
             body,
@@ -196,7 +197,7 @@ impl<'r> Lowerer<'r> {
         self.function_like(ident, params, &signature.return_type, body)
     }
 
-    fn function(self, function: &ast::FunctionDeclaration) -> Function {
+    fn function(self, function: &ast::FunctionDeclaration) -> Item {
         let name = self.type_info.resolved_name(&function.ident);
         let dec = self.type_info.scope_graph.get_declaration(name);
 
@@ -214,7 +215,7 @@ impl<'r> Lowerer<'r> {
         )
     }
 
-    fn test(self, test: &ast::Test) -> Function {
+    fn test(self, test: &ast::Test) -> Item {
         let ident = Meta {
             node: format!("test#{}", *test.ident).into(),
             id: test.ident.id,
@@ -231,7 +232,7 @@ impl<'r> Lowerer<'r> {
         params: &ast::Params,
         return_type: &Type,
         body: &Meta<ast::Block>,
-    ) -> Function {
+    ) -> Item {
         let scope = self.type_info.function_scope(ident);
         let label = self.label_store.new_label("$entry".into());
         self.new_block(label);
@@ -278,14 +279,16 @@ impl<'r> Lowerer<'r> {
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
 
-        Function {
+        Item {
             name,
             scope,
             variables: self.vars,
-            parameters,
+            ty: ItemType::Function {
+                parameters,
+                signature,
+            },
             tmp_idx: self.tmp_idx,
             blocks: self.blocks,
-            signature,
         }
     }
 

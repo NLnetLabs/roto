@@ -36,24 +36,34 @@ pub enum VarKind {
 
 #[derive(Clone, Debug)]
 pub struct Mir {
-    pub functions: Vec<Function>,
+    pub items: Vec<Item>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Function {
+pub enum ItemType {
+    Constant {
+        ty: Type,
+    },
+    Function {
+        parameters: Vec<Var>,
+        signature: Signature,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct Item {
+    pub ty: ItemType,
+
     /// Name of this function
+    ///
+    /// This is the fully resolved name.
     pub name: Identifier,
 
     /// Scope that belongs to this function
     pub scope: ScopeRef,
 
+    /// Variables used in this function
     pub variables: Vec<(Var, Type)>,
-
-    /// Parameters to this function
-    pub parameters: Vec<Var>,
-
-    /// The function signature
-    pub signature: Signature,
 
     /// Basic blocks of this function
     ///

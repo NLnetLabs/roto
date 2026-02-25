@@ -14,7 +14,8 @@ use crate::{
     ice,
     label::{LabelRef, LabelStore},
     lir::{
-        self, FloatCmp, IntCmp, IrValue, Operand, Var, VarKind, value::IrType,
+        self, FloatCmp, IntCmp, IrValue, ItemKind, Operand, Var, VarKind,
+        value::IrType,
     },
     runtime::{
         ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
@@ -307,7 +308,7 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
-    ir: &[lir::Function],
+    ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -441,14 +442,20 @@ impl ModuleBuilder {
     }
 
     /// Declare a function and its signature (without the body)
-    fn declare_function(&mut self, func: &lir::Function) {
-        let lir::Function {
+    fn declare_function(&mut self, func: &lir::Item) {
+        let lir::Item {
             name,
-            ir_signature,
-            signature,
+            kind:
+                ItemKind::Function {
+                    ir_signature,
+                    signature,
+                },
             public,
             ..
-        } = func;
+        } = func
+        else {
+            return;
+        };
 
         let mut sig = self.inner.make_signature();
 
@@ -500,13 +507,13 @@ impl ModuleBuilder {
     /// The function must be declared first.
     fn define_function(
         &mut self,
-        func: &lir::Function,
+        func: &lir::Item,
         builder_context: &mut FunctionBuilderContext,
     ) {
-        let lir::Function {
+        let lir::Item {
             name,
             blocks,
-            ir_signature,
+            kind,
             scope,
             variables,
             ..
@@ -516,22 +523,47 @@ impl ModuleBuilder {
         let mut ctx = self.inner.make_context();
         let mut sig = self.inner.make_signature();
 
-        if ir_signature.return_ptr {
+        let parameters = match &kind {
+            ItemKind::Constant { .. } => &[] as &[_],
+            ItemKind::Function { ir_signature, .. } => {
+                &ir_signature.parameters
+            }
+        };
+
+        let return_ty = match &kind {
+            ItemKind::Constant { .. } => None,
+            ItemKind::Function { ir_signature, .. } => {
+                ir_signature.return_type.as_ref()
+            }
+        };
+
+        let return_ptr = match &kind {
+            ItemKind::Constant { .. } => true,
+            ItemKind::Function { ir_signature, .. } => {
+                ir_signature.return_ptr
+            }
+        };
+
+        let context = match &kind {
+            ItemKind::Constant { .. } => false,
+            ItemKind::Function { ir_signature, .. } => ir_signature.context,
+        };
+
+        if return_ptr {
             sig.params
                 .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
         }
 
-        // This is the context
-        if ir_signature.context {
+        if context {
             sig.params
                 .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
         }
 
-        for (_, ty) in &ir_signature.parameters {
+        for (_, ty) in parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
         }
 
-        if let Some(ty) = &ir_signature.return_type {
+        if let Some(ty) = &return_ty {
             sig.returns.push(AbiParam::new(self.cranelift_type(ty)));
         }
 
@@ -578,10 +610,10 @@ impl ModuleBuilder {
 
         func_gen.entry_block(
             &blocks[0],
-            &ir_signature.parameters,
+            parameters,
             stack_slots,
-            ir_signature.return_ptr,
-            ir_signature.context,
+            return_ptr,
+            context,
         );
 
         for block in &blocks[1..] {
