@@ -94,6 +94,7 @@
 //!
 //! [`Declaration`]: scope::Declaration
 
+use crate::typechecker::value_cycle::RefGraph;
 use crate::value::{TypeDescription, TypeRegistry};
 use crate::{
     ast::{self, Identifier},
@@ -103,13 +104,13 @@ use crate::{
     runtime::{Rt, RuntimeFunctionRef},
     typechecker::types::EnumVariant,
 };
-use cycle::detect_type_cycles;
 use scope::{
     DeclarationKind, ModuleScope, ResolvedName, ScopeRef, ScopeType,
     TypeOrStub,
 };
 use scoped_display::TypeDisplay;
 use std::{any::TypeId, borrow::Borrow};
+use type_cycle::detect_type_cycles;
 use types::{
     FunctionDefinition, MustBeSigned, Type, TypeDefinition, TypeName,
 };
@@ -119,7 +120,6 @@ use self::{
     types::{Signature, default_types},
 };
 
-mod cycle;
 pub(crate) mod error;
 mod expr;
 mod function;
@@ -128,8 +128,10 @@ pub mod scope;
 pub mod scoped_display;
 #[cfg(all(test, not(miri)))]
 mod tests;
+mod type_cycle;
 pub mod types;
 mod unionfind;
+mod value_cycle;
 
 pub use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
@@ -158,6 +160,9 @@ pub struct TypeChecker {
     /// Set of obligations that we have to satisfy at the end of type checking
     /// a function
     obligations: Vec<Obligation>,
+
+    // Graph of references in definitions
+    references: RefGraph,
 }
 
 /// Result of type checking
@@ -182,6 +187,7 @@ impl TypeChecker {
             while_counter: 0,
             for_counter: 0,
             obligations: Vec::new(),
+            references: RefGraph::new(),
         };
         checker.declare_builtin_types().unwrap();
         checker
@@ -211,6 +217,9 @@ impl TypeChecker {
         self.declare_functions(&modules)?;
         self.tree(&modules)?;
         self.force_filtermap_types(&modules);
+
+        let _order = self.find_compilation_order()?;
+
         Ok(self.type_info)
     }
 
@@ -577,6 +586,7 @@ impl TypeChecker {
                     ast::Declaration::FilterMap(x) => {
                         (DeclarationKind::Function(None), x.ident.clone())
                     }
+                    ast::Declaration::Const(_) => continue,
                     ast::Declaration::Import(_) => continue,
                     ast::Declaration::Test(_) => continue,
                 };
@@ -658,6 +668,7 @@ impl TypeChecker {
                     ast::Declaration::Function(_)
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
+                    | ast::Declaration::Const(_)
                     | ast::Declaration::Import(_) => continue,
                     ast::Declaration::Enum(ast::VariantTypeDeclaration {
                         ident,
@@ -857,6 +868,10 @@ impl TypeChecker {
                             signature,
                         )?;
                     }
+                    ast::Declaration::Const(x) => {
+                        let ty = self.evaluate_type_expr(scope, &x.ty)?;
+                        self.insert_const(scope, x.ident.clone(), ty)?;
+                    }
                     ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(_) => continue,
                     ast::Declaration::Enum(_) => continue,
@@ -876,6 +891,9 @@ impl TypeChecker {
                     }
                     ast::Declaration::Function(x) => {
                         self.function(scope, x)?;
+                    }
+                    ast::Declaration::Const(x) => {
+                        self.constant(scope, x)?;
                     }
                     ast::Declaration::Test(x) => {
                         self.test(scope, x)?;
@@ -1130,6 +1148,23 @@ impl TypeChecker {
     ) -> TypeResult<()> {
         let ty = ty.borrow();
         match self.type_info.scope_graph.insert_var(scope, &k, ty) {
+            Ok(name) => {
+                self.type_info.resolved_names.insert(k.id, name);
+                self.type_info.expr_types.insert(k.id, ty.clone());
+                Ok(())
+            }
+            Err(old) => Err(self.error_declared_twice(&k, old)),
+        }
+    }
+
+    fn insert_const(
+        &mut self,
+        scope: ScopeRef,
+        k: Meta<Identifier>,
+        ty: impl Borrow<Type>,
+    ) -> TypeResult<()> {
+        let ty = ty.borrow();
+        match self.type_info.scope_graph.insert_const(scope, &k, ty) {
             Ok(name) => {
                 self.type_info.resolved_names.insert(k.id, name);
                 self.type_info.expr_types.insert(k.id, ty.clone());
