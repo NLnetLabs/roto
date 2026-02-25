@@ -23,11 +23,12 @@ Append a string to another, creating a new string.
 ```
 ````
 
-````{roto:function} chars(self: String) -> List[char]
-Convert this string into a list of characters.
-```roto
-"hello".chars() # -> ['h', 'e', 'l', 'l', 'o']
-```
+````{roto:function} bytes(self: String) -> StringBytes
+Get a view of this string indexed by bytes.
+````
+
+````{roto:function} chars(self: String) -> StringChars
+Get a view of this string indexed by chars.
 ````
 
 ````{roto:function} contains(self: String, needle: String) -> bool
@@ -60,38 +61,8 @@ String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
 ```
 ````
 
-````{roto:function} get(self: String, n: u64) -> Option[char]
-Get the nth character from a string.
-
-This method uses zero-based indexing.
-
-```roto
-"hello".get(1)  # -> Some('e')
-"hello".get(10) # -> None
-"Löwe".get(2)   # -> Some('w')
-```
-````
-
-````{roto:function} len(self: String) -> u64
-Get the number of characters in this string.
-
-Note that this might differ from the length of the string in
-bytes.
-
-```roto
-"hi".len()   # -> 2
-"老虎".len() # -> 2
-```
-````
-
-````{roto:function} lines(self: String) -> List[String]
-Create list of all the lines in a string.
-
-Line terminators are not included in the strings in the list.
-
-```roto
-"One line\nAnd another".lines() # -> ["One line", "And another"]
-```
+````{roto:function} lines(self: String) -> StringLines
+Get a view of this string indexed by lines.
 ````
 
 ````{roto:function} repeat(self: String, n: u32) -> String
@@ -107,20 +78,6 @@ Replace all occurrences of `from` with `to`.
 
 ```roto
 "In rust we trust".replace("rust", "roto") # -> "In roto we troto"
-```
-````
-
-````{roto:function} slice(self: String, i: u64, j: u64) -> Option[String]
-Extract a substring from this string.
-
-The indices indicate the start and end of the string in number
-of characters.
-
-The start of the range is inclusive and the end is exclusive.
-
-```roto
-"extraction".slice(4, 7)        # -> "act"
-"Löwe 老虎 Léopard".slice(5, 7) # -> "老虎"
 ```
 ````
 

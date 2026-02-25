@@ -11,6 +11,9 @@ Option[T] <Option[T]/index>
 Prefix <Prefix/index>
 String <String/index>
 StringBuf <StringBuf/index>
+StringBytes <StringBytes/index>
+StringChars <StringChars/index>
+StringLines <StringLines/index>
 Verdict[A, R] <Verdict[A, R]/index>
 bool <bool/index>
 char <char/index>
