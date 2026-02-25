@@ -298,7 +298,7 @@ fn string_methods() -> Library {
                 self.slice(i, j)
             }
 
-            /// Returns the list of bytes of this string
+            /// Returns the list of bytes of this string.
             fn list(self) -> List<u8> {
                 self.list()
             }
@@ -354,7 +354,7 @@ fn string_methods() -> Library {
                 self.slice(i, j)
             }
 
-            /// Get a list of lines
+            /// Get a list of lines.
             fn list(self) -> List<String> {
                 self.list()
             }
