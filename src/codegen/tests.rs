@@ -5289,3 +5289,146 @@ fn block_expression() {
 
     assert_eq!(f.call(10), 40);
 }
+
+#[test]
+fn simple_roto_constant() {
+    let s = src!(
+        r#"
+        const FOO: u8 = 8;
+
+        fn main() -> u8 {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u8>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn simple_roto_constant_string() {
+    let s = src!(
+        r#"
+        const FOO: String = "foo";
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foo".into());
+}
+
+#[test]
+fn simple_roto_constant_string_2() {
+    let s = src!(
+        r#"
+        const BAR: String = "bar";
+        const FOO: String = "foo" + BAR;
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foobar".into());
+}
+
+#[test]
+fn roto_constants_through_functions() {
+    let s = src!(
+        r#"
+        const BAR: String = foofoo() + foofoo();
+        const FOO: String = "foo";
+
+        fn foofoo() -> String {
+            FOO + FOO
+        }
+
+        fn main() -> String {
+            BAR
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foofoofoofoo".into());
+}
+
+#[test]
+fn registered_constant_in_roto_constant() {
+    let s = src!(
+        r#"
+         const FOO: u32 = BAR + 1;  
+
+         fn main() -> u32 {
+             FOO
+         }
+       "#
+    );
+
+    let lib = library! {
+        const BAR: u32 = 4;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> u32>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 5);
+}
+
+#[test]
+fn runtime_type_constant() {
+    let s = src!(
+        r#"
+         const FOO: Foo = Foo.new(4);  
+
+         fn main() -> Foo {
+             FOO
+         }
+       "#
+    );
+
+    #[derive(Clone, PartialEq)]
+    struct Foo {
+        x: i32,
+    }
+
+    let lib = library! {
+        #[clone] type Foo = Val<Foo>;
+
+        impl Val<Foo> {
+            fn new(x: i32) -> Self {
+                Val(Foo { x })
+            }
+        }
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.0.x, 4);
+}

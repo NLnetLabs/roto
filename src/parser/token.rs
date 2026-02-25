@@ -79,6 +79,7 @@ pub enum FStringToken<'s> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Keyword {
     Accept,
+    Const,
     Dep,
     Else,
     Enum,
@@ -572,6 +573,7 @@ impl<'s> Lexer<'s> {
 
         let kw = match ident {
             "accept" => Keyword::Accept,
+            "const" => Keyword::Const,
             "dep" => Keyword::Dep,
             "else" => Keyword::Else,
             "enum" => Keyword::Enum,
@@ -692,6 +694,7 @@ impl Keyword {
     fn as_str(&self) -> &'static str {
         match self {
             Keyword::Accept => "accept",
+            Keyword::Const => "const",
             Keyword::Dep => "dep",
             Keyword::Else => "else",
             Keyword::Enum => "enum",
