@@ -141,7 +141,7 @@ pub mod boundary {
 
         // This field enforces covariance over the type parameter `T`, since
         // `PhantomData<T>` is covariant over `T`.
-        _phantom: PhantomData<T>,
+        _phantom: PhantomData<T::Transformed>,
     }
 
     impl<T: Value> Clone for List<T> {

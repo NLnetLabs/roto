@@ -139,7 +139,7 @@ impl TypeRegistry {
 #[sealed(pub(crate))]
 pub trait Value: Sized + 'static {
     /// Intermediate type that can be used to convert a type to a Roto type
-    type Transformed: Clone;
+    type Transformed: Clone + Send + Sync;
 
     /// The type that this type should be converted into when passed to Roto
     type AsParam: Param<Self::Transformed>;
@@ -292,7 +292,7 @@ impl<T> Param<Val<T>> for *mut T {
 }
 
 #[sealed]
-impl<T: 'static + Clone> Value for Val<T> {
+impl<T: 'static + Clone + Send + Sync> Value for Val<T> {
     type Transformed = Self;
     type AsParam = *mut T;
 
