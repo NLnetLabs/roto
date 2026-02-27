@@ -67,9 +67,14 @@ mod hidden {
 
 use hidden::*;
 
-type Log = *mut OutputStream<Output>;
 type Func =
     TypedFunc<NoCtx, fn(Val<Log>, Val<RotondaRoute>) -> Verdict<(), ()>>;
+
+#[derive(Clone, Copy)]
+struct Log(*mut OutputStream<Output>);
+
+unsafe impl Send for Log {}
+unsafe impl Sync for Log {}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Registering types and their methods
@@ -105,14 +110,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         impl Val<Log> {
             fn log_prefix(stream: Val<Log>, prefix: Prefix) {
-                let mut stream = stream;
-                let stream = unsafe { &mut **stream };
+                let stream = unsafe { &mut *stream.0.0 };
                 stream.push(Output::Prefix(prefix));
             }
 
             fn log_custom(stream: Val<Log>, id: u32, local: u32) {
-                let mut stream = stream;
-                let stream = unsafe { &mut **stream };
+                let stream = unsafe { &mut *stream.0.0 };
                 stream.push(Output::Custom(id, local));
             }
         }
@@ -139,7 +142,7 @@ fn run_with_prefix(
     let route =
         RotondaRoute::Ipv4Unicast(RouteWorkshop::new(prefix.parse()?));
     let mut output = OutputStream::default();
-    let log = &mut output as *mut _;
+    let log = Log(&mut output as *mut _);
 
     let verdict = function.call(Val(log), Val(route));
 
