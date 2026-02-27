@@ -2885,19 +2885,25 @@ fn use_type_from_other_module_in_type() {
 
 #[test]
 fn mutate() {
-    #[derive(Copy, Clone, Debug)]
     struct MyType {
-        i: i16,
+        i: AtomicI32,
     }
 
-    let rt = Runtime::from_lib(library! {
-        #[copy] type MyType = Val<*mut MyType>;
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    struct Ptr(*mut MyType);
 
-        impl Val<*mut MyType> {
-            fn increase(mut self) {
-                eprintln!("increase, pre: {}", unsafe { (**self).i });
-                unsafe { (**self).i += 1 };
-                eprintln!("increase, post: {}", unsafe { (**self).i });
+    unsafe impl Send for Ptr {}
+    unsafe impl Sync for Ptr {}
+
+    let rt = Runtime::from_lib(library! {
+        #[copy] type MyType = Val<Ptr>;
+
+        impl Val<Ptr> {
+            fn increase(self) {
+                use std::sync::atomic::Ordering::Relaxed;
+                eprintln!("increase, pre: {}", unsafe { (*self.0.0).i.load(Relaxed) });
+                unsafe { (*self.0.0).i.fetch_add(1, Relaxed) };
+                eprintln!("increase, post: {}", unsafe { (*self.0.0).i.load(Relaxed) });
             }
         }
     })
@@ -2914,21 +2920,25 @@ fn mutate() {
 
     let mut p = compile_with_runtime(s, rt);
     let f = p
-        .get_function::<fn(Val<*mut MyType>) -> Verdict<Val<*mut MyType>, ()>>("main")
+        .get_function::<fn(Val<Ptr>) -> Verdict<Val<Ptr>, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let mut t = MyType { i: 0 };
-    let res = f.call(Val(&mut t));
+    let mut t = MyType {
+        i: AtomicI32::new(0),
+    };
+    let ptr = Ptr(&mut t as *mut _);
+    let res = f.call(Val(ptr));
 
+    use std::sync::atomic::Ordering::Relaxed;
     match res {
         Verdict::Accept(val) => {
-            let val = unsafe { &*val.0 };
-            assert_eq!(val.i, 1, "returned value should be 1")
+            let val = unsafe { (*val.0.0).i.load(Relaxed) };
+            assert_eq!(val, 1, "returned value should be 1")
         }
         Verdict::Reject(_) => todo!(),
     }
 
-    assert_eq!(t.i, 1, "mutated value should be 1");
+    assert_eq!(t.i.load(Relaxed), 1, "mutated value should be 1");
 }
 
 #[test]
