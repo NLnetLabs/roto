@@ -290,12 +290,18 @@ fn string_methods() -> Library {
 
             /// Slice this string based on byte indices.
             ///
-            /// This method returns `None` if either `i` or `j` is out of bounds or if
-            /// `i` is greater than `j`.
-            fn slice(self, i: u64, j: u64) -> Option<String> {
-                let i = i.try_into().ok()?;
-                let j = j.try_into().ok()?;
-                self.slice(i, j)
+            /// The byte at index `end` is not included in the returned
+            /// string.
+            ///
+            /// This method returns `None` if either `start` or `end` is out of
+            /// bounds or if `start` is greater than `end`. Additionally, this
+            /// method also returns `None` if the resulting string would not be
+            /// valid UTF-8, i.e. when the one of the indices is within a code
+            /// point.
+            fn slice(self, start: u64, end: u64) -> Option<String> {
+                let start = start.try_into().ok()?;
+                let end = end.try_into().ok()?;
+                self.slice(start, end)
             }
 
             /// Returns the list of bytes of this string.
@@ -318,12 +324,15 @@ fn string_methods() -> Library {
 
             /// Slice this string based on the character indices.
             ///
-            /// This method returns `None` if either `i` or `j` is out of bounds or if
-            /// `i` is greater than `j`.
-            fn slice(self, i: u64, j: u64) -> Option<String> {
-                let i = i.try_into().ok()?;
-                let j = j.try_into().ok()?;
-                self.slice(i, j)
+            /// The character at index `end` is not included in the returned
+            /// string.
+            ///
+            /// This method returns `None` if either `start` or `end` is out of
+            /// bounds or if `start` is greater than `end`.
+            fn slice(self, start: u64, end: u64) -> Option<String> {
+                let start = start.try_into().ok()?;
+                let end = end.try_into().ok()?;
+                self.slice(start, end)
             }
 
             /// Get a list of characters that this string consists of.
@@ -346,12 +355,14 @@ fn string_methods() -> Library {
 
             /// Slice this string by lines.
             ///
-            /// This method returns `None` if either `i` or `j` is out of bounds or if
-            /// `i` is greater than `j`.
-            fn slice(self, i: u64, j: u64) -> Option<String> {
-                let i = i.try_into().ok()?;
-                let j = j.try_into().ok()?;
-                self.slice(i, j)
+            /// The line at index `end` is not included in the returned string.
+            ///
+            /// This method returns `None` if either `start` or `end` is out of
+            /// bounds or if `start` is greater than `end`.
+            fn slice(self, start: u64, end: u64) -> Option<String> {
+                let start = start.try_into().ok()?;
+                let end = end.try_into().ok()?;
+                self.slice(start, end)
             }
 
             /// Get a list of lines.

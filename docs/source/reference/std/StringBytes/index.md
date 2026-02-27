@@ -13,13 +13,19 @@ Get the length of the string in bytes.
 ````
 
 ````{roto:function} list(self: StringBytes) -> List[u8]
-Returns the list of bytes of this string
+Returns the list of bytes of this string.
 ````
 
-````{roto:function} slice(self: StringBytes, i: u64, j: u64) -> Option[String]
+````{roto:function} slice(self: StringBytes, start: u64, end: u64) -> Option[String]
 Slice this string based on byte indices.
 
-This method returns `None` if either `i` or `j` is out of bounds or if
-`i` is greater than `j`.
+The byte at index `end` is not included in the returned
+string.
+
+This method returns `None` if either `start` or `end` is out of
+bounds or if `start` is greater than `end`. Additionally, this
+method also returns `None` if the resulting string would not be
+valid UTF-8, i.e. when the one of the indices is within a code
+point.
 ````
 

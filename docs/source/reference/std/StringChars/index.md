@@ -16,10 +16,13 @@ Get the number of characters in a string.
 Get a list of characters that this string consists of.
 ````
 
-````{roto:function} slice(self: StringChars, i: u64, j: u64) -> Option[String]
+````{roto:function} slice(self: StringChars, start: u64, end: u64) -> Option[String]
 Slice this string based on the character indices.
 
-This method returns `None` if either `i` or `j` is out of bounds or if
-`i` is greater than `j`.
+The character at index `end` is not included in the returned
+string.
+
+This method returns `None` if either `start` or `end` is out of
+bounds or if `start` is greater than `end`.
 ````
 

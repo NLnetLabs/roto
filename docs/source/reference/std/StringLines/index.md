@@ -13,13 +13,15 @@ Get the number of lines in this string.
 ````
 
 ````{roto:function} list(self: StringLines) -> List[String]
-Get a list of lines
+Get a list of lines.
 ````
 
-````{roto:function} slice(self: StringLines, i: u64, j: u64) -> Option[String]
+````{roto:function} slice(self: StringLines, start: u64, end: u64) -> Option[String]
 Slice this string by lines.
 
-This method returns `None` if either `i` or `j` is out of bounds or if
-`i` is greater than `j`.
+The line at index `end` is not included in the returned string.
+
+This method returns `None` if either `start` or `end` is out of
+bounds or if `start` is greater than `end`.
 ````
 
