@@ -1,7 +1,7 @@
 Roto
 ====
 
-[![CI](https://github.com/NLnetLabs/roto/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/NLnetLabs/roto/actions?query=workflow%3Aci)
+[![CI](https://codeberg.org/NLnetLabs/roto/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://codeberg.org/NLnetLabs/roto/actions?query=workflow%3Aci)
 [![docs.rs](https://img.shields.io/docsrs/roto?label=docs.rs)](https://docs.rs/roto)
 [![Documentation Status](https://app.readthedocs.org/projects/roto/badge/?version=latest)](https://roto.docs.nlnetlabs.nl/)
 [![Discuss on Discourse](https://img.shields.io/badge/Discourse-NLnet_Labs-orange?logo=Discourse)](https://community.nlnetlabs.nl/)
@@ -78,20 +78,20 @@ implementing them yet. Most limitations can be found in the issue tracker, but
 we've summarized some important missing features here.
 
 - It's not yet possible to write generic functions.
-  ([#190](https://github.com/NLnetLabs/roto/issues/190))
+  ([#190](https://codeberg.org/NLnetLabs/roto/issues/190))
 - It's not yet possible to create global constants.
-  ([#344](https://github.com/NLnetLabs/roto/issues/344))
+  ([#344](https://codeberg.org/NLnetLabs/roto/issues/344))
 - Functions are not yet first-class, meaning that they cannot be passed around
-  as values. ([#122](https://github.com/NLnetLabs/roto/issues/122))
+  as values. ([#122](https://codeberg.org/NLnetLabs/roto/issues/122))
 - Roto does not have maps/dictionaries yet.
-  ([#345](https://github.com/NLnetLabs/roto/issues/345))
+  ([#345](https://codeberg.org/NLnetLabs/roto/issues/345))
 
 ## Memory safety
 
 Roto fundamentally relies on unsafe code, after all, we are generating machine
 code at runtime. However, we treat every unsoundness stemming from use of Roto
 with safe Rust as a bug of high priority. Please report any issues you find to
-the [GitHub repository].
+the [Codeberg repository].
 
 We run our extensive test suite under Valgrind in CI to ensure that at least
 most common use cases are correctly implemented.
@@ -138,7 +138,7 @@ Roto is distributed under the terms of the BSD-3-clause license.
 See LICENSE for details.
 
 [Rotonda]: https://github.com/NlnetLabs/rotonda
-[GitHub repository]: https://github.com/NLnetLabs/routecore
+[Codeberg repository]: https://codeberg.org/NLnetLabs/roto
 [Documentation]: https://roto.docs.nlnetlabs.nl/
 [crate]: https://crates.io/crates/roto
 [docs.rs]: https://docs.rs/roto

@@ -13,6 +13,7 @@ keywords.workspace = true
 categories.workspace = true
 exclude = [
   "/.github",
+  "/.forgejo",
   "/tests",
   "/vscode-extension",
 ]
@@ -78,7 +79,7 @@ license = "BSD-3-Clause"
 rust-version = "1.89"
 description = "a statically-typed, compiled, embedded scripting language"
 documentation = "https://docs.rs/roto/"
-repository = "https://github.com/NLnetLabs/roto/"
+repository = "https://codeberg.org/NLnetLabs/roto/"
 homepage = "https://www.nlnetlabs.nl/projects/routing/rotonda/"
 keywords = ["scripting", "language", "scripting-language", "routing", "bgp"]
 categories = ["compilers", "network-programming"]

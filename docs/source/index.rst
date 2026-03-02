@@ -7,8 +7,8 @@ Roto
    between 0.x versions.
 
    For more information
-   on upcoming features and changes see the `issue tracker <https://github.com/
-   NLnetLabs/roto/issues>`__.
+   on upcoming features and changes see the `issue tracker
+   <https://codeberg.org/NLnetLabs/roto/issues>`__.
 
 Roto is an embedded scripting language for Rust applications that is fast, safe
 and easy to use.
@@ -53,7 +53,7 @@ Contributing
 ------------
 
 If you have comments, proposed changes, or would like to contribute, please open
-an issue in the `GitHub repository <https://github.com/NLnetLabs/roto>`__. In
+an issue in the `Codeberg repository <https://codeberg.org/NLnetLabs/roto>`__. In
 particular, if you would like to use the crate but it is missing functionality
 for your use case, we would love to hear from you!
 
@@ -61,7 +61,7 @@ License
 -------
 
 Roto is distributed under the terms of the BSD-3-clause license. See
-`LICENSE <https://github.com/NLnetLabs/roto/blob/main/LICENSE>`__ for details.
+`LICENSE <https://codeberg.org/NLnetLabs/roto/src/branch/main/LICENSE>`__ for details.
 
    .. only:: html
 

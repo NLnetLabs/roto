@@ -251,7 +251,7 @@ pub mod __internal {
 
 pub(crate) const FIND_HELP: &str = "\n\
     If you are seeing this error you have found a bug in the Roto compiler.\n\
-    Please open an issue at https://github.com/NLnetLabs/roto.";
+    Please open an issue at https://codeberg.org/NLnetLabs/roto.";
 
 /// Panic with an internal compiler error
 ///

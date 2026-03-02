@@ -707,7 +707,7 @@ it is wrapped in ``{}``.
 The current implementation of this feature is very limited: you
 can only match against ``variant`` types and only match against the
 constructor, not against the contents of the constructor.  See `issue 124
-<https://github.com/NLnetLabs/roto/issues/124>`_ for the status on these
+<https://codeberg.org/NLnetLabs/roto/issues/124>`_ for the status on these
 limitations.
 
 .. code-block:: roto
