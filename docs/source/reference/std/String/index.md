@@ -16,15 +16,23 @@ with an `f`.
 
 
 ````{roto:function} append(self: String, other: String) -> String
-Append a string to another, creating a new string
+Append a string to another, creating a new string.
 
 ```roto
 "hello".append(" ").append("world") # -> "hello world"
 ```
 ````
 
+````{roto:function} bytes(self: String) -> StringBytes
+Get a view of this string indexed by bytes.
+````
+
+````{roto:function} chars(self: String) -> StringChars
+Get a view of this string indexed by chars.
+````
+
 ````{roto:function} contains(self: String, needle: String) -> bool
-Check whether a string contains another string
+Check whether a string contains another string.
 
 ```roto
 "haystack".contains("hay")  # -> true
@@ -33,7 +41,7 @@ Check whether a string contains another string
 ````
 
 ````{roto:function} ends_with(self: String, suffix: String) -> bool
-Check whether a string ends with a given suffix
+Check whether a string ends with a given suffix.
 
 ```roto
 "haystack".ends_with("stack") # -> true
@@ -42,19 +50,47 @@ Check whether a string ends with a given suffix
 ````
 
 ````{roto:function} eq(self: String, other: String) -> bool
-Check for string equality
+Check for string equality.
+````
+
+````{roto:function} from_chars(chars: List[char]) -> String
+Create a new string from a list of characters.
+
+```roto
+String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
+```
+````
+
+````{roto:function} lines(self: String) -> StringLines
+Get a view of this string indexed by lines.
 ````
 
 ````{roto:function} repeat(self: String, n: u32) -> String
-Repeat a string `n` times and join them
+Repeat a string `n` times and join them.
 
 ```roto
 "ha".repeat(6) # -> "hahahahahaha"
 ```
 ````
 
+````{roto:function} replace(self: String, from: String, to: String) -> String
+Replace all occurrences of `from` with `to`.
+
+```roto
+"In rust we trust".replace("rust", "roto") # -> "In roto we troto"
+```
+````
+
+````{roto:function} split(self: String, separator: String) -> List[String]
+Split a string by a separator.
+
+```roto
+"one, two, three".split(", ") # -> ["one", "two", "three"]
+```
+````
+
 ````{roto:function} starts_with(self: String, prefix: String) -> bool
-Check whether a string starts with a given prefix
+Check whether a string starts with a given prefix.
 
 ```roto
 "haystack".starts_with("hay")   # -> true
@@ -63,7 +99,7 @@ Check whether a string starts with a given prefix
 ````
 
 ````{roto:function} to_lowercase(self: String) -> String
-Create a new string with all characters converted to lowercase
+Create a new string with all characters converted to lowercase.
 
 ```roto
 "LOUD".to_lowercase() # -> "loud"
@@ -75,7 +111,7 @@ Convert this value into a `String`
 ````
 
 ````{roto:function} to_uppercase(self: String) -> String
-Create a new string with all characters converted to uppercase
+Create a new string with all characters converted to uppercase.
 
 ```roto
 "quiet".to_uppercase() # -> "QUIET"

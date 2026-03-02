@@ -819,8 +819,8 @@ fn gather_docstring(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream {
     }
 
     quote! {{
-        let x: Vec<String> = vec![#({
-            let s: String = #docstring.to_string();
+        let x: Vec<std::string::String> = vec![#({
+            let s: std::string::String = #docstring.to_string();
             s.strip_prefix(" ").unwrap_or(&s).to_string()
         }),*];
         x.join("\n")

@@ -10,9 +10,7 @@ use crate::{
     },
     value::{TypeDescription, TypeRegistry, Value},
 };
-use std::{
-    any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr, sync::Arc,
-};
+use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
 #[derive(Debug)]
 pub enum FunctionRetrievalError {
@@ -98,7 +96,7 @@ fn check_roto_type(
     let ASN: TypeId = TypeId::of::<Asn>();
     let IPADDR: TypeId = TypeId::of::<IpAddr>();
     let PREFIX: TypeId = TypeId::of::<Prefix>();
-    let STRING: TypeId = TypeId::of::<Arc<str>>();
+    let STRING: TypeId = TypeId::of::<crate::String>();
 
     let Some(rust_type) = TypeRegistry::get(rust_type) else {
         return Err(TypeMismatch {

@@ -11,7 +11,6 @@ use std::{
     any::TypeId,
     borrow::Borrow,
     fmt::{Debug, Display, Write},
-    sync::Arc,
 };
 
 use super::{
@@ -591,7 +590,7 @@ impl Primitive {
             Bool => Layout::new(1, 1),
             Char => Layout::of::<char>(),
             Asn => Layout::new(4, 4),
-            String => Layout::of::<Arc<str>>(),
+            String => Layout::of::<crate::String>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
             Prefix => Layout::of::<inetnum::addr::Prefix>(),
         }
