@@ -2,20 +2,20 @@ Roto
 ====
 
 [![CI](https://codeberg.org/NLnetLabs/roto/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://codeberg.org/NLnetLabs/roto/actions?query=workflow%3Aci)
+[![Documentation Status](https://img.shields.io/readthedocs/roto/latest?label=manual)](https://roto.docs.nlnetlabs.nl/)
 [![docs.rs](https://img.shields.io/docsrs/roto?label=docs.rs)](https://docs.rs/roto)
-[![Documentation Status](https://app.readthedocs.org/projects/roto/badge/?version=latest)](https://roto.docs.nlnetlabs.nl/)
 [![Discuss on Discourse](https://img.shields.io/badge/Discourse-NLnet_Labs-orange?logo=Discourse)](https://community.nlnetlabs.nl/)
 [![Mastodon Follow](https://img.shields.io/mastodon/follow/114692612288811644?domain=social.nlnetlabs.nl&style=social)](https://social.nlnetlabs.nl/@nlnetlabs)
 
 Roto is an embedded scripting language for Rust applications that is fast, safe
-and easy to use. 
+and easy to use.
 
 The language is primarily used by [Rotonda], the composable, programmable
 routing BGP engine. It is made to integrate especially well with Rotonda, so
 that writing filters is as simple as possible. In addition, Roto can be easily
 embedded into any Rust application for general purpose scripting.
 
-Read more about it in the [documentation].
+Read more about it in the [manual].
 
 ## Example
 
@@ -50,8 +50,9 @@ cargo run --example <example name>
   caught at compile-time. This does not mean that the user has to specify types
   everywhere, most types can be inferred by the Roto compiler. When the compiler
   detects a mistake in your script, it will emit a friendly message.
-- Scripts are **compiled** to machine code before they are executed. This
-  means that they run quickly and introduce minimal latency into your system.
+- Scripts are **JIT compiled** to machine code with [cranelift] before they are
+  executed. This means that they run quickly and introduce minimal latency into
+  your system.
 - Roto scripts are **hot-reloadable**. The host application can recompile
   scripts at any time.
 
@@ -118,7 +119,7 @@ functionality that compromises the security of your application.
 
 ## Learn more
 
-- To learn how to use and embed Roto, you can read the [documentation].
+- To learn how to use and embed Roto, you can read the [manual].
 - The API docs for the latest version are available on [docs.rs].
 - If you have questions, you can ask them on the [community forum].
 - Some examples are available in the `examples/` folder of the Roto repository.
@@ -137,9 +138,10 @@ See [CONTRIBUTING.md] for more information.
 Roto is distributed under the terms of the BSD-3-clause license.
 See LICENSE for details.
 
+[cranelift]: https://cranelift.dev
 [Rotonda]: https://github.com/NlnetLabs/rotonda
 [Codeberg repository]: https://codeberg.org/NLnetLabs/roto
-[Documentation]: https://roto.docs.nlnetlabs.nl/
+[Manual]: https://roto.docs.nlnetlabs.nl/
 [crate]: https://crates.io/crates/roto
 [docs.rs]: https://docs.rs/roto
 [community forum]: https://community.nlnetlabs.nl/c/roto/7
