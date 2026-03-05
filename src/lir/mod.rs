@@ -290,7 +290,9 @@ pub enum ValueOrSlot {
 pub enum ItemKind {
     Constant {
         ty: typechecker::types::Type,
-        ir_ty: IrType,
+        layout: Option<Layout>,
+        type_id: usize,
+        name: ResolvedName,
     },
     Function {
         signature: typechecker::types::Signature,
@@ -300,7 +302,7 @@ pub enum ItemKind {
 
 #[derive(Debug)]
 pub struct Item {
-    /// Identifier of the function
+    /// Full name of the function
     pub name: Identifier,
 
     /// Scope of the function

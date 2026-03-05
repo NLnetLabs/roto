@@ -43,6 +43,7 @@ pub struct Mir {
 pub enum ItemType {
     Constant {
         ty: Type,
+        name: ResolvedName,
     },
     Function {
         parameters: Vec<Var>,

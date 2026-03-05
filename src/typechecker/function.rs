@@ -50,6 +50,7 @@ impl TypeChecker {
             },
         };
 
+        self.references.add_node(ctx.item);
         self.block(scope, &ctx, body)?;
         self.resolve_obligations()?;
 
@@ -95,6 +96,7 @@ impl TypeChecker {
             },
         };
 
+        self.references.add_node(ctx.item);
         self.block(scope, &ctx, body)?;
         self.resolve_obligations()?;
 
@@ -103,20 +105,29 @@ impl TypeChecker {
 
     pub fn constant(
         &mut self,
-        scope: ScopeRef,
+        outer_scope: ScopeRef,
         constant: &ast::ConstantDeclaration,
     ) -> TypeResult<()> {
         let ast::ConstantDeclaration { ident, ty, expr } = constant;
 
-        let ty = self.evaluate_type_expr(scope, ty)?;
+        let scope = self
+            .type_info
+            .scope_graph
+            .wrap(outer_scope, ScopeType::Function(ident.node));
+
+        self.type_info.function_scopes.insert(ident.id, scope);
+
+        let ty = self.evaluate_type_expr(outer_scope, ty)?;
         let ctx = Context {
             expected_type: ty,
             function_return_type: None,
             item: ResolvedName {
-                scope,
+                scope: outer_scope,
                 ident: **ident,
             },
         };
+
+        self.references.add_node(ctx.item);
 
         self.expr(scope, &ctx, expr)?;
         self.resolve_obligations()?;
@@ -165,6 +176,7 @@ impl TypeChecker {
                 ident: *name,
             },
         };
+        self.references.add_node(ctx.item);
         self.block(scope, &ctx, body)?;
         self.resolve_obligations()?;
         Ok(())

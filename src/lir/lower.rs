@@ -54,6 +54,7 @@ struct Lowerer<'c, 'r> {
     function_scope: ScopeRef,
     tmp_idx: usize,
     return_type: Type,
+    force_reference_return: bool,
     variables: Vec<(Var, ValueOrSlot)>,
 }
 
@@ -86,18 +87,32 @@ impl Lowerer<'_, '_> {
             }
         }
 
-        let clone_functions = Self::generate_clones(ctx);
-        functions.extend(clone_functions);
+        // We need to add all the generated functions, but they need to be
+        // generated before we start evaluating any constants, so they need to
+        // go at the front.
+        let mut all_functions = Vec::new();
+        let mut clone_functions = Self::generate_clones(ctx);
+        all_functions.append(&mut clone_functions);
 
-        let drop_functions = Self::generate_drops(ctx);
-        functions.extend(drop_functions);
+        let mut drop_functions = Self::generate_drops(ctx);
+        all_functions.append(&mut drop_functions);
 
-        Lir { functions }
+        all_functions.append(&mut functions);
+
+        Lir {
+            functions: all_functions,
+        }
     }
 
     fn item(ctx: &mut LowerCtx<'_>, item: mir::Item) -> Option<Item> {
         let return_type = match &item.ty {
-            ItemType::Constant { ty } => ty.clone(),
+            ItemType::Constant { ty, .. } => {
+                // Each constant needs to be dropped later when the module is
+                // dropped. Which means Rust needs to get a pointer to its drop
+                // function.
+                ctx.drops_to_generate.push_back(ty.clone());
+                ty.clone()
+            }
             ItemType::Function { signature, .. } => {
                 signature.return_type.clone()
             }
@@ -107,6 +122,10 @@ impl Lowerer<'_, '_> {
             ctx,
             tmp_idx: item.tmp_idx,
             function_scope: item.scope,
+            force_reference_return: matches!(
+                &item.ty,
+                ItemType::Constant { .. }
+            ),
             return_type: return_type.clone(),
             blocks: Vec::new(),
             variables: Vec::new(),
@@ -179,9 +198,15 @@ impl Lowerer<'_, '_> {
             };
 
         let kind = match item.ty {
-            ItemType::Constant { ty } => {
-                todo!()
-            }
+            ItemType::Constant { name, ty } => ItemKind::Constant {
+                layout: lowerer
+                    .ctx
+                    .type_info
+                    .layout_of(&ty, lowerer.ctx.runtime),
+                name,
+                type_id: lowerer.ctx.type_info.type_id(&ty),
+                ty,
+            },
             ItemType::Function {
                 signature,
                 parameters,
@@ -780,6 +805,16 @@ impl Lowerer<'_, '_> {
                 .into(),
                 var.into(),
                 layout.unwrap().size() as u32,
+            );
+            self.emit_return(None);
+        } else if self.force_reference_return {
+            self.emit_write(
+                Var {
+                    scope: self.function_scope,
+                    kind: VarKind::Return,
+                }
+                .into(),
+                var.into(),
             );
             self.emit_return(None);
         } else {

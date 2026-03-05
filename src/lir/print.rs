@@ -25,12 +25,12 @@ impl Printable for Item {
         };
 
         match &self.kind {
-            ItemKind::Constant { ir_ty, .. } => {
+            ItemKind::Constant { ty, .. } => {
                 let _ = write!(
                     &mut s,
                     "const {}: {} = {{",
                     self.name,
-                    ir_ty.display(printer.type_info)
+                    ty.display(printer.type_info)
                 );
             }
             ItemKind::Function { ir_signature, .. } => {

@@ -175,6 +175,10 @@ impl RefGraph {
         }
     }
 
+    pub fn add_node(&mut self, from: ResolvedName) {
+        self.references.entry(from).or_default();
+    }
+
     pub fn add_edge(&mut self, from: ResolvedName, to: ResolvedName) {
         self.references.entry(from).or_default().insert(to);
     }
@@ -192,7 +196,7 @@ struct VertexState {
     lowlink: usize,
 }
 
-fn tarjan<V: Copy + Eq + Ord + Hash>(
+fn tarjan<V: Copy + Eq + Ord + Hash + std::fmt::Debug>(
     edges: &BTreeMap<V, BTreeSet<V>>,
 ) -> Vec<Vec<V>> {
     let mut state = State::<V>::new();

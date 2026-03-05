@@ -219,7 +219,6 @@ impl TypeChecker {
         self.force_filtermap_types(&modules);
 
         let order = self.find_compilation_order()?;
-
         Ok((self.type_info, order))
     }
 

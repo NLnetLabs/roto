@@ -148,6 +148,7 @@ impl Lowerer<'_, '_> {
         let mut lowerer = Lowerer {
             ctx,
             tmp_idx: 0,
+            force_reference_return: false,
             // The drop fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
@@ -184,7 +185,7 @@ impl Lowerer<'_, '_> {
             entry_block,
             variables: lowerer.variables,
             blocks: lowerer.blocks,
-            public: false,
+            public: true,
         }
     }
 

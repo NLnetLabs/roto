@@ -302,6 +302,8 @@ pub fn eval(
         ItemKind::Function { ir_signature, .. } => &ir_signature.parameters,
     };
 
+    dbg!(parameters);
+
     let return_ptr = match &item.kind {
         ItemKind::Constant { .. } => true,
         ItemKind::Function { ir_signature, .. } => ir_signature.return_ptr,
@@ -458,9 +460,14 @@ pub fn eval(
                     );
                 }
 
-                let names = parameters.iter().map(|p| p.0);
+                let names = match &f.kind {
+                    ItemKind::Function { ir_signature, .. } => {
+                        Some(ir_signature.parameters.iter().map(|p| p.0))
+                    }
+                    ItemKind::Constant { .. } => None,
+                };
 
-                for (name, arg) in names.zip(args) {
+                for (name, arg) in names.into_iter().flatten().zip(args) {
                     let val = eval_operand(&vars, arg);
                     vars.insert(
                         Var {

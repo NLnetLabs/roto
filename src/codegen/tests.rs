@@ -4853,3 +4853,85 @@ fn string_line_slice() {
     let res = f.call(0, 2);
     assert_eq!(res, Some("1\n2\n".into()));
 }
+
+#[test]
+fn simple_roto_constant() {
+    let s = src!(
+        r#"
+        const FOO: u8 = 8;
+
+        fn main() -> u8 {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u8>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn simple_roto_constant_string() {
+    let s = src!(
+        r#"
+        const FOO: String = "foo";
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foo".into());
+}
+
+#[test]
+fn simple_roto_constant_string_2() {
+    let s = src!(
+        r#"
+        const BAR: String = "bar";
+        const FOO: String = "foo" + BAR;
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foobar".into());
+}
+
+#[test]
+fn roto_constants_through_functions() {
+    let s = src!(
+        r#"
+        const BAR: String = foofoo() + foofoo();
+        const FOO: String = "foo";
+
+        fn foofoo() -> String {
+            FOO + FOO
+        }
+
+        fn main() -> String {
+            BAR
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foofoofoofoo".into());
+}

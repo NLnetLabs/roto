@@ -323,6 +323,7 @@ impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
             &runtime.rt,
             &mut type_info,
             &mut label_store,
+            order,
         );
 
         #[cfg(feature = "logger")]

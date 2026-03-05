@@ -29,7 +29,7 @@ impl Printable for Item {
         };
 
         match &self.ty {
-            ItemType::Constant { ty } => {
+            ItemType::Constant { ty, .. } => {
                 let _ = write!(
                     &mut s,
                     "const {}: {} = {{",
