@@ -20,7 +20,9 @@ use crate::{
     ast,
     parser::{Parser, meta::Spans},
     typechecker::scope::{DeclarationKind, ScopeType},
-    value::{CloneFn, DropFn, DynVal, Ty, TypeDescription, TypeRegistry},
+    value::{
+        CloneFn, DropFn, DynVal, EqFn, Ty, TypeDescription, TypeRegistry,
+    },
 };
 use context::ContextDescription;
 use func::FunctionDescription;
@@ -386,6 +388,15 @@ pub(crate) unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
     unsafe { x.cast::<T>().drop_in_place() };
 }
 
+pub(crate) unsafe extern "C" fn extern_eq<T: PartialEq + 'static>(
+    x: *const (),
+    y: *const (),
+) -> bool {
+    let x = unsafe { &*x.cast::<T>() };
+    let y = unsafe { &*y.cast::<T>() };
+    x.eq(y)
+}
+
 #[derive(Clone, Debug)]
 pub struct RuntimeType {
     /// The name the type can be referenced by from Roto
@@ -398,6 +409,9 @@ pub struct RuntimeType {
 
     /// Whether this type is `Copy`
     movability: Movability,
+
+    /// Equality function
+    eq_fn: EqFn,
 
     /// Layout of the type
     layout: Layout,
@@ -417,6 +431,10 @@ impl RuntimeType {
 
     pub fn movability(&self) -> &Movability {
         &self.movability
+    }
+
+    pub fn eq_fn(&self) -> EqFn {
+        self.eq_fn
     }
 
     pub fn layout(&self) -> Layout {
@@ -617,6 +635,7 @@ impl Rt {
             name,
             type_id: ty.type_id,
             movability: ty.movability.clone(),
+            eq_fn: ty.eq_fn,
             layout: ty.layout.clone(),
             _docstring: ty.doc.clone(),
         });
