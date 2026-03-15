@@ -273,6 +273,22 @@ fn string_methods() -> Library {
             fn lines(self) -> StringLines {
                 self.lines()
             }
+
+            /// Create a new string by removing leading and trailing
+            /// whitespace.
+            fn trim(self) -> Self {
+                self.trim()
+            }
+
+            /// Create a new string by removing leading whitespace.
+            fn trim_start(self) -> Self {
+                self.trim_start()
+            }
+
+            /// Create a new string by removing trailing whitespace.
+            fn trim_end(self) -> Self {
+                self.trim_end()
+            }
         }
 
         impl StringBytes {

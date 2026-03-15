@@ -80,6 +80,22 @@ impl String {
     pub fn lines(self) -> StringLines {
         StringLines(self.0)
     }
+
+    /// Create a new string by removing leading and trailing
+    /// whitespace.
+    pub fn trim(self) -> Self {
+        self.0.0.trim().into()
+    }
+
+    /// Create a new string by removing leading whitespace.
+    pub fn trim_start(self) -> Self {
+        self.0.0.trim_start().into()
+    }
+
+    /// Create a new string by removing trailing whitespace.
+    pub fn trim_end(self) -> Self {
+        self.0.0.trim_end().into()
+    }
 }
 
 impl<T: Into<Arc<str>>> From<T> for String {
