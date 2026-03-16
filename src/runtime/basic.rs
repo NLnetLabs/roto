@@ -289,6 +289,18 @@ fn string_methods() -> Library {
             fn trim_end(self) -> Self {
                 self.trim_end()
             }
+
+            /// Create a new string by removing a given prefix.
+            /// Returns None if the string does not contain the prefix.
+            fn strip_prefix(self, prefix: String) -> Option<String> {
+                self.strip_prefix(&prefix)
+            }
+
+            /// Create a new string by removing a given suffix.
+            /// Returns None if the string does not contain the suffix.
+            fn strip_suffix(self, suffix: String) -> Option<String> {
+                self.strip_suffix(&suffix)
+            }
         }
 
         impl StringBytes {
