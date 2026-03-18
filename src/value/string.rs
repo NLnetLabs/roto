@@ -98,13 +98,15 @@ impl String {
     }
 
     /// Create a new string by removing a given prefix.
-    /// Returns None if the string does not contain the prefix.
+    ///
+    /// Returns `None` if the string does not contain the prefix.
     pub fn strip_prefix(self, prefix: &str) -> Option<Self> {
         self.0.0.strip_prefix(prefix).map(|s| s.into())
     }
 
     /// Create a new string by removing a given suffix.
-    /// Returns None if the string does not contain the suffix.
+    ///
+    /// Returns `None` if the string does not contain the suffix.
     pub fn strip_suffix(self, suffix: &str) -> Option<Self> {
         self.0.0.strip_suffix(suffix).map(|s| s.into())
     }
