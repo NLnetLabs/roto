@@ -4833,6 +4833,125 @@ fn string_lines() {
 }
 
 #[test]
+fn string_trim() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "  Rust!  ".trim()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "Rust!".into());
+}
+
+#[test]
+fn string_trim_start() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "  Rust!  ".trim_start()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "Rust!  ".into());
+}
+
+#[test]
+fn string_trim_end() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "  Rust!  ".trim_end()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "  Rust!".into());
+}
+
+#[test]
+fn string_strip_prefix_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "RotoRust!".strip_prefix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, Some("Rust!".into()));
+}
+
+#[test]
+fn string_strip_prefix_not_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "Rust!".strip_prefix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, None);
+}
+
+#[test]
+fn string_strip_suffix_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "Rust!Roto".strip_suffix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, Some("Rust!".into()));
+}
+
+#[test]
+fn string_strip_suffix_not_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "Rust!".strip_suffix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, None);
+}
+
+#[test]
 fn string_line_slice() {
     let s = src!(
         r#"

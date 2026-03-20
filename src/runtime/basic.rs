@@ -273,6 +273,56 @@ fn string_methods() -> Library {
             fn lines(self) -> StringLines {
                 self.lines()
             }
+
+            /// Create a new string by removing leading and trailing
+            /// whitespace.
+            ///
+            /// ```roto
+            /// "  Roto!  ".trim() # -> "Roto!"
+            /// ```
+            fn trim(self) -> Self {
+                self.trim()
+            }
+
+            /// Create a new string by removing leading whitespace.
+            ///
+            /// ```roto
+            /// "  Roto!  ".trim_start() # -> "Roto!  "
+            /// ```
+            fn trim_start(self) -> Self {
+                self.trim_start()
+            }
+
+            /// Create a new string by removing trailing whitespace.
+            ///
+            /// ```roto
+            /// "  Roto!  ".trim_end() # -> "  Roto!"
+            /// ```
+            fn trim_end(self) -> Self {
+                self.trim_end()
+            }
+
+            /// Create a new string by removing a given prefix.
+            ///
+            /// Returns `None` if the string does not contain the prefix.
+            ///
+            /// ```roto
+            /// "RustRoto!".strip_prefix("Rust") # -> "Roto!"
+            /// ```
+            fn strip_prefix(self, prefix: String) -> Option<String> {
+                self.strip_prefix(&prefix)
+            }
+
+            /// Create a new string by removing a given suffix.
+            ///
+            /// Returns `None` if the string does not contain the suffix.
+            ///
+            /// ```roto
+            /// "Roto!Rust".strip_suffix("Rust") # -> "Roto!"
+            /// ```
+            fn strip_suffix(self, suffix: String) -> Option<String> {
+                self.strip_suffix(&suffix)
+            }
         }
 
         impl StringBytes {
