@@ -14,10 +14,16 @@ Concatenate this list with another, returning the result.
 The arguments are not mutated by this function.
 ````
 
+````{roto:function} contains(self: List[T], item: T) -> bool
+````
+
 ````{roto:function} get(self: List[T], idx: u64) -> Option[T]
 Get an element from the list.
 
 This function returns `None` if the index is out of bounds.
+````
+
+````{roto:function} index(self: List[T], item: T) -> Option[u64]
 ````
 
 ````{roto:function} is_empty(self: List[T]) -> bool

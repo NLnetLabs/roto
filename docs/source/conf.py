@@ -67,6 +67,7 @@ extensions = [
     'myst_parser',
 ]
 
+test_code_output = "../tests/doctests.json"
 autosectionlabel_prefix_document = True
 suppress_warnings = ['autosectionlabel.*']
 

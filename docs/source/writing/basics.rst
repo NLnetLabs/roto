@@ -38,37 +38,53 @@ input. Strings are delimited by double quotes ``"``.
 .. code-block:: roto
 
     fn main() {
-        print("Hello, world!");
+        print("Hello, World!");
     }
 
-Variables are created with ``let``. For example, we can create a variable
-``name`` that holds a string, which we can then join with other strings with the
-`+` operator.
+.. testoutput::
+
+    Hello, World!
+
+Variables are created with ``let``. The type of a variable is usually inferred,
+but you can be more explicit about it by adding a type annotation. Roto's type
+checker will then check that the variable has that type and error otherwise.
+For example, we can create a variable ``name`` that holds a string, which we can
+then join with other strings with the `+` operator.
 
 .. code-block:: roto
 
     fn main() {
-        let name = "John";
-        print("Hello, " + name);
-        # prints: "Hello, John"
-        print("Bye, " + name + "!");
-        # prints: "Bye, John!"
+        # Create a variable with the inferred type String
+        let first_name = "John";
+        print("Hello, " + first_name);
+
+        # Create a variable with a type annotation
+        let last_name: String = "Doe";
+        print("Bye, " + first_name + " " + last_name + "!");
     }
+
+.. testoutput::
+
+    Hello, John
+    Bye, John Doe!
 
 A more convenient way to build complex strings is with string formatting. A
 string prefixed with ``f`` will act as a format string (or f-string) where
-text between ``{}`` will be evaluated as a Roto expression and inserted at that
-location in the string.
+code in curly braces (``{}``) will be evaluated as a Roto expression and
+inserted at that location in the string.
 
 .. code-block:: roto
 
     fn main() {
-        let name = "John";
-        print(f"Hello, {name}");
-        # prints: "Hello, John"
-        print(f"Bye, {name}!");
-        # prints: "Bye, John!"
+        let first_name = "John";
+        let last_name = "Doe";
+        print(f"Hello, {first_name} {last_name}!");
+        # prints: "Hello, John Doe!"
     }
+
+.. testoutput::
+
+    Hello, John Doe!
 
 We are not limited to using names of variables in f-strings, we can also use
 more complex expressions. For instance, we can convert the name to uppercase
@@ -77,15 +93,28 @@ before printing it.
 .. code-block:: roto
 
     fn main() {
-        let name = "Jan";
+        let name = "John";
         print(f"Hello, {name.to_uppercase()}");
-        # prints "Hello, JOHN"
     }
 
-You can find more string methods under the :roto:ref:`String` documentation.
+.. testoutput::
 
-Roto as a calculator
---------------------
+    Hello, JOHN
+
+.. seealso::
+
+    :ref:`lang_strings`
+        Strings in the language reference.
+
+    :roto:ref:`String`
+        Documentation of the `String` type.
+
+    :roto:ref:`print`
+        Documentation of the `print` function.
+
+
+Simple Calculations
+-------------------
 
 Of course, Roto doesn't just have strings. The next thing we should introduce
 are Roto's number types. The simplest number types in Roto are the integers.
@@ -100,35 +129,47 @@ addition, ``-`` for subtraction, ``*`` for multiplication, ``/`` for division
 and ``%`` for remainder. These operators follow the conventional rules for
 precedence.
 
+While we can't print integers directly, we can use them in f-strings.
+
 .. code-block:: roto
 
     fn main() {
         # We can specify the type to get a specific integer type
-        let a: u8 = 2 + 1; # -> 3
+        let a: u8 = 2 + 1;
         print(f"2 + 1 = {a}");
 
         # If we don't specify the type we get i32
-        let b = -10 + 3; # -> -7
+        let b = -10 + 3;
         print(f"-10 + 3 = {b}");
 
-        let c = 2 * 3; # -> 6
+        let c = 2 * 3;
         print(f"2 * 3 = {c}");
 
-        let d = 20 / 5; # -> 4
+        let d = 20 / 5;
         print(f"20 / 5 = {d}");
 
-        let e = 23 % 5; # -> 3
+        let e = 23 % 5;
         print(f"23 % 5 = {e}");
 
         # Regular order of operations applies
-        let f = 1 + 4 * 5; # -> 21
+        let f = 1 + 4 * 5;
         print(f"1 + 4 * 5 = {f}");
     }
 
+.. testoutput::
+
+    2 + 1 = 3
+    -10 + 3 = -7
+    2 * 3 = 6
+    20 / 5 = 4
+    23 % 5 = 3
+    1 + 4 * 5 = 21
+
 Note that due to Roto's static typing, we aren't allowed to do operations on
-different integer types.
+different types.
 
 .. code-block:: roto
+    :notest:
 
     fn main() {
         let a: u8 = 5;
@@ -142,7 +183,8 @@ point types: :roto:ref:`f32` and :roto:ref:`f64` which are 32- and 64-bit,
 respectively. They support all the same operators as integers, except for ``%``.
 
 To disambiguate floating point numbers from integers, you always have to add a
-period to floating point literals.
+period to floating point literals. So ``10`` is always an integer, but ``10.`` and
+``10.0`` are always a floating point number.
 
 .. code-block:: roto
 
@@ -152,20 +194,127 @@ period to floating point literals.
         print(f"2.0 + 1.0 = {a}");
 
         # We always have to write the period for floating point numbers
-        let a: f32 = 2. + 1.; # -> 3.0
-        print(f"2. + 1. = {a}");
+        let b: f32 = 2. + 1.; # -> 3.0
+        print(f"2. + 1. = {b}");
 
         # If we don't specify the type we get f64
-        let b = -12.3 + 4.5; # -> -7.8
-        print(f"-10.0 + 3.0 = {b}");
+        let c = -12.3 + 4.5; # -> -7.8
+        print(f"-12.3 + 4.5 = {c}");
 
-        let c = 2.0 * 3.5; # -> 7.0
-        print(f"2.0 * 3.0 = {c}");
+        let d = 2.0 * 3.5; # -> 7.0
+        print(f"2.0 * 3.5 = {d}");
 
-        let d = 20.0 / 5.0; # -> 4.0
-        print(f"20.0 / 5.0 = {d}");
+        let e = 20.0 / 5.0; # -> 4.0
+        print(f"20.0 / 5.0 = {e}");
 
         # Regular order of operations applies
         let f = 1.0 + 4.0 * 5.0; # -> 21.0
         print(f"1.0 + 4.0 * 5.0 = {f}");
     }
+
+.. testoutput::
+
+    2.0 + 1.0 = 3
+    2. + 1. = 3
+    -12.3 + 4.5 = -7.800000000000001
+    2.0 * 3.5 = 7
+    20.0 / 5.0 = 4
+    1.0 + 4.0 * 5.0 = 21
+
+.. seealso::
+
+    :ref:`lang_integers`
+        Integers in the language reference.
+
+    :ref:`lang_floats`
+        Floating point numbers in the language reference.
+
+    :ref:`lang_arithmetic`
+        Arithmetic operators in the language reference.
+
+    :roto:ref:`u8`, :roto:ref:`u16`, :roto:ref:`u32`, :roto:ref:`u64`
+        Documentation for the ``u8``, ``u16``, ``u32`` and ``u64`` types.
+
+    :roto:ref:`i8`, :roto:ref:`i16`, :roto:ref:`i32`, :roto:ref:`i64`
+        Documentation for the ``i8``, ``i16``, ``i32`` and ``i64`` types.
+
+    :roto:ref:`f32`, :roto:ref:`f64`
+        Documentation for the ``f32`` and ``f64`` types.
+
+Booleans and Comparisons
+------------------------
+
+Booleans in Roto are represented by the :roto:ref:`bool` type. It has two
+possible values: ``true`` and ``false``.  Like any built-in type, booleans can
+be used directly in an f-string to be printed. A boolean can be negated with the
+``not`` operator.
+
+.. code-block:: roto
+
+    fn main() {
+        let a = not false;
+        print(f"{a}");
+    }
+
+.. testoutput::
+
+    true
+
+The other important operators for boolean values are the ``&&`` and ``||``
+operators that represent the "logical and" and "logical or" operations,
+respectively.
+
+We can also get booleans from comparisons. In Roto, you can use the equality
+operator ``==`` on all types.
+
+.. code-block:: roto
+
+    fn main() {
+        let x = 5 == 5;
+        let y = "hello" == "hello";
+        let z = true == true;
+        print(f"{x && y && z}");
+    }
+
+.. testoutput::
+
+    true
+
+.. warning::
+
+    You should be careful when using ``==`` and ``!=`` on floats, because they
+    check for exact equality, even though floating point numbers are usually not
+    exactly equal. A ``nan`` value is also not equal to itself.
+
+The opposite of the ``==`` is the ``!=`` operator, which returns ``true`` if the
+operands are not equal.
+
+Integers and floats also support the comparison operators for "less than"
+(``<``), "less than or equal" (``<=``), "greater than" (``>``) and "greater than
+or equal" (``>=``).
+
+.. code-block:: roto
+
+    fn main() {
+        let x = 5 > 3;
+        print(f"{x}");
+    }
+
+.. testoutput::
+
+    true
+
+.. seealso::
+
+    :ref:`lang_booleans`
+        Booleans in the language reference.
+
+    :ref:`lang_comparison`
+        Booleans in the language reference.
+
+    :ref:`lang_logical`
+        Booleans in the language reference.
+
+    :roto:ref:`bool`
+        Documentation for the ``bool`` type.
+

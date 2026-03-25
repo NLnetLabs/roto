@@ -31,7 +31,7 @@ mod test_expressions;
 #[cfg(test)]
 mod test_sections;
 
-type ParseResult<T> = Result<T, Box<ParseError>>;
+pub type ParseResult<T> = Result<T, Box<ParseError>>;
 
 pub struct Parser<'source, 'spans> {
     file: usize,

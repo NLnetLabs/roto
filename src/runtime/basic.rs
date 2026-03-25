@@ -111,7 +111,9 @@ fn ip_addr_methods() -> Library {
             /// An IPv4 address is never equal to an IPv6 address. IP addresses are considered equal if
             /// all their bits are equal.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// 192.0.0.0 == 192.0.0.0   # -> true
             /// ::0 == ::0               # -> true
             /// 192.0.0.0 == 192.0.0.1   # -> false
@@ -126,7 +128,9 @@ fn ip_addr_methods() -> Library {
 
             /// Returns true if this address is an IPv4 address, and false otherwise.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// 1.1.1.1.is_ipv4() # -> true
             /// ::.is_ipv4()      # -> false
             /// ```
@@ -136,7 +140,9 @@ fn ip_addr_methods() -> Library {
 
             /// Returns true if this address is an IPv6 address, and false otherwise.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// 1.1.1.1.is_ipv6() # -> false
             /// ::.is_ipv6()      # -> true
             /// ```
@@ -163,7 +169,9 @@ fn string_methods() -> Library {
         impl String {
             /// Create a new string from a list of characters.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
             /// ```
             fn from_chars(chars: List<char>) -> String {
@@ -172,7 +180,9 @@ fn string_methods() -> Library {
 
             /// Append a string to another, creating a new string.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "hello".append(" ").append("world") # -> "hello world"
             /// ```
             fn append(self, other: Self) -> Self {
@@ -181,7 +191,9 @@ fn string_methods() -> Library {
 
             /// Check whether a string contains another string.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "haystack".contains("hay")  # -> true
             /// "haystack".contains("corn") # -> false
             /// ```
@@ -191,7 +203,9 @@ fn string_methods() -> Library {
 
             /// Check whether a string starts with a given prefix.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "haystack".starts_with("hay")   # -> true
             /// "haystack".starts_with("trees") # -> false
             /// ```
@@ -201,7 +215,9 @@ fn string_methods() -> Library {
 
             /// Check whether a string ends with a given suffix.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "haystack".ends_with("stack") # -> true
             /// "haystack".ends_with("black") # -> false
             /// ```
@@ -211,7 +227,9 @@ fn string_methods() -> Library {
 
             /// Create a new string with all characters converted to lowercase.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "LOUD".to_lowercase() # -> "loud"
             /// ```
             fn to_lowercase(self) -> Self {
@@ -220,7 +238,9 @@ fn string_methods() -> Library {
 
             /// Create a new string with all characters converted to uppercase.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "quiet".to_uppercase() # -> "QUIET"
             /// ```
             fn to_uppercase(self) -> Self {
@@ -229,7 +249,9 @@ fn string_methods() -> Library {
 
             /// Repeat a string `n` times and join them.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "ha".repeat(6) # -> "hahahahahaha"
             /// ```
             fn repeat(self, n: u32) -> Self {
@@ -243,7 +265,9 @@ fn string_methods() -> Library {
 
             /// Replace all occurrences of `from` with `to`.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "In rust we trust".replace("rust", "roto") # -> "In roto we troto"
             /// ```
             fn replace(self, from: Self, to: Self) -> Self {
@@ -252,7 +276,9 @@ fn string_methods() -> Library {
 
             /// Split a string by a separator.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// "one, two, three".split(", ") # -> ["one", "two", "three"]
             /// ```
             fn split(self, separator: String) -> List<String> {
@@ -438,7 +464,9 @@ pub fn built_ins() -> Library {
         ///
         /// Can be used to store both 2-byte and 4-byte ASNs.
         ///
-        /// ```roto
+        /// ```{code-block} roto
+        /// :notest:
+        ///
         /// AS0
         /// AS1010
         /// AS4294967295
@@ -451,7 +479,9 @@ pub fn built_ins() -> Library {
         ///
         /// For IPv4, only dot-separated quad notation is supported.
         ///
-        /// ```roto
+        /// ```{code-block} roto
+        /// :notest:
+        ///
         /// # IPv4 examples
         /// 127.0.0.1
         /// 0.0.0.0
@@ -470,7 +500,9 @@ pub fn built_ins() -> Library {
         /// [`Prefix.new`](Prefix.new) function. This operator takes an [`IpAddr`](IpAddr)
         /// and a [`u8`](u8) as operands.
         ///
-        /// ```roto
+        /// ```{code-block} roto
+        /// :notest:
+        ///
         /// 1.1.1.0 / 8
         /// 192.0.0.0.0 / 24
         /// ```
@@ -481,7 +513,9 @@ pub fn built_ins() -> Library {
         /// A `String` literal is created by putting some text between double
         /// quotes.
         ///
-        /// ```roto
+        /// ```{code-block} roto
+        /// :notest:
+        ///
         /// let x = "Hello!";
         /// ```
         ///
@@ -530,7 +564,9 @@ pub fn built_ins() -> Library {
             ///
             /// A prefix can also be constructed with the `/` operator.
             ///
-            /// ```roto
+            /// ```{code-block} roto
+            /// :notest:
+            ///
             /// Prefix.new(192.169.0.0, 16)
             ///
             /// # or equivalently

@@ -6,7 +6,9 @@ A prefix can be constructed with the `/` operator or with the
 [`Prefix.new`](Prefix.new) function. This operator takes an [`IpAddr`](IpAddr)
 and a [`u8`](u8) as operands.
 
-```roto
+```{code-block} roto
+:notest:
+
 1.1.1.0 / 8
 192.0.0.0.0 / 24
 ```
@@ -40,7 +42,9 @@ Construct a new prefix
 
 A prefix can also be constructed with the `/` operator.
 
-```roto
+```{code-block} roto
+:notest:
+
 Prefix.new(192.169.0.0, 16)
 
 # or equivalently
