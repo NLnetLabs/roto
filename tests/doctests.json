@@ -1,0 +1,106 @@
+[
+    {
+        "src": "overview/hello_world",
+        "lang": "roto",
+        "code": "fn main() {\n    print(\"Hello, world!\");\n}",
+        "source": "/home/terts/code/roto/docs/source/overview/hello_world.rst",
+        "line": 6,
+        "testoutput": "Hello, world!\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    print(\"Hello, World!\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 39,
+        "testoutput": "Hello, World!\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    # Create a variable with the inferred type String\n    let first_name = \"John\";\n    print(\"Hello, \" + first_name);\n\n    # Create a variable with a type annotation\n    let last_name: String = \"Doe\";\n    print(\"Bye, \" + first_name + \" \" + last_name + \"!\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 55,
+        "testoutput": "Hello, John\nBye, John Doe!\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let first_name = \"John\";\n    let last_name = \"Doe\";\n    print(f\"Hello, {first_name} {last_name}!\");\n    # prints: \"Hello, John Doe!\"\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 77,
+        "testoutput": "Hello, John Doe!\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let name = \"John\";\n    print(f\"Hello, {name.to_uppercase()}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 94,
+        "testoutput": "Hello, JOHN\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    # We can specify the type to get a specific integer type\n    let a: u8 = 2 + 1;\n    print(f\"2 + 1 = {a}\");\n\n    # If we don't specify the type we get i32\n    let b = -10 + 3;\n    print(f\"-10 + 3 = {b}\");\n\n    let c = 2 * 3;\n    print(f\"2 * 3 = {c}\");\n\n    let d = 20 / 5;\n    print(f\"20 / 5 = {d}\");\n\n    let e = 23 % 5;\n    print(f\"23 % 5 = {e}\");\n\n    # Regular order of operations applies\n    let f = 1 + 4 * 5;\n    print(f\"1 + 4 * 5 = {f}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 135,
+        "testoutput": "2 + 1 = 3\n-10 + 3 = -7\n2 * 3 = 6\n20 / 5 = 4\n23 % 5 = 3\n1 + 4 * 5 = 21\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    # We can specify the type to get a specific integer type\n    let a: f32 = 2.0 + 1.0; # -> 3.0\n    print(f\"2.0 + 1.0 = {a}\");\n\n    # We always have to write the period for floating point numbers\n    let b: f32 = 2. + 1.; # -> 3.0\n    print(f\"2. + 1. = {b}\");\n\n    # If we don't specify the type we get f64\n    let c = -12.3 + 4.5; # -> -7.8\n    print(f\"-12.3 + 4.5 = {c}\");\n\n    let d = 2.0 * 3.5; # -> 7.0\n    print(f\"2.0 * 3.5 = {d}\");\n\n    let e = 20.0 / 5.0; # -> 4.0\n    print(f\"20.0 / 5.0 = {e}\");\n\n    # Regular order of operations applies\n    let f = 1.0 + 4.0 * 5.0; # -> 21.0\n    print(f\"1.0 + 4.0 * 5.0 = {f}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 190,
+        "testoutput": "2.0 + 1.0 = 3\n2. + 1. = 3\n-12.3 + 4.5 = -7.800000000000001\n2.0 * 3.5 = 7\n20.0 / 5.0 = 4\n1.0 + 4.0 * 5.0 = 21\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let a = not false;\n    print(f\"{a}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 253,
+        "testoutput": "true\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let x = 5 == 5;\n    let y = \"hello\" == \"hello\";\n    let z = true == true;\n    print(f\"{x && y && z}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 271,
+        "testoutput": "true\n"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let x = 5 > 3;\n    print(f\"{x}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.rst",
+        "line": 297,
+        "testoutput": "true\n"
+    },
+    {
+        "src": "writing/control_flow",
+        "lang": "roto",
+        "code": "fn main() {\n    let x = 100;\n    if x % 2 == 0 {\n        print(\"x is even\");\n    } else {\n        print(\"x is odd\");\n    }\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/control_flow.rst",
+        "line": 15,
+        "testoutput": "x is even\n"
+    },
+    {
+        "src": "writing/control_flow",
+        "lang": "roto",
+        "code": "fn main() {\n    let x = 100;\n    let sign = if x > 0 {\n        print(\"x is positive\");\n        1\n    } else {\n        print(\"x is negative\");\n        -1\n    };\n    print(f\"{sign}\");\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/control_flow.rst",
+        "line": 33,
+        "testoutput": "x is positive\n1\n"
+    },
+    {
+        "src": "writing/control_flow",
+        "lang": "roto",
+        "code": "# Euclidean algorithm for greatest common divisor\nfn main() {\n    let a_initial = 125;\n    let b_initial = 50;\n\n    let a = a_initial;\n    let b = b_initial;\n    while b != 0 {\n        let t = b;\n        b = a % b;\n        a = t;\n    }\n\n    print(f\"gcd({a_initial}, {b_initial}) = {a}\")\n}",
+        "source": "/home/terts/code/roto/docs/source/writing/control_flow.rst",
+        "line": 55,
+        "testoutput": "gcd(125, 50) = 25\n"
+    }
+]

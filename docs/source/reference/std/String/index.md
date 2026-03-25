@@ -5,7 +5,9 @@ The string type
 A `String` literal is created by putting some text between double
 quotes.
 
-```roto
+```{code-block} roto
+:notest:
+
 let x = "Hello!";
 ```
 
@@ -18,7 +20,9 @@ with an `f`.
 ````{roto:function} append(self: String, other: String) -> String
 Append a string to another, creating a new string.
 
-```roto
+```{code-block} roto
+:notest:
+
 "hello".append(" ").append("world") # -> "hello world"
 ```
 ````
@@ -34,7 +38,9 @@ Get a view of this string indexed by chars.
 ````{roto:function} contains(self: String, needle: String) -> bool
 Check whether a string contains another string.
 
-```roto
+```{code-block} roto
+:notest:
+
 "haystack".contains("hay")  # -> true
 "haystack".contains("corn") # -> false
 ```
@@ -43,7 +49,9 @@ Check whether a string contains another string.
 ````{roto:function} ends_with(self: String, suffix: String) -> bool
 Check whether a string ends with a given suffix.
 
-```roto
+```{code-block} roto
+:notest:
+
 "haystack".ends_with("stack") # -> true
 "haystack".ends_with("black") # -> false
 ```
@@ -56,7 +64,9 @@ Check for string equality.
 ````{roto:function} from_chars(chars: List[char]) -> String
 Create a new string from a list of characters.
 
-```roto
+```{code-block} roto
+:notest:
+
 String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
 ```
 ````
@@ -68,7 +78,9 @@ Get a view of this string indexed by lines.
 ````{roto:function} repeat(self: String, n: u32) -> String
 Repeat a string `n` times and join them.
 
-```roto
+```{code-block} roto
+:notest:
+
 "ha".repeat(6) # -> "hahahahahaha"
 ```
 ````
@@ -76,7 +88,9 @@ Repeat a string `n` times and join them.
 ````{roto:function} replace(self: String, from: String, to: String) -> String
 Replace all occurrences of `from` with `to`.
 
-```roto
+```{code-block} roto
+:notest:
+
 "In rust we trust".replace("rust", "roto") # -> "In roto we troto"
 ```
 ````
@@ -84,7 +98,9 @@ Replace all occurrences of `from` with `to`.
 ````{roto:function} split(self: String, separator: String) -> List[String]
 Split a string by a separator.
 
-```roto
+```{code-block} roto
+:notest:
+
 "one, two, three".split(", ") # -> ["one", "two", "three"]
 ```
 ````
@@ -92,7 +108,9 @@ Split a string by a separator.
 ````{roto:function} starts_with(self: String, prefix: String) -> bool
 Check whether a string starts with a given prefix.
 
-```roto
+```{code-block} roto
+:notest:
+
 "haystack".starts_with("hay")   # -> true
 "haystack".starts_with("trees") # -> false
 ```
@@ -101,7 +119,9 @@ Check whether a string starts with a given prefix.
 ````{roto:function} to_lowercase(self: String) -> String
 Create a new string with all characters converted to lowercase.
 
-```roto
+```{code-block} roto
+:notest:
+
 "LOUD".to_lowercase() # -> "loud"
 ```
 ````
@@ -113,7 +133,9 @@ Convert this value into a `String`
 ````{roto:function} to_uppercase(self: String) -> String
 Create a new string with all characters converted to uppercase.
 
-```roto
+```{code-block} roto
+:notest:
+
 "quiet".to_uppercase() # -> "QUIET"
 ```
 ````

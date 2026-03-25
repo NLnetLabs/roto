@@ -14,6 +14,7 @@ Comments in Roto start with a ``#`` and continue until the end of a line. They c
 be inserted anywhere in the script and are ignored.
 
 .. code-block:: roto
+    :notest:
 
     # this is a comment
 
@@ -21,6 +22,7 @@ Block comments are not supported. To create a multiline comment, prefix every
 line with a ``#``.
 
 .. code-block:: roto
+    :notest:
 
     # one comment line
     # another comment line
@@ -91,6 +93,7 @@ Local variables
 Local variables are declared with a ``let`` statement.
 
 .. code-block:: roto
+    :notest:
 
     fn greater_than_square(x: i32, y: i32) {
         let y_squared = y * y;
@@ -101,6 +104,7 @@ Any local variable can be overwritten with an assignment, which is expressed as 
 without ``let``:
 
 .. code-block:: roto
+    :notest:
 
     let x = 0;
     x = x + 1;
@@ -110,6 +114,7 @@ with type inference. In the example below, ``0`` has an unknown type as it can
 be any integer type, so the type annotation forces it to be ``u32``.
 
 .. code-block:: roto
+    :notest:
 
     let x: u32 = 0;
 
@@ -118,6 +123,7 @@ are declared. A new scope is created with ``{}``, including when that is part of
 the syntax. For example, the body of an ``if`` expression creates a new scope.
 
 .. code-block:: roto
+    :notest:
 
     let x = true;
     if x {
@@ -238,6 +244,7 @@ A character of a string has type :roto:ref:`char` and represents a Unicode code 
 in single quotes.
 
 .. code-block:: roto
+    :notest:
 
     let character_a: char = 'a';
 
@@ -250,12 +257,14 @@ Strings
 Strings are enclosed in double quotes like so:
 
 .. code-block:: roto
+    :notest:
 
     "This is a string!"
 
 Strings can be concatenated with ``+``:
 
 .. code-block:: roto
+    :notest:
 
     "race" + "car" # yields the string "racecar"
 
@@ -305,6 +314,7 @@ with a ``to_string`` method can be put in an f-string, including registered
 types.
 
 .. code-block:: roto
+    :notest:
 
     let x = 10;
     print(f"x is {x}"); # will print "x is 10"
@@ -313,6 +323,7 @@ Arbitrary expressions are allowed to appear in format strings, including other
 strings and format strings.
 
 .. code-block:: roto
+    :notest:
 
     let x = 10;
     print(f"Twice x is {2 * x}");
@@ -327,6 +338,7 @@ The ``{`` and ``}`` characters need to be escaped to be used in an f-string by
 duplicating them: ``{{``, ``}}``.
 
 .. code-block:: roto
+    :notest:
 
     print(f"x is {{ x }}")
     # will print the string "x is { x }"
@@ -342,21 +354,23 @@ same type. Therefore, the type of a list has a type parameter: ``List[T]``. You 
 create lists with ``[`` and ``]`` with expressions separated by commas.
 
 .. code-block:: roto
+    :notest:
 
-  let my_list: List[i32] = [1, 2, 3];
-  let first: i32? = my_list.get(0);
-  match first {
-      Some(first) -> print(f"First element was: {first}"),
-      None -> print("No elements!"),
-  }
+    let my_list: List[i32] = [1, 2, 3];
+    let first: i32? = my_list.get(0);
+    match first {
+        Some(first) -> print(f"First element was: {first}"),
+        None -> print("No elements!"),
+    }
 
 The ``+`` operator can be used to concatenate two lists.
 
 .. code-block:: roto
+    :notest:
 
-  let a = ["one", "two", "three"];
-  let b = ["four", "five", "six"];
-  let concatenated = a + b;
+    let a = ["one", "two", "three"];
+    let b = ["four", "five", "six"];
+    let concatenated = a + b;
 
 See :roto:ref:`List[T]` for all methods available on lists. Lists are passed by reference,
 meaning that if we assign a list ``a`` to a variable ``b`` and we modify ``a`` then ``b``
@@ -380,6 +394,7 @@ The ``Option`` type is a ``variant`` type with 2 constructors: ``None`` and
 Like any variant type it is possible to match on a value of type ``T?``
 
 .. code-block:: roto
+    :notest:
 
     match x {
         Some(x) -> x,
@@ -391,6 +406,7 @@ In addition, there is a ``?`` operator, which will evaluate to the value of
 ``x?`` is equivalent to the following match expression:
 
 .. code-block:: roto
+    :notest:
 
     match x {
         Some(x) -> x,
@@ -410,6 +426,7 @@ Multiple values can be grouped into records. A record is constructed with `{}`
 and contains key-value pairs.
 
 .. code-block:: roto
+    :notest:
 
     { foo: 5, bar: 10 }
 
@@ -418,6 +435,7 @@ field names or different field types are separate types. For example, this is
 a type checking error:
 
 .. code-block:: roto
+    :notest:
 
     if x {
         { foo: 5, bar: 10 }
@@ -431,6 +449,7 @@ and objects in JavaScript, which resemble hash-maps and are far more dynamic.
 Fields of records can be accessed with the `.` operator.
 
 .. code-block:: roto
+    :notest:
 
     filtermap example_filter_map() {
         let x = { foo: 5 };
@@ -440,6 +459,7 @@ Fields of records can be accessed with the `.` operator.
 Fields can also be updated with an assignment.
 
 .. code-block:: roto
+    :notest:
 
     let x = { foo: 5 };
     x.foo = 6;
@@ -453,6 +473,7 @@ Named records provide a more principled approach to grouping values which will
 yield more readable type checking errors.
 
 .. code-block:: roto
+    :notest:
 
     record SomeRecord {
         foo: i32,
@@ -468,6 +489,7 @@ Roto checks that all declared values are provided and are of the same type.
 There is an automatic coercion from anonymous records to named records:
 
 .. code-block:: roto
+    :notest:
 
     fn foo(int: i32) -> SomeRecord {
         { foo: int, bar: false }  # implicitly coerced to SomeRecord
@@ -484,6 +506,7 @@ of these. Each of the constructors can take arguments. To inspect ``variant``
 types, we can ``match`` on them.
 
 .. code-block:: roto
+    :notest:
 
     # A `Number` variant type that has the constructors `Int`, `Float` and `Nan`.
     variant Number {
@@ -507,6 +530,7 @@ types, we can ``match`` on them.
 Variant types can be generic over other types by taking type parameters.
 
 .. code-block:: roto
+    :notest:
 
     variant Either[L, R] {
         Left(L),
@@ -562,20 +586,25 @@ Parentheses can always be used to force a certain order of operations. For
 example, this expression:
 
 .. code-block:: roto
+    :notest:
 
     1 + 2 * 3    # evaluates to 7
 
 is interpreted as
 
 .. code-block:: roto
+    :notest:
 
     1 + (2 * 3)  # evaluates to 7
 
 and not as
 
 .. code-block:: roto
+    :notest:
 
     (1 + 2) * 3  # evaluates to 9
+
+.. _lang_comparison:
 
 Comparison operators
 ^^^^^^^^^^^^^^^^^^^^
@@ -601,12 +630,15 @@ script won't compile if the operands have different types.
 Examples:
 
 .. code-block:: roto
+    :notest:
 
     5 > 10      # evaluates to false
     10 > 5      # evaluates to true
     5 == 5      # evaluates to true
     5 == true   # compile error!
     1 < x < 10  # compile error!
+
+.. _lang_logical:
 
 Logical operators
 ^^^^^^^^^^^^^^^^^
@@ -627,12 +659,14 @@ Now that we have all the rules for precedence, here is an example using all type
 operators (arithmetic, comparison and logical):
 
 .. code-block:: roto
+    :notest:
 
     1 + x * 3 == 5 && y < 10
 
 This is equivalent to:
 
 .. code-block:: roto
+    :notest:
 
     ((1 + (x * 3)) == 5) && (y < 10)
 
@@ -655,6 +689,7 @@ example below are required. The condition does not require parentheses. The
 condition must evaluate to a boolean.
 
 .. code-block:: roto
+    :notest:
 
     if x > 0 {
         # if the condition is true
@@ -664,6 +699,7 @@ An ``else``-clause can optionally follow the ``if``-block. The ``if``-``else``
 construct is an expression and therefore evaluates to a value.
 
 .. code-block:: roto
+    :notest:
 
     if x > 0 {
         # if the condition is true
@@ -676,12 +712,14 @@ a value. This means that it can be used as a replacement for a ternary
 operator.
 
 .. code-block:: roto
+    :notest:
 
     let x = if y { 1 } else { 0 };
 
 If-else expressions can be chained without additional braces.
 
 .. code-block:: roto
+    :notest:
 
     if x > 0 {
         print("x is positive!");
@@ -711,6 +749,7 @@ constructor, not against the contents of the constructor.  See `issue 124
 limitations.
 
 .. code-block:: roto
+    :notest:
 
     let x = Some(10);
     match x {
@@ -740,6 +779,7 @@ A ``while`` loop takes a condition and a block. It will keep executing the block
 until the condition evaluates to ``false``.
 
 .. code-block:: roto
+    :notest:
 
     let i = 0;
     while i < 10 {
@@ -759,6 +799,7 @@ created by the loop is available only within the loop and received a copy of the
 data in the list.
 
 .. code-block:: roto
+    :notest:
 
     let total = 0;
     for x in [1, 2, 3, 4] {
@@ -782,6 +823,7 @@ parameters. The return type is specified with ``->``. A function without a
 return type does not return anything.
 
 .. code-block:: roto
+    :notest:
 
     fn add_one(x: u64) -> u64 {
         x + 1
@@ -790,6 +832,7 @@ return type does not return anything.
 This function can then be called like so:
 
 .. code-block:: roto
+    :notest:
 
     add_one(10)
 
@@ -798,6 +841,7 @@ it is not terminated by a ``;``. The return can also be made explicit with the
 ``return`` keyword. This function is equivalent to the previous example.
 
 .. code-block:: roto
+    :notest:
 
     fn add_one(x: u64) -> u64 {
         return x + 1;
@@ -807,6 +851,7 @@ The following function uses multiple statements to return ``0`` if the input is 
 and subtract ``1`` otherwise.
 
 .. code-block:: roto
+    :notest:
 
     fn subtract_one(x: u64) -> u64 {
         if x == 0 {
@@ -818,6 +863,7 @@ and subtract ``1`` otherwise.
 This function does not return anything:
 
 .. code-block:: roto
+    :notest:
 
     fn returns_nothing(x: u64) {
         x + 1;
@@ -840,6 +886,7 @@ Generally, an accepted value is stored or fed to some other component and a
 reject value is dropped.
 
 .. code-block:: roto
+    :notest:
 
     filtermap reject_zeros(input: IpAddr) {
         if input == 0.0.0.0 {
@@ -856,6 +903,7 @@ Like with functions, intermediate results can be stored in variables with let
 bindings.
 
 .. code-block:: roto
+    :notest:
 
     filtermap reject_zeros(input: IpAddr) {
         let zeros = 0.0.0.0;
@@ -869,6 +917,7 @@ bindings.
 A ``filtermap`` can also ``accept`` or ``reject`` with a value.
 
 .. code-block:: roto
+    :notest:
 
     filtermap small_enough(x: i32) {
         if x < 10 {
@@ -881,6 +930,7 @@ A ``filtermap`` can also ``accept`` or ``reject`` with a value.
 This ``filtermap`` is identical to the following function:
 
 .. code-block:: roto
+    :notest:
 
     fn small_enough(x: i32) -> Verdict[i32, String] {
         if x < 10 {
@@ -907,6 +957,7 @@ called directly and they do not have any arguments. Instead, Roto's test runner
 finds the tests and runs them.
 
 .. code-block:: roto
+    :notest:
 
     fn add(x: u32, y: u32) -> u32 {
         x + y
@@ -979,6 +1030,7 @@ function can be referenced in any of the other files with the absolute path
 ``pkg.foo.square``. For example:
 
 .. code-block:: roto
+    :notest:
 
     fn add_and_square(x: i32, y: i32) -> i32 {
         pkg.foo.square(x + y)
@@ -989,6 +1041,7 @@ the ``super`` keyword in a path to reference the parent module of the current
 module. Multiple ``super`` keywords can appear at the start of a path.
 
 .. code-block:: roto
+    :notest:
 
     # in pkg.roto
     foo.square
@@ -1020,6 +1073,7 @@ with the ``import`` keyword. The ``import`` keyword is followed by a path. The
 item the path references will be available by name in the current scope.
 
 .. code-block:: roto
+    :notest:
 
     import foo.square;
 
@@ -1034,6 +1088,7 @@ An ``import`` does not need to be at the top-level, they can be in any scope.
 We can rewrite the previous example as follows.
 
 .. code-block:: roto
+    :notest:
 
     fn fourth_power(x: i32) -> i32 {
         import foo.square;
@@ -1046,6 +1101,7 @@ imports such as in the following example, where we use a function ``foo`` from
 either module ``A`` or ``B``, depending on a boolean flag.
 
 .. code-block:: roto
+    :notest:
 
     fn use_foo(x: i32, choice: bool) -> i32 {
         if choice {

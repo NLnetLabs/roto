@@ -6,7 +6,9 @@ Can be either IPv4 or IPv6.
 
 For IPv4, only dot-separated quad notation is supported.
 
-```roto
+```{code-block} roto
+:notest:
+
 # IPv4 examples
 127.0.0.1
 0.0.0.0
@@ -28,7 +30,9 @@ A more convenient but equivalent method for checking equality is via the `==` op
 An IPv4 address is never equal to an IPv6 address. IP addresses are considered equal if
 all their bits are equal.
 
-```roto
+```{code-block} roto
+:notest:
+
 192.0.0.0 == 192.0.0.0   # -> true
 ::0 == ::0               # -> true
 192.0.0.0 == 192.0.0.1   # -> false
@@ -42,7 +46,9 @@ all their bits are equal.
 ````{roto:function} is_ipv4(self: IpAddr) -> bool
 Returns true if this address is an IPv4 address, and false otherwise.
 
-```roto
+```{code-block} roto
+:notest:
+
 1.1.1.1.is_ipv4() # -> true
 ::.is_ipv4()      # -> false
 ```
@@ -51,7 +57,9 @@ Returns true if this address is an IPv4 address, and false otherwise.
 ````{roto:function} is_ipv6(self: IpAddr) -> bool
 Returns true if this address is an IPv6 address, and false otherwise.
 
-```roto
+```{code-block} roto
+:notest:
+
 1.1.1.1.is_ipv6() # -> false
 ::.is_ipv6()      # -> true
 ```

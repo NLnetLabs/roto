@@ -46,6 +46,7 @@ the Rust application, we ask for a function called ``times_two`` with the type
 a function that doubles its input.
 
 .. code-block:: roto
+    :notest:
 
     fn times_two(x: i32) -> i32 {
         2 * x

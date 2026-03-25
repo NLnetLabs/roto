@@ -44,6 +44,9 @@ symbol_table = { version = "0.5.0", features = ["global"] }
 rustc-literal-escaper = "0.0.7"
 libc = "0.2"
 sealed = "0.6.0"
+tempdir = "0.3.7"
+tempfile = "3.27.0"
+assert_cmd = { version = "2.2.0", features = ["color"] }
 
 [dependencies.cranelift]
 version = "0.127.1"
@@ -56,8 +59,11 @@ version = "0.127.1"
 version = "0.127.1"
 
 [dev-dependencies]
+assert_cmd = "2.2.0"
 insta = { version = "1.46.0", features = ["glob"] }
 routecore = { version = "0.6", features = ["bgp", "bmp", "serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 
 [profile.profiling]
 inherits = "release"
