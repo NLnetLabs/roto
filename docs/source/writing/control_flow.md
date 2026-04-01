@@ -3,9 +3,9 @@
 After introducing the basic types and operations, it's time we delve
 into more complex programs with control flow.
 
-## If-else
+## If-Else
 
-An `if-else` expression allows you to branch based on a boolean value.
+An [`if-else`](lang_if_else) expression allows you to branch based on a boolean value.
 In contrast with some other languages, Roto does not require parentheses
 around the condition, but it does require curly braces for the body. You
 can use the `if-else` expression as a statement. The `else` part is then
@@ -26,19 +26,19 @@ fn main() {
 x is even
 :::
 
-An `if-else` expression also evaluates to a value itself. That value is
-determined by the last value in each of the arms, as long as there is no
-semicolon after them.
+An [`if-else`](lang_if_else) expression also evaluates to a value itself. That
+value is determined by the last value in each of the arms, as long as there is
+no semicolon at the end.
 
-``` roto
+```roto
 fn main() {
     let x = 100;
     let sign = if x > 0 {
         print("x is positive");
-        1
+        1       # <- No semicolon!
     } else {
         print("x is negative");
-        -1
+        -1      # <- No semicolon!
     };
     print(f"{sign}");
 }
@@ -49,7 +49,26 @@ x is positive
 1
 :::
 
-## While loops
+It's possible to declare variables in the arms of [`if-else`](lang_if_else)
+expressions, but they will only be available within that arm. The same goes
+for any block of statements in Roto that is delimited by `{}`.
+
+{class="test-error"}
+```roto
+fn main() {
+    if true {
+        let x = 10;
+        print(f"{x}"); # This is fine!
+    }
+    print(f"{x}"); # This errors during type checking!
+}
+```
+
+## While Loops
+
+We can loop in Roto using a [`while`](lang_while) loop. As you might expect from
+other languages, a [`while`](lang_while) loop takes a condition and then a block.
+It will keep running the body until the condition evaluates to `false`.
 
 ```roto
 # Euclidean algorithm for greatest common divisor
@@ -73,6 +92,32 @@ fn main() {
 gcd(125, 50) = 25
 :::
 
-## For loops
+<<<<<<< conflict 1 of 1
++++++++ pvykprmw ca788af9 "more docs work"
+## For Loops
 
-TODO
+If you'd like to execute some code for every element in a list, you should use
+a [`for`](lang_for) loop instead of a [`while`](lang_while) loop.
+
+```roto
+fn main() {
+    for x in [10, 20, 30] {
+        let squared = x * x;
+        print(f"{x} squared is {squared}");
+    }
+}
+```
+
+:::{testoutput}
+10 squared is 100
+20 squared is 400
+30 squared is 900
+:::
+
+:::{note}
+A [`while`](lang_while) loop is currently the best way to iterate over a range
+of numbers. There will be support for using [`for`](lang_for) loops with ranges
+in the future. See [this community
+post](https://community.nlnetlabs.nl/t/range-types-and-literals/74) for more
+information.
+:::

@@ -69,9 +69,9 @@ Bye, John Doe!
 :::
 
 A more convenient way to build complex strings is with string
-formatting. A string prefixed with `f` will act as a format string (or
-f-string) where code in curly braces (`{}`) will be evaluated as a Roto
-expression and inserted at that location in the string.
+formatting. A string prefixed with `f` will act as a [format string (or
+f-string)](lang_string_formatting) where code in curly braces (`{}`) will be
+evaluated as a Roto expression and inserted at that location in the string.
 
 ```roto
 fn main() {
@@ -102,11 +102,11 @@ Hello, JOHN
 
 :::{seealso}
 
-{ref}`lang_strings` in the language references
+{ref}`lang_strings` in the language reference.
 
 The {roto:ref}`String` type.
 
-The {roto:ref}`print` function
+The {roto:ref}`print` function.
 :::
 
 ## Simple Calculations
@@ -236,8 +236,8 @@ fn main() {
 
 Booleans in Roto are represented by the {roto:ref}`bool` type. It has two
 possible values: `true` and `false`. Like any built-in type, booleans can be
-used directly in an f-string to be printed. A boolean can be negated with the
-`not` operator.
+used directly in an [f-string](lang_string_formatting) to be printed. A boolean
+can be negated with the `not` operator.
 
 ```roto
 fn main() {
@@ -307,4 +307,60 @@ true
 {ref}`lang_logical` in the language reference
 
 {roto:ref}`bool`
+:::
+
+## Lists
+
+[Lists](lang_lists) are the most common (and currently also the only) collection type in Roto.
+You can create a list with `[]` with the elements separated by commas. The type
+of a list is {roto:ref}`List[T]` where `T` is the type of the elements.
+
+```roto
+fn main() {
+    let x: List[i32] = [1, 2, 4];
+    let len = x.len();
+    let contains_2 = x.contains(2);
+    let contains_3 = x.contains(3);
+    print(f"length of x: {len}");
+    print(f"x contains 2: {contains_2}");
+    print(f"x contains 3: {contains_3}");
+}
+```
+
+:::{testoutput}
+length of x: 3
+x contains 2: true
+x contains 3: false
+:::
+
+Unlike in some other scripting languages, all the elements of a list must be of
+the same type. You'd get a type checking error if you try to make a list with an
+integer and a string for example.
+
+{class="test-error"}
+```roto
+fn main() {
+    let x = [1, "hello!"];
+}
+```
+
+You can build larger lists by concatenating multiple lists using the `+`
+operator.
+
+```roto
+fn main() {
+    let x = [1, 2, 3];
+    let y = [4, 5, 6];
+    let z = x + y;
+
+    let contains_2 = z.contains(2);
+    let contains_5 = z.contains(5);
+    print(f"z contains 2: {contains_2}");
+    print(f"z contains 5: {contains_5}");
+}
+```
+
+:::{testoutput}
+z contains 2: true
+z contains 5: true
 :::

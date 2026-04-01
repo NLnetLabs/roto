@@ -378,6 +378,33 @@
         "mode": "run"
     },
     {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let x: List[i32] = [1, 2, 4];\n    let len = x.len();\n    let contains_2 = x.contains(2);\n    let contains_3 = x.contains(3);\n    print(f\"length of x: {len}\");\n    print(f\"x contains 2: {contains_2}\");\n    print(f\"x contains 3: {contains_3}\");\n}\n",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.md",
+        "line": 318,
+        "testoutput": "length of x: 3\nx contains 2: true\nx contains 3: false\n",
+        "mode": "run"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let x = [1, \"hello!\"];\n}\n",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.md",
+        "line": 341,
+        "testoutput": "",
+        "mode": "error"
+    },
+    {
+        "src": "writing/basics",
+        "lang": "roto",
+        "code": "fn main() {\n    let x = [1, 2, 3];\n    let y = [4, 5, 6];\n    let z = x + y;\n\n    let contains_2 = z.contains(2);\n    let contains_5 = z.contains(5);\n    print(f\"z contains 2: {contains_2}\");\n    print(f\"z contains 5: {contains_5}\");\n}\n",
+        "source": "/home/terts/code/roto/docs/source/writing/basics.md",
+        "line": 350,
+        "testoutput": "z contains 2: true\nz contains 5: true\n",
+        "mode": "run"
+    },
+    {
         "src": "writing/control_flow",
         "lang": "roto",
         "code": "fn main() {\n    let x = 100;\n    if x % 2 == 0 {\n        print(\"x is even\");\n    } else {\n        print(\"x is odd\");\n    }\n}\n",
@@ -389,7 +416,7 @@
     {
         "src": "writing/control_flow",
         "lang": "roto",
-        "code": "fn main() {\n    let x = 100;\n    let sign = if x > 0 {\n        print(\"x is positive\");\n        1\n    } else {\n        print(\"x is negative\");\n        -1\n    };\n    print(f\"{sign}\");\n}\n",
+        "code": "fn main() {\n    let x = 100;\n    let sign = if x > 0 {\n        print(\"x is positive\");\n        1       # <- No semicolon!\n    } else {\n        print(\"x is negative\");\n        -1      # <- No semicolon!\n    };\n    print(f\"{sign}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
         "line": 33,
         "testoutput": "x is positive\n1\n",
@@ -398,10 +425,28 @@
     {
         "src": "writing/control_flow",
         "lang": "roto",
+        "code": "fn main() {\n    if true {\n        let x = 10;\n        print(f\"{x}\"); # This is fine!\n    }\n    print(f\"{x}\"); # This errors during type checking!\n}\n",
+        "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
+        "line": 57,
+        "testoutput": "",
+        "mode": "error"
+    },
+    {
+        "src": "writing/control_flow",
+        "lang": "roto",
         "code": "# Euclidean algorithm for greatest common divisor\nfn main() {\n    let a_initial = 125;\n    let b_initial = 50;\n\n    let a = a_initial;\n    let b = b_initial;\n    while b != 0 {\n        let t = b;\n        b = a % b;\n        a = t;\n    }\n\n    print(f\"gcd({a_initial}, {b_initial}) = {a}\")\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
-        "line": 54,
+        "line": 73,
         "testoutput": "gcd(125, 50) = 25\n",
+        "mode": "run"
+    },
+    {
+        "src": "writing/control_flow",
+        "lang": "roto",
+        "code": "fn main() {\n    for x in [10, 20, 30] {\n        let squared = x * x;\n        print(f\"{x} squared is {squared}\");\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
+        "line": 100,
+        "testoutput": "10 squared is 100\n20 squared is 400\n30 squared is 900\n",
         "mode": "run"
     }
 ]
