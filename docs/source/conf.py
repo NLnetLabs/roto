@@ -293,7 +293,7 @@ class RotoLexer(RegexLexer):
                 ),
                 token.Keyword
             ),
-            (words(('+', '-', '/', '*', '%', '==', '>=', '>', '<=', '<', '=', '&&', '||', '?')), token.Operator),
+            (words(('+', '-', '/', '*', '%', '==', '>=', '>', '<=', '<', '=', '&&', '||', '?', '!')), token.Operator),
             (words(('{', '}', '(', ')', '[', ']', ':', '.', ';', ',')), token.Punctuation),
             (r'[a-zA-Z_][a-zA-Z0-9_]*', token.Name),
             (r'[0-9]', token.Number),

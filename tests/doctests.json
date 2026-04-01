@@ -9,6 +9,15 @@
         "mode": "run"
     },
     {
+        "src": "overview/hello_world",
+        "lang": "roto",
+        "code": "fn main() {\n    print(5);\n}",
+        "source": "/home/terts/code/roto/docs/source/overview/hello_world.rst",
+        "line": 36,
+        "testoutput": "",
+        "mode": "error"
+    },
+    {
         "src": "reference/language_reference",
         "lang": "roto",
         "code": "# this is a comment",
@@ -356,8 +365,8 @@
         "code": "fn main() {\n    let x = 5 == 5;\n    let y = \"hello\" == \"hello\";\n    let z = true == true;\n    print(f\"{x && y && z}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
         "line": 260,
-        "testoutput": "",
-        "mode": "check"
+        "testoutput": "true\n",
+        "mode": "run"
     },
     {
         "src": "writing/basics",

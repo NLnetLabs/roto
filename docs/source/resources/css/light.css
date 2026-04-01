@@ -66,9 +66,8 @@ button.copybtn {
 
 @media (prefers-color-scheme: light) {
     a code {
-      color: blue !important;
+      color: #2980b9 !important;
     }
-
 
     .code-block-caption {
       background: #d9d9d9;

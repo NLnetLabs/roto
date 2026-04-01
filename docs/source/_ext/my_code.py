@@ -33,8 +33,6 @@ def find_code(app, doctree, fromdocname):
         classes = node.attributes.get("classes", [])
         istestoutput = node.attributes.get("istestoutput", False)
 
-        print(type(node))
-
         if istestoutput:
             code = found[-1]
 
@@ -69,6 +67,14 @@ def find_code(app, doctree, fromdocname):
                 "mode": mode,
             })
 
+lang_map = {
+    'roto': 'Roto',
+    'rust': 'Rust',
+    'console': 'Console',
+    'text': 'Text',
+    'default': "Default",
+}
+
 class CodeBlockTransform(SphinxTransform):
 
     default_priority = 100
@@ -76,10 +82,15 @@ class CodeBlockTransform(SphinxTransform):
     def apply(self, **kwargs):
         for node in self.document.findall(literal_block):
             lang = node.attributes.get("language")
-            if not lang:
+
+            if node.attributes.get("istestoutput"):
+                lang_str = "Output"
+            elif lang:
+                lang_str = lang_map[lang]
+            else:
                 continue
 
-            lang = nodes.inline(nodes.Inline(), nodes.Text(lang))
+            lang = nodes.inline(nodes.Inline(), nodes.Text(lang_str))
             lang.set_class("lang-tag")
             new_node = nodes.container("", lang, node.deepcopy())
             new_node.set_class("codeblock-container")

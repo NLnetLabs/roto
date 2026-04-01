@@ -266,7 +266,7 @@ fn main() {
 }
 ```
 
-:::{code-block} testoutput
+:::{testoutput}
 true
 :::
 
