@@ -3,6 +3,10 @@
     .code-block-caption {
         background: #292929;
     }
+
+    a code {
+      color: rgb(101, 173, 220) !important;
+    }
     
     /*
                             _______

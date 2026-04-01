@@ -11,7 +11,7 @@ struct Test {
     source: String,
     line: usize,
     testoutput: String,
-    run: bool,
+    mode: String,
 }
 
 #[test]
@@ -25,6 +25,10 @@ fn manual_doctests() {
     let path = dir.path();
 
     for test in tests {
+        if test.mode == "ignore" {
+            continue;
+        }
+
         let source_path = path.join(format!(
             "{}:{}",
             test.src.replace("/", "."),
@@ -44,22 +48,41 @@ fn manual_doctests() {
         }
         drop(source_file);
 
-        if test.run {
-            assert_cmd::Command::cargo_bin("roto")
-                .unwrap()
-                .arg("run")
-                .arg(source_path)
-                .assert()
-                .stdout(test.testoutput)
-                .stderr("");
-        } else {
-            assert_cmd::Command::cargo_bin("roto")
-                .unwrap()
-                .arg("check")
-                .arg(source_path)
-                .assert()
-                .stdout("All ok!\n")
-                .stderr("");
+        // This is inefficient, but really helpful for debuggin the
+        // tests.
+        dbg!(std::fs::read_to_string(&source_path).unwrap());
+
+        match &*test.mode {
+            "run" => {
+                assert_cmd::Command::cargo_bin("roto")
+                    .unwrap()
+                    .arg("run")
+                    .arg(source_path)
+                    .assert()
+                    .stdout(test.testoutput)
+                    .stderr("");
+            }
+            "check" => {
+                assert_cmd::Command::cargo_bin("roto")
+                    .unwrap()
+                    .arg("check")
+                    .arg(source_path)
+                    .assert()
+                    .stdout("All ok!\n")
+                    .stderr("")
+                    .success();
+            }
+            "error" => {
+                assert_cmd::Command::cargo_bin("roto")
+                    .unwrap()
+                    .arg("check")
+                    .arg(source_path)
+                    .assert()
+                    .failure();
+            }
+            _ => {
+                panic!("unknown test mode: {}", test.mode);
+            }
         }
     }
 

@@ -8,12 +8,10 @@ is constructed with the `AS` prefix followed by a number.
 
 Can be used to store both 2-byte and 4-byte ASNs.
 
-```{code-block} roto
-:notest:
-
-AS0
-AS1010
-AS4294967295
+```roto
+let a = AS0;
+let b = AS1010;
+let c = AS4294967295;
 ```
 `````
 

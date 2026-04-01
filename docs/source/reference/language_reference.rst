@@ -331,7 +331,7 @@ strings and format strings.
         "small"
     }}");
 
-.. output:: roto
+.. testoutput:: roto
 
     Twice x is 20
     x is small

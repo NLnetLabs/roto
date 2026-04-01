@@ -1,5 +1,0 @@
-Advanced features
-=================
-
-- Constants
-- Tests
