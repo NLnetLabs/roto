@@ -95,7 +95,6 @@ Roto is distributed under the terms of the BSD-3-clause license. See
    writing/functions
    writing/data_types
    writing/modules
-   writing/advanced
 
 .. toctree::
    :maxdepth: 2

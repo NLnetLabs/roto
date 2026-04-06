@@ -11,38 +11,16 @@ from sphinx.util.typing import ExtensionMetadata
 
 from sphinx.directives.code import CodeBlock
 from sphinx import addnodes
+from sphinx.transforms import SphinxTransform
 from docutils.nodes import literal_block, Text
 import json
 
-class Code(CodeBlock):
-    option_spec = {
-        "notest": directives.flag, 
-         **CodeBlock.option_spec,
-    }
-
-    def run(self) -> list[Node]:
-        try:
-            language = self.arguments[0]
-            self.options['caption'] = language.title()
-        except:
-            pass
-
-        nodes = super().run()
-
-        if self.options.get('caption'):
-            nodes[0].children[-1].attributes['notest'] = 'notest' in self.options
-        else:
-            nodes[0].attributes['notest'] = 'notest' in self.options
-
-        return nodes
-
 class Testoutput(CodeBlock):
     def run(self) -> list[Node]:
-        self.options['caption'] = "Output"
         self.arguments.append("text")
 
         nodes = super().run()
-        nodes[0].children[-1].attributes['istestoutput'] = True
+        nodes[0].attributes['istestoutput'] = True
         return nodes
 
 found = []
@@ -51,9 +29,8 @@ def find_code(app, doctree, fromdocname):
     last_code_block_name = None
     
     for node in doctree.traverse(literal_block):
-        # if "dballe.DB.connect" in str(node):
         lang = node.attributes.get("language", "default")
-        notest = node.attributes.get("notest", None)
+        classes = node.attributes.get("classes", [])
         istestoutput = node.attributes.get("istestoutput", False)
 
         if istestoutput:
@@ -62,15 +39,22 @@ def find_code(app, doctree, fromdocname):
             if code['testoutput']:
                 raise Exception(f"multiple testoutputs: {src}:{line}")
 
-            print(node)
             code['testoutput'] = node.children[0] + "\n"
+            code['mode'] = "run"
             continue
 
         if lang != "roto":
             continue
 
-        if notest:
+        if "test-ignore" in classes:
             continue
+
+        if "test-ignore" in classes:
+            mode = "ignore"
+        elif "test-error" in classes:
+            mode = "error"
+        else:
+            mode = "check"
         
         for subnode in node.traverse(Text):
             found.append({
@@ -79,8 +63,39 @@ def find_code(app, doctree, fromdocname):
                 "code": subnode,
                 "source": node.source,
                 "line": node.line,
-                "testoutput": None
+                "testoutput": None,
+                "mode": mode,
             })
+
+lang_map = {
+    'roto': 'Roto',
+    'rust': 'Rust',
+    'console': 'Console',
+    'text': 'Text',
+    'default': "Default",
+}
+
+class CodeBlockTransform(SphinxTransform):
+
+    default_priority = 100
+
+    def apply(self, **kwargs):
+        for node in self.document.findall(literal_block):
+            lang = node.attributes.get("language")
+
+            if node.attributes.get("istestoutput"):
+                lang_str = "Output"
+            elif lang:
+                lang_str = lang_map[lang]
+            else:
+                continue
+
+            lang = nodes.inline(nodes.Inline(), nodes.Text(lang_str))
+            lang.set_class("lang-tag")
+            new_node = nodes.container("", lang, node.deepcopy())
+            new_node.set_class("codeblock-container")
+
+            node.replace_self(new_node)
 
 
 def output(app, exception):
@@ -91,19 +106,18 @@ def output(app, exception):
     if dest is None:
         return
 
-    no_tests_for = "".join(f" - {code['src']}:{code['line']}\n" for code in found if code['testoutput'] is None)
-    if no_tests_for:
-        raise Exception(f"untested code blocks:\n{no_tests_for}")
+    for code in found:
+        if code['testoutput'] is None:
+            code['testoutput'] = ""
 
     with open(dest, "wt") as fd:
         json.dump(found, fd, indent=4)
 
+
 def setup(app: Sphinx) -> ExtensionMetadata:
     app.add_config_value('test_code_output', None, '')
 
-    app.add_directive('code-block', Code)
-    app.add_directive('sourcecode', Code)
-    app.add_directive('code', Code)
+    app.add_transform(CodeBlockTransform)
     app.add_directive('testoutput', Testoutput)
 
     app.connect('doctree-resolved', find_code)

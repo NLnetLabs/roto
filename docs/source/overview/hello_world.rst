@@ -34,7 +34,7 @@ second line is completely optional.
 You can see Roto's type checker at work if you change the script to the following:
 
 .. code-block:: roto
-  :notest:
+  :class: test-error
 
   fn main() {
       print(5);

@@ -1,5 +1,4 @@
-Data Types
-==========
+# Data Types
 
 - anonymous record types
 - record types
