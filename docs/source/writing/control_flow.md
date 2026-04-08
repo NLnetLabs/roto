@@ -8,8 +8,8 @@ into more complex programs with control flow.
 An [`if-else`](lang_if_else) expression allows you to branch based on a boolean value.
 In contrast with some other languages, Roto does not require parentheses
 around the condition, but it does require curly braces for the body. You
-can use the `if-else` expression as a statement. The `else` part is then
-optional.
+can use the [`if-else`](lang_if_else) expression as a statement. The
+[`else`](lang_if_else) part is then optional.
 
 ```roto
 fn main() {
@@ -64,6 +64,10 @@ fn main() {
 }
 ```
 
+:::{seealso}
+[](lang_if_else) in the language reference
+:::
+
 ## While Loops
 
 We can loop in Roto using a [`while`](lang_while) loop. As you might expect from
@@ -92,8 +96,10 @@ fn main() {
 gcd(125, 50) = 25
 :::
 
-<<<<<<< conflict 1 of 1
-+++++++ pvykprmw ca788af9 "more docs work"
+:::{seealso}
+[](lang_while) in the language reference
+:::
+
 ## For Loops
 
 If you'd like to execute some code for every element in a list, you should use
@@ -120,4 +126,8 @@ of numbers. There will be support for using [`for`](lang_for) loops with ranges
 in the future. See [this community
 post](https://community.nlnetlabs.nl/t/range-types-and-literals/74) for more
 information.
+:::
+
+:::{seealso}
+[](lang_for) in the language reference
 :::

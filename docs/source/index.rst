@@ -90,6 +90,7 @@ Roto is distributed under the terms of the BSD-3-clause license. See
    :caption: Writing Roto
    :name: toc-writing
 
+   writing/introduction.md
    writing/basics
    writing/control_flow
    writing/functions

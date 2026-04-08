@@ -1,3 +1,5 @@
+.. _lang:
+
 Language Reference
 ==================
 
@@ -984,6 +986,8 @@ you can run the tests with the ``test`` subcommand:
 
 Modules
 -------
+
+.. _lang_modules:
 
 Modules
 ^^^^^^^

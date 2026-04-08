@@ -1,3 +1,5 @@
+.. _syntax_overview:
+
 Syntax Overview
 ===============
 

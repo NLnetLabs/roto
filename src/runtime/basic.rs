@@ -232,7 +232,7 @@ fn string_methods() -> Library {
             /// ```roto
             /// let a = "ha".repeat(6); # -> "hahahahahaha"
             /// ```
-            fn repeat(self, n: u32) -> Self {
+            fn repeat(self, n: u64) -> Self {
                 self.repeat(n as usize)
             }
 
