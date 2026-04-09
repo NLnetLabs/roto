@@ -117,7 +117,7 @@ def output(app, exception):
     try:
         with open(dest, "wt") as fd:
             json.dump(found, fd, indent=4)
-    except e:
+    except Exception as e:
         print(e)
 
 
