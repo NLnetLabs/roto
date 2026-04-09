@@ -121,7 +121,7 @@
         "lang": "roto",
         "code": "const FOO: u32 = 10;",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.rst",
-        "line": 993,
+        "line": 995,
         "testoutput": "",
         "mode": "check"
     },
@@ -130,7 +130,7 @@
         "lang": "roto",
         "code": "const FOO: u32 = BAR;\nconst BAR: u32 = FOO;",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.rst",
-        "line": 1012,
+        "line": 1014,
         "testoutput": "",
         "mode": "error"
     },
