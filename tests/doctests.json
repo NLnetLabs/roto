@@ -126,6 +126,15 @@
         "mode": "check"
     },
     {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "const FOO: u32 = BAR;\nconst BAR: u32 = FOO;\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 931,
+        "testoutput": "",
+        "mode": "error"
+    },
+    {
         "src": "reference/std/Asn/index",
         "lang": "roto",
         "code": "let a = AS0;\nlet b = AS1010;\nlet c = AS4294967295;\n",

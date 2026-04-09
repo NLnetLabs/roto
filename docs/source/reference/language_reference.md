@@ -541,7 +541,7 @@ For example, this expression:
 {class="test-ignore"}
 ```roto
 1 + 2 * 3    // evaluates to 7
-```
+``
 
 is interpreted as
 
@@ -900,6 +900,37 @@ CLI](generate_cli), you can run the tests with the `test` subcommand:
 
 ```console
 $ roto test
+```
+
+## Constants
+
+Constants in Roto are declared with the `const` keyword. They are evaluated
+at the end of compilation, before functions are extracted.
+
+{class="test-ignore"}
+```roto
+const FOO: u32 = 10;
+```
+
+Unlike `let` declarations, `const` declarations always require a type
+annotation. By convention, the names of constants are written in all capital
+letters.
+
+The declarations of constants can be in any order. The context is not available
+during the evaluation of constants. Therefore, it is not possible to use any
+functions that use context variables. Any other function, both from the runtime
+and from the script can be used.
+
+If constant `A` is defined in terms of constant `B`, then Roto will ensure
+that `B` is evaluated first. Otherwise, the evaluation order is undefined
+and you should not rely on any order. If there is any cycle in the dependencies
+between constants, then Roto will yield a compile-time error before any
+constants are evaluated.
+
+{class="test-error"}
+```roto
+const FOO: u32 = BAR;
+const BAR: u32 = FOO;
 ```
 
 ## Modules

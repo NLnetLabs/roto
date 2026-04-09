@@ -270,6 +270,7 @@ class RotoLexer(RegexLexer):
                 words(
                     (
                         'accept',
+                        'const',
                         'dep',
                         'else',
                         'enum',
