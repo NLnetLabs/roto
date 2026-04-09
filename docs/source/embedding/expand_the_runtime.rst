@@ -106,6 +106,7 @@ The argument to that method is the docstring for this type. We can now pass this
 type to Roto and return it from Roto:
 
 .. code-block:: roto
+    :class: test-ignore
 
     fn passthrough(x: Range) -> Range {
         x
@@ -163,6 +164,7 @@ expose methods on it to Roto.
 And then in Roto:
 
 .. code-block:: roto
+    :class: test-ignore
 
     fn in_range(r: Range, x: i64) -> bool {
         r.contains(x)
@@ -192,6 +194,7 @@ example below ``new`` is such a method.
 The registered ``new`` function can be used in Roto like this:
 
 .. code-block:: roto
+    :class: test-ignore
 
     let range = Range.new(0, 99);
     range.contains(50)
@@ -267,6 +270,7 @@ give to this invocation. The script can then use the names of the fields of
 ``Ctx`` as if they were constants.
 
 .. code-block:: roto
+    :class: test-ignore
 
     fn greeting() -> String {
         "Hello, " + first_name + " " + last_name + "!"
@@ -307,6 +311,7 @@ The Rust code above registers the ``sin`` and ``cos`` functions in the ``math``
 module, so that's how we can then access it from Roto:
 
 .. code-block:: roto
+    :class: test-ignore
 
     # import the cos function so we can use it directly
     import math.cos;

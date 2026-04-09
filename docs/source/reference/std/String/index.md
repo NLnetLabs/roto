@@ -6,7 +6,7 @@ A `String` literal is created by putting some text between double
 quotes.
 
 ```roto
-let x = "Hello!";
+let a = "Hello!";
 ```
 
 See [the language reference](#lang_strings) for more information.
@@ -19,7 +19,7 @@ with an `f`.
 Append a string to another, creating a new string.
 
 ```roto
-"hello".append(" ").append("world") # -> "hello world"
+let a = "hello".append(" ").append("world"); # -> "hello world"
 ```
 ````
 
@@ -35,8 +35,8 @@ Get a view of this string indexed by chars.
 Check whether a string contains another string.
 
 ```roto
-"haystack".contains("hay")  # -> true
-"haystack".contains("corn") # -> false
+let a = "haystack".contains("hay");  # -> true
+let b = "haystack".contains("corn"); # -> false
 ```
 ````
 
@@ -44,8 +44,8 @@ Check whether a string contains another string.
 Check whether a string ends with a given suffix.
 
 ```roto
-"haystack".ends_with("stack") # -> true
-"haystack".ends_with("black") # -> false
+let a = "haystack".ends_with("stack"); # -> true
+let b = "haystack".ends_with("black"); # -> false
 ```
 ````
 
@@ -57,7 +57,7 @@ Check for string equality.
 Create a new string from a list of characters.
 
 ```roto
-String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
+let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); # -> "hello"
 ```
 ````
 
@@ -69,7 +69,7 @@ Get a view of this string indexed by lines.
 Repeat a string `n` times and join them.
 
 ```roto
-"ha".repeat(6) # -> "hahahahahaha"
+let a = "ha".repeat(6); # -> "hahahahahaha"
 ```
 ````
 
@@ -77,7 +77,7 @@ Repeat a string `n` times and join them.
 Replace all occurrences of `from` with `to`.
 
 ```roto
-"In rust we trust".replace("rust", "roto") # -> "In roto we troto"
+let a = "In rust we trust".replace("rust", "roto"); # -> "In roto we troto"
 ```
 ````
 
@@ -85,7 +85,7 @@ Replace all occurrences of `from` with `to`.
 Split a string by a separator.
 
 ```roto
-"one, two, three".split(", ") # -> ["one", "two", "three"]
+let a = "one, two, three".split(", "); # -> ["one", "two", "three"]
 ```
 ````
 
@@ -93,8 +93,8 @@ Split a string by a separator.
 Check whether a string starts with a given prefix.
 
 ```roto
-"haystack".starts_with("hay")   # -> true
-"haystack".starts_with("trees") # -> false
+let a = "haystack".starts_with("hay");   # -> true
+let b = "haystack".starts_with("trees"); # -> false
 ```
 ````
 
@@ -102,7 +102,7 @@ Check whether a string starts with a given prefix.
 Create a new string with all characters converted to lowercase.
 
 ```roto
-"LOUD".to_lowercase() # -> "loud"
+let a = "LOUD".to_lowercase(); # -> "loud"
 ```
 ````
 
@@ -114,7 +114,7 @@ Convert this value into a `String`
 Create a new string with all characters converted to uppercase.
 
 ```roto
-"quiet".to_uppercase() # -> "QUIET"
+let a = "quiet".to_uppercase(); # -> "QUIET"
 ```
 ````
 

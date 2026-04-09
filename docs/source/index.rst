@@ -87,6 +87,19 @@ Roto is distributed under the terms of the BSD-3-clause license. See
 .. toctree::
    :maxdepth: 2
    :hidden:
+   :caption: Writing Roto
+   :name: toc-writing
+
+   writing/introduction.md
+   writing/basics
+   writing/control_flow
+   writing/functions
+   writing/data_types
+   writing/modules
+
+.. toctree::
+   :maxdepth: 2
+   :hidden:
    :caption: Embedding Roto
    :name: toc-embedding
 

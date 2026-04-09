@@ -112,13 +112,13 @@ fn ip_addr_methods() -> Library {
             /// all their bits are equal.
             ///
             /// ```roto
-            /// 192.0.0.0 == 192.0.0.0   # -> true
-            /// ::0 == ::0               # -> true
-            /// 192.0.0.0 == 192.0.0.1   # -> false
-            /// 0.0.0.0 == 0::0          # -> false
+            /// let a = 192.0.0.0 == 192.0.0.0;   # -> true
+            /// let b = ::0 == ::0;               # -> true
+            /// let c = 192.0.0.0 == 192.0.0.1;   # -> false
+            /// let d = 0.0.0.0 == 0::0;          # -> false
             ///
             /// # or equivalently:
-            /// 192.0.0.0.eq(192.0.0.0)  # -> true
+            /// let e = 192.0.0.0.eq(192.0.0.0);  # -> true
             /// ```
             fn eq(self, other: IpAddr) -> bool {
                 self == other
@@ -127,8 +127,8 @@ fn ip_addr_methods() -> Library {
             /// Returns true if this address is an IPv4 address, and false otherwise.
             ///
             /// ```roto
-            /// 1.1.1.1.is_ipv4() # -> true
-            /// ::.is_ipv4()      # -> false
+            /// let a = 1.1.1.1.is_ipv4(); # -> true
+            /// let b = ::.is_ipv4();      # -> false
             /// ```
             fn is_ipv4(self) -> bool {
                 self.is_ipv4()
@@ -137,8 +137,8 @@ fn ip_addr_methods() -> Library {
             /// Returns true if this address is an IPv6 address, and false otherwise.
             ///
             /// ```roto
-            /// 1.1.1.1.is_ipv6() # -> false
-            /// ::.is_ipv6()      # -> true
+            /// let a = 1.1.1.1.is_ipv6(); # -> false
+            /// let b = ::.is_ipv6();      # -> true
             /// ```
             fn is_ipv6(self) -> bool {
                 self.is_ipv6()
@@ -164,7 +164,7 @@ fn string_methods() -> Library {
             /// Create a new string from a list of characters.
             ///
             /// ```roto
-            /// String.from_chars(['h', 'e', 'l', 'l', 'o']) # -> "hello"
+            /// let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); # -> "hello"
             /// ```
             fn from_chars(chars: List<char>) -> String {
                 String::from_chars(chars)
@@ -173,7 +173,7 @@ fn string_methods() -> Library {
             /// Append a string to another, creating a new string.
             ///
             /// ```roto
-            /// "hello".append(" ").append("world") # -> "hello world"
+            /// let a = "hello".append(" ").append("world"); # -> "hello world"
             /// ```
             fn append(self, other: Self) -> Self {
                 format!("{self}{other}").into()
@@ -182,8 +182,8 @@ fn string_methods() -> Library {
             /// Check whether a string contains another string.
             ///
             /// ```roto
-            /// "haystack".contains("hay")  # -> true
-            /// "haystack".contains("corn") # -> false
+            /// let a = "haystack".contains("hay");  # -> true
+            /// let b = "haystack".contains("corn"); # -> false
             /// ```
             fn contains(self, needle: Self) -> bool {
                 self.contains(&needle)
@@ -192,8 +192,8 @@ fn string_methods() -> Library {
             /// Check whether a string starts with a given prefix.
             ///
             /// ```roto
-            /// "haystack".starts_with("hay")   # -> true
-            /// "haystack".starts_with("trees") # -> false
+            /// let a = "haystack".starts_with("hay");   # -> true
+            /// let b = "haystack".starts_with("trees"); # -> false
             /// ```
             fn starts_with(self, prefix: Self) -> bool {
                 self.starts_with(&prefix)
@@ -202,8 +202,8 @@ fn string_methods() -> Library {
             /// Check whether a string ends with a given suffix.
             ///
             /// ```roto
-            /// "haystack".ends_with("stack") # -> true
-            /// "haystack".ends_with("black") # -> false
+            /// let a = "haystack".ends_with("stack"); # -> true
+            /// let b = "haystack".ends_with("black"); # -> false
             /// ```
             fn ends_with(self, suffix: Self) -> bool {
                 self.ends_with(&suffix)
@@ -212,7 +212,7 @@ fn string_methods() -> Library {
             /// Create a new string with all characters converted to lowercase.
             ///
             /// ```roto
-            /// "LOUD".to_lowercase() # -> "loud"
+            /// let a = "LOUD".to_lowercase(); # -> "loud"
             /// ```
             fn to_lowercase(self) -> Self {
                 self.to_lowercase()
@@ -221,7 +221,7 @@ fn string_methods() -> Library {
             /// Create a new string with all characters converted to uppercase.
             ///
             /// ```roto
-            /// "quiet".to_uppercase() # -> "QUIET"
+            /// let a = "quiet".to_uppercase(); # -> "QUIET"
             /// ```
             fn to_uppercase(self) -> Self {
                 self.to_uppercase()
@@ -230,9 +230,9 @@ fn string_methods() -> Library {
             /// Repeat a string `n` times and join them.
             ///
             /// ```roto
-            /// "ha".repeat(6) # -> "hahahahahaha"
+            /// let a = "ha".repeat(6); # -> "hahahahahaha"
             /// ```
-            fn repeat(self, n: u32) -> Self {
+            fn repeat(self, n: u64) -> Self {
                 self.repeat(n as usize)
             }
 
@@ -244,7 +244,7 @@ fn string_methods() -> Library {
             /// Replace all occurrences of `from` with `to`.
             ///
             /// ```roto
-            /// "In rust we trust".replace("rust", "roto") # -> "In roto we troto"
+            /// let a = "In rust we trust".replace("rust", "roto"); # -> "In roto we troto"
             /// ```
             fn replace(self, from: Self, to: Self) -> Self {
                 self.replace(&from, &to)
@@ -253,7 +253,7 @@ fn string_methods() -> Library {
             /// Split a string by a separator.
             ///
             /// ```roto
-            /// "one, two, three".split(", ") # -> ["one", "two", "three"]
+            /// let a = "one, two, three".split(", "); # -> ["one", "two", "three"]
             /// ```
             fn split(self, separator: String) -> List<String> {
                 self.split(&separator)
@@ -489,9 +489,9 @@ pub fn built_ins() -> Library {
         /// Can be used to store both 2-byte and 4-byte ASNs.
         ///
         /// ```roto
-        /// AS0
-        /// AS1010
-        /// AS4294967295
+        /// let a = AS0;
+        /// let b = AS1010;
+        /// let c = AS4294967295;
         /// ```
         #[value] type Asn = Asn;
 
@@ -503,14 +503,14 @@ pub fn built_ins() -> Library {
         ///
         /// ```roto
         /// # IPv4 examples
-        /// 127.0.0.1
-        /// 0.0.0.0
-        /// 255.255.255.255
+        /// let a = 127.0.0.1;
+        /// let b = 0.0.0.0;
+        /// let c = 255.255.255.255;
         ///
         /// # IPv6 examples
-        /// 0:0:0:0:0:0:0:1
-        /// ::1
-        /// ::
+        /// let d = 0:0:0:0:0:0:0:1;
+        /// let e = ::1;
+        /// let f = ::;
         /// ```
         #[copy] type IpAddr = IpAddr;
 
@@ -521,8 +521,8 @@ pub fn built_ins() -> Library {
         /// and a [`u8`](u8) as operands.
         ///
         /// ```roto
-        /// 1.1.1.0 / 8
-        /// 192.0.0.0.0 / 24
+        /// let a = 1.1.1.0 / 8;
+        /// let b = 192.0.0.0 / 24;
         /// ```
         #[copy] type Prefix = Prefix;
 
@@ -532,7 +532,7 @@ pub fn built_ins() -> Library {
         /// quotes.
         ///
         /// ```roto
-        /// let x = "Hello!";
+        /// let a = "Hello!";
         /// ```
         ///
         /// See [the language reference](#lang_strings) for more information.
@@ -581,10 +581,10 @@ pub fn built_ins() -> Library {
             /// A prefix can also be constructed with the `/` operator.
             ///
             /// ```roto
-            /// Prefix.new(192.169.0.0, 16)
+            /// let a = Prefix.new(192.169.0.0, 16);
             ///
             /// # or equivalently
-            /// 192.169.0.0 / 16
+            /// let b = 192.169.0.0 / 16;
             /// ```
             fn new(ip: IpAddr, len: u8) -> Prefix {
                 Prefix::new_relaxed(ip, len).unwrap()

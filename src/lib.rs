@@ -30,6 +30,7 @@ pub use cli::cli;
 #[cfg(all(test, not(miri)))]
 pub(crate) use pipeline::{source_file, src};
 
+use crate::ast::{Declaration, Identifier};
 pub use crate::value::List;
 pub use codegen::{TypedFunc, check::RotoFunc};
 pub use file_tree::{FileSpec, FileTree, SourceFile};
@@ -289,6 +290,29 @@ impl std::fmt::Display for Location {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         format!("{}:{}:{}", self.file, self.line, self.column).fmt(f)
     }
+}
+
+/// Returns `true` if the script has valid syntax and contains a `main` function
+/// on the top level.
+///
+/// This is used by the documentation test framework to determine whether the
+/// script should be wrapped in an `fn main`.
+pub fn has_main_function(script: &str) -> parser::ParseResult<bool> {
+    let file = 0;
+    let mut spans = parser::meta::Spans::default();
+    let ast = parser::Parser::parse(file, &mut spans, script)?;
+
+    for item in &ast.declarations {
+        if let Declaration::Function(ast::FunctionDeclaration {
+            ident, ..
+        }) = item
+            && ident.node == Identifier::from("main")
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// Rust source code location

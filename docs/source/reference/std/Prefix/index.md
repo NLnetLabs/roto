@@ -7,8 +7,8 @@ A prefix can be constructed with the `/` operator or with the
 and a [`u8`](u8) as operands.
 
 ```roto
-1.1.1.0 / 8
-192.0.0.0.0 / 24
+let a = 1.1.1.0 / 8;
+let b = 192.0.0.0 / 24;
 ```
 `````
 
@@ -41,10 +41,10 @@ Construct a new prefix
 A prefix can also be constructed with the `/` operator.
 
 ```roto
-Prefix.new(192.169.0.0, 16)
+let a = Prefix.new(192.169.0.0, 16);
 
 # or equivalently
-192.169.0.0 / 16
+let b = 192.169.0.0 / 16;
 ```
 ````
 

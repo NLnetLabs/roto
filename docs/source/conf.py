@@ -54,19 +54,22 @@ sphinx_tabs_disable_css_loading = True
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'myst_parser',
     'sphinx.ext.todo',
     'sphinx.ext.ifconfig',
     'sphinx_tabs.tabs',
-    'sphinx_copybutton',
+    # 'sphinx_copybutton',
     'sphinxcontrib.jquery',
     'sphinx.ext.intersphinx',
     'sphinx.ext.autosectionlabel',
     'sphinx_substitution_extensions',
     'roto_domain',
     'my_code',
-    'myst_parser',
 ]
 
+myst_enable_extensions = ['colon_fence', 'attrs_block']
+
+test_code_output = "../tests/doctests.json"
 autosectionlabel_prefix_document = True
 suppress_warnings = ['autosectionlabel.*']
 
@@ -290,7 +293,7 @@ class RotoLexer(RegexLexer):
                 ),
                 token.Keyword
             ),
-            (words(('+', '-', '/', '*', '==', '>=', '>', '<=', '<', '=', '&&', '||', '?')), token.Operator),
+            (words(('+', '-', '/', '*', '%', '==', '>=', '>', '<=', '<', '=', '&&', '||', '?', '!')), token.Operator),
             (words(('{', '}', '(', ')', '[', ']', ':', '.', ';', ',')), token.Punctuation),
             (r'[a-zA-Z_][a-zA-Z0-9_]*', token.Name),
             (r'[0-9]', token.Number),
