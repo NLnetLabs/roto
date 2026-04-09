@@ -1,3 +1,7 @@
+html {
+  color-scheme: light dark;
+}
+
 .code-block-caption {
   padding: 0.2em !important;
   border-radius: 1em 1em 0 0;
@@ -13,7 +17,7 @@ span.lang-tag {
   top: 0;
   right: 0;
   padding: 0.4em 1em;
-  background: light-dark(#00000044, #ffffff44);
+  background: #00000044;
   border-radius: 0 0 0 0.5em;
   z-index: 100;
   font-size: small;
@@ -31,24 +35,8 @@ button.copybtn {
     margin: 0;
   }
 
-  &:has(div.test-ignore) {
-    border: 2px solid orange;
-  }
-
-  &:has(div.test-ignore) span.lang-tag {
-    top: calc(1em + 11px);
-  }
-
-  & div.test-ignore:before {
-    content: "Untested!";
-    display: block;
-    color: white;
-    background: orange;
-    padding: 2px 2px 2px 10px;
-  }
-
   &:has(div.test-error) {
-    border: 2px solid red;
+    border: 2px solid light-dark(#f29f97, #450e08);
   }
   
   &:has(div.test-error) span.lang-tag {
@@ -56,10 +44,11 @@ button.copybtn {
   }
 
   & div.test-error:before {
-    content: "Error!";
+    content: "Error";
+    font-weight: bold;
     display: block;
-    color: white;
-    background: red;
+    color: light-dark(#ffffff, #cdc8c2);
+    background: light-dark(#f29f97, #450e08);
     padding: 2px 2px 2px 10px;
   }
 }

@@ -30,11 +30,8 @@ pub use cli::cli;
 #[cfg(all(test, not(miri)))]
 pub(crate) use pipeline::{source_file, src};
 
+use crate::ast::{Declaration, Identifier};
 pub use crate::value::List;
-use crate::{
-    ast::{Declaration, Identifier},
-    typechecker::scope::DeclarationKind,
-};
 pub use codegen::{TypedFunc, check::RotoFunc};
 pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub(crate) use pipeline::RotoError;

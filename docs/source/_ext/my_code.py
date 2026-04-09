@@ -72,7 +72,7 @@ lang_map = {
     'rust': 'Rust',
     'console': 'Console',
     'text': 'Text',
-    'default': "Default",
+    'default': '',
 }
 
 class CodeBlockTransform(SphinxTransform):
@@ -88,6 +88,9 @@ class CodeBlockTransform(SphinxTransform):
             elif lang:
                 lang_str = lang_map[lang]
             else:
+                continue
+
+            if not lang_str:
                 continue
 
             lang = nodes.inline(nodes.Inline(), nodes.Text(lang_str))

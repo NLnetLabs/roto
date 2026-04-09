@@ -1,10 +1,10 @@
 Introduction
 ============
 
-This chapter will introduce Roto and guide you towards being able to
-write your own scripts with it. This is not meant to be a comprehensive
-reference. If you want to know _everything_ that Roto has to offer, you should
-look at the [](lang), instead.
+This chapter will introduce Roto and guide you towards being able to write
+your own scripts with it. This is not meant to be a comprehensive reference.
+If you want to know _everything_ that Roto has to offer, you should look at the
+[](lang), instead.
 
 While you're learning the language, there are probably two pages you
 want to keep open as a reference, so you can look up anything you don't

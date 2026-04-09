@@ -5,8 +5,8 @@
 
 The first thing you should know about Roto is how to make it print something.
 That is done with the {roto:ref}`print` function, which takes a single
-{roto:ref}`String` as input. {roto:ref}`Strings <lang_strings>` are delimited by
-double quotes `"`.
+{roto:ref}`String` as input. [Strings](lang_strings) are delimited by double
+quotes `"`.
 
 ```roto
 fn main() {
