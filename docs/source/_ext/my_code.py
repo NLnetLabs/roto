@@ -113,8 +113,12 @@ def output(app, exception):
         if code['testoutput'] is None:
             code['testoutput'] = ""
 
-    with open(dest, "wt") as fd:
-        json.dump(found, fd, indent=4)
+    # This fails on readthedocs, so just ignore that if that happens
+    try:
+        with open(dest, "wt") as fd:
+            json.dump(found, fd, indent=4)
+    except e:
+        print(e)
 
 
 def setup(app: Sphinx) -> ExtensionMetadata:
