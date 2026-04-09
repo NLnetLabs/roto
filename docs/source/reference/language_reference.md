@@ -519,20 +519,21 @@ operand is a signed integer or a floating point number (i.e. not an
 unsigned integer).
 
 There are binary operators for common arithmetic operations, which are
-implemented for all numeric types (integers and floating point numbers):
+implemented for numeric types:
 
-| Operator | Description    |
-| -------- | -------------- |
-| `+`      | addition       |
-| `-`      | subtraction    |
-| `*`      | multiplication |
-| `/`      | division       |
+| Operator | Description               |
+| -------- | ------------------------- |
+| `+`      | addition                  |
+| `-`      | subtraction               |
+| `*`      | multiplication            |
+| `/`      | division                  |
+| `%`      | remainder (integers only) |
 
 These operators follow the conventional PEMDAS rule for precedence. The
 order is
 
 - Parentheses
-- Multiplication and division
+- Multiplication, division and remainder
 - Addition and subtraction
 
 Parentheses can always be used to force a certain order of operations.
