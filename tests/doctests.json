@@ -117,6 +117,24 @@
         "mode": "check"
     },
     {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "const FOO: u32 = 10;",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.rst",
+        "line": 993,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "const FOO: u32 = BAR;\nconst BAR: u32 = FOO;",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.rst",
+        "line": 1012,
+        "testoutput": "",
+        "mode": "error"
+    },
+    {
         "src": "reference/std/Asn/index",
         "lang": "roto",
         "code": "let a = AS0;\nlet b = AS1010;\nlet c = AS4294967295;\n",
