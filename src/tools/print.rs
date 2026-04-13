@@ -45,6 +45,7 @@ pub fn print_highlighted(s: &str) {
             | Token::Comma
             | Token::Eq
             | Token::EqEq
+            | Token::FatArrow
             | Token::Hash
             | Token::Hyphen
             | Token::HyphenHyphen

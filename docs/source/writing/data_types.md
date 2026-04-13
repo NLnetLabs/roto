@@ -105,13 +105,13 @@ fn align(x: String, size: u64, alignment: Alignment) -> String {
     let left = 0;
     let right = 0;
     match alignment {
-        Left -> {
+        Left => {
             right = pad;
         }
-        Right -> {
+        Right => {
             left = pad;
         }
-        Center -> {
+        Center => {
             left = pad / 2;
             right = pad / 2 + pad % 2;
         }
@@ -157,10 +157,10 @@ enum Range {
 
 fn contains(range: Range, x: i64) -> bool {
     match range {
-        Full -> true,
-        From(a) -> x >= a,
-        Until(a) -> x <= a,
-        Between(a, b) -> x >= a && x <= b,
+        Full => true,
+        From(a) => x >= a,
+        Until(a) => x <= a,
+        Between(a, b) => x >= a && x <= b,
     }
 } 
 

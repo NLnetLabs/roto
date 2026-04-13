@@ -615,8 +615,8 @@ impl Parser<'_, '_> {
     ///
     /// ```ebnf
     /// MatchExpr    ::= 'match' Expr '{' MatchArm* MatchArmLast? '}'
-    /// MatchArm     ::= Pattern ('|' Expr)? '->' (Block | (Expr ','))
-    /// MatchArmLast ::= Pattern ('|' Expr)? '->' Expr
+    /// MatchArm     ::= Pattern ('|' Expr)? '=>' (Block | (Expr ','))
+    /// MatchArmLast ::= Pattern ('|' Expr)? '=>' Expr
     /// ```
     fn match_expr(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::Keyword(Keyword::Match))?;
@@ -660,7 +660,7 @@ impl Parser<'_, '_> {
                 None
             };
 
-            self.take(Token::Arrow)?;
+            self.take(Token::FatArrow)?;
 
             let body = if self.peek_is(Token::CurlyLeft) {
                 let exprs = self.block()?;

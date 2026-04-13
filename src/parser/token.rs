@@ -22,6 +22,7 @@ pub enum Token<'s> {
     Comma,
     Eq,
     EqEq,
+    FatArrow,
     Hash,
     Hyphen,
     HyphenHyphen,
@@ -213,6 +214,7 @@ impl<'s> Lexer<'s> {
             [b'>', b'='] => Token::AngleRightEq,
             [b'<', b'='] => Token::AngleLeftEq,
             [b'-', b'>'] => Token::Arrow,
+            [b'=', b'>'] => Token::FatArrow,
 
             // These are added for better diagnostics
             [b'/', b'*'] => Token::SlashStar,
@@ -616,6 +618,7 @@ impl Display for Token<'_> {
             Token::Comma => ",",
             Token::Eq => "=",
             Token::EqEq => "==",
+            Token::FatArrow => "=>",
             Token::Hash => "#",
             Token::Hyphen => "-",
             Token::HyphenHyphen => "--",

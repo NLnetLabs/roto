@@ -1988,8 +1988,8 @@ fn match_option_value() {
         "
         fn or_fortytwo(x: u32?) -> u32 {
             match x {
-                Some(x) -> x,
-                None -> 42,
+                Some(x) => x,
+                None => 42,
             }
         }
         "
@@ -2017,8 +2017,8 @@ fn match_option_string() {
 
         fn bar() -> Verdict[String, String] {
             match foo() {
-                Some(v) -> accept v,
-                _ -> reject \"nope\",
+                Some(v) => accept v,
+                _ => reject \"nope\",
             }
         }
         "
@@ -2040,12 +2040,12 @@ fn match_on_string_with_guards() {
         r#"
         fn foo(s: String?, x: i32) -> String {
             match s {
-                Some(s) | s == "hello" -> "hey!",
-                _ | x == 5 ->  "x is 5",
-                Some(s) | s.starts_with("lorem ipsum") -> {
+                Some(s) | s == "hello" => "hey!",
+                _ | x == 5 =>  "x is 5",
+                Some(s) | s.starts_with("lorem ipsum") => {
                     "You've generated lorem ipsum: " + s
                 }
-                _ -> "Can't recognize",
+                _ => "Can't recognize",
             }
         }
         "#
@@ -2205,8 +2205,8 @@ fn match_on_verdict() {
 
         filtermap foo(x: i32) {
             match over_10(x) {
-                Accept(x) -> accept x + 1,
-                Reject(x) -> reject x,
+                Accept(x) => accept x + 1,
+                Reject(x) => reject x,
             };
         }
         "
@@ -3383,8 +3383,8 @@ fn layered_option_matching_none() {
         "
         fn reproducer() -> String? {
           let s = match None {
-            Some(v) -> v,
-            None -> { return None; },
+            Some(v) => v,
+            None => { return None; },
           };
           Some(s)
         }
@@ -3736,8 +3736,8 @@ fn define_enum_type() {
 
        fn match_on_foo(x: bool) -> i32 {
            match make_foo(x) {
-               Bar -> 10,
-               Baz -> 20,
+               Bar => 10,
+               Baz => 20,
            }
        }
     "
@@ -3766,15 +3766,15 @@ fn haskeller_wants_to_feel_at_home() {
 
        fn from_option(x: i32?) -> Maybe {
            match x {
-               None -> Nothing,
-               Some(x) -> Just(x)
+               None => Nothing,
+               Some(x) => Just(x)
            }
        }
 
        fn to_option(x: Maybe) -> i32? {
            match x {
-               Nothing -> None,
-               Just(x) -> Some(x),
+               Nothing => None,
+               Just(x) => Some(x),
            }
        }
 
@@ -3809,15 +3809,15 @@ fn generic_haskeller_wants_to_feel_at_home() {
 
        fn from_option(x: i32?) -> Maybe[i32] {
            match x {
-               None -> Nothing,
-               Some(x) -> Just(x)
+               None => Nothing,
+               Some(x) => Just(x)
            }
        }
 
        fn to_option(x: Maybe[i32]) -> i32? {
            match x {
-               Nothing -> None,
-               Just(x) -> Some(x),
+               Nothing => None,
+               Just(x) => Some(x),
            }
        }
 
@@ -3880,7 +3880,7 @@ fn match_on_uninhabited_variant() {
 
         fn foo(x: Foo) {
             match x {
-                Baz(x) -> {}
+                Baz(x) => {}
             }
         }
     "
@@ -3902,15 +3902,15 @@ fn lets_make_a_result() {
 
         fn from(x: Verdict[i32, u32]) -> Result[i32, u32] {
            match x {
-               Reject(x) -> Err(x),
-               Accept(x) -> Ok(x)
+               Reject(x) => Err(x),
+               Accept(x) => Ok(x)
            }
         }
 
         fn to(x: Result[i32, u32]) -> Verdict[i32, u32] {
            match x {
-               Ok(x) -> Verdict.Accept(x),
-               Err(x) -> Verdict.Reject(x),
+               Ok(x) => Verdict.Accept(x),
+               Err(x) => Verdict.Reject(x),
            }
         }
 
@@ -4068,8 +4068,8 @@ fn generics_all_the_way_down() {
                 }),
             };
             match foo.bar {
-                Some(bar) -> bar.inner,
-                None -> 0,
+                Some(bar) => bar.inner,
+                None => 0,
             }
         }
     "

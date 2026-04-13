@@ -363,8 +363,8 @@ create lists with ``[`` and ``]`` with expressions separated by commas.
     let my_list: List[i32] = [1, 2, 3];
     let first: i32? = my_list.get(0);
     match first {
-        Some(first) -> print(f"First element was: {first}"),
-        None -> print("No elements!"),
+        Some(first) => print(f"First element was: {first}"),
+        None => print("No elements!"),
     }
 
 .. testoutput::
@@ -405,8 +405,8 @@ Like any enum type it is possible to match on a value of type ``T?``
     :class: test-ignore
 
     match x {
-        Some(x) -> x,
-        None -> 0,
+        Some(x) => x,
+        None => 0,
     }
 
 In addition, there is a ``?`` operator, which will evaluate to the value of
@@ -417,8 +417,8 @@ In addition, there is a ``?`` operator, which will evaluate to the value of
     :class: test-ignore
 
     match x {
-        Some(x) -> x,
-        None -> return Option.None,
+        Some(x) => x,
+        None => return Option.None,
     }
 
 
@@ -527,9 +527,9 @@ types, we can ``match`` on them.
         let z = Number.Nan;
 
         match x {
-            Int(i) -> print(f"int: {i}"),
-            Float(f) -> print(f"float: {f}"),
-            Nan -> print(f"nan!"),
+            Int(i) => print(f"int: {i}"),
+            Float(f) => print(f"float: {f}"),
+            Nan => print(f"nan!"),
         }
     }
 
@@ -545,8 +545,8 @@ Enum types can be generic over other types by taking type parameters.
 
     fn to_string(x: Either[i32, String]) -> String {
         match x {
-            Left(i) -> f"{i}",
-            Right(s) -> s,
+            Left(i) => f"{i}",
+            Right(s) => s,
         }
     }
 
@@ -755,7 +755,7 @@ Pattern matching in Roto is supported via ``match`` expressions. These take a
 value and a set of patterns to check against, with an expression associated with
 each of the patterns.
 
-The pattern is separated from the associated expression with ``->``. The arms
+The pattern is separated from the associated expression with ``=>``. The arms
 should be separated with commas, unless the expression is a block, i.e., when
 it is wrapped in ``{}``.
 
@@ -770,21 +770,19 @@ limitations.
 
     let x = Some(10);
     match x {
-        None -> print("x is None"),
-        Some(i) -> {
+        None => print("x is None"),
+        Some(i) => {
             print("x is Some");
             print(f"x is {i}");
         }
     }
 
 .. note::
-    If you are used to Rust, be aware that Roto uses ``->`` instead of ``=>`` to
-    separate the pattern from the expression.
 
-    Another difference to be aware of is that Roto currently doesn't use
-    the full path to the ``enum`` constructor, but only the name. So
-    ``Option.None`` is not allowed as a pattern, but ``None`` is. This will
-    probably change once ``match`` expressions become more general.
+    In contrast with Rust, Roto currently doesn't use the full path to the
+    ``enum`` constructor, but only the name. So ``Option.None`` is not allowed
+    as a pattern, but ``None`` is. This will probably change once ``match``
+    expressions become more general.
 
 
 .. _lang_while:

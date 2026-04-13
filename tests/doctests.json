@@ -92,7 +92,7 @@
     {
         "src": "reference/language_reference",
         "lang": "roto",
-        "code": "let my_list: List[i32] = [1, 2, 3];\nlet first: i32? = my_list.get(0);\nmatch first {\n    Some(first) -> print(f\"First element was: {first}\"),\n    None -> print(\"No elements!\"),\n}",
+        "code": "let my_list: List[i32] = [1, 2, 3];\nlet first: i32? = my_list.get(0);\nmatch first {\n    Some(first) => print(f\"First element was: {first}\"),\n    None => print(\"No elements!\"),\n}",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.rst",
         "line": 361,
         "testoutput": "First element was: 1\n",
@@ -506,7 +506,7 @@
     {
         "src": "writing/data_types",
         "lang": "roto",
-        "code": "enum Alignment {\n    Left,\n    Center,\n    Right,\n}\n\nfn align(x: String, size: u64, alignment: Alignment) -> String {\n    let x_size = x.chars().len();\n    if size <= x_size {\n        return x;\n    }\n\n    let pad = size - x_size;\n    let left = 0;\n    let right = 0;\n    match alignment {\n        Left -> {\n            right = pad;\n        }\n        Right -> {\n            left = pad;\n        }\n        Center -> {\n            left = pad / 2;\n            right = pad / 2 + pad % 2;\n        }\n    }\n\n    let left_str = \"_\".repeat(left);\n    let right_str = \"_\".repeat(right);\n    f\"{left_str}{x}{right_str}\"\n}\n\nfn main() {\n    print(align(\"Hey!\", 10, Alignment.Left));\n    print(align(\"Hey!\", 10, Alignment.Right));\n    print(align(\"Hey!\", 10, Alignment.Center));\n    print(align(\"Ho!\", 10, Alignment.Left));\n    print(align(\"Ho!\", 10, Alignment.Right));\n    print(align(\"Ho!\", 10, Alignment.Center));\n}\n",
+        "code": "enum Alignment {\n    Left,\n    Center,\n    Right,\n}\n\nfn align(x: String, size: u64, alignment: Alignment) -> String {\n    let x_size = x.chars().len();\n    if size <= x_size {\n        return x;\n    }\n\n    let pad = size - x_size;\n    let left = 0;\n    let right = 0;\n    match alignment {\n        Left => {\n            right = pad;\n        }\n        Right => {\n            left = pad;\n        }\n        Center => {\n            left = pad / 2;\n            right = pad / 2 + pad % 2;\n        }\n    }\n\n    let left_str = \"_\".repeat(left);\n    let right_str = \"_\".repeat(right);\n    f\"{left_str}{x}{right_str}\"\n}\n\nfn main() {\n    print(align(\"Hey!\", 10, Alignment.Left));\n    print(align(\"Hey!\", 10, Alignment.Right));\n    print(align(\"Hey!\", 10, Alignment.Center));\n    print(align(\"Ho!\", 10, Alignment.Left));\n    print(align(\"Ho!\", 10, Alignment.Right));\n    print(align(\"Ho!\", 10, Alignment.Center));\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/data_types.md",
         "line": 91,
         "testoutput": "Hey!______\n______Hey!\n___Hey!___\nHo!_______\n_______Ho!\n___Ho!____\n",
@@ -515,7 +515,7 @@
     {
         "src": "writing/data_types",
         "lang": "roto",
-        "code": "enum Range {\n    Full,\n    From(i64),\n    Until(i64),\n    Between(i64, i64),\n}\n\nfn contains(range: Range, x: i64) -> bool {\n    match range {\n        Full -> true,\n        From(a) -> x >= a,\n        Until(a) -> x <= a,\n        Between(a, b) -> x >= a && x <= b,\n    }\n} \n\nfn main() {\n    let a = contains(Range.Full, 5);\n    let b = contains(Range.From(6), 5);\n    let c = contains(Range.Until(7), 5);\n    let d = contains(Range.Between(6, 10), 5);\n    print(f\"a = {a}, b = {b}, c = {c}, d = {d}\");\n}\n",
+        "code": "enum Range {\n    Full,\n    From(i64),\n    Until(i64),\n    Between(i64, i64),\n}\n\nfn contains(range: Range, x: i64) -> bool {\n    match range {\n        Full => true,\n        From(a) => x >= a,\n        Until(a) => x <= a,\n        Between(a, b) => x >= a && x <= b,\n    }\n} \n\nfn main() {\n    let a = contains(Range.Full, 5);\n    let b = contains(Range.From(6), 5);\n    let c = contains(Range.Until(7), 5);\n    let d = contains(Range.Between(6, 10), 5);\n    print(f\"a = {a}, b = {b}, c = {c}, d = {d}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/data_types.md",
         "line": 150,
         "testoutput": "a = true, b = false, c = true, d = false\n",
