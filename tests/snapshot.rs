@@ -12,7 +12,7 @@ fn parse_errors() {
         let file_tree = FileTree::read(relative_path).unwrap();
         let res = file_tree.compile(&runtime);
         let Err(e) = res else {
-            panic!("should not succeed");
+            panic!("{path:?} should not succeed");
         };
         let mut string = String::new();
         e.write(&mut string, false).unwrap();

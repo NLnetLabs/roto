@@ -197,8 +197,8 @@ impl ParseErrorKind {
     pub fn hint(&self) -> Option<String> {
         match self {
             ParseErrorKind::Expected { got, .. } => {
-                if got == "//" || got == "/*" || got == "--" {
-                    Some(format!("`Use `#` for comments instead of `{got}`"))
+                if got == "#" || got == "/*" || got == "--" {
+                    Some(format!("`Use `//` for comments instead of `{got}`"))
                 } else {
                     None
                 }

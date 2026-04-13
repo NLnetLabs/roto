@@ -22,6 +22,7 @@ pub enum Token<'s> {
     Comma,
     Eq,
     EqEq,
+    Hash,
     Hyphen,
     HyphenHyphen,
     Period,
@@ -31,7 +32,6 @@ pub enum Token<'s> {
     QuestionMark,
     SemiColon,
     Slash,
-    SlashSlash,
     SlashStar,
     Star,
     Percent,
@@ -190,7 +190,7 @@ impl<'s> Lexer<'s> {
     fn skip_whitespace(&mut self) {
         loop {
             self.input = self.input.trim_start();
-            if self.input.as_bytes().first() == Some(&b'#') {
+            if self.input.as_bytes().first_chunk() == Some(b"//") {
                 let n = self.input.find('\n').unwrap_or(self.input.len());
                 self.bump(n);
             } else {
@@ -216,7 +216,6 @@ impl<'s> Lexer<'s> {
             [b'-', b'>'] => Token::Arrow,
 
             // These are added for better diagnostics
-            [b'/', b'/'] => Token::SlashSlash,
             [b'/', b'*'] => Token::SlashStar,
             [b'-', b'-'] => Token::HyphenHyphen,
 
@@ -257,6 +256,7 @@ impl<'s> Lexer<'s> {
             b'<' => Token::AngleLeft,
             b'>' => Token::AngleRight,
             b'%' => Token::Percent,
+            b'#' => Token::Hash,
             _ => return ControlFlow::Continue(()),
         };
 
@@ -618,6 +618,7 @@ impl Display for Token<'_> {
             Token::Comma => ",",
             Token::Eq => "=",
             Token::EqEq => "==",
+            Token::Hash => "#",
             Token::Hyphen => "-",
             Token::HyphenHyphen => "--",
             Token::Period => ".",
@@ -627,7 +628,6 @@ impl Display for Token<'_> {
             Token::QuestionMark => "?",
             Token::SemiColon => ";",
             Token::Slash => "/",
-            Token::SlashSlash => "//",
             Token::SlashStar => "/*",
             Token::Star => "*",
             Token::Percent => "%",

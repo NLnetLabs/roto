@@ -19,7 +19,7 @@ with an `f`.
 Append a string to another, creating a new string.
 
 ```roto
-let a = "hello".append(" ").append("world"); # -> "hello world"
+let a = "hello".append(" ").append("world"); // -> "hello world"
 ```
 ````
 
@@ -35,8 +35,8 @@ Get a view of this string indexed by chars.
 Check whether a string contains another string.
 
 ```roto
-let a = "haystack".contains("hay");  # -> true
-let b = "haystack".contains("corn"); # -> false
+let a = "haystack".contains("hay");  // -> true
+let b = "haystack".contains("corn"); // -> false
 ```
 ````
 
@@ -44,8 +44,8 @@ let b = "haystack".contains("corn"); # -> false
 Check whether a string ends with a given suffix.
 
 ```roto
-let a = "haystack".ends_with("stack"); # -> true
-let b = "haystack".ends_with("black"); # -> false
+let a = "haystack".ends_with("stack"); // -> true
+let b = "haystack".ends_with("black"); // -> false
 ```
 ````
 
@@ -57,7 +57,7 @@ Check for string equality.
 Create a new string from a list of characters.
 
 ```roto
-let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); # -> "hello"
+let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); // -> "hello"
 ```
 ````
 
@@ -69,7 +69,7 @@ Get a view of this string indexed by lines.
 Repeat a string `n` times and join them.
 
 ```roto
-let a = "ha".repeat(6); # -> "hahahahahaha"
+let a = "ha".repeat(6); // -> "hahahahahaha"
 ```
 ````
 
@@ -77,7 +77,7 @@ let a = "ha".repeat(6); # -> "hahahahahaha"
 Replace all occurrences of `from` with `to`.
 
 ```roto
-let a = "In rust we trust".replace("rust", "roto"); # -> "In roto we troto"
+let a = "In rust we trust".replace("rust", "roto"); // -> "In roto we troto"
 ```
 ````
 
@@ -85,7 +85,7 @@ let a = "In rust we trust".replace("rust", "roto"); # -> "In roto we troto"
 Split a string by a separator.
 
 ```roto
-let a = "one, two, three".split(", "); # -> ["one", "two", "three"]
+let a = "one, two, three".split(", "); // -> ["one", "two", "three"]
 ```
 ````
 
@@ -93,8 +93,8 @@ let a = "one, two, three".split(", "); # -> ["one", "two", "three"]
 Check whether a string starts with a given prefix.
 
 ```roto
-let a = "haystack".starts_with("hay");   # -> true
-let b = "haystack".starts_with("trees"); # -> false
+let a = "haystack".starts_with("hay");   // -> true
+let b = "haystack".starts_with("trees"); // -> false
 ```
 ````
 
@@ -104,7 +104,7 @@ Create a new string by removing a given prefix.
 Returns `None` if the string does not contain the prefix.
 
 ```roto
-let a = "RustRoto!".strip_prefix("Rust"); # -> "Roto!"
+let a = "RustRoto!".strip_prefix("Rust"); // -> "Roto!"
 ```
 ````
 
@@ -114,7 +114,7 @@ Create a new string by removing a given suffix.
 Returns `None` if the string does not contain the suffix.
 
 ```roto
-let a = "Roto!Rust".strip_suffix("Rust"); # -> "Roto!"
+let a = "Roto!Rust".strip_suffix("Rust"); // -> "Roto!"
 ```
 ````
 
@@ -122,7 +122,7 @@ let a = "Roto!Rust".strip_suffix("Rust"); # -> "Roto!"
 Create a new string with all characters converted to lowercase.
 
 ```roto
-let a = "LOUD".to_lowercase(); # -> "loud"
+let a = "LOUD".to_lowercase(); // -> "loud"
 ```
 ````
 
@@ -134,7 +134,7 @@ Convert this value into a `String`
 Create a new string with all characters converted to uppercase.
 
 ```roto
-let a = "quiet".to_uppercase(); # -> "QUIET"
+let a = "quiet".to_uppercase(); // -> "QUIET"
 ```
 ````
 
@@ -143,7 +143,7 @@ Create a new string by removing leading and trailing
 whitespace.
 
 ```roto
-let a = "  Roto!  ".trim(); # -> "Roto!"
+let a = "  Roto!  ".trim(); // -> "Roto!"
 ```
 ````
 
@@ -151,7 +151,7 @@ let a = "  Roto!  ".trim(); # -> "Roto!"
 Create a new string by removing trailing whitespace.
 
 ```roto
-let a = "  Roto!  ".trim_end(); # -> "  Roto!"
+let a = "  Roto!  ".trim_end(); // -> "  Roto!"
 ```
 ````
 
@@ -159,7 +159,7 @@ let a = "  Roto!  ".trim_end(); # -> "  Roto!"
 Create a new string by removing leading whitespace.
 
 ```roto
-let a = "  Roto!  ".trim_start(); # -> "Roto!  "
+let a = "  Roto!  ".trim_start(); // -> "Roto!  "
 ```
 ````
 

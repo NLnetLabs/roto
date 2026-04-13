@@ -12,20 +12,20 @@ the language.
 Comments
 --------
 
-Comments in Roto start with a ``#`` and continue until the end of a line. They can
+Comments in Roto start with ``//`` and continue until the end of a line. They can
 be inserted anywhere in the script and are ignored.
 
 .. code-block:: roto
 
-    # this is a comment
+    // this is a comment
 
 Block comments are not supported. To create a multiline comment, prefix every
-line with a ``#``.
+line with ``//``.
 
 .. code-block:: roto
 
-    # one comment line
-    # another comment line
+    // one comment line
+    // another comment line
 
 Literals
 --------
@@ -126,11 +126,11 @@ the syntax. For example, the body of an ``if`` expression creates a new scope.
     let x = true;
     if x {
         let y = false;
-        print(f"{y}"); # ok!
-        # y is implicitly dropped here
+        print(f"{y}"); // ok!
+        // y is implicitly dropped here
     }
-    print(f"{x}"); # ok!
-    print(f"{y}"); # this is not possible: y has been dropped!
+    print(f"{x}"); // ok!
+    print(f"{y}"); // this is not possible: y has been dropped!
 
 Built-in Types
 --------------
@@ -263,7 +263,7 @@ Strings can be concatenated with ``+``:
 .. code-block:: roto
     :class: test-ignore
 
-    let s = "race" + "car"; # yields the string "racecar"
+    let s = "race" + "car"; // yields the string "racecar"
 
 It also has some methods such as :roto:ref:`String.contains` that can be very
 useful. See the documentation for the :roto:ref:`String` type for more
@@ -447,7 +447,7 @@ a type checking error:
     if x {
         { foo: 5, bar: 10 }
     } else {
-        { foo: 5 }  # error!
+        { foo: 5 }  // error!
     }
 
 Note that this makes records significantly different from dictionaries in Python
@@ -486,7 +486,7 @@ yield more readable type checking errors.
         bar: bool,
     }
 
-    # ...
+    // ...
 
     x = SomeRecord { foo: 3, bar: false }
 
@@ -498,7 +498,7 @@ There is an automatic coercion from anonymous records to named records:
     :class: test-ignore
 
     fn foo(int: i32) -> SomeRecord {
-        { foo: int, bar: false }  # implicitly coerced to SomeRecord
+        { foo: int, bar: false }  // implicitly coerced to SomeRecord
     }
 
 .. _lang_enum_type:
@@ -514,7 +514,7 @@ types, we can ``match`` on them.
 .. code-block:: roto
     :class: test-ignore
 
-    # A `Number` enum type that has the constructors `Int`, `Float` and `Nan`.
+    // A `Number` enum type that has the constructors `Int`, `Float` and `Nan`.
     enum Number {
         Int(i32),
         Float(f32),
@@ -590,21 +590,21 @@ example, this expression:
 .. code-block:: roto
     :class: test-ignore
 
-    1 + 2 * 3    # evaluates to 7
+    1 + 2 * 3    // evaluates to 7
 
 is interpreted as
 
 .. code-block:: roto
     :class: test-ignore
 
-    1 + (2 * 3)  # evaluates to 7
+    1 + (2 * 3)  // evaluates to 7
 
 and not as
 
 .. code-block:: roto
     :class: test-ignore
 
-    (1 + 2) * 3  # evaluates to 9
+    (1 + 2) * 3  // evaluates to 9
 
 .. _lang_comparison:
 
@@ -634,11 +634,11 @@ Examples:
 .. code-block:: roto
     :class: test-ignore
 
-    5 > 10      # evaluates to false
-    10 > 5      # evaluates to true
-    5 == 5      # evaluates to true
-    5 == true   # compile error!
-    1 < x < 10  # compile error!
+    5 > 10      // evaluates to false
+    10 > 5      // evaluates to true
+    5 == 5      // evaluates to true
+    5 == true   // compile error!
+    1 < x < 10  // compile error!
 
 .. _lang_logical:
 
@@ -694,7 +694,7 @@ condition must evaluate to a boolean.
     :class: test-ignore
 
     if x > 0 {
-        # if the condition is true
+        // if the condition is true
     }
 
 An ``else``-clause can optionally follow the ``if``-block. The ``if``-``else``
@@ -704,9 +704,9 @@ construct is an expression and therefore evaluates to a value.
     :class: test-ignore
 
     if x > 0 {
-        # if the condition is true
+        // if the condition is true
     } else {
-        # if the condition is false
+        // if the condition is false
     }
 
 The if-else is an expression, not a statement, which means that it evaluates to
@@ -1047,16 +1047,16 @@ module. Multiple ``super`` keywords can appear at the start of a path.
 .. code-block:: roto
     :class: test-ignore
 
-    # in pkg.roto
+    // in pkg.roto
     foo.square
 
-    # in foo.roto
+    // in foo.roto
     square
 
-    # in bar.roto
+    // in bar.roto
     super.foo.square
 
-    # in bar/baz.roto
+    // in bar/baz.roto
     super.super.foo.square
 
 There are 3 special identifiers that can only be used at the start of a path

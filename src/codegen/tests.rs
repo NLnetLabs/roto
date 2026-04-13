@@ -397,8 +397,8 @@ fn record_with_fields_flipped() {
         record Foo { a: i32, b: i32 }
 
         filtermap main(x: i32) {
-            # These are flipped, to ensure that the order in which
-            # the fields are given doesn't matter:
+            // These are flipped, to ensure that the order in which
+            // the fields are given doesn't matter:
             let foo = Foo { b: 20, a: x };
             if foo.a == foo.b {
                 accept
@@ -1646,7 +1646,7 @@ fn use_a_test() {
     let s = src!(
         "
         fn double(x: i32) -> i32 {
-            x # oops! not correct
+            x // oops! not correct
         }
 
         test check_double {
@@ -4029,7 +4029,7 @@ fn generic_record_inferred() {
         }
 
         fn wrap(x: i32) -> Foo[i32] {
-            { x: x } # this is now inferred to be Foo[i32]
+            { x: x } // this is now inferred to be Foo[i32]
         }
 
         fn unwrap(x: Foo[i32]) -> i32 {
@@ -4765,7 +4765,7 @@ fn string_replace() {
     let s = src!(
         r#"
         fn main() -> String {
-            # Note: there are better ways to write this in Roto!
+            // Note: there are better ways to write this in Roto!
             "Hello $NAME".replace("$NAME", "John")
         }
     "#

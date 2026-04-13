@@ -746,7 +746,7 @@ fn return_keyword() {
 fn unit_block() {
     let s = src!(
         "
-        # workaround for not having a ()
+        // workaround for not having a ()
         fn unit() {}
 
         fn bar() -> Bool {
@@ -1123,7 +1123,7 @@ fn assign_to_enum_with_different_type_param() {
 
           fn foo() {
               let x: Foo[i32] = Foo.Bar(10);
-              let y: Foo[f32] = x; # should error!
+              let y: Foo[f32] = x; // should error!
           }
         "#
     );
