@@ -389,7 +389,7 @@
     {
         "src": "writing/basics",
         "lang": "roto",
-        "code": "fn main() {\n    let a = not false;\n    print(f\"{a}\");\n}\n",
+        "code": "fn main() {\n    let a = !false;\n    print(f\"{a}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
         "line": 215,
         "testoutput": "true\n",

@@ -210,11 +210,11 @@ fn main() {
 Booleans in Roto are represented by the {roto:ref}`bool` type. It has two
 possible values: `true` and `false`. Like any built-in type, booleans can be
 used directly in an [f-string](lang_string_formatting) to be printed. A boolean
-can be negated with the `not` operator.
+can be negated with the `!` operator.
 
 ```roto
 fn main() {
-    let a = not false;
+    let a = !false;
     print(f"{a}");
 }
 ```

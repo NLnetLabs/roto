@@ -274,7 +274,7 @@ fn inversion() {
     let s = src!(
         "
         filtermap main(x: i32) {
-            if not (x == 10) {
+            if !(x == 10) {
                 accept
             } else {
                 reject
@@ -304,7 +304,7 @@ fn not_not() {
     let s = src!(
         "
         fn main(x: i32) -> bool {
-            not not (x == 10)
+            !!(x == 10)
         }
     "
     );

@@ -179,7 +179,7 @@ Booleans
 
 The boolean type in Roto is called :roto:ref:`bool` and it has two possible
 values: ``true`` and ``false``. Booleans can be manipulated via several
-operators such as ``&&`` (logical and), ``||`` (locical or) and ``not`` (logical
+operators such as ``&&`` (logical and), ``||`` (locical or) and ``!`` (logical
 negation).
 
 .. _lang_integers:
@@ -645,20 +645,40 @@ Examples:
 Logical operators
 ^^^^^^^^^^^^^^^^^
 
-Operators to combine boolean values are called logical operators. They have a
-lower precedence than comparison operators. These are the logical operators in
-Roto:
+Operators to combine boolean values are called logical operators. These are the
+logical operators in Roto:
 
 +---------+--------------------------------+
 | ``&&``  | Logical and (short-circuiting) |
 +---------+--------------------------------+
 | ``||``  | Logical or (short-circuiting)  |
 +---------+--------------------------------+
-| ``not`` | Negation                       |
+| ``!``   | Negation                       |
 +---------+--------------------------------+
 
-Now that we have all the rules for precedence, here is an example using all types of
-operators (arithmetic, comparison and logical):
+The ``&&`` and ``||`` operators are short-circuiting, meaning that if the left-hand operand
+of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
+``true``, the right hand side won't be evaluated.
+
+Precedence
+^^^^^^^^^^
+
+The precedence of the operators is as follows (from highest to lowest):
+
++--------------------------------------------------+-------------------------------------+
+| ``!``, ``-``                                     | Prefix operators                    |
++--------------------------------------------------+-------------------------------------+
+| ``*``, ``/`` , ``%``                             | Multiplication and division         |
++--------------------------------------------------+-------------------------------------+
+| ``+``, ``-``                                     | Addition and subtraction            |
++--------------------------------------------------+-------------------------------------+
+| ``==``, ``!=`` , ``>=`` , ``>`` , ``<=`` , ``<`` | Comparison                          |
++--------------------------------------------------+-------------------------------------+
+| ``&&``, ``||``                                   | Logical conjunction and disjunction |
++--------------------------------------------------+-------------------------------------+
+
+Here is an example using all types of operators (arithmetic, comparison and
+logical):
 
 .. code-block:: roto
     :class: test-ignore
@@ -671,11 +691,6 @@ This is equivalent to:
     :class: test-ignore
 
     ((1 + (x * 3)) == 5) && (y < 10)
-
-The ``&&`` and ``||`` are short-circuiting, meaning that if the left-hand operand
-of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
-``true``, the right hand side won't be evaluated.
-
 
 
 Control Flow

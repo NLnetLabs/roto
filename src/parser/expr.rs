@@ -348,19 +348,17 @@ impl Parser<'_, '_> {
     /// Parse a negation expression
     ///
     /// ```ebnf
-    /// Negation ::= 'not' Access
+    /// Negation ::= ('!' | '-')* Access
     /// ```
     fn negation(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        // TODO: A negation should be a unary `-`. The `not` operator should
-        // have much lower precedence.
-        if self.peek_is(Token::Keyword(Keyword::Not)) {
-            let span = self.take(Token::Keyword(Keyword::Not))?;
+        if self.peek_is(Token::Bang) {
+            let span = self.take(Token::Bang)?;
             let expr = self.negation(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
         } else if self.peek_is(Token::Hyphen) {
             let span = self.take(Token::Hyphen)?;
-            let expr = self.access(r)?;
+            let expr = self.negation(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Negate(Box::new(expr))))
         } else {

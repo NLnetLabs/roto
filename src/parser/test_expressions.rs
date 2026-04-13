@@ -162,13 +162,13 @@ fn test_if_else_if_else() {
 
 #[test]
 fn test_not_true() {
-    let s = "not true";
+    let s = "!true";
     parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_not_true_is_true() {
-    let s = "not true == true";
+    let s = "!true == true";
     parse_expr(s).unwrap();
 }
 
