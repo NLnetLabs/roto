@@ -1,0 +1,236 @@
+
+# cargo-vet config file
+
+[cargo-vet]
+version = "0.10"
+
+[imports.bytecode-alliance]
+url = "https://raw.githubusercontent.com/bytecodealliance/wasmtime/main/supply-chain/audits.toml"
+
+[imports.google]
+url = "https://raw.githubusercontent.com/google/supply-chain/main/audits.toml"
+
+[imports.mozilla]
+url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
+
+[policy.roto]
+audit-as-crates-io = true
+
+[policy.roto-macros]
+audit-as-crates-io = true
+
+[[exemptions.ariadne]]
+version = "0.6.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.autocfg]]
+version = "1.5.0"
+criteria = "safe-to-run"
+
+[[exemptions.bytes]]
+version = "1.11.0"
+criteria = "safe-to-run"
+
+[[exemptions.capstone]]
+version = "0.13.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.capstone-sys]]
+version = "0.17.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.cc]]
+version = "1.2.52"
+criteria = "safe-to-deploy"
+
+[[exemptions.chrono]]
+version = "0.4.42"
+criteria = "safe-to-run"
+
+[[exemptions.console]]
+version = "0.15.11"
+criteria = "safe-to-run"
+
+[[exemptions.const-str]]
+version = "0.6.4"
+criteria = "safe-to-run"
+
+[[exemptions.const-str-proc-macro]]
+version = "0.6.4"
+criteria = "safe-to-run"
+
+[[exemptions.crossbeam-utils]]
+version = "0.8.21"
+criteria = "safe-to-deploy"
+
+[[exemptions.darling]]
+version = "0.21.3"
+criteria = "safe-to-run"
+
+[[exemptions.darling_core]]
+version = "0.21.3"
+criteria = "safe-to-run"
+
+[[exemptions.darling_macro]]
+version = "0.21.3"
+criteria = "safe-to-run"
+
+[[exemptions.deranged]]
+version = "0.5.5"
+criteria = "safe-to-run"
+
+[[exemptions.encode_unicode]]
+version = "1.0.0"
+criteria = "safe-to-run"
+
+[[exemptions.errno]]
+version = "0.3.14"
+criteria = "safe-to-run"
+
+[[exemptions.fallible-iterator]]
+version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.find-msvc-tools]]
+version = "0.1.7"
+criteria = "safe-to-deploy"
+
+[[exemptions.getrandom]]
+version = "0.3.4"
+criteria = "safe-to-run"
+
+[[exemptions.ident_case]]
+version = "1.0.1"
+criteria = "safe-to-run"
+
+[[exemptions.indexmap]]
+version = "2.13.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.inetnum]]
+version = "0.1.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.insta]]
+version = "1.46.0"
+criteria = "safe-to-run"
+
+[[exemptions.js-sys]]
+version = "0.3.85"
+criteria = "safe-to-run"
+
+[[exemptions.mach2]]
+version = "0.4.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.memmap2]]
+version = "0.2.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.octseq]]
+version = "0.5.2"
+criteria = "safe-to-run"
+
+[[exemptions.once_cell]]
+version = "1.21.3"
+criteria = "safe-to-run"
+
+[[exemptions.portable-atomic]]
+version = "1.13.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.portable-atomic-util]]
+version = "0.2.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.r-efi]]
+version = "5.3.0"
+criteria = "safe-to-run"
+
+[[exemptions.region]]
+version = "3.0.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.roto]]
+version = "0.10.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.roto-macros]]
+version = "0.10.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.routecore]]
+version = "0.6.0"
+criteria = "safe-to-run"
+
+[[exemptions.rustc-literal-escaper]]
+version = "0.0.7"
+criteria = "safe-to-deploy"
+
+[[exemptions.schemars]]
+version = "0.9.0"
+criteria = "safe-to-run"
+
+[[exemptions.schemars]]
+version = "1.2.0"
+criteria = "safe-to-run"
+
+[[exemptions.sealed]]
+version = "0.6.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.serde_with]]
+version = "3.16.1"
+criteria = "safe-to-run"
+
+[[exemptions.serde_with_macros]]
+version = "3.16.1"
+criteria = "safe-to-run"
+
+[[exemptions.similar]]
+version = "2.7.0"
+criteria = "safe-to-run"
+
+[[exemptions.stable_deref_trait]]
+version = "1.2.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.symbol_table]]
+version = "0.5.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.target-lexicon]]
+version = "0.13.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.time]]
+version = "0.3.45"
+criteria = "safe-to-run"
+
+[[exemptions.time-core]]
+version = "0.1.7"
+criteria = "safe-to-run"
+
+[[exemptions.time-macros]]
+version = "0.2.25"
+criteria = "safe-to-run"
+
+[[exemptions.wasm-bindgen]]
+version = "0.2.108"
+criteria = "safe-to-run"
+
+[[exemptions.wasm-bindgen-macro]]
+version = "0.2.108"
+criteria = "safe-to-run"
+
+[[exemptions.wasm-bindgen-macro-support]]
+version = "0.2.108"
+criteria = "safe-to-run"
+
+[[exemptions.wasm-bindgen-shared]]
+version = "0.2.108"
+criteria = "safe-to-run"
+
+[[exemptions.yansi]]
+version = "1.0.1"
+criteria = "safe-to-deploy"
