@@ -80,8 +80,6 @@ we've summarized some important missing features here.
 
 - It's not yet possible to write generic functions.
   ([#190](https://codeberg.org/NLnetLabs/roto/issues/190))
-- It's not yet possible to create global constants.
-  ([#344](https://codeberg.org/NLnetLabs/roto/issues/344))
 - Functions are not yet first-class, meaning that they cannot be passed around
   as values. ([#122](https://codeberg.org/NLnetLabs/roto/issues/122))
 - Roto does not have maps/dictionaries yet.
