@@ -264,7 +264,7 @@ impl TypeChecker {
                                 node: variant.name,
                                 id: MetaId(0),
                             },
-                            DeclarationKind::Variant(Some((
+                            DeclarationKind::Enum(Some((
                                 type_def.clone(),
                                 variant.clone(),
                             ))),
@@ -611,7 +611,7 @@ impl TypeChecker {
                             self.type_info.scope_graph.insert_declaration(
                                 new_scope,
                                 &variant.ident,
-                                DeclarationKind::Variant(None),
+                                DeclarationKind::Enum(None),
                                 String::new(),
                                 |_| false,
                             );
@@ -659,7 +659,7 @@ impl TypeChecker {
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Import(_) => continue,
-                    ast::Declaration::Enum(ast::VariantTypeDeclaration {
+                    ast::Declaration::Enum(ast::EnumTypeDeclaration {
                         ident,
                         type_params,
                         variants,
@@ -744,7 +744,7 @@ impl TypeChecker {
                                         node: variant.name,
                                         id: MetaId(0),
                                     },
-                                    DeclarationKind::Variant(Some((
+                                    DeclarationKind::Enum(Some((
                                         type_def.clone(),
                                         variant.clone(),
                                     ))),
@@ -752,7 +752,7 @@ impl TypeChecker {
                                     |kind| {
                                         matches!(
                                             kind,
-                                            DeclarationKind::Variant(None)
+                                            DeclarationKind::Enum(None)
                                         )
                                     },
                                 )

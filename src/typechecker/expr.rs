@@ -1226,7 +1226,7 @@ impl TypeChecker {
                     fields,
                 }))
             }
-            DeclarationKind::Variant(Some((ty, variant))) => {
+            DeclarationKind::Enum(Some((ty, variant))) => {
                 if let Some(_field) = idents.next() {
                     todo!("make a nice error for variant cannot have field")
                 }
@@ -1235,7 +1235,7 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
-            DeclarationKind::Variant(None)
+            DeclarationKind::Enum(None)
             | DeclarationKind::Function(None)
             | DeclarationKind::Method(None) => {
                 ice!("These should be declared at this point")
@@ -1257,7 +1257,7 @@ impl TypeChecker {
             DeclarationKind::Value(..)
             | DeclarationKind::Function(..)
             | DeclarationKind::Method(..)
-            | DeclarationKind::Variant(..)
+            | DeclarationKind::Enum(..)
             | DeclarationKind::Module => {
                 Err(self.error_expected_type(ident, declaration))
             }

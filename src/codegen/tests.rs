@@ -3718,10 +3718,10 @@ fn prefix_eq() {
 }
 
 #[test]
-fn define_variant_type() {
+fn define_enum_type() {
     let s = src!(
         "
-       variant Foo {
+       enum Foo {
            Bar,
            Baz,
        }
@@ -3757,7 +3757,7 @@ fn define_variant_type() {
 fn haskeller_wants_to_feel_at_home() {
     let s = src!(
         "
-       variant Maybe {
+       enum Maybe {
            Just(i32),
            Nothing,
        }
@@ -3800,7 +3800,7 @@ fn haskeller_wants_to_feel_at_home() {
 fn generic_haskeller_wants_to_feel_at_home() {
     let s = src!(
         "
-       variant Maybe[T] {
+       enum Maybe[T] {
            Just(T),
            Nothing,
        }
@@ -3840,10 +3840,10 @@ fn generic_haskeller_wants_to_feel_at_home() {
 }
 
 #[test]
-fn match_on_empty_variant() {
+fn match_on_empty_enum() {
     let s = src!(
         "
-        variant Foo {}
+        enum Foo {}
 
         fn foo(x: Foo) {
             match x {}
@@ -3855,10 +3855,10 @@ fn match_on_empty_variant() {
 }
 
 #[test]
-fn match_on_empty_variant_2() {
+fn match_on_empty_enum_2() {
     let s = src!(
         "
-        variant Foo {}
+        enum Foo {}
 
         fn foo() {
             let x: Foo = return;
@@ -3876,7 +3876,7 @@ fn match_on_empty_variant_2() {
 fn match_on_uninhabited_variant() {
     let s = src!(
         "
-        variant Foo { Baz(!) }
+        enum Foo { Baz(!) }
 
         fn foo(x: Foo) {
             match x {
@@ -3893,7 +3893,7 @@ fn match_on_uninhabited_variant() {
 fn lets_make_a_result() {
     let s = src!(
         "
-        variant Result[T, E] {
+        enum Result[T, E] {
             Ok(T),
             Err(E),
         }
@@ -3929,10 +3929,10 @@ fn lets_make_a_result() {
 }
 
 #[test]
-fn variant_with_unused_type_param() {
+fn enum_with_unused_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x = Foo.Bar;
@@ -3945,10 +3945,10 @@ fn variant_with_unused_type_param() {
 }
 
 #[test]
-fn variant_with_never_type_param() {
+fn enum_with_never_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x: Foo[!] = Foo.Bar;

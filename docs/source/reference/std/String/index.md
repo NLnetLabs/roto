@@ -65,7 +65,7 @@ let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); # -> "hello"
 Get a view of this string indexed by lines.
 ````
 
-````{roto:function} repeat(self: String, n: u32) -> String
+````{roto:function} repeat(self: String, n: u64) -> String
 Repeat a string `n` times and join them.
 
 ```roto
@@ -98,6 +98,26 @@ let b = "haystack".starts_with("trees"); # -> false
 ```
 ````
 
+````{roto:function} strip_prefix(self: String, prefix: String) -> Option[String]
+Create a new string by removing a given prefix.
+
+Returns `None` if the string does not contain the prefix.
+
+```roto
+let a = "RustRoto!".strip_prefix("Rust"); # -> "Roto!"
+```
+````
+
+````{roto:function} strip_suffix(self: String, suffix: String) -> Option[String]
+Create a new string by removing a given suffix.
+
+Returns `None` if the string does not contain the suffix.
+
+```roto
+let a = "Roto!Rust".strip_suffix("Rust"); # -> "Roto!"
+```
+````
+
 ````{roto:function} to_lowercase(self: String) -> String
 Create a new string with all characters converted to lowercase.
 
@@ -115,6 +135,31 @@ Create a new string with all characters converted to uppercase.
 
 ```roto
 let a = "quiet".to_uppercase(); # -> "QUIET"
+```
+````
+
+````{roto:function} trim(self: String) -> String
+Create a new string by removing leading and trailing
+whitespace.
+
+```roto
+let a = "  Roto!  ".trim(); # -> "Roto!"
+```
+````
+
+````{roto:function} trim_end(self: String) -> String
+Create a new string by removing trailing whitespace.
+
+```roto
+let a = "  Roto!  ".trim_end(); # -> "  Roto!"
+```
+````
+
+````{roto:function} trim_start(self: String) -> String
+Create a new string by removing leading whitespace.
+
+```roto
+let a = "  Roto!  ".trim_start(); # -> "Roto!  "
 ```
 ````
 

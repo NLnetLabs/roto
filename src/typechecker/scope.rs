@@ -67,7 +67,7 @@ pub enum DeclarationKind {
     Function(Option<FunctionDeclaration>),
     Module,
     Method(Option<FunctionDeclaration>),
-    Variant(Option<(TypeDefinition, EnumVariant)>),
+    Enum(Option<(TypeDefinition, EnumVariant)>),
     TypeParam(Identifier),
 }
 

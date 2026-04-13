@@ -278,7 +278,7 @@ fn string_methods() -> Library {
             /// whitespace.
             ///
             /// ```roto
-            /// "  Roto!  ".trim() # -> "Roto!"
+            /// let a = "  Roto!  ".trim(); # -> "Roto!"
             /// ```
             fn trim(self) -> Self {
                 self.trim()
@@ -287,7 +287,7 @@ fn string_methods() -> Library {
             /// Create a new string by removing leading whitespace.
             ///
             /// ```roto
-            /// "  Roto!  ".trim_start() # -> "Roto!  "
+            /// let a = "  Roto!  ".trim_start(); # -> "Roto!  "
             /// ```
             fn trim_start(self) -> Self {
                 self.trim_start()
@@ -296,7 +296,7 @@ fn string_methods() -> Library {
             /// Create a new string by removing trailing whitespace.
             ///
             /// ```roto
-            /// "  Roto!  ".trim_end() # -> "  Roto!"
+            /// let a = "  Roto!  ".trim_end(); # -> "  Roto!"
             /// ```
             fn trim_end(self) -> Self {
                 self.trim_end()
@@ -307,7 +307,7 @@ fn string_methods() -> Library {
             /// Returns `None` if the string does not contain the prefix.
             ///
             /// ```roto
-            /// "RustRoto!".strip_prefix("Rust") # -> "Roto!"
+            /// let a = "RustRoto!".strip_prefix("Rust"); # -> "Roto!"
             /// ```
             fn strip_prefix(self, prefix: String) -> Option<String> {
                 self.strip_prefix(&prefix)
@@ -318,7 +318,7 @@ fn string_methods() -> Library {
             /// Returns `None` if the string does not contain the suffix.
             ///
             /// ```roto
-            /// "Roto!Rust".strip_suffix("Rust") # -> "Roto!"
+            /// let a = "Roto!Rust".strip_suffix("Rust"); # -> "Roto!"
             /// ```
             fn strip_suffix(self, suffix: String) -> Option<String> {
                 self.strip_suffix(&suffix)

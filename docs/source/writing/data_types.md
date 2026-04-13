@@ -75,12 +75,12 @@ A `record` in Roto is similar to a `struct` or `class` in other languages.
 [](lang_named_records) in the language reference
 :::
 
-## Variant Types
+## Enum Types
 
 Records are great when you want to create a type that is a combination of
 multiple fields, but often, you need something that contains one of several
 options. For example, text might be left, center or right aligned. We can model
-that in Roto with [`variant`](lang_variant_type) types.
+that in Roto with [`enum`](lang_enum_type) types.
 
 We start by declaring the type `Alignment` with three constructors: `Left`,
 `Center`, `Right`. If we now write `Alignment.Left`, for instance, we make
@@ -89,7 +89,7 @@ a value of that type representing left alignment. For any value of type
 we should do in each of the cases.
 
 ```roto
-variant Alignment {
+enum Alignment {
     Left,
     Center,
     Right,
@@ -141,14 +141,14 @@ _______Ho!
 ___Ho!____
 :::
 
-Variant types can also carry data in their constructors. You can specify that with a list
+Enum types can also carry data in their constructors. You can specify that with a list
 of types enclosed in `()`. You can extract the values of these fields while
 matching on the type. Below, we create a type `Range` that represents a range of
 `i64` numbers, where you can either specify no bounds, a lower bound, an upper bound or
 both. The `contains` function then checks whether a number is within that range.
 
 ```roto
-variant Range {
+enum Range {
     Full,
     From(i64),
     Until(i64),
@@ -177,13 +177,8 @@ fn main() {
 a = true, b = false, c = true, d = false
 :::
 
-:::{hint}
-A [`variant`](lang_variant_type) type in Roto is similar to an `enum` or
-algebraic data type in other languages.
-:::
-
 :::{seealso}
-[](lang_variant_type) in the language reference
+[](lang_enum_type) in the language reference
 
 [](lang_match) in the language reference
 :::

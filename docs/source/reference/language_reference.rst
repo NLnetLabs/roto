@@ -78,7 +78,7 @@ Additionally, we have the following conventions:
 
 - The names of local variables, modules, functions and function arguments
   should use ``snake_case``, i.e. should be all lowercase with words separated by ``_``.
-- The names of types and variant constructors should use ``PascalCase``, i.e. should
+- The names of types and enum constructors should use ``PascalCase``, i.e. should
   have each word capitalized. The exceptions are the primitive boolean, integer
   and floating point types.
 - The names of constants should use ``SCREAMING_SNAKE_CASE``, i.e. should be all uppercase
@@ -395,11 +395,11 @@ has optional values. The type of an optional value is written ``T?``, which is
 shorthand for ``Option[T]``. For example, an optional ``u32`` is ``u32?``, or
 equivalently, ``Option[u32]``.
 
-The ``Option`` type is a ``variant`` type with 2 constructors: ``None`` and
+The ``Option`` type is an ``enum`` type with 2 constructors: ``None`` and
 ``Some``. A value of ``T?`` is constructed with either ``Option.None`` or
 ``Option.Some(t)`` where ``t`` is a value of type ``T``.
 
-Like any variant type it is possible to match on a value of type ``T?``
+Like any enum type it is possible to match on a value of type ``T?``
 
 .. code-block:: roto
     :class: test-ignore
@@ -501,21 +501,21 @@ There is an automatic coercion from anonymous records to named records:
         { foo: int, bar: false }  # implicitly coerced to SomeRecord
     }
 
-.. _lang_variant_type:
+.. _lang_enum_type:
 
-Variant types
-^^^^^^^^^^^^^
+Enum types
+^^^^^^^^^^
 
-Another kind of custom type in Roto are ``variant`` types. These types have a
+Another kind of custom type in Roto are ``enum`` types. These types have a
 set of constructors and values of these types are always constructed using one
-of these. Each of the constructors can take arguments. To inspect ``variant``
+of these. Each of the constructors can take arguments. To inspect ``enum``
 types, we can ``match`` on them.
 
 .. code-block:: roto
     :class: test-ignore
 
-    # A `Number` variant type that has the constructors `Int`, `Float` and `Nan`.
-    variant Number {
+    # A `Number` enum type that has the constructors `Int`, `Float` and `Nan`.
+    enum Number {
         Int(i32),
         Float(f32),
         Nan,
@@ -533,12 +533,12 @@ types, we can ``match`` on them.
         }
     }
 
-Variant types can be generic over other types by taking type parameters.
+Enum types can be generic over other types by taking type parameters.
 
 .. code-block:: roto
     :class: test-ignore
 
-    variant Either[L, R] {
+    enum Either[L, R] {
         Left(L),
         Right(R),
     }
@@ -551,11 +551,7 @@ Variant types can be generic over other types by taking type parameters.
     }
 
 .. note::
-    If you're familiar with Rust, ``variant`` types are just ``enum`` with another name.
-    Or, for the functional programmers, ``variant`` types are algebraic data types.
-
-.. note::
-    Variant types are also used to model optional values. See :ref:`lang_optionals`.
+    Enum types are also used to model optional values. See :ref:`lang_optionals`.
 
 
 Operators
@@ -749,7 +745,7 @@ should be separated with commas, unless the expression is a block, i.e., when
 it is wrapped in ``{}``.
 
 The current implementation of this feature is very limited: you
-can only match against ``variant`` types and only match against the
+can only match against ``enum`` types and only match against the
 constructor, not against the contents of the constructor.  See `issue 124
 <https://codeberg.org/NLnetLabs/roto/issues/124>`_ for the status on these
 limitations.
@@ -771,7 +767,7 @@ limitations.
     separate the pattern from the expression.
 
     Another difference to be aware of is that Roto currently doesn't use
-    the full path to the ``variant`` constructor, but only the name. So
+    the full path to the ``enum`` constructor, but only the name. So
     ``Option.None`` is not allowed as a pattern, but ``None`` is. This will
     probably change once ``match`` expressions become more general.
 

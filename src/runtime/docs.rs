@@ -318,7 +318,7 @@ impl Rt {
                         items,
                     }));
                 }
-                DeclarationKind::Variant(_) => {
+                DeclarationKind::Enum(_) => {
                     // Skip for now
                 }
                 DeclarationKind::TypeParam(_) => {

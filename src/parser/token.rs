@@ -80,6 +80,7 @@ pub enum Keyword {
     Accept,
     Dep,
     Else,
+    Enum,
     Filter,
     FilterMap,
     For,
@@ -97,7 +98,6 @@ pub enum Keyword {
     Std,
     Super,
     Test,
-    Variant,
     While,
 }
 
@@ -550,6 +550,7 @@ impl<'s> Lexer<'s> {
             "accept" => Keyword::Accept,
             "dep" => Keyword::Dep,
             "else" => Keyword::Else,
+            "enum" => Keyword::Enum,
             "filter" => Keyword::Filter,
             "filtermap" => Keyword::FilterMap,
             "for" => Keyword::For,
@@ -567,7 +568,6 @@ impl<'s> Lexer<'s> {
             "std" => Keyword::Std,
             "super" => Keyword::Super,
             "test" => Keyword::Test,
-            "variant" => Keyword::Variant,
             "while" => Keyword::While,
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
@@ -583,7 +583,6 @@ impl<'s> Lexer<'s> {
     fn record_almost_keyword(&mut self, x: &str, span: Range<usize>) {
         let suggestion = match x {
             "loop" => None,
-            "enum" => Some("variant"),
             "struct" => Some("record"),
             "class" => Some("record"),
             "data" => Some("record"),
@@ -671,6 +670,7 @@ impl Keyword {
             Keyword::Accept => "accept",
             Keyword::Dep => "dep",
             Keyword::Else => "else",
+            Keyword::Enum => "enum",
             Keyword::Filter => "filter",
             Keyword::FilterMap => "filtermap",
             Keyword::For => "for",
@@ -688,7 +688,6 @@ impl Keyword {
             Keyword::Std => "std",
             Keyword::Super => "super",
             Keyword::Test => "test",
-            Keyword::Variant => "variant",
             Keyword::While => "while",
         }
     }
