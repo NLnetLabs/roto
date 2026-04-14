@@ -1,6 +1,6 @@
 # Control Flow
 
-After introducing the basic types and operations, it's time we delve
+After introducing basic types and operations, it's time to delve
 into more complex programs with control flow.
 
 ## If-Else
@@ -26,7 +26,7 @@ fn main() {
 x is even
 :::
 
-An [`if-else`](lang_if_else) expression also evaluates to a value itself. That
+An [`if-else`](lang_if_else) expression can also evaluate to a value itself. That
 value is determined by the last value in each of the arms, as long as there is
 no semicolon at the end.
 
@@ -49,8 +49,8 @@ x is positive
 1
 :::
 
-It's possible to declare variables in the arms of [`if-else`](lang_if_else)
-expressions, but they will only be available within that arm. The same goes
+It's possible to declare variables within the arms of [`if-else`](lang_if_else)
+expressions, but they will only be available within that arm, and they will cease to exist on leaving that scope. The same goes
 for any block of statements in Roto that is delimited by `{}`.
 
 {class="test-error"}
@@ -60,19 +60,22 @@ fn main() {
         let x = 10;
         print(f"{x}"); # This is fine!
     }
-    print(f"{x}"); # This errors during type checking!
+    print(f"{x}"); # This errors during type checking as x no longer exists here!
 }
 ```
 
 :::{seealso}
-[](lang_if_else) in the language reference
+[`if-else`](lang_if_else) in the language reference
 :::
+
+## Match
+
+@todo
 
 ## While Loops
 
-We can loop in Roto using a [`while`](lang_while) loop. As you might expect from
-other languages, a [`while`](lang_while) loop takes a condition and then a block.
-It will keep running the body until the condition evaluates to `false`.
+We can loop in Roto using a [`while`](lang_while) loop. As in many other languages, a [`while`](lang_while) loop takes a condition and then a block.
+The body of the block is run repeatedly until the condition evaluates to `false`.
 
 ```roto
 # Euclidean algorithm for greatest common divisor
@@ -97,12 +100,12 @@ gcd(125, 50) = 25
 :::
 
 :::{seealso}
-[](lang_while) in the language reference
+[`while`](lang_while) in the language reference
 :::
 
 ## For Loops
 
-If you'd like to execute some code for every element in a list, you should use
+To execute some code for every element in a list, use
 a [`for`](lang_for) loop instead of a [`while`](lang_while) loop.
 
 ```roto
@@ -123,11 +126,9 @@ fn main() {
 :::{note}
 A [`while`](lang_while) loop is currently the best way to iterate over a range
 of numbers. There will be support for using [`for`](lang_for) loops with ranges
-in the future. See [this community
-post](https://community.nlnetlabs.nl/t/range-types-and-literals/74) for more
-information.
+in the future. See [this community post](https://community.nlnetlabs.nl/t/range-types-and-literals/74) for more information.
 :::
 
 :::{seealso}
-[](lang_for) in the language reference
+[`for`](lang_for) in the language reference
 :::

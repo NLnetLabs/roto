@@ -1,16 +1,13 @@
 # Data Types
 
 In [](writing-basics), we covered some of Roto's primitive types, but those
-can only get you so far. You can construct your own types too!
+can only get you so far; you can construct your own types too!
 
 ## Anonymous Records
 
-The simplest way to group some values is with an anonymous record. The syntax
-for it is curly braces (`{}`) with the fields and their types. You can create
-a value of that same type with the same braces and if you assign a value for
-every field.
+The simplest way to group some values is with an *anonymous record*. Create one using curly braces `{}` to wrap a list of the fields and their respective types. Create a value of that same type by using the same braces and assigning a value for every field. This is a convenient way to return multiple values from a function.
 
-This is a convenient way to return multiple values from a function.
+In this example, the function accepts an anonymous record containing two `f64` fields, `x` and `y`, and returns a new record with those fields doubled. The body of the function takes the values from the `a` parameter and multiplies them by 2 to create the new record that matches the "shape" of the declared return type.
 
 ```roto
 fn double_both(a: {x: f64, y: f64}) -> {x: f64, y: f64} {
@@ -34,16 +31,15 @@ two.y = 40
 :::
 
 :::{seealso}
-[](lang_anonymous_records) in the language reference
+[`anonymous records`](lang_anonymous_records) in the language reference
 :::
 
 ## Record Types
 
-Of course, writing the same anonymous record types gets tedious. That's why you
-can also make named record types with the [`record`](lang_named_records)
-keyword.
+Of course, writing the same anonymous record types gets tedious, so you
+can also make *named* record types with the [`record`](lang_named_records) keyword.
 
-Here is the same snippet as before but using a named record type instead.
+Here is the same snippet as before but using a named record type instead of an anonymous one:
 
 ```roto
 record Vec2 {
@@ -72,7 +68,7 @@ A `record` in Roto is similar to a `struct` or `class` in other languages.
 :::
 
 :::{seealso}
-[](lang_named_records) in the language reference
+[`named_records`](lang_named_records) in the language reference
 :::
 
 ## Variant Types
@@ -85,8 +81,8 @@ that in Roto with [`variant`](lang_variant_type) types.
 We start by declaring the type `Alignment` with three constructors: `Left`,
 `Center`, `Right`. If we now write `Alignment.Left`, for instance, we make
 a value of that type representing left alignment. For any value of type
-`Alignment` that we get, we can [`match`](lang_match) on it to specify what
-we should do in each of the cases.
+`Alignment`, we can [`match`](lang_match) on it to specify what
+we should do in each case.
 
 ```roto
 variant Alignment {
@@ -141,7 +137,7 @@ _______Ho!
 ___Ho!____
 :::
 
-Variant types can also carry data in their constructors. You can specify that with a list
+Variant types can also carry data in their constructors by specifying a list
 of types enclosed in `()`. You can extract the values of these fields while
 matching on the type. Below, we create a type `Range` that represents a range of
 `i64` numbers, where you can either specify no bounds, a lower bound, an upper bound or
@@ -183,7 +179,5 @@ algebraic data type in other languages.
 :::
 
 :::{seealso}
-[](lang_variant_type) in the language reference
-
-[](lang_match) in the language reference
+[`variant type`](lang_variant_type) and [`match`](lang_match) in the language reference
 :::

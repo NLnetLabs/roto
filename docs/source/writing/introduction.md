@@ -1,12 +1,11 @@
-Introduction
-============
+# Introduction
 
 This chapter will introduce Roto and guide you towards being able to write
 your own scripts with it. This is not meant to be a comprehensive reference.
-If you want to know _everything_ that Roto has to offer, you should look at the
+If you want to know _everything_ that Roto has to offer, look at the
 [](lang), instead.
 
-While you're learning the language, there are probably two pages you
+While you're learning the language, there are two pages you might
 want to keep open as a reference, so you can look up anything you don't
 understand:
 
@@ -21,9 +20,9 @@ the following command:
 $ roto run path-to-script.roto
 ```
 
-When a Roto script is run, it is first compiled and any syntax or type
+When a Roto script is run, it is first compiled, and any syntax or type
 checking errors will be reported. Then the function called `main` will
-be called. The minimal script you need is therefore the following.
+be called. The minimal script you need is therefore the following:
 
 ```roto
 fn main() {
@@ -31,7 +30,7 @@ fn main() {
 }
 ```
 
-Every statement you write in Roto has to end with a semicolon. You can
+Every statement you write in Roto must end with a semicolon. You can
 add [comments](lang_comments) to your code with `#`, which will make Roto
 ignore the rest of the line.
 
