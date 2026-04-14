@@ -48,7 +48,7 @@ fn manual_doctests() {
         }
         drop(source_file);
 
-        // This is inefficient, but really helpful for debuggin the
+        // This is inefficient, but really helpful for debugging the
         // tests.
         dbg!(std::fs::read_to_string(&source_path).unwrap());
 

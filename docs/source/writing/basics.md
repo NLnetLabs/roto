@@ -1,39 +1,12 @@
+(writing-basics)=
 # Basics
-
-This chapter will introduce Roto and guide you towards being able to
-write your own scripts with it.
-
-While you're learning the language, there are probably two pages you
-want to
-
-The easiest way to follow along is to [install the standalone
-compiler](installation). and run the examples locally. You can run a script with
-the following command:
-
-```console
-$ roto run path-to-script.roto
-```
-
-When a Roto script is run, it is first compiled and any syntax or type
-checking errors will be reported. Then the function called `main` will
-be called. The minimal script you need is therefore the following.
-
-```roto
-fn main() {
-    # your code goes here
-}
-```
-
-Every statement you write in Roto has to end with a semicolon. You can
-add [comments](lang_comments) to your code with `#`, which will make Roto
-ignore the rest of the line.
 
 ## Printing
 
 The first thing you should know about Roto is how to make it print something.
 That is done with the {roto:ref}`print` function, which takes a single
-{roto:ref}`String` as input. {roto:ref}`Strings <lang_strings>` are delimited by
-double quotes `"`.
+{roto:ref}`String` as input. [Strings](lang_strings) are delimited by double
+quotes `"`.
 
 ```roto
 fn main() {
@@ -102,7 +75,7 @@ Hello, JOHN
 
 :::{seealso}
 
-{ref}`lang_strings` in the language reference.
+[](lang_strings) in the language reference.
 
 The {roto:ref}`String` type.
 
