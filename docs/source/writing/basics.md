@@ -244,10 +244,6 @@ true
 :::
 
 ::::{warning}
-:::{title}
-Warning
-:::
-
 You should be careful when using `==` and `!=` on floats, because they
 check for exact equality, even though floating point numbers are usually
 not exactly equal. A `nan` value is also not equal to itself.

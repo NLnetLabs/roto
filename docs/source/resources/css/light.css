@@ -1,3 +1,7 @@
+.text-right {
+  text-align: right;
+}
+
 html {
   color-scheme: light dark;
 }
