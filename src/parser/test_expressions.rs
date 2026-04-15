@@ -220,3 +220,19 @@ fn match_with_braces_without_commas() {
     ";
     parse_expr(s).unwrap();
 }
+
+#[test]
+fn anonymous_record() {
+    let s = "
+        { foo: 10, bar: 20 }
+    ";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn block() {
+    let s = "
+        { foo = 10; bar = 20 }
+    ";
+    parse_expr(s).unwrap();
+}

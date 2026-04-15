@@ -1,7 +1,7 @@
 //! Lexer for Roto scripts
 
 use core::{ops::Range, str};
-use std::{fmt::Display, ops::ControlFlow};
+use std::{collections::VecDeque, fmt::Display, ops::ControlFlow};
 
 use unicode_ident::{is_xid_continue, is_xid_start};
 
@@ -104,24 +104,47 @@ pub enum Keyword {
 pub struct Lexer<'a> {
     input: &'a str,
     original_length: usize,
-    peeked: Option<(Result<Token<'a>, ()>, Range<usize>)>,
+    peeked: VecDeque<(Result<Token<'a>, ()>, Range<usize>)>,
     pub almost_keyword:
         Option<(Identifier, Range<usize>, Option<&'static str>)>,
 }
 
 impl<'a> Lexer<'a> {
     pub fn next(&mut self) -> Option<(Result<Token<'a>, ()>, Range<usize>)> {
-        if self.peeked.is_some() {
-            return self.peeked.take();
+        if let Some(t) = self.peeked.pop_front() {
+            return Some(t);
         }
         self.next_inner()
     }
 
-    pub fn peek(&mut self) -> &Option<(Result<Token<'a>, ()>, Range<usize>)> {
-        if self.peeked.is_none() {
-            self.peeked = self.next_inner();
+    pub fn peek(&mut self) -> Option<&(Result<Token<'a>, ()>, Range<usize>)> {
+        if self.peeked.is_empty()
+            && let Some(t) = self.next_inner()
+        {
+            self.peeked.push_back(t);
         }
-        &self.peeked
+        self.peeked.front()
+    }
+
+    pub fn peek_many<const N: usize>(&mut self) -> Option<[&Token<'a>; N]> {
+        for _ in 0..N - self.peeked.len() {
+            if let Some(t) = self.next_inner() {
+                self.peeked.push_back(t);
+            } else {
+                return None;
+            }
+        }
+
+        // Start with some random tokens that we will override.
+        let mut tokens = [const { &Token::AmpAmp }; N];
+        for (i, token) in tokens.iter_mut().enumerate() {
+            let (Ok(t), _) = self.peeked.get(i).unwrap() else {
+                return None;
+            };
+            *token = t;
+        }
+
+        Some(tokens)
     }
 
     fn next_inner(
@@ -147,7 +170,7 @@ impl<'s> Lexer<'s> {
         Self {
             input,
             original_length: input.len(),
-            peeked: None,
+            peeked: VecDeque::new(),
             almost_keyword: None,
         }
     }

@@ -124,6 +124,9 @@ pub enum Expr {
     /// A literal expression
     Literal(Meta<Literal>),
 
+    /// A block expression
+    Block(Meta<Block>),
+
     /// A match expression,
     Match(Box<Meta<Match>>),
 

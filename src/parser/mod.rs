@@ -86,6 +86,10 @@ impl<'source> Parser<'source, '_> {
         }
     }
 
+    fn peek_many<const N: usize>(&mut self) -> Option<[&Token<'source>; N]> {
+        self.lexer.peek_many()
+    }
+
     /// Peek the next token and return whether it matches the given token
     fn peek_is(&mut self, token: Token) -> bool {
         let Some(lexed_token) = self.peek() else {

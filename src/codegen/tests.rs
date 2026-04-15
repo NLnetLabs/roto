@@ -5259,3 +5259,23 @@ fn list_index_string() {
     assert_eq!(f.call("Luuk".into()), Some(2));
     assert_eq!(f.call("Martin".into()), None);
 }
+
+#[test]
+fn block_expression() {
+    let s = src!(
+        r#"
+        fn main(x: u64) -> u64 {
+            let y = {
+                let a = 2 * x;
+                2 * a
+            };
+            y
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(u64) -> u64>("main").unwrap();
+
+    assert_eq!(f.call(10), 40);
+}

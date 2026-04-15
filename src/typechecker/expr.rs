@@ -223,6 +223,15 @@ impl TypeChecker {
                 Ok(true)
             }
             Literal(l) => self.literal(ctx, l),
+            Block(b) => {
+                let idx = self.block_counter;
+                self.block_counter += 1;
+                let block_scope = self
+                    .type_info
+                    .scope_graph
+                    .wrap(scope, ScopeType::Block(idx));
+                self.block(block_scope, ctx, b)
+            }
             Match(m) => self.match_expr(scope, ctx, m),
             FunctionCall(e, args) => match &e.node {
                 ast::Expr::Path(p) => {

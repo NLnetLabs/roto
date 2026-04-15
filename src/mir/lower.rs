@@ -289,6 +289,21 @@ impl<'r> Lowerer<'r> {
         }
     }
 
+    fn block_expr(&mut self, block: &Meta<ast::Block>) -> Value {
+        let val = self.block(block);
+
+        let ty = self.type_info.type_of(block);
+        let res = self.undropped_tmp();
+        self.emit_assign(
+            Place::new(res.clone(), ty.clone()),
+            ty.clone(),
+            val,
+        );
+
+        self.add_live_variable(res.clone(), ty);
+        Value::Move(res)
+    }
+
     fn block(&mut self, block: &Meta<ast::Block>) -> Value {
         self.stack_slots.push(Vec::new());
 
@@ -357,6 +372,7 @@ impl<'r> Lowerer<'r> {
                 self.r#return(return_kind, expr)
             }
             ast::Expr::Literal(literal) => self.literal(literal),
+            ast::Expr::Block(block) => self.block_expr(block),
             ast::Expr::Match(r#match) => self.r#match(id, r#match),
             ast::Expr::FunctionCall(function, arguments) => {
                 self.function_call(id, function, arguments)

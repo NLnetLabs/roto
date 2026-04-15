@@ -446,9 +446,22 @@ impl Parser<'_, '_> {
         }
 
         if self.peek_is(Token::CurlyLeft) {
-            let key_values = self.record()?;
-            let span = self.spans.get(&key_values);
-            return Ok(self.spans.add(span, Expr::Record(key_values)));
+            let is_anonymous_record = matches!(
+                self.peek_many::<2>(),
+                Some([Token::CurlyLeft, Token::CurlyRight])
+            ) || matches!(
+                self.peek_many::<3>(),
+                Some([Token::CurlyLeft, Token::Ident(_), Token::Colon])
+            );
+            if is_anonymous_record {
+                let key_values = self.record()?;
+                let span = self.spans.get(&key_values);
+                return Ok(self.spans.add(span, Expr::Record(key_values)));
+            } else {
+                let block = self.block()?;
+                let span = self.get_span(&block);
+                return Ok(self.spans.add(span, Expr::Block(block)));
+            }
         }
 
         if let Some(Token::Keyword(
