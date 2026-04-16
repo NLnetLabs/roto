@@ -667,7 +667,7 @@ impl Parser<'_, '_> {
 
             let pattern = self.add_span(span, pattern);
 
-            let guard = if self.next_is(Token::Pipe) {
+            let guard = if self.next_is(Token::Keyword(Keyword::If)) {
                 Some(self.expr()?)
             } else {
                 None

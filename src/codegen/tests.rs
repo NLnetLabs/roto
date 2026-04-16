@@ -2040,9 +2040,9 @@ fn match_on_string_with_guards() {
         r#"
         fn foo(s: String?, x: i32) -> String {
             match s {
-                Some(s) | s == "hello" => "hey!",
-                _ | x == 5 =>  "x is 5",
-                Some(s) | s.starts_with("lorem ipsum") => {
+                Some(s) if s == "hello" => "hey!",
+                _ if x == 5 =>  "x is 5",
+                Some(s) if s.starts_with("lorem ipsum") => {
                     "You've generated lorem ipsum: " + s
                 }
                 _ => "Can't recognize",
