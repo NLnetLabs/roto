@@ -38,9 +38,18 @@
     {
         "src": "reference/language_reference",
         "lang": "roto",
+        "code": "fn greater_than_square(x: i32, y: i32) -> bool {\n    let y_squared = y * y;\n    x > y_squared\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 89,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
         "code": "let x = 0;\nx = x + 1;\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 100,
+        "line": 99,
         "testoutput": "",
         "mode": "check"
     },
@@ -49,16 +58,43 @@
         "lang": "roto",
         "code": "let x: u32 = 0;\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 110,
+        "line": 109,
         "testoutput": "",
         "mode": "check"
     },
     {
         "src": "reference/language_reference",
         "lang": "roto",
+        "code": "let x = true;\nif x {\n    let y = false;\n    print(f\"{y}\"); // ok!\n    // y is implicitly dropped here\n}\nprint(f\"{x}\"); // ok!\nprint(f\"{y}\"); // this is not possible: y has been dropped!\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 119,
+        "testoutput": "",
+        "mode": "error"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
         "code": "let character_a: char = 'a';\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 221,
+        "line": 220,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "let s = \"This is a string!\";\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 229,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "let s = \"race\" + \"car\"; // yields the string \"racecar\"\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 235,
         "testoutput": "",
         "mode": "check"
     },
@@ -67,7 +103,7 @@
         "lang": "roto",
         "code": "let x = 10;\nprint(f\"x is {x}\");\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 277,
+        "line": 274,
         "testoutput": "x is 10\n",
         "mode": "run"
     },
@@ -76,7 +112,7 @@
         "lang": "roto",
         "code": "let x = 10;\nprint(f\"Twice x is {2 * x}\");\n\nprint(f\"x is {if x > 100 {\n    \"big\"\n} else {\n    \"small\"\n}}\");\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 289,
+        "line": 286,
         "testoutput": "Twice x is 20\nx is small\n",
         "mode": "run"
     },
@@ -85,7 +121,7 @@
         "lang": "roto",
         "code": "print(f\"x is {{ x }}\");\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 308,
+        "line": 305,
         "testoutput": "x is { x }\n",
         "mode": "run"
     },
@@ -94,16 +130,25 @@
         "lang": "roto",
         "code": "let my_list: List[i32] = [1, 2, 3];\nlet first: i32? = my_list.get(0);\nmatch first {\n    Some(first) => print(f\"First element was: {first}\"),\n    None => print(\"No elements!\"),\n}\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 324,
+        "line": 321,
         "testoutput": "First element was: 1\n",
         "mode": "run"
     },
     {
         "src": "reference/language_reference",
         "lang": "roto",
+        "code": "let a = [\"one\", \"two\", \"three\"];\nlet b = [\"four\", \"five\", \"six\"];\nlet concatenated = a + b;\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 336,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
         "code": "let foo = { bar: 5, baz: 10 };\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 392,
+        "line": 388,
         "testoutput": "",
         "mode": "check"
     },
@@ -112,16 +157,169 @@
         "lang": "roto",
         "code": "if x {\n    { foo: 5, bar: 10 }\n} else {\n    { foo: 5 }  // error!\n}\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 401,
+        "line": 397,
         "testoutput": "",
         "mode": "error"
     },
     {
         "src": "reference/language_reference",
         "lang": "roto",
+        "code": "filtermap example_filter_map() {\n    let x = { foo: 5 };\n    accept x.foo\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 411,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
         "code": "let x = { foo: 5 };\nx.foo = 6;\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 425,
+        "line": 420,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "// A `Number` enum type that has the constructors `Int`, `Float` and `Nan`.\nenum Number {\n    Int(i32),\n    Float(f32),\n    Nan,\n}\n\nfn use_number() {\n    let x = Number.Int(10);\n    let y = Number.Float(21.5);\n    let z = Number.Nan;\n\n    match x {\n        Int(i) => print(f\"int: {i}\"),\n        Float(f) => print(f\"float: {f}\"),\n        Nan => print(f\"nan!\"),\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 463,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "enum Either[L, R] {\n    Left(L),\n    Right(R),\n}\n\nfn to_string(x: Either[i32, String]) -> String {\n    match x {\n        Left(i) => f\"{i}\",\n        Right(s) => s,\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 486,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "1 + 2 * 3;    // evaluates to 7\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 535,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "1 + (2 * 3);  // evaluates to 7\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 541,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "(1 + 2) * 3;  // evaluates to 9\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 547,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "let x = Some(10);\nmatch x {\n    None => print(\"x is None\"),\n    Some(i) => {\n        print(\"x is Some\");\n        print(f\"x is {i}\");\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 677,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "let i = 0;\nwhile i < 10 {\n    i = i + 1;\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 701,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "let total = 0;\nfor x in [1, 2, 3, 4] {\n    total = total + x;\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 718,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "fn add_one(x: u64) -> u64 {\n    x + 1\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 738,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "fn add_one(x: u64) -> u64 {\n    return x + 1;\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 756,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "fn subtract_one(x: u64) -> u64 {\n    if x == 0 {\n        return 0;\n    }\n    x - 1\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 765,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "filtermap reject_zeros(input: IpAddr) {\n    let zeros = 0.0.0.0;\n    if input == zeros {\n        reject\n    } else {\n        accept\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 814,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "filtermap small_enough(x: i32) {\n    if x < 10 {\n        accept x\n    } else {\n        reject \"value was too big!\"\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 827,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "fn small_enough(x: i32) -> Verdict[i32, String] {\n    if x < 10 {\n        return Verdict.Accept(x)\n    } else {\n        return Verdict.Reject(\"value was too big!\")\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 839,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "fn add(x: u32, y: u32) -> u32 {\n    x + y\n}\n\ntest test_add_function {\n    if add(10, 20) == 30 {\n        accept\n    } else {\n        reject\n    }\n}\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 865,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/language_reference",
+        "lang": "roto",
+        "code": "const FOO: u32 = 10;\n",
+        "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
+        "line": 891,
         "testoutput": "",
         "mode": "check"
     },
@@ -130,7 +328,7 @@
         "lang": "roto",
         "code": "const FOO: u32 = BAR;\nconst BAR: u32 = FOO;\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 932,
+        "line": 911,
         "testoutput": "",
         "mode": "error"
     },
