@@ -26,11 +26,11 @@ string, which we can then join with other strings with the `+` operator.
 
 ```roto
 fn main() {
-    # Create a variable with the inferred type String
+    // Create a variable with the inferred type String
     let first_name = "John";
     print("Hello, " + first_name);
 
-    # Create a variable with a type annotation
+    // Create a variable with a type annotation
     let last_name: String = "Doe";
     print("Bye, " + first_name + " " + last_name + "!");
 }
@@ -101,11 +101,11 @@ While we can't print integers directly, we can use them in f-strings.
 
 ```roto
 fn main() {
-    # We can specify the type to get a specific integer type
+    // We can specify the type to get a specific integer type
     let a: u8 = 2 + 1;
     print(f"2 + 1 = {a}");
 
-    # If we don't specify the type we get i32
+    // If we don't specify the type we get i32
     let b = -10 + 3;
     print(f"-10 + 3 = {b}");
 
@@ -118,7 +118,7 @@ fn main() {
     let e = 23 % 5;
     print(f"23 % 5 = {e}");
 
-    # Regular order of operations applies
+    // Regular order of operations applies
     let f = 1 + 4 * 5;
     print(f"1 + 4 * 5 = {f}");
 }
@@ -142,7 +142,7 @@ fn main() {
     let a: u8 = 5;
     let b: u32 = 10;
 
-    let c = a + b; # error!
+    let c = a + b; // error!
 }
 ```
 
@@ -157,26 +157,26 @@ but `10.` and `10.0` are always a floating point number.
 
 ```roto
 fn main() {
-    # We can specify the type to get a specific integer type
-    let a: f32 = 2.0 + 1.0; # -> 3.0
+    // We can specify the type to get a specific integer type
+    let a: f32 = 2.0 + 1.0; // -> 3.0
     print(f"2.0 + 1.0 = {a}");
 
-    # We always have to write the period for floating point numbers
-    let b: f32 = 2. + 1.; # -> 3.0
+    // We always have to write the period for floating point numbers
+    let b: f32 = 2. + 1.; // -> 3.0
     print(f"2. + 1. = {b}");
 
-    # If we don't specify the type we get f64
-    let c = -12.3 + 4.5; # -> -7.8
+    // If we don't specify the type we get f64
+    let c = -12.3 + 4.5; // -> -7.8
     print(f"-12.3 + 4.5 = {c}");
 
-    let d = 2.0 * 3.5; # -> 7.0
+    let d = 2.0 * 3.5; // -> 7.0
     print(f"2.0 * 3.5 = {d}");
 
-    let e = 20.0 / 5.0; # -> 4.0
+    let e = 20.0 / 5.0; // -> 4.0
     print(f"20.0 / 5.0 = {e}");
 
-    # Regular order of operations applies
-    let f = 1.0 + 4.0 * 5.0; # -> 21.0
+    // Regular order of operations applies
+    let f = 1.0 + 4.0 * 5.0; // -> 21.0
     print(f"1.0 + 4.0 * 5.0 = {f}");
 }
 ```
@@ -210,11 +210,11 @@ fn main() {
 Booleans in Roto are represented by the {roto:ref}`bool` type. It has two
 possible values: `true` and `false`. Like any built-in type, booleans can be
 used directly in an [f-string](lang_string_formatting) to be printed. A boolean
-can be negated with the `not` operator.
+can be negated with the `!` operator.
 
 ```roto
 fn main() {
-    let a = not false;
+    let a = !false;
     print(f"{a}");
 }
 ```

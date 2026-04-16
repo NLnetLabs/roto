@@ -75,12 +75,12 @@ A `record` in Roto is similar to a `struct` or `class` in other languages.
 [](lang_named_records) in the language reference
 :::
 
-## Variant Types
+## Enum Types
 
 Records are great when you want to create a type that is a combination of
 multiple fields, but often, you need something that contains one of several
 options. For example, text might be left, center or right aligned. We can model
-that in Roto with [`variant`](lang_variant_type) types.
+that in Roto with [`enum`](lang_enum_type) types.
 
 We start by declaring the type `Alignment` with three constructors: `Left`,
 `Center`, `Right`. If we now write `Alignment.Left`, for instance, we make
@@ -89,7 +89,7 @@ a value of that type representing left alignment. For any value of type
 we should do in each of the cases.
 
 ```roto
-variant Alignment {
+enum Alignment {
     Left,
     Center,
     Right,
@@ -105,13 +105,13 @@ fn align(x: String, size: u64, alignment: Alignment) -> String {
     let left = 0;
     let right = 0;
     match alignment {
-        Left -> {
+        Left => {
             right = pad;
         }
-        Right -> {
+        Right => {
             left = pad;
         }
-        Center -> {
+        Center => {
             left = pad / 2;
             right = pad / 2 + pad % 2;
         }
@@ -141,14 +141,14 @@ _______Ho!
 ___Ho!____
 :::
 
-Variant types can also carry data in their constructors. You can specify that with a list
+Enum types can also carry data in their constructors. You can specify that with a list
 of types enclosed in `()`. You can extract the values of these fields while
 matching on the type. Below, we create a type `Range` that represents a range of
 `i64` numbers, where you can either specify no bounds, a lower bound, an upper bound or
 both. The `contains` function then checks whether a number is within that range.
 
 ```roto
-variant Range {
+enum Range {
     Full,
     From(i64),
     Until(i64),
@@ -157,10 +157,10 @@ variant Range {
 
 fn contains(range: Range, x: i64) -> bool {
     match range {
-        Full -> true,
-        From(a) -> x >= a,
-        Until(a) -> x <= a,
-        Between(a, b) -> x >= a && x <= b,
+        Full => true,
+        From(a) => x >= a,
+        Until(a) => x <= a,
+        Between(a, b) => x >= a && x <= b,
     }
 } 
 
@@ -177,13 +177,8 @@ fn main() {
 a = true, b = false, c = true, d = false
 :::
 
-:::{hint}
-A [`variant`](lang_variant_type) type in Roto is similar to an `enum` or
-algebraic data type in other languages.
-:::
-
 :::{seealso}
-[](lang_variant_type) in the language reference
+[](lang_enum_type) in the language reference
 
 [](lang_match) in the language reference
 :::

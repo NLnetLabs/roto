@@ -27,12 +27,12 @@ be called. The minimal script you need is therefore the following.
 
 ```roto
 fn main() {
-    # your code goes here
+    // your code goes here
 }
 ```
 
 Every statement you write in Roto has to end with a semicolon. You can
-add [comments](lang_comments) to your code with `#`, which will make Roto
+add [comments](lang_comments) to your code with `//`, which will make Roto
 ignore the rest of the line.
 
 Let's get started!

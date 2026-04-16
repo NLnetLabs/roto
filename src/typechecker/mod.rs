@@ -155,6 +155,7 @@ pub struct TypeChecker {
     if_else_counter: usize,
     while_counter: usize,
     for_counter: usize,
+    block_counter: usize,
     /// Set of obligations that we have to satisfy at the end of type checking
     /// a function
     obligations: Vec<Obligation>,
@@ -181,6 +182,7 @@ impl TypeChecker {
             if_else_counter: 0,
             while_counter: 0,
             for_counter: 0,
+            block_counter: 0,
             obligations: Vec::new(),
         };
         checker.declare_builtin_types().unwrap();
@@ -264,7 +266,7 @@ impl TypeChecker {
                                 node: variant.name,
                                 id: MetaId(0),
                             },
-                            DeclarationKind::Variant(Some((
+                            DeclarationKind::Enum(Some((
                                 type_def.clone(),
                                 variant.clone(),
                             ))),
@@ -611,7 +613,7 @@ impl TypeChecker {
                             self.type_info.scope_graph.insert_declaration(
                                 new_scope,
                                 &variant.ident,
-                                DeclarationKind::Variant(None),
+                                DeclarationKind::Enum(None),
                                 String::new(),
                                 |_| false,
                             );
@@ -659,7 +661,7 @@ impl TypeChecker {
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Import(_) => continue,
-                    ast::Declaration::Enum(ast::VariantTypeDeclaration {
+                    ast::Declaration::Enum(ast::EnumTypeDeclaration {
                         ident,
                         type_params,
                         variants,
@@ -744,7 +746,7 @@ impl TypeChecker {
                                         node: variant.name,
                                         id: MetaId(0),
                                     },
-                                    DeclarationKind::Variant(Some((
+                                    DeclarationKind::Enum(Some((
                                         type_def.clone(),
                                         variant.clone(),
                                     ))),
@@ -752,7 +754,7 @@ impl TypeChecker {
                                     |kind| {
                                         matches!(
                                             kind,
-                                            DeclarationKind::Variant(None)
+                                            DeclarationKind::Enum(None)
                                         )
                                     },
                                 )

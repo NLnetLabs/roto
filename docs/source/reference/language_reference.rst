@@ -12,20 +12,20 @@ the language.
 Comments
 --------
 
-Comments in Roto start with a ``#`` and continue until the end of a line. They can
+Comments in Roto start with ``//`` and continue until the end of a line. They can
 be inserted anywhere in the script and are ignored.
 
 .. code-block:: roto
 
-    # this is a comment
+    // this is a comment
 
 Block comments are not supported. To create a multiline comment, prefix every
-line with a ``#``.
+line with ``//``.
 
 .. code-block:: roto
 
-    # one comment line
-    # another comment line
+    // one comment line
+    // another comment line
 
 Literals
 --------
@@ -78,7 +78,7 @@ Additionally, we have the following conventions:
 
 - The names of local variables, modules, functions and function arguments
   should use ``snake_case``, i.e. should be all lowercase with words separated by ``_``.
-- The names of types and variant constructors should use ``PascalCase``, i.e. should
+- The names of types and enum constructors should use ``PascalCase``, i.e. should
   have each word capitalized. The exceptions are the primitive boolean, integer
   and floating point types.
 - The names of constants should use ``SCREAMING_SNAKE_CASE``, i.e. should be all uppercase
@@ -126,11 +126,11 @@ the syntax. For example, the body of an ``if`` expression creates a new scope.
     let x = true;
     if x {
         let y = false;
-        print(f"{y}"); # ok!
-        # y is implicitly dropped here
+        print(f"{y}"); // ok!
+        // y is implicitly dropped here
     }
-    print(f"{x}"); # ok!
-    print(f"{y}"); # this is not possible: y has been dropped!
+    print(f"{x}"); // ok!
+    print(f"{y}"); // this is not possible: y has been dropped!
 
 Built-in Types
 --------------
@@ -179,7 +179,7 @@ Booleans
 
 The boolean type in Roto is called :roto:ref:`bool` and it has two possible
 values: ``true`` and ``false``. Booleans can be manipulated via several
-operators such as ``&&`` (logical and), ``||`` (locical or) and ``not`` (logical
+operators such as ``&&`` (logical and), ``||`` (locical or) and ``!`` (logical
 negation).
 
 .. _lang_integers:
@@ -263,7 +263,7 @@ Strings can be concatenated with ``+``:
 .. code-block:: roto
     :class: test-ignore
 
-    let s = "race" + "car"; # yields the string "racecar"
+    let s = "race" + "car"; // yields the string "racecar"
 
 It also has some methods such as :roto:ref:`String.contains` that can be very
 useful. See the documentation for the :roto:ref:`String` type for more
@@ -363,8 +363,8 @@ create lists with ``[`` and ``]`` with expressions separated by commas.
     let my_list: List[i32] = [1, 2, 3];
     let first: i32? = my_list.get(0);
     match first {
-        Some(first) -> print(f"First element was: {first}"),
-        None -> print("No elements!"),
+        Some(first) => print(f"First element was: {first}"),
+        None => print("No elements!"),
     }
 
 .. testoutput::
@@ -395,18 +395,18 @@ has optional values. The type of an optional value is written ``T?``, which is
 shorthand for ``Option[T]``. For example, an optional ``u32`` is ``u32?``, or
 equivalently, ``Option[u32]``.
 
-The ``Option`` type is a ``variant`` type with 2 constructors: ``None`` and
+The ``Option`` type is an ``enum`` type with 2 constructors: ``None`` and
 ``Some``. A value of ``T?`` is constructed with either ``Option.None`` or
 ``Option.Some(t)`` where ``t`` is a value of type ``T``.
 
-Like any variant type it is possible to match on a value of type ``T?``
+Like any enum type it is possible to match on a value of type ``T?``
 
 .. code-block:: roto
     :class: test-ignore
 
     match x {
-        Some(x) -> x,
-        None -> 0,
+        Some(x) => x,
+        None => 0,
     }
 
 In addition, there is a ``?`` operator, which will evaluate to the value of
@@ -417,8 +417,8 @@ In addition, there is a ``?`` operator, which will evaluate to the value of
     :class: test-ignore
 
     match x {
-        Some(x) -> x,
-        None -> return Option.None,
+        Some(x) => x,
+        None => return Option.None,
     }
 
 
@@ -447,7 +447,7 @@ a type checking error:
     if x {
         { foo: 5, bar: 10 }
     } else {
-        { foo: 5 }  # error!
+        { foo: 5 }  // error!
     }
 
 Note that this makes records significantly different from dictionaries in Python
@@ -486,7 +486,7 @@ yield more readable type checking errors.
         bar: bool,
     }
 
-    # ...
+    // ...
 
     x = SomeRecord { foo: 3, bar: false }
 
@@ -498,24 +498,24 @@ There is an automatic coercion from anonymous records to named records:
     :class: test-ignore
 
     fn foo(int: i32) -> SomeRecord {
-        { foo: int, bar: false }  # implicitly coerced to SomeRecord
+        { foo: int, bar: false }  // implicitly coerced to SomeRecord
     }
 
-.. _lang_variant_type:
+.. _lang_enum_type:
 
-Variant types
-^^^^^^^^^^^^^
+Enum types
+^^^^^^^^^^
 
-Another kind of custom type in Roto are ``variant`` types. These types have a
+Another kind of custom type in Roto are ``enum`` types. These types have a
 set of constructors and values of these types are always constructed using one
-of these. Each of the constructors can take arguments. To inspect ``variant``
+of these. Each of the constructors can take arguments. To inspect ``enum``
 types, we can ``match`` on them.
 
 .. code-block:: roto
     :class: test-ignore
 
-    # A `Number` variant type that has the constructors `Int`, `Float` and `Nan`.
-    variant Number {
+    // A `Number` enum type that has the constructors `Int`, `Float` and `Nan`.
+    enum Number {
         Int(i32),
         Float(f32),
         Nan,
@@ -527,35 +527,31 @@ types, we can ``match`` on them.
         let z = Number.Nan;
 
         match x {
-            Int(i) -> print(f"int: {i}"),
-            Float(f) -> print(f"float: {f}"),
-            Nan -> print(f"nan!"),
+            Int(i) => print(f"int: {i}"),
+            Float(f) => print(f"float: {f}"),
+            Nan => print(f"nan!"),
         }
     }
 
-Variant types can be generic over other types by taking type parameters.
+Enum types can be generic over other types by taking type parameters.
 
 .. code-block:: roto
     :class: test-ignore
 
-    variant Either[L, R] {
+    enum Either[L, R] {
         Left(L),
         Right(R),
     }
 
     fn to_string(x: Either[i32, String]) -> String {
         match x {
-            Left(i) -> f"{i}",
-            Right(s) -> s,
+            Left(i) => f"{i}",
+            Right(s) => s,
         }
     }
 
 .. note::
-    If you're familiar with Rust, ``variant`` types are just ``enum`` with another name.
-    Or, for the functional programmers, ``variant`` types are algebraic data types.
-
-.. note::
-    Variant types are also used to model optional values. See :ref:`lang_optionals`.
+    Enum types are also used to model optional values. See :ref:`lang_optionals`.
 
 
 Operators
@@ -594,21 +590,21 @@ example, this expression:
 .. code-block:: roto
     :class: test-ignore
 
-    1 + 2 * 3    # evaluates to 7
+    1 + 2 * 3    // evaluates to 7
 
 is interpreted as
 
 .. code-block:: roto
     :class: test-ignore
 
-    1 + (2 * 3)  # evaluates to 7
+    1 + (2 * 3)  // evaluates to 7
 
 and not as
 
 .. code-block:: roto
     :class: test-ignore
 
-    (1 + 2) * 3  # evaluates to 9
+    (1 + 2) * 3  // evaluates to 9
 
 .. _lang_comparison:
 
@@ -638,31 +634,51 @@ Examples:
 .. code-block:: roto
     :class: test-ignore
 
-    5 > 10      # evaluates to false
-    10 > 5      # evaluates to true
-    5 == 5      # evaluates to true
-    5 == true   # compile error!
-    1 < x < 10  # compile error!
+    5 > 10      // evaluates to false
+    10 > 5      // evaluates to true
+    5 == 5      // evaluates to true
+    5 == true   // compile error!
+    1 < x < 10  // compile error!
 
 .. _lang_logical:
 
 Logical operators
 ^^^^^^^^^^^^^^^^^
 
-Operators to combine boolean values are called logical operators. They have a
-lower precedence than comparison operators. These are the logical operators in
-Roto:
+Operators to combine boolean values are called logical operators. These are the
+logical operators in Roto:
 
 +---------+--------------------------------+
 | ``&&``  | Logical and (short-circuiting) |
 +---------+--------------------------------+
 | ``||``  | Logical or (short-circuiting)  |
 +---------+--------------------------------+
-| ``not`` | Negation                       |
+| ``!``   | Negation                       |
 +---------+--------------------------------+
 
-Now that we have all the rules for precedence, here is an example using all types of
-operators (arithmetic, comparison and logical):
+The ``&&`` and ``||`` operators are short-circuiting, meaning that if the left-hand operand
+of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
+``true``, the right hand side won't be evaluated.
+
+Precedence
+^^^^^^^^^^
+
+The precedence of the operators is as follows (from highest to lowest):
+
++--------------------------------------------------+-------------------------------------+
+| ``!``, ``-``                                     | Prefix operators                    |
++--------------------------------------------------+-------------------------------------+
+| ``*``, ``/`` , ``%``                             | Multiplication and division         |
++--------------------------------------------------+-------------------------------------+
+| ``+``, ``-``                                     | Addition and subtraction            |
++--------------------------------------------------+-------------------------------------+
+| ``==``, ``!=`` , ``>=`` , ``>`` , ``<=`` , ``<`` | Comparison                          |
++--------------------------------------------------+-------------------------------------+
+| ``&&``, ``||``                                   | Logical conjunction and disjunction |
++--------------------------------------------------+-------------------------------------+
+
+Here is an example using all types of operators (arithmetic, comparison and
+logical):
 
 .. code-block:: roto
     :class: test-ignore
@@ -675,11 +691,6 @@ This is equivalent to:
     :class: test-ignore
 
     ((1 + (x * 3)) == 5) && (y < 10)
-
-The ``&&`` and ``||`` are short-circuiting, meaning that if the left-hand operand
-of ``&&`` evaluates to ``false`` or the left-hand operand of ``||`` evaluates to
-``true``, the right hand side won't be evaluated.
-
 
 
 Control Flow
@@ -698,7 +709,7 @@ condition must evaluate to a boolean.
     :class: test-ignore
 
     if x > 0 {
-        # if the condition is true
+        // if the condition is true
     }
 
 An ``else``-clause can optionally follow the ``if``-block. The ``if``-``else``
@@ -708,9 +719,9 @@ construct is an expression and therefore evaluates to a value.
     :class: test-ignore
 
     if x > 0 {
-        # if the condition is true
+        // if the condition is true
     } else {
-        # if the condition is false
+        // if the condition is false
     }
 
 The if-else is an expression, not a statement, which means that it evaluates to
@@ -744,12 +755,12 @@ Pattern matching in Roto is supported via ``match`` expressions. These take a
 value and a set of patterns to check against, with an expression associated with
 each of the patterns.
 
-The pattern is separated from the associated expression with ``->``. The arms
+The pattern is separated from the associated expression with ``=>``. The arms
 should be separated with commas, unless the expression is a block, i.e., when
 it is wrapped in ``{}``.
 
 The current implementation of this feature is very limited: you
-can only match against ``variant`` types and only match against the
+can only match against ``enum`` types and only match against the
 constructor, not against the contents of the constructor.  See `issue 124
 <https://codeberg.org/NLnetLabs/roto/issues/124>`_ for the status on these
 limitations.
@@ -759,21 +770,19 @@ limitations.
 
     let x = Some(10);
     match x {
-        None -> print("x is None"),
-        Some(i) -> {
+        None => print("x is None"),
+        Some(i) => {
             print("x is Some");
             print(f"x is {i}");
         }
     }
 
 .. note::
-    If you are used to Rust, be aware that Roto uses ``->`` instead of ``=>`` to
-    separate the pattern from the expression.
 
-    Another difference to be aware of is that Roto currently doesn't use
-    the full path to the ``variant`` constructor, but only the name. So
-    ``Option.None`` is not allowed as a pattern, but ``None`` is. This will
-    probably change once ``match`` expressions become more general.
+    In contrast with Rust, Roto currently doesn't use the full path to the
+    ``enum`` constructor, but only the name. So ``Option.None`` is not allowed
+    as a pattern, but ``None`` is. This will probably change once ``match``
+    expressions become more general.
 
 
 .. _lang_while:
@@ -1051,16 +1060,16 @@ module. Multiple ``super`` keywords can appear at the start of a path.
 .. code-block:: roto
     :class: test-ignore
 
-    # in pkg.roto
+    // in pkg.roto
     foo.square
 
-    # in foo.roto
+    // in foo.roto
     square
 
-    # in bar.roto
+    // in bar.roto
     super.foo.square
 
-    # in bar/baz.roto
+    // in bar/baz.roto
     super.super.foo.square
 
 There are 3 special identifiers that can only be used at the start of a path

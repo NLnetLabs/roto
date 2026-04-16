@@ -669,7 +669,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         types.push((name, "".into(), TypeDefinition::Primitive(p)))
     }
 
-    struct VariantType {
+    struct EnumType {
         name: &'static str,
         doc: &'static str,
         params: Vec<&'static str>,
@@ -677,11 +677,11 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     }
 
     let compound_types = vec![
-        VariantType {
+        EnumType {
             name: "Option",
             doc: "An optional value.\n\
             \n\
-            The `Option[T]` is a variant type with two constructors: `Some(T)` \
+            The `Option[T]` is an enum with two constructors: `Some(T)` \
             and `None`. To get the value of an `Option`, you can either match \
             on it or use the `?` operator.\n\
             \n\
@@ -694,7 +694,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
                 ("None", vec![]),
             ],
         },
-        VariantType {
+        EnumType {
             name: "Verdict",
             doc: "The verdict that a filter reaches about a value, that is, \
             whether to accept or reject it.\n\
@@ -710,7 +710,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         },
     ];
 
-    for VariantType {
+    for EnumType {
         name,
         doc,
         params,

@@ -43,7 +43,7 @@ A prefix can also be constructed with the `/` operator.
 ```roto
 let a = Prefix.new(192.169.0.0, 16);
 
-# or equivalently
+// or equivalently
 let b = 192.169.0.0 / 16;
 ```
 ````

@@ -35,10 +35,10 @@ fn main() {
     let x = 100;
     let sign = if x > 0 {
         print("x is positive");
-        1       # <- No semicolon!
+        1       // <- No semicolon!
     } else {
         print("x is negative");
-        -1      # <- No semicolon!
+        -1      // <- No semicolon!
     };
     print(f"{sign}");
 }
@@ -58,9 +58,9 @@ for any block of statements in Roto that is delimited by `{}`.
 fn main() {
     if true {
         let x = 10;
-        print(f"{x}"); # This is fine!
+        print(f"{x}"); // This is fine!
     }
-    print(f"{x}"); # This errors during type checking!
+    print(f"{x}"); // This errors during type checking!
 }
 ```
 
@@ -75,7 +75,7 @@ other languages, a [`while`](lang_while) loop takes a condition and then a block
 It will keep running the body until the condition evaluates to `false`.
 
 ```roto
-# Euclidean algorithm for greatest common divisor
+// Euclidean algorithm for greatest common divisor
 fn main() {
     let a_initial = 125;
     let b_initial = 50;

@@ -272,6 +272,7 @@ class RotoLexer(RegexLexer):
                         'accept',
                         'dep',
                         'else',
+                        'enum',
                         'filter',
                         'filtermap',
                         'fn',
@@ -286,7 +287,6 @@ class RotoLexer(RegexLexer):
                         'std',
                         'super',
                         'test',
-                        'variant',
                         'while',
                     ),
                     suffix=r'\b'

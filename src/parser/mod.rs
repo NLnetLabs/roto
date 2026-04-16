@@ -86,6 +86,10 @@ impl<'source> Parser<'source, '_> {
         }
     }
 
+    fn peek_many<const N: usize>(&mut self) -> Option<[&Token<'source>; N]> {
+        self.lexer.peek_many()
+    }
+
     /// Peek the next token and return whether it matches the given token
     fn peek_is(&mut self, token: Token) -> bool {
         let Some(lexed_token) = self.peek() else {
@@ -245,8 +249,8 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Keyword(Keyword::Record) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Keyword(Keyword::Variant) => {
-                Declaration::Enum(self.variant_declaration()?)
+            Token::Keyword(Keyword::Enum) => {
+                Declaration::Enum(self.enum_declaration()?)
             }
             Token::Keyword(Keyword::Fn) => {
                 Declaration::Function(self.function()?)

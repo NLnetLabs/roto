@@ -746,7 +746,7 @@ fn return_keyword() {
 fn unit_block() {
     let s = src!(
         "
-        # workaround for not having a ()
+        // workaround for not having a ()
         fn unit() {}
 
         fn bar() -> Bool {
@@ -1105,25 +1105,25 @@ fn invalid_type_in_f_string() {
 }
 
 #[test]
-fn two_variants() {
+fn two_enums() {
     let s = src!(
         r#"
-          variant Foo { Bar }
-          variant Foo { Baz }  
+          enum Foo { Bar }
+          enum Foo { Baz }  
         "#
     );
     typecheck(s).unwrap_err();
 }
 
 #[test]
-fn assign_to_variant_with_different_type_param() {
+fn assign_to_enum_with_different_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar(T) }
+          enum Foo[T] { Bar(T) }
 
           fn foo() {
               let x: Foo[i32] = Foo.Bar(10);
-              let y: Foo[f32] = x; # should error!
+              let y: Foo[f32] = x; // should error!
           }
         "#
     );
@@ -1131,10 +1131,10 @@ fn assign_to_variant_with_different_type_param() {
 }
 
 #[test]
-fn variant_with_unused_type_param() {
+fn enum_with_unused_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x = Foo.Bar;
@@ -1145,10 +1145,10 @@ fn variant_with_unused_type_param() {
 }
 
 #[test]
-fn variant_with_never_type_param() {
+fn enum_with_never_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x: Foo[!] = Foo.Bar;
