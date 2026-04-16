@@ -1,11 +1,11 @@
 mod match_expr;
 
-use std::any::TypeId;
+use std::{any::TypeId, collections::HashMap};
 
 use inetnum::addr::Prefix;
 
 use super::{
-    Block, Function, Instruction, Mir, Place, Projection, Value, Var, VarKind,
+    Block, Instruction, Item, Mir, Place, Projection, Value, Var, VarKind,
 };
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
     ice,
     ir_printer::{IrPrinter, Printable},
     label::{LabelRef, LabelStore},
+    mir::ItemKind,
     module::ModuleTree,
     parser::meta::{Meta, MetaId},
     runtime::{Rt, RuntimeFunctionRef},
@@ -52,8 +53,9 @@ pub fn lower_to_mir(
     runtime: &Rt,
     type_info: &mut TypeInfo,
     label_store: &mut LabelStore,
+    order: &[ResolvedName],
 ) -> Mir {
-    let mut mir = Lowerer::tree(runtime, type_info, tree, label_store);
+    let mut mir = Lowerer::tree(runtime, type_info, tree, label_store, order);
     mir.eliminate_dead_code();
     mir
 }
@@ -64,10 +66,16 @@ impl<'r> Lowerer<'r> {
         type_info: &'r mut TypeInfo,
         function_name: &Meta<Identifier>,
         label_store: &'r mut LabelStore,
+        is_constant_definition: bool,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
-        let signature = type_info.function_signature(function_name);
-        let return_type = signature.return_type;
+
+        let return_type = if is_constant_definition {
+            type_info.type_of(function_name)
+        } else {
+            let signature = type_info.function_signature(function_name);
+            signature.return_type
+        };
 
         Self {
             tmp_idx: 0,
@@ -131,30 +139,35 @@ impl<'r> Lowerer<'r> {
         type_info: &mut TypeInfo,
         tree: &ModuleTree,
         label_store: &mut LabelStore,
+        order: &[ResolvedName],
     ) -> Mir {
-        let mut functions = Vec::new();
+        let mut items = HashMap::new();
 
         for m in &tree.modules {
             for d in &m.ast.declarations {
                 match d {
                     ast::Declaration::FilterMap(x) => {
-                        functions.push(
+                        items.insert(
+                            type_info.resolved_name(&x.ident),
                             Lowerer::new(
                                 runtime,
                                 type_info,
                                 &x.ident,
                                 label_store,
+                                false,
                             )
                             .filter_map(x),
                         );
                     }
                     ast::Declaration::Function(x) => {
-                        functions.push(
+                        items.insert(
+                            type_info.resolved_name(&x.ident),
                             Lowerer::new(
                                 runtime,
                                 type_info,
                                 &x.ident,
                                 label_store,
+                                false,
                             )
                             .function(x),
                         );
@@ -162,7 +175,8 @@ impl<'r> Lowerer<'r> {
                     // We give tests special names, so that they can't be referenced from Roto.
                     // It's a bit of a hack, but works well enough.
                     ast::Declaration::Test(x) => {
-                        functions.push(
+                        items.insert(
+                            type_info.resolved_name(&x.ident),
                             Lowerer::new(
                                 runtime,
                                 type_info,
@@ -171,8 +185,26 @@ impl<'r> Lowerer<'r> {
                                     id: x.ident.id,
                                 },
                                 label_store,
+                                false,
                             )
                             .test(x),
+                        );
+                    }
+                    ast::Declaration::Const(x) => {
+                        items.insert(
+                            type_info.resolved_name(&x.ident),
+                            Lowerer::new(
+                                runtime,
+                                type_info,
+                                &Meta {
+                                    node: format!("constant#{}", x.ident)
+                                        .into(),
+                                    id: x.ident.id,
+                                },
+                                label_store,
+                                true,
+                            )
+                            .constant(x),
                         );
                     }
                     // Ignore the rest
@@ -180,11 +212,13 @@ impl<'r> Lowerer<'r> {
                 }
             }
         }
-        Mir { functions }
+
+        let items = order.iter().flat_map(|n| items.remove(n)).collect();
+        Mir { items }
     }
 
     /// Lower a filtermap
-    fn filter_map(self, fm: &ast::FilterMap) -> Function {
+    fn filter_map(self, fm: &ast::FilterMap) -> Item {
         let ast::FilterMap {
             ident,
             body,
@@ -196,7 +230,7 @@ impl<'r> Lowerer<'r> {
         self.function_like(ident, params, &signature.return_type, body)
     }
 
-    fn function(self, function: &ast::FunctionDeclaration) -> Function {
+    fn function(self, function: &ast::FunctionDeclaration) -> Item {
         let name = self.type_info.resolved_name(&function.ident);
         let dec = self.type_info.scope_graph.get_declaration(name);
 
@@ -214,7 +248,7 @@ impl<'r> Lowerer<'r> {
         )
     }
 
-    fn test(self, test: &ast::Test) -> Function {
+    fn test(self, test: &ast::Test) -> Item {
         let ident = Meta {
             node: format!("test#{}", *test.ident).into(),
             id: test.ident.id,
@@ -224,6 +258,43 @@ impl<'r> Lowerer<'r> {
         self.function_like(&ident, &params, &return_type, &test.body)
     }
 
+    fn constant(mut self, constant: &ast::ConstantDeclaration) -> Item {
+        let scope = self.type_info.function_scope(&constant.ident);
+        let label = self.label_store.new_label("$entry".into());
+        self.new_block(label);
+
+        self.stack_slots.push(Vec::new());
+        self.stack_slots.push(Vec::new());
+
+        let last = self.expr(&constant.expr);
+
+        let ty = self.type_info.type_of(&constant.ident);
+        let tmp = self.assign_to_var(last, ty.clone());
+        self.remove_live_variable(&tmp);
+
+        let to_drop = self.stack_slots.pop().unwrap();
+        for (var, ty) in to_drop.into_iter().rev() {
+            self.emit_drop(Place::new(var, ty.clone()), ty);
+        }
+
+        self.emit_return(tmp);
+
+        let resolved_name = self.type_info.resolved_name(&constant.ident);
+        let name = self.type_info.full_name(&resolved_name);
+
+        Item {
+            name,
+            scope,
+            variables: self.vars,
+            ty: ItemKind::Constant {
+                ty,
+                name: resolved_name,
+            },
+            tmp_idx: self.tmp_idx,
+            blocks: self.blocks,
+        }
+    }
+
     /// Lower a function-like construct (i.e. a function, filtermap or test)
     fn function_like(
         mut self,
@@ -231,7 +302,7 @@ impl<'r> Lowerer<'r> {
         params: &ast::Params,
         return_type: &Type,
         body: &Meta<ast::Block>,
-    ) -> Function {
+    ) -> Item {
         let scope = self.type_info.function_scope(ident);
         let label = self.label_store.new_label("$entry".into());
         self.new_block(label);
@@ -266,26 +337,28 @@ impl<'r> Lowerer<'r> {
         };
 
         let last = self.block(body);
+        let tmp = self.assign_to_var(last, return_type.clone());
 
         let to_drop = self.stack_slots.pop().unwrap();
         for (var, ty) in to_drop.into_iter().rev() {
             self.emit_drop(Place::new(var, ty.clone()), ty);
         }
 
-        let tmp = self.assign_to_var(last, return_type.clone());
         self.emit_return(tmp);
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
 
-        Function {
+        Item {
             name,
             scope,
             variables: self.vars,
-            parameters,
+            ty: ItemKind::Function {
+                parameters,
+                signature,
+            },
             tmp_idx: self.tmp_idx,
             blocks: self.blocks,
-            signature,
         }
     }
 

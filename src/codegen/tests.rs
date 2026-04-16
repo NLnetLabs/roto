@@ -2885,19 +2885,25 @@ fn use_type_from_other_module_in_type() {
 
 #[test]
 fn mutate() {
-    #[derive(Copy, Clone, Debug)]
     struct MyType {
-        i: i16,
+        i: AtomicI32,
     }
 
-    let rt = Runtime::from_lib(library! {
-        #[copy] type MyType = Val<*mut MyType>;
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    struct Ptr(*mut MyType);
 
-        impl Val<*mut MyType> {
-            fn increase(mut self) {
-                eprintln!("increase, pre: {}", unsafe { (**self).i });
-                unsafe { (**self).i += 1 };
-                eprintln!("increase, post: {}", unsafe { (**self).i });
+    unsafe impl Send for Ptr {}
+    unsafe impl Sync for Ptr {}
+
+    let rt = Runtime::from_lib(library! {
+        #[copy] type MyType = Val<Ptr>;
+
+        impl Val<Ptr> {
+            fn increase(self) {
+                use std::sync::atomic::Ordering::Relaxed;
+                eprintln!("increase, pre: {}", unsafe { (*self.0.0).i.load(Relaxed) });
+                unsafe { (*self.0.0).i.fetch_add(1, Relaxed) };
+                eprintln!("increase, post: {}", unsafe { (*self.0.0).i.load(Relaxed) });
             }
         }
     })
@@ -2914,21 +2920,25 @@ fn mutate() {
 
     let mut p = compile_with_runtime(s, rt);
     let f = p
-        .get_function::<fn(Val<*mut MyType>) -> Verdict<Val<*mut MyType>, ()>>("main")
+        .get_function::<fn(Val<Ptr>) -> Verdict<Val<Ptr>, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let mut t = MyType { i: 0 };
-    let res = f.call(Val(&mut t));
+    let mut t = MyType {
+        i: AtomicI32::new(0),
+    };
+    let ptr = Ptr(&mut t as *mut _);
+    let res = f.call(Val(ptr));
 
+    use std::sync::atomic::Ordering::Relaxed;
     match res {
         Verdict::Accept(val) => {
-            let val = unsafe { &*val.0 };
-            assert_eq!(val.i, 1, "returned value should be 1")
+            let val = unsafe { (*val.0.0).i.load(Relaxed) };
+            assert_eq!(val, 1, "returned value should be 1")
         }
         Verdict::Reject(_) => todo!(),
     }
 
-    assert_eq!(t.i, 1, "mutated value should be 1");
+    assert_eq!(t.i.load(Relaxed), 1, "mutated value should be 1");
 }
 
 #[test]
@@ -5278,4 +5288,147 @@ fn block_expression() {
     let f = pkg.get_function::<fn(u64) -> u64>("main").unwrap();
 
     assert_eq!(f.call(10), 40);
+}
+
+#[test]
+fn simple_roto_constant() {
+    let s = src!(
+        r#"
+        const FOO: u8 = 8;
+
+        fn main() -> u8 {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u8>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn simple_roto_constant_string() {
+    let s = src!(
+        r#"
+        const FOO: String = "foo";
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foo".into());
+}
+
+#[test]
+fn simple_roto_constant_string_2() {
+    let s = src!(
+        r#"
+        const BAR: String = "bar";
+        const FOO: String = "foo" + BAR;
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foobar".into());
+}
+
+#[test]
+fn roto_constants_through_functions() {
+    let s = src!(
+        r#"
+        const BAR: String = foofoo() + foofoo();
+        const FOO: String = "foo";
+
+        fn foofoo() -> String {
+            FOO + FOO
+        }
+
+        fn main() -> String {
+            BAR
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foofoofoofoo".into());
+}
+
+#[test]
+fn registered_constant_in_roto_constant() {
+    let s = src!(
+        r#"
+         const FOO: u32 = BAR + 1;  
+
+         fn main() -> u32 {
+             FOO
+         }
+       "#
+    );
+
+    let lib = library! {
+        const BAR: u32 = 4;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> u32>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 5);
+}
+
+#[test]
+fn runtime_type_constant() {
+    let s = src!(
+        r#"
+         const FOO: Foo = Foo.new(4);  
+
+         fn main() -> Foo {
+             FOO
+         }
+       "#
+    );
+
+    #[derive(Clone, PartialEq)]
+    struct Foo {
+        x: i32,
+    }
+
+    let lib = library! {
+        #[clone] type Foo = Val<Foo>;
+
+        impl Val<Foo> {
+            fn new(x: i32) -> Self {
+                Val(Foo { x })
+            }
+        }
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.0.x, 4);
 }

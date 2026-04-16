@@ -307,6 +307,23 @@ impl ScopeGraph {
         Ok(dec.name)
     }
 
+    pub fn insert_const(
+        &mut self,
+        scope: ScopeRef,
+        ident: &Meta<Identifier>,
+        ty: &Type,
+    ) -> Result<ResolvedName, MetaId> {
+        let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
+        let dec = self.insert_declaration(
+            scope,
+            ident,
+            kind,
+            String::new(),
+            |_| false,
+        )?;
+        Ok(dec.name)
+    }
+
     pub fn insert_type(
         &mut self,
         scope: ScopeRef,

@@ -18,6 +18,7 @@ pub struct SyntaxTree {
 #[derive(Clone, Debug)]
 pub enum Declaration {
     FilterMap(Box<FilterMap>),
+    Const(ConstantDeclaration),
     Record(RecordTypeDeclaration),
     Enum(EnumTypeDeclaration),
     Function(FunctionDeclaration),
@@ -53,6 +54,13 @@ pub struct EnumTypeDeclaration {
 pub struct Variant {
     pub ident: Meta<Identifier>,
     pub fields: Vec<Meta<TypeExpr>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ConstantDeclaration {
+    pub ident: Meta<Identifier>,
+    pub ty: Meta<TypeExpr>,
+    pub expr: Meta<Expr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

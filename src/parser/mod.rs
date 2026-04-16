@@ -7,7 +7,8 @@
 
 use crate::{
     ast::{
-        Declaration, FunctionDeclaration, Identifier, Path, SyntaxTree, Test,
+        ConstantDeclaration, Declaration, FunctionDeclaration, Identifier,
+        Path, SyntaxTree, Test,
     },
     parser::error::Hint,
 };
@@ -246,6 +247,9 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
+            Token::Keyword(Keyword::Const) => {
+                Declaration::Const(self.constant()?)
+            }
             Token::Keyword(Keyword::Record) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
@@ -270,6 +274,19 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             }
         };
         Ok(expr)
+    }
+
+    /// Parse a constant declaration
+    fn constant(&mut self) -> ParseResult<ConstantDeclaration> {
+        self.take(Token::Keyword(Keyword::Const))?;
+        let ident = self.identifier()?;
+        self.take(Token::Colon)?;
+        let ty = self.type_expr()?;
+        self.take(Token::Eq)?;
+        let expr = self.expr()?;
+        self.take(Token::SemiColon)?;
+
+        Ok(ConstantDeclaration { ident, ty, expr })
     }
 
     /// Parse a term section

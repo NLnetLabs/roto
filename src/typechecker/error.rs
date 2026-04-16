@@ -166,6 +166,34 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_recursive_constant(
+        &self,
+        ident: Identifier,
+        id: MetaId,
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "constant `{ident}` is recursively defined.",
+            ),
+            location: id,
+            labels: vec![Label::error("references itself", id)],
+        }
+    }
+
+    pub fn error_constant_uses_context(
+        &self,
+        ident: Identifier,
+        id: MetaId,
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "constant `{ident}` depends on a context variable.",
+            ),
+            location: id,
+            labels: vec![Label::error("depends on a context variable", id)],
+        }
+    }
+
     pub fn error_declared_twice(
         &self,
         new_declaration: &Meta<Identifier>,

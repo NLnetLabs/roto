@@ -4,12 +4,11 @@ mod eq;
 
 use std::collections::{HashMap, VecDeque};
 
-use crate::value::{CloneFn, EqFn, VTable};
 use crate::{
     ast::{self, BinOp, Identifier, Literal},
     ice,
     label::{LabelRef, LabelStore},
-    lir::IrValue,
+    lir::{IrValue, ItemKind},
     mir,
     runtime::{
         Rt, RuntimeFunctionRef, init_string,
@@ -24,10 +23,11 @@ use crate::{
             TypeDefinition,
         },
     },
+    value::{CloneFn, EqFn, VTable},
 };
 
 use super::{
-    Block, FloatCmp, Function, Instruction, IntCmp, Lir, Operand, Signature,
+    Block, FloatCmp, Instruction, IntCmp, Item, Lir, Operand, Signature,
     ValueOrSlot, Var, VarKind, value::IrType,
 };
 
@@ -55,6 +55,7 @@ struct Lowerer<'c, 'r> {
     function_scope: ScopeRef,
     tmp_idx: usize,
     return_type: Type,
+    force_reference_return: bool,
     variables: Vec<(Var, ValueOrSlot)>,
 }
 
@@ -81,55 +82,77 @@ impl Lowerer<'_, '_> {
     fn program(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
         let mut functions = Vec::new();
 
-        for function in mir.functions {
-            if let Some(f) = Self::function(ctx, function) {
+        for item in mir.items {
+            if let Some(f) = Self::item(ctx, item) {
                 functions.push(f);
             }
         }
 
-        let clone_functions = Self::generate_clones(ctx);
-        functions.extend(clone_functions);
+        // We need to add all the generated functions, but they need to be
+        // generated before we start evaluating any constants, so they need to
+        // go at the front.
+        let mut all_functions = Vec::new();
+        let mut clone_functions = Self::generate_clones(ctx);
+        all_functions.append(&mut clone_functions);
 
-        let drop_functions = Self::generate_drops(ctx);
-        functions.extend(drop_functions);
+        let mut drop_functions = Self::generate_drops(ctx);
+        all_functions.append(&mut drop_functions);
 
         let eq_functions = Self::generate_eqs(ctx);
-        functions.extend(eq_functions);
+        all_functions.extend(eq_functions);
 
-        Lir { functions }
+        all_functions.append(&mut functions);
+
+        Lir {
+            functions: all_functions,
+        }
     }
 
-    fn function(
-        ctx: &mut LowerCtx<'_>,
-        function: mir::Function,
-    ) -> Option<Function> {
-        let return_type = function.signature.return_type.clone();
+    fn item(ctx: &mut LowerCtx<'_>, item: mir::Item) -> Option<Item> {
+        let return_type = match &item.ty {
+            mir::ItemKind::Constant { ty, .. } => {
+                // Each constant needs to be dropped later when the module is
+                // dropped. Which means Rust needs to get a pointer to its drop
+                // function.
+                ctx.drops_to_generate.push_back(ty.clone());
+                ty.clone()
+            }
+            mir::ItemKind::Function { signature, .. } => {
+                signature.return_type.clone()
+            }
+        };
+
         let mut lowerer = Lowerer {
             ctx,
-            tmp_idx: function.tmp_idx,
-            function_scope: function.scope,
+            tmp_idx: item.tmp_idx,
+            function_scope: item.scope,
+            force_reference_return: matches!(
+                &item.ty,
+                mir::ItemKind::Constant { .. }
+            ),
             return_type: return_type.clone(),
             blocks: Vec::new(),
             variables: Vec::new(),
         };
-        let name = function.name;
-        let signature = function.signature;
+        let name = item.name;
 
         // All parameters must be inhabited. If they aren't then we can skip
         // lowering this entire function.
-        signature
-            .parameter_types
-            .iter()
-            .map(|ty| {
-                lowerer
-                    .ctx
-                    .type_info
-                    .layout_of(ty, lowerer.ctx.runtime)
-                    .map(|_| ())
-            })
-            .collect::<Option<()>>()?;
+        if let mir::ItemKind::Function { signature, .. } = &item.ty {
+            signature
+                .parameter_types
+                .iter()
+                .map(|ty| {
+                    lowerer
+                        .ctx
+                        .type_info
+                        .layout_of(ty, lowerer.ctx.runtime)
+                        .map(|_| ())
+                })
+                .collect::<Option<()>>()?;
+        }
 
-        lowerer.variables = function
+        lowerer.variables = item
             .variables
             .iter()
             .filter_map(|(v, ty)| {
@@ -146,7 +169,10 @@ impl Lowerer<'_, '_> {
                 let var_type = if is_reference_type {
                     // Parameters don't need a slot because they already
                     // live somewhere.
-                    if function.parameters.contains(v) {
+                    if let mir::ItemKind::Function { parameters, .. } =
+                        &item.ty
+                        && parameters.contains(v)
+                    {
                         ValueOrSlot::Val(IrType::Pointer)
                     } else {
                         let layout = lowerer
@@ -162,7 +188,7 @@ impl Lowerer<'_, '_> {
             })
             .collect::<Vec<_>>();
 
-        for block in function.blocks {
+        for block in item.blocks {
             lowerer.block(block);
         }
 
@@ -175,31 +201,49 @@ impl Lowerer<'_, '_> {
                 None => (None, false),
             };
 
-        let ir_signature = Signature {
-            parameters: function
-                .parameters
-                .iter()
-                .zip(&signature.parameter_types)
-                .filter_map(|(def, ty)| {
-                    let ty = lowerer.lower_type(ty)?;
-                    let mir::VarKind::Explicit(x) = def.kind else {
-                        ice!()
-                    };
-                    Some((x, ty))
-                })
-                .collect(),
-            context: true,
-            return_ptr,
-            return_type: return_ir_type,
+        let kind = match item.ty {
+            mir::ItemKind::Constant { name, ty } => ItemKind::Constant {
+                layout: lowerer
+                    .ctx
+                    .type_info
+                    .layout_of(&ty, lowerer.ctx.runtime),
+                name,
+                type_id: lowerer.ctx.type_info.type_id(&ty),
+                ty,
+            },
+            mir::ItemKind::Function {
+                signature,
+                parameters,
+            } => {
+                let ir_signature = Signature {
+                    parameters: parameters
+                        .iter()
+                        .zip(&signature.parameter_types)
+                        .filter_map(|(def, ty)| {
+                            let ty = lowerer.lower_type(ty)?;
+                            let mir::VarKind::Explicit(x) = def.kind else {
+                                ice!()
+                            };
+                            Some((x, ty))
+                        })
+                        .collect(),
+                    context: true,
+                    return_ptr,
+                    return_type: return_ir_type,
+                };
+                ItemKind::Function {
+                    signature,
+                    ir_signature,
+                }
+            }
         };
 
-        Some(Function {
+        Some(Item {
             name,
             blocks: lowerer.blocks,
             variables: lowerer.variables,
-            signature,
-            scope: function.scope,
-            ir_signature,
+            kind,
+            scope: item.scope,
             entry_block,
             public: true,
         })
@@ -781,6 +825,16 @@ impl Lowerer<'_, '_> {
                 .into(),
                 var.into(),
                 layout.unwrap().size() as u32,
+            );
+            self.emit_return(None);
+        } else if self.force_reference_return {
+            self.emit_write(
+                Var {
+                    scope: self.function_scope,
+                    kind: VarKind::Return,
+                }
+                .into(),
+                var.into(),
             );
             self.emit_return(None);
         } else {
