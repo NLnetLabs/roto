@@ -1,9 +1,9 @@
-use roto::{Context, Runtime, String};
+use roto::{Context, RotoString, Runtime};
 
 #[derive(Clone, Context)]
 struct Ctx {
-    pub first_name: String,
-    pub last_name: String,
+    pub first_name: RotoString,
+    pub last_name: RotoString,
 }
 
 fn main() {
@@ -11,7 +11,7 @@ fn main() {
 
     let mut pkg = runtime.compile("examples/context.roto").unwrap();
 
-    let f = pkg.get_function::<fn() -> String>("greeting").unwrap();
+    let f = pkg.get_function::<fn() -> RotoString>("greeting").unwrap();
 
     let mut ctx = Ctx {
         first_name: "John".into(),

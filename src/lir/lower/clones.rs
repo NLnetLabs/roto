@@ -1,6 +1,7 @@
 use std::{any::TypeId, collections::HashSet};
 
 use crate::{
+    RotoString,
     ast::Identifier,
     ice,
     lir::{
@@ -488,7 +489,7 @@ impl Lowerer<'_, '_> {
                 match type_def {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
-                        Some(TypeId::of::<crate::String>())
+                        Some(TypeId::of::<RotoString>())
                     }
                     TypeDefinition::List(_) => {
                         Some(TypeId::of::<ErasedList>())

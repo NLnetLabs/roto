@@ -48,7 +48,7 @@ pub use runtime::{
         Use,
     },
 };
-pub use value::{String, Val, Value, Verdict};
+pub use value::{RotoString, Val, Value, Verdict};
 
 /// Create a list of items to be registered.
 ///

@@ -29,6 +29,7 @@ pub mod value;
 mod test_eval;
 
 use crate::{
+    RotoString,
     ast::Identifier,
     label::LabelRef,
     runtime::{self, layout::Layout},
@@ -95,7 +96,7 @@ pub enum Instruction {
     InitString {
         to: Var,
         string: String,
-        init_func: unsafe extern "C" fn(*mut crate::String, *mut u8, u32),
+        init_func: unsafe extern "C" fn(*mut RotoString, *mut u8, u32),
     },
 
     /// Call a function.

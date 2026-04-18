@@ -544,7 +544,7 @@ impl Lowerer<'_, '_> {
                 match type_def {
                     TypeDefinition::Runtime(_, id) => Some(id),
                     TypeDefinition::Primitive(Primitive::String) => {
-                        Some(TypeId::of::<crate::value::String>())
+                        Some(TypeId::of::<crate::value::RotoString>())
                     }
                     TypeDefinition::Primitive(Primitive::IpAddr) => {
                         Some(TypeId::of::<IpAddr>())

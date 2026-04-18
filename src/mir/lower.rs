@@ -949,7 +949,7 @@ impl<'r> Lowerer<'r> {
         binop: &ast::BinOp,
         r: &Meta<ast::Expr>,
     ) -> Value {
-        let type_id = TypeId::of::<crate::String>();
+        let type_id = TypeId::of::<crate::RotoString>();
         match binop {
             ast::BinOp::Add => self.desugared_binop(
                 type_id,
@@ -1455,7 +1455,7 @@ impl<'r> Lowerer<'r> {
         let string_val = make_string("".into());
         let string = self.assign_to_var(string_val, Type::string());
 
-        let type_id = TypeId::of::<crate::String>();
+        let type_id = TypeId::of::<crate::RotoString>();
         let func_ref = self.find_method(type_id, "append");
 
         for part in parts {
