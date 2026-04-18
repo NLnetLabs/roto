@@ -35,17 +35,26 @@ fn manual_doctests() {
             test.line
         ));
 
-        let has_main = roto::has_main_function(&test.code).unwrap_or(false);
-
         let mut source_file = std::fs::File::create(&source_path).unwrap();
 
-        if !has_main {
-            source_file.write_all(b"fn main() {\n").unwrap();
+        match roto::has_main_function(&test.code) {
+            Ok(false) => {
+                if test.mode == "run" {
+                    panic!("Can't run without main function");
+                }
+                source_file.write_all(test.code.as_ref()).unwrap();
+            }
+            Ok(true) => {
+                source_file.write_all(test.code.as_ref()).unwrap();
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                source_file.write_all(b"fn main() {\n").unwrap();
+                source_file.write_all(test.code.as_ref()).unwrap();
+                source_file.write_all(b"\n}").unwrap();
+            }
         }
-        source_file.write_all(test.code.as_ref()).unwrap();
-        if !has_main {
-            source_file.write_all(b"\n}").unwrap();
-        }
+
         drop(source_file);
 
         // This is inefficient, but really helpful for debugging the
@@ -63,14 +72,18 @@ fn manual_doctests() {
                     .stderr("");
             }
             "check" => {
-                assert_cmd::Command::cargo_bin("roto")
+                let assert = assert_cmd::Command::cargo_bin("roto")
                     .unwrap()
                     .arg("check")
                     .arg(source_path)
-                    .assert()
-                    .stdout("All ok!\n")
-                    .stderr("")
-                    .success();
+                    .assert();
+
+                eprint!(
+                    "{}",
+                    std::str::from_utf8(&assert.get_output().stderr).unwrap()
+                );
+
+                assert.stdout("All ok!\n").stderr("").success();
             }
             "error" => {
                 assert_cmd::Command::cargo_bin("roto")

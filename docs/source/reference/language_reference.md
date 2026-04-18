@@ -2,7 +2,7 @@
 # Language Reference
 
 This section describes the basic syntax of Roto scripts. This is written
-in a reference-style. It is mostly meant as a cheatsheet, not as an
+in a reference-style. It is mostly meant as a cheat sheet, not as an
 introduction to the language.
 
 (lang_comments)=
@@ -82,13 +82,12 @@ Additionally, we have the following conventions:
 - A leading underscore can be used to signal that a value is unused.
 
 (lang_locals)=
-## Local variables
+## Local Variables
 
 Local variables are declared with a `let` statement.
 
-{class="test-ignore"}
 ```roto
-fn greater_than_square(x: i32, y: i32) {
+fn greater_than_square(x: i32, y: i32) -> bool {
     let y_squared = y * y;
     x > y_squared
 }
@@ -116,7 +115,7 @@ where they are declared. A new scope is created with `{}`, including
 when that is part of the syntax. For example, the body of an `if`
 expression creates a new scope.
 
-{class="test-ignore"}
+{class="test-error"}
 ```roto
 let x = true;
 if x {
@@ -130,7 +129,7 @@ print(f"{y}"); // this is not possible: y has been dropped!
 
 ## Built-in Types
 
-### Primitive types
+### Primitive Types
 
 There are several types at Roto's core, which can be expressed as
 literals.
@@ -154,7 +153,7 @@ are described elsewhere. Note that Roto is case-sensitive; writing the
 `String` type as `STRING` or `string` won\'t work.
 
 (lang_unit)=
-### Unit type
+### Unit Type
 
 The unit type is a special type written as `()` with only one value:
 `()`. It is the type of expressions that do not have meaningful values
@@ -162,7 +161,7 @@ to evaluate to. For functions, returning `()` is equivalent to returning
 nothing.
 
 (lang_never)=
-### Never type
+### Never Type
 
 The never type `!` is an *uninhabited* type, meaning that it cannot be
 constructed. It appears in code paths that are unreachable. For example,
@@ -174,7 +173,7 @@ other type.
 
 The boolean type in Roto is called {roto:ref}`bool` and it has two possible
 values: `true` and `false`. Booleans can be manipulated via several operators
-such as `&&` (logical and), `||` (locical or) and `!` (logical negation).
+such as `&&` (logical and), `||` (logical or) and `!` (logical negation).
 
 (lang_integers)=
 ### Integers
@@ -190,7 +189,7 @@ and `i` for signed integers.
 
 Below is a table of all available integer types.
 
-| Type            | Bits | Signed | Min                        | Max                         |
+| Type            | Bits | Signed | Minimum                    | Maximum                     |
 | --------------- | ---- | ------ | -------------------------: | --------------------------: |
 | {roto:ref}`u8`  |    8 | No     |   0                        |                         255 |
 | {roto:ref}`u16` |   16 | No     |   0                        |                      65,535 |
@@ -202,7 +201,7 @@ Below is a table of all available integer types.
 | {roto:ref}`i64` |   64 | Yes    | -9,223,372,036,854,775,808 |   9,223,372,036,854,775,807 |
 
 (lang_floats)=
-### Floating point numbers
+### Floating Point Numbers
 
 There are two floating point types: `f32` and `f64`, of 32 and 64 bits
 length, respectively.
@@ -227,14 +226,12 @@ let character_a: char = 'a';
 
 Strings are enclosed in double quotes like so:
 
-{class="test-ignore"}
 ```roto
 let s = "This is a string!";
 ```
 
 Strings can be concatenated with `+`:
 
-{class="test-ignore"}
 ```roto
 let s = "race" + "car"; // yields the string "racecar"
 ```
@@ -257,7 +254,7 @@ Strings can contain the following escape sequences:
 | `\'`            | U+0027 (APOSTROPHE)      | Single quote    |
 | `\\`            | U+005C (REVERSE SOLIDUS) | Backslash       |
 
-In addition, any unicode character can be represented by its scalar
+In addition, any Unicode character can be represented by its scalar
 value. This can be done with `\x` followed by 2 hexadecimal digits or
 with `\u{...}` where the `...` is a hexadecimal number.
 
@@ -265,7 +262,7 @@ Finally, Roto will ignore any whitespace after a `\` followed by a
 newline.
 
 (lang_string_formatting)=
-#### String formatting
+#### String Formatting
 
 Roto supports a Python-like syntax for string formatting. Any string
 literal prefixed with `f` will become a format string (or "f-string"),
@@ -336,7 +333,6 @@ First element was: 1
 
 The `+` operator can be used to concatenate two lists.
 
-{class="test-ignore"}
 ```roto
 let a = ["one", "two", "three"];
 let b = ["four", "five", "six"];
@@ -348,7 +344,7 @@ reference, meaning that if we assign a list `a` to a variable `b` and we modify
 `a` then `b` will see the same modifications.
 
 (lang_optionals)=
-### Optional values
+### Optional Values
 
 Roto does not feature a value like `None`, `null` or `nil`. Instead, it
 has optional values. The type of an optional value is written `T?`,
@@ -384,7 +380,7 @@ match x {
 ## Custom Types
 
 (lang_anonymous_records)=
-### Anonymous records
+### Anonymous Records
 
 Multiple values can be grouped into records. A record is constructed
 with `{}` and contains key-value pairs.
@@ -412,7 +408,6 @@ far more dynamic.
 
 Fields of records can be accessed with the `.` operator.
 
-{class="test-ignore"}
 ```roto
 filtermap example_filter_map() {
     let x = { foo: 5 };
@@ -428,7 +423,7 @@ x.foo = 6;
 ```
 
 (lang_named_records)=
-### Named records
+### Named Records
 
 Named records provide a more principled approach to grouping values
 which will yield more readable type checking errors.
@@ -458,14 +453,13 @@ fn foo(int: i32) -> SomeRecord {
 ```
 
 (lang_enum_type)=
-### Enum types
+### Enum Types
 
 Another kind of custom type in Roto are `enum` types. These types
 have a set of constructors and values of these types are always
 constructed using one of these. Each of the constructors can take
 arguments. To inspect `enum` types, we can `match` on them.
 
-{class="test-ignore"}
 ```roto
 // A `Number` enum type that has the constructors `Int`, `Float` and `Nan`.
 enum Number {
@@ -476,7 +470,7 @@ enum Number {
 
 fn use_number() {
     let x = Number.Int(10);
-    let y = Number.Float(21.5),
+    let y = Number.Float(21.5);
     let z = Number.Nan;
 
     match x {
@@ -489,17 +483,16 @@ fn use_number() {
 
 Enum types can be generic over other types by taking type parameters.
 
-{class="test-ignore"}
 ```roto
-variant Either[L, R] {
+enum Either[L, R] {
     Left(L),
     Right(R),
 }
 
 fn to_string(x: Either[i32, String]) -> String {
     match x {
-        Left(i) -> f"{i}",
-        Right(s) -> s,
+        Left(i) => f"{i}",
+        Right(s) => s,
     }
 }
 ```
@@ -512,53 +505,51 @@ Enum types are also used to model optional values. See
 ## Operators
 
 (lang_arithmetic)=
-### Arithmetic operators
+### Arithmetic Operators
 
 The unary `-` operator will negate a number. It requires that its
 operand is a signed integer or a floating point number (i.e. not an
 unsigned integer).
 
 There are binary operators for common arithmetic operations, which are
-implemented for all numeric types (integers and floating point numbers):
+implemented for numeric types:
 
-| Operator | Description    |
-| -------- | -------------- |
-| `+`      | addition       |
-| `-`      | subtraction    |
-| `*`      | multiplication |
-| `/`      | division       |
+| Operator | Description               |
+| -------- | ------------------------- |
+| `+`      | addition                  |
+| `-`      | subtraction               |
+| `*`      | multiplication            |
+| `/`      | division                  |
+| `%`      | remainder (integers only) |
 
 These operators follow the conventional PEMDAS rule for precedence. The
 order is
 
 - Parentheses
-- Multiplication and division
+- Multiplication, division and remainder
 - Addition and subtraction
 
 Parentheses can always be used to force a certain order of operations.
 For example, this expression:
 
-{class="test-ignore"}
 ```roto
-1 + 2 * 3    // evaluates to 7
+1 + 2 * 3;    // evaluates to 7
 ```
 
 is interpreted as
 
-{class="test-ignore"}
 ```roto
-1 + (2 * 3)  // evaluates to 7
+1 + (2 * 3);  // evaluates to 7
 ```
 
 and not as
 
-{class="test-ignore"}
 ```roto
-(1 + 2) * 3  // evaluates to 9
+(1 + 2) * 3;  // evaluates to 9
 ```
 
 (lang_comparison)=
-### Comparison operators
+### Comparison Operators
 
 In addition to arithmetic operators, there are operators to compare
 values. Comparison operators have a lower precedence than arithmetic
@@ -586,7 +577,7 @@ Examples:
 ```
 
 (lang_logical)=
-### Logical operators
+### Logical Operators
 
 Operators to combine boolean values are called logical operators. These are the
 logical operators in Roto:
@@ -614,7 +605,7 @@ This is equivalent to:
 
 The `&&` and `||` are short-circuiting, meaning that if the left-hand
 operand of `&&` evaluates to `false` or the left-hand operand of `||`
-evaluates to `true`, the right hand side won\'t be evaluated.
+evaluates to `true`, the right-hand side won't be evaluated.
 
 ## Control Flow
 
@@ -683,7 +674,6 @@ not against the contents of the constructor. See [issue
 124](https://codeberg.org/NLnetLabs/roto/issues/124) for the status on
 these limitations.
 
-{class="test-ignore"}
 ```roto
 let x = Some(10);
 match x {
@@ -703,12 +693,11 @@ probably change once `match` expressions become more general.
 ::::
 
 (lang_while)=
-### While loops
+### While Loops
 
 A `while` loop takes a condition and a block. It will keep executing the
 block until the condition evaluates to `false`.
 
-{class="test-ignore"}
 ```roto
 let i = 0;
 while i < 10 {
@@ -720,13 +709,12 @@ A `while` loop is an expression of the type `()`. Like with `if`,
 `while` does not require parentheses around the condition.
 
 (lang_for)=
-### For loops
+### For Loops
 
 A `for` loop can be used to iterate over the elements in a list. The
 variable created by the loop is available only within the loop and
 received a copy of the data in the list.
 
-{class="test-ignore"}
 ```roto
 let total = 0;
 for x in [1, 2, 3, 4] {
@@ -747,7 +735,6 @@ parameters of the function. It is required to specify the types of the
 parameters. The return type is specified with `->`. A function without a
 return type does not return anything.
 
-{class="test-ignore"}
 ```roto
 fn add_one(x: u64) -> u64 {
     x + 1
@@ -766,7 +753,6 @@ returned if it is not terminated by a `;`. The return can also be made
 explicit with the `return` keyword. This function is equivalent to the
 previous example.
 
-{class="test-ignore"}
 ```roto
 fn add_one(x: u64) -> u64 {
     return x + 1;
@@ -776,7 +762,6 @@ fn add_one(x: u64) -> u64 {
 The following function uses multiple statements to return `0` if the
 input is `0` and subtract `1` otherwise.
 
-{class="test-ignore"}
 ```roto
 fn subtract_one(x: u64) -> u64 {
     if x == 0 {
@@ -804,7 +789,7 @@ value to exit the function early.
 A `filtermap` is a function that filters and transforms some incoming
 value.
 
-Filter-maps resemble functions but they don't `return`. Instead they
+Filter-maps resemble functions but they don't `return`. Instead, they
 either `accept` or `reject`, which determines what happens to the value.
 Generally, an accepted value is stored or fed to some other component
 and a reject value is dropped.
@@ -826,7 +811,6 @@ it is not equal to `0.0.0.0`.
 Like with functions, intermediate results can be stored in variables
 with let bindings.
 
-{class="test-ignore"}
 ```roto
 filtermap reject_zeros(input: IpAddr) {
     let zeros = 0.0.0.0;
@@ -840,7 +824,6 @@ filtermap reject_zeros(input: IpAddr) {
 
 A `filtermap` can also `accept` or `reject` with a value.
 
-{class="test-ignore"}
 ```roto
 filtermap small_enough(x: i32) {
     if x < 10 {
@@ -853,7 +836,6 @@ filtermap small_enough(x: i32) {
 
 This `filtermap` is identical to the following function:
 
-{class="test-ignore"}
 ```roto
 fn small_enough(x: i32) -> Verdict[i32, String] {
     if x < 10 {
@@ -880,7 +862,6 @@ Tests look a lot like functions with a few crucial differences: they
 cannot be called directly and they do not have any arguments. Instead,
 Roto's test runner finds the tests and runs them.
 
-{class="test-ignore"}
 ```roto
 fn add(x: u32, y: u32) -> u32 {
     x + y
@@ -902,6 +883,58 @@ CLI](generate_cli), you can run the tests with the `test` subcommand:
 $ roto test
 ```
 
+## Constants
+
+Constants in Roto are declared with the `const` keyword. They are evaluated
+at the end of compilation, before functions are extracted.
+
+```roto
+const FOO: u32 = 10;
+```
+
+Unlike `let` declarations, `const` declarations always require a type
+annotation. By convention, the names of constants are written in all
+capital letters with words separated by underscores (also known as
+SCREAMING_SNAKE_CASE).
+
+The declarations of constants can be in any order. [Context
+variables](#lang_context) is not available during the evaluation of constants.
+Therefore, it is not possible to use any functions that use context variables.
+Any other function, both from the runtime and from the script can be used.
+
+If constant `A` is defined in terms of constant `B`, then Roto will ensure
+that `B` is evaluated first. Otherwise, the evaluation order is undefined
+and you should not rely on any order. If there is any cycle in the dependencies
+between constants, then Roto will yield a compile-time error before any
+constants are evaluated.
+
+{class="test-error"}
+```roto
+const FOO: u32 = BAR;
+const BAR: u32 = FOO;
+```
+
+(lang_context=)
+## Context Variables
+
+Context variables are global variables that are passed to each invocation of
+a script. They are [declared by the runtime](#add-constants). There is no way to
+create context variables in a Roto script.
+
+The use case of context variables is to pass some implicit values to a script
+that do not need to be passed explicitly to functions in the script.
+
+For example, if the runtime declares a context variable `FOO` of type `u32`,
+then we can access it by name directly.
+
+{class="test-ignore"}
+```roto
+fn foo() {
+    let foo = FOO;
+    print(f"{x}");
+}
+```
+
 ## Modules
 
 (lang_modules)=
@@ -913,10 +946,10 @@ directly in it called `pkg.roto`. This file is the root of our script.
 The contents of `pkg.roto` will form the `pkg` module. No other files in
 the directory can be called `pkg.roto`.
 
-Files adjacent to `pkg.roto` are sub-modules of `pkg`. For example, a
+Files adjacent to `pkg.roto` are submodules of `pkg`. For example, a
 file called `foo.roto` will define the module `pkg.foo`.
 
-A directory next to `pkg.roto` will also be a sub-module if it contains
+A directory next to `pkg.roto` will also be a submodule if it contains
 a file called `lib.roto`. A file `foo/lib.roto` is therefore equivalent
 to `foo.roto` and defines the module called `pkg.foo`. We can do this
 recursively, so we can define the module `pkg.foo.bar` with either a
@@ -1039,7 +1072,7 @@ fn use_foo(x: i32, choice: bool) -> i32 {
 }
 ```
 
-## Next steps
+## Next Steps
 
 You can learn more about Roto by looking at the documentation for the
 {doc}`std/index`.
