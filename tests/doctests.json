@@ -328,7 +328,7 @@
         "lang": "roto",
         "code": "const FOO: u32 = BAR;\nconst BAR: u32 = FOO;\n",
         "source": "/home/terts/code/roto/docs/source/reference/language_reference.md",
-        "line": 911,
+        "line": 912,
         "testoutput": "",
         "mode": "error"
     },

@@ -893,13 +893,14 @@ const FOO: u32 = 10;
 ```
 
 Unlike `let` declarations, `const` declarations always require a type
-annotation. By convention, the names of constants are written in all capital
-letters.
+annotation. By convention, the names of constants are written in all
+capital letters with words separated by underscores (also known as
+SCREAMING_SNAKE_CASE).
 
-The declarations of constants can be in any order. The context is not available
-during the evaluation of constants. Therefore, it is not possible to use any
-functions that use context variables. Any other function, both from the runtime
-and from the script can be used.
+The declarations of constants can be in any order. [Context
+variables](#lang_context) is not available during the evaluation of constants.
+Therefore, it is not possible to use any functions that use context variables.
+Any other function, both from the runtime and from the script can be used.
 
 If constant `A` is defined in terms of constant `B`, then Roto will ensure
 that `B` is evaluated first. Otherwise, the evaluation order is undefined
@@ -911,6 +912,27 @@ constants are evaluated.
 ```roto
 const FOO: u32 = BAR;
 const BAR: u32 = FOO;
+```
+
+(lang_context=)
+## Context Variables
+
+Context variables are global variables that are passed to each invocation of
+a script. They are [declared by the runtime](#add-constants). There is no way to
+create context variables in a Roto script.
+
+The use case of context variables is to pass some implicit values to a script
+that do not need to be passed explicitly to functions in the script.
+
+For example, if the runtime declares a context variable `FOO` of type `u32`,
+then we can access it by name directly.
+
+{class="test-ignore"}
+```roto
+fn foo() {
+    let foo = FOO;
+    print(f"{x}");
+}
 ```
 
 ## Modules
