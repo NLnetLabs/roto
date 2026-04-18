@@ -347,6 +347,15 @@ pub mod boundary {
         }
     }
 
+    impl<A: Clone + Value> From<Vec<A>> for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        fn from(value: Vec<A>) -> Self {
+            value.into_iter().collect()
+        }
+    }
+
     impl<A: Clone + Value + std::fmt::Debug> std::fmt::Debug for List<A>
     where
         A::Transformed: PartialEq,
