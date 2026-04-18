@@ -346,6 +346,34 @@ pub mod boundary {
             this
         }
     }
+
+    impl<A: Clone + Value + std::fmt::Debug> std::fmt::Debug for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            struct Wrapper<'a, A: Value>(&'a List<A>);
+
+            impl<'a, A: Clone + Value + std::fmt::Debug> std::fmt::Debug
+                for Wrapper<'a, A>
+            where
+                A::Transformed: PartialEq,
+            {
+                fn fmt(
+                    &self,
+                    f: &mut std::fmt::Formatter<'_>,
+                ) -> std::fmt::Result {
+                    let mut list = f.debug_list();
+                    for elem in self.0.clone() {
+                        list.entry(&elem);
+                    }
+                    list.finish()
+                }
+            }
+
+            f.debug_tuple("List").field(&Wrapper(self)).finish()
+        }
+    }
 }
 
 // We use `*mut ()` and `NonNull<()>` to represent `*mut T` and
