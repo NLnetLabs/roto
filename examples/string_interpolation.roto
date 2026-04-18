@@ -5,4 +5,5 @@ fn main() {
     print(f"Your number is {number}!");
     print(f"And {number} multiplied by 2 is {2 * number}.");
     print(f"This is a string with { f"another string which prints {true}" }, isn't that wonderful?");
+    print(f"This is on line { 1 }\nAnd this one line { 2 }");
 }
