@@ -374,6 +374,40 @@ pub mod boundary {
             f.debug_tuple("List").field(&Wrapper(self)).finish()
         }
     }
+
+    impl<A: Clone + Value> IntoIterator for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        type Item = A;
+
+        type IntoIter = IntoIter<A>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            IntoIter {
+                inner: self,
+                idx: 0,
+            }
+        }
+    }
+
+    pub struct IntoIter<A: Value> {
+        inner: List<A>,
+        idx: usize,
+    }
+
+    impl<A: Value + Clone> Iterator for IntoIter<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        type Item = A;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let item = self.inner.get(self.idx)?;
+            self.idx += 1;
+            Some(item)
+        }
+    }
 }
 
 // We use `*mut ()` and `NonNull<()>` to represent `*mut T` and
@@ -1327,5 +1361,32 @@ mod tests {
         assert_eq!(list.index(&"Beta".into()), Some(1));
         assert_eq!(list.index(&"Gamma".into()), Some(2));
         assert_eq!(list.index(&"Delta".into()), None);
+    }
+
+    #[test]
+    fn debug_list() {
+        let list = List::new();
+
+        for x in 1..7 {
+            list.push(x)
+        }
+
+        assert_eq!(format!("{list:?}"), "List([1, 2, 3, 4, 5, 6])");
+    }
+
+    #[test]
+    fn iterate_list() {
+        let list = List::new();
+
+        for x in 1..7 {
+            list.push(x)
+        }
+
+        let mut total = 0;
+        for x in list {
+            total += x;
+        }
+
+        assert_eq!(total, (1..7).sum());
     }
 }
