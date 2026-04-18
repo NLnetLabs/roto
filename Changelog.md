@@ -1,5 +1,201 @@
 # Changelog
 
+## 0.11.0
+
+Released 2026-04-29
+
+### Meta
+
+- Roto is now on Codeberg! The repository is now located at
+  <https://codeberg.org/NLnetLabs/roto>.
+
+### Language
+
+#### Breaking changes
+
+- There are a couple of syntax changes. These all bring Roto a bit closer to
+  Rust, which makes Roto a less surprising for new users. The comment syntax has
+  now changed twice and we apologize for the churn that creates. See [this forum
+  post](https://community.nlnetlabs.nl/t/proposed-syntax-changes-for-0-11/3343)
+  for the reasoning behind these changes.
+
+  - Change comment syntax from `#` to `//`. (#384)
+  - Change `variant` keyword to `enum`. (#384)
+  - Change match arm syntax from `->` to `=>`. (#384)
+  - Change boolean negation operator from `not` to `!`. (#384)
+  - Change match guard syntax from `|` to `if`. (#387)
+
+```roto
+// This is the new comment syntax!
+// And here is an enum (previously variant):
+enum Direction {
+    Left,
+    Right,
+}
+
+fn choose_direction(choice: Direction, dont_go_left: bool) {
+    match choice {
+        Left if !dont_go_left => print("left!"),
+        Right => print("right!"),
+        _ => print("unsure!"),
+    }
+}
+```
+
+- It is not allowed anymore to chain comparison operators (`==`, `!=`, `<=`,
+  `>=`, `<`, `>`) without parentheses. This ensures that the associativity of
+  these operators is always clear. (#353)
+
+```roto
+fn main() {
+    let x = false == true == false;   // now a parse error
+    let y = (false == true) == false; // but this is allowed
+}
+```
+
+- Many operators now parse left-associative instead of right-associative.
+  This shouldn't normally make much of a difference, but in some edge cases (for
+  example with floats) it matters. (#353)
+
+#### Added
+
+- Constants can now be defined in Roto scripts. They are computed at
+  compile-time and can be accessed in functions and other constants. (#371)
+
+```roto
+const FOO: u32 = 10 + 5;
+```
+
+- The `==` and `!=` operators can now be used on all types, including registered
+  types, records and enums. (#366)
+
+```roto
+record Vec2 {
+    x: f32,
+    y: f32,
+}
+
+fn main() {
+    let a = Vec2 { x: 1.0, y: 1.0 };
+    let b = Vec2 { x: 1.0, y: 1.0 };
+    print(f"a and b are equal: {a == b}");
+}
+```
+
+- Blocks (`{}`) can now be used as expressions. This is particularly useful
+  for complex definition of constants. Note that an empty pair of braces `{}`
+  still parses as an anonymous record, not as an empty block. (#384)
+
+```roto
+const FOO: u32 = {
+    let a = 10;
+    a + 5
+};
+```
+
+- Added the remainder operator `%` for integers. Thanks, @Wrimo! (#364)
+
+```roto
+fn is_even(x: u64) -> bool {
+    x % 2 == 0
+}
+```
+
+- Added `List.contains` and `List.index` methods to find elements in a list.
+  (#369)
+
+```roto
+fn main() -> bool {
+    let l = ["A", "B", "C", "D"];
+    print(f"list contains B: {l.contains("B")}");
+    match l.index("C") {
+      Some(idx) => print(f"index of C: {idx}"),
+      None => print("no C in list"),
+    }
+}
+```
+
+- Added `List.join` method to join strings in a list into a single string.
+  (#357)
+
+```roto
+fn main() -> bool {
+    let l = ["one", "two", "three", "four"];
+    print(l.join(", ")); // prints "one, two, three, four"
+}
+```
+
+- Added `String.from_chars`, `String.split`, `String.replace` methods. (#357)
+- Added `String.trim`, `String.trim_start`, `String.trim_end`,
+  `String.strip_prefix`, `String.strip_suffix` methods. Thanks, @erikwastaken!
+  (#377)
+- Added `String.bytes`, `String.chars`, `String.lines` methods to give a view
+  over a string indexed by the respective unit. (#357)
+
+```roto
+fn main() -> bool {
+    let s = "this is line one\nthis is line two";
+    match s.lines().get(0) {
+      Some(line) => print(line),
+      None => print("no line"),
+    }
+}
+```
+
+#### Bug fixes
+
+- Fixed a bug that caused some record fields not being when cloned. (#362)
+
+### Crate
+
+#### Breaking changes
+
+- All registered types are now required to implement `PartialEq`. (#366)
+- All registered types are now required to implement `Send + Sync`. (#371)
+- The Rust type corresponding to a `String` in Roto is now `RotoString` instead
+  of `Arc<str>`. For compatibility, `RotoString` can be converted from and into
+  `Arc<str>` with `into`. This change allows us to optimize the string type
+  without breaking the API again at a later stage. (#357)
+
+```rust
+// Roto 0.10
+let f = pkg.get_function::<fn(Arc<str>) -> Arc<str>>("main").unwrap();
+
+// Roto 0.11
+let f = pkg.get_function::<fn(RotoString) -> RotoString>("main").unwrap();
+```
+
+#### Added
+
+- `List<T>` now implements `FromIterator`. This means that you can `collect`
+  into a `List`. (#357)
+- `List<T>` now implements `From<Vec<T>>`, `From<&[T]>` and `From<[T; N]>`.
+  (#389)
+- `List<T>` now implements `IntoIterator`. (#389)
+- `List<T>` now implements `Debug`. (#389)
+
+#### Bug fixes
+
+- Rename fields of `TypeMismatch` so that `unwrap` after `get_function` gives a
+  clearer error message. Thanks, @Teufelchen1! (#368)
+- Change `unwrap`s generated by the `library!` macro to `expect` to allow it in
+  cases where the `unwrap_used` lint is active. Thanks, @algernon! (#381)
+- Roto no longer fails to compile if `log`'s `kv_serde` feature is enabled. (#394)
+
+### Documentation
+
+- New chapter "Writing Roto". (#380)
+- Many fixes and improvements due to review by @SynchroM. Thanks! (#397, #398)
+- Add instructions for Sublime Text support to the docs. Thanks, @Teufelchen1! (#367)
+- Most code samples in CI are now tested, which should make them more reliable
+  and always up to date. (#380, #400)
+
+### Tooling
+
+- Updated Sublime Text syntax definition. (#401)
+- Updated VS Code syntax definition. (#401)
+- Updated tree-sitter definition at <https://codeberg.org/NLnetLabs/tree-sitter-roto>.
+
 ## 0.10.0
 
 Released 2026-01-14.
