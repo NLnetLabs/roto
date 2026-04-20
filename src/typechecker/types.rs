@@ -344,7 +344,17 @@ impl TypeDisplay for Type {
         type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        let fmt_args = |args: &[Type]| {
+        // The return type must be specified explicitly because the question
+        // marks use Into and Rust must therefore know what the type to convert
+        // to is. Usually, there is only one possible conversion (the identity),
+        // in which case Rust will pick that one. However, as soon as another
+        // From<std::fmt::Error> implementation appears this will start failing.
+        //
+        // This currently happens with the log crate when the kv_serde feature
+        // flag is enabled somewhere in the dependency tree which we will
+        // observe via feature unification. So, ehh, don't remove this return
+        // type!
+        let fmt_args = |args: &[Type]| -> Result<String, std::fmt::Error> {
             use std::fmt::Write;
             let mut iter = args.iter();
             let mut s = String::new();
