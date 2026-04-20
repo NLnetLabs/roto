@@ -517,8 +517,6 @@ pub fn codegen<Ctx: OptCtx>(
                     drop_ptr,
                 );
 
-                dbg!(constant.drop_fn as *const u8, constant.ptr);
-
                 let func_ptr = module.inner.get_finalized_function(func_id);
                 let func_ptr = unsafe {
                     std::mem::transmute::<
