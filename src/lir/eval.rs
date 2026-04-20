@@ -302,8 +302,6 @@ pub fn eval(
         ItemKind::Function { ir_signature, .. } => &ir_signature.parameters,
     };
 
-    dbg!(parameters);
-
     let return_ptr = match &item.kind {
         ItemKind::Constant { .. } => true,
         ItemKind::Function { ir_signature, .. } => ir_signature.return_ptr,

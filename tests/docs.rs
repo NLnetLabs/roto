@@ -59,7 +59,7 @@ fn manual_doctests() {
 
         // This is inefficient, but really helpful for debugging the
         // tests.
-        dbg!(std::fs::read_to_string(&source_path).unwrap());
+        eprintln!("{}", std::fs::read_to_string(&source_path).unwrap());
 
         match &*test.mode {
             "run" => {
