@@ -346,6 +346,95 @@ pub mod boundary {
             this
         }
     }
+
+    impl<A: Clone + Value> From<Vec<A>> for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        fn from(value: Vec<A>) -> Self {
+            value.into_iter().collect()
+        }
+    }
+
+    impl<A: Clone + Value> From<&[A]> for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        fn from(value: &[A]) -> Self {
+            value.iter().cloned().collect()
+        }
+    }
+
+    impl<A: Clone + Value, const N: usize> From<[A; N]> for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        fn from(value: [A; N]) -> Self {
+            value.iter().cloned().collect()
+        }
+    }
+
+    impl<A: Clone + Value + std::fmt::Debug> std::fmt::Debug for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            struct Wrapper<'a, A: Value>(&'a List<A>);
+
+            impl<'a, A: Clone + Value + std::fmt::Debug> std::fmt::Debug
+                for Wrapper<'a, A>
+            where
+                A::Transformed: PartialEq,
+            {
+                fn fmt(
+                    &self,
+                    f: &mut std::fmt::Formatter<'_>,
+                ) -> std::fmt::Result {
+                    let mut list = f.debug_list();
+                    for elem in self.0.clone() {
+                        list.entry(&elem);
+                    }
+                    list.finish()
+                }
+            }
+
+            f.debug_tuple("List").field(&Wrapper(self)).finish()
+        }
+    }
+
+    impl<A: Clone + Value> IntoIterator for List<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        type Item = A;
+
+        type IntoIter = IntoIter<A>;
+
+        fn into_iter(self) -> Self::IntoIter {
+            IntoIter {
+                inner: self,
+                idx: 0,
+            }
+        }
+    }
+
+    pub struct IntoIter<A: Value> {
+        inner: List<A>,
+        idx: usize,
+    }
+
+    impl<A: Value + Clone> Iterator for IntoIter<A>
+    where
+        A::Transformed: PartialEq,
+    {
+        type Item = A;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let item = self.inner.get(self.idx)?;
+            self.idx += 1;
+            Some(item)
+        }
+    }
 }
 
 // We use `*mut ()` and `NonNull<()>` to represent `*mut T` and
@@ -1125,10 +1214,7 @@ mod tests {
 
     #[test]
     fn push_and_get() {
-        let l = List::<u64>::new();
-        l.push(10);
-        l.push(20);
-        l.push(30);
+        let l = List::<u64>::from([10, 20, 30]);
 
         assert_eq!(Some(10), l.get(0));
         assert_eq!(Some(20), l.get(1));
@@ -1143,9 +1229,7 @@ mod tests {
         // Create a list of string to and concat it a few times, which
         // should exercise the clone and drop implementation (especially
         // under valgrind).
-        let l = List::<String>::new();
-        l.push("hello".into());
-        l.push("world".into());
+        let l = List::<String>::from(["hello".into(), "world".into()]);
 
         let l = l.concat(&l);
         let l = l.concat(&l);
@@ -1230,12 +1314,7 @@ mod tests {
 
     #[test]
     fn swap() {
-        let list = List::<i32>::new();
-
-        list.push(1);
-        list.push(2);
-        list.push(3);
-        list.push(4);
+        let list = List::<i32>::from([1, 2, 3, 4]);
 
         list.swap(1, 2);
         list.swap(0, 3);
@@ -1245,11 +1324,7 @@ mod tests {
 
     #[test]
     fn contains_int() {
-        let list = List::<i32>::new();
-
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        let list = List::<i32>::from([1, 2, 3]);
 
         assert!(!list.contains(&0));
         assert!(list.contains(&1));
@@ -1260,11 +1335,11 @@ mod tests {
 
     #[test]
     fn contains_str() {
-        let list = List::<crate::String>::new();
-
-        list.push("Alpha".into());
-        list.push("Beta".into());
-        list.push("Gamma".into());
+        let list = List::<crate::String>::from([
+            "Alpha".into(),
+            "Beta".into(),
+            "Gamma".into(),
+        ]);
 
         assert!(list.contains(&"Alpha".into()));
         assert!(list.contains(&"Beta".into()));
@@ -1274,11 +1349,7 @@ mod tests {
 
     #[test]
     fn index_int() {
-        let list = List::<i32>::new();
-
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        let list = List::<i32>::from([1, 2, 3]);
 
         assert_eq!(list.index(&0), None);
         assert_eq!(list.index(&1), Some(0));
@@ -1289,15 +1360,34 @@ mod tests {
 
     #[test]
     fn index_str() {
-        let list = List::<crate::String>::new();
-
-        list.push("Alpha".into());
-        list.push("Beta".into());
-        list.push("Gamma".into());
+        let list = List::<crate::String>::from([
+            "Alpha".into(),
+            "Beta".into(),
+            "Gamma".into(),
+        ]);
 
         assert_eq!(list.index(&"Alpha".into()), Some(0));
         assert_eq!(list.index(&"Beta".into()), Some(1));
         assert_eq!(list.index(&"Gamma".into()), Some(2));
         assert_eq!(list.index(&"Delta".into()), None);
+    }
+
+    #[test]
+    fn debug_list() {
+        let list = List::from_iter(1..7);
+
+        assert_eq!(format!("{list:?}"), "List([1, 2, 3, 4, 5, 6])");
+    }
+
+    #[test]
+    fn iterate_list() {
+        let list = List::from_iter(1..7);
+
+        let mut total = 0;
+        for x in list {
+            total += x;
+        }
+
+        assert_eq!(total, (1..7).sum());
     }
 }
