@@ -2,20 +2,20 @@
 # Language Reference
 
 This section describes the basic syntax of Roto scripts. This is written
-in a reference-style. It is mostly meant as a cheat sheet, not as an
+in a reference style, mostly intended to be used as a cheat sheet, not as an
 introduction to the language.
 
 (lang_comments)=
 ## Comments
 
-Comments in Roto start with `//` and continue until the end of a line.
-They can be inserted anywhere in the script and are ignored.
+Comments in Roto start with `//` and continue until the end of the line. They
+can be inserted anywhere in the script and are ignored.
 
 ```roto
 // this is a comment
 ```
 
-Block comments are not supported. To create a multiline comment, prefix
+Block comments are not supported; to create a multiline comment, prefix
 every line with `//`.
 
 ```roto
@@ -48,7 +48,7 @@ Identifiers in Roto can consist of any character from Unicode's
 `XID_Start` character set or an `_` followed by characters from
 `XID_Continue`. In practice, this means that identifiers can use ASCII,
 numbers, diacritics and other alphabets, with the restriction that they
-cannot *start* with a number. Keywords are also not valid identifiers.
+cannot *start* with a number. Language keywords are also not valid identifiers.
 
 Identifiers are case-sensitive, so `foo` is not considered to be equal
 to `Foo` or `FOO`. Every character in the identifier is significant.
@@ -72,13 +72,13 @@ The following strings are **not** valid identifiers:
 Additionally, we have the following conventions:
 
 - The names of local variables, modules, functions and function
-  arguments should use `snake_case`, i.e. should be all lowercase with
-  words separated by `_`.
-- The names of types and enum constructors should use `PascalCase`,
-  i.e. should have each word capitalized. The exceptions are the
-  primitive boolean, integer and floating point types.
-- The names of constants should use `SCREAMING_SNAKE_CASE`, i.e. should
-  be all uppercase with words separated by `_`.
+  arguments should use `snake_case`, i.e. all lowercase with words separated
+  by `_`.
+- The names of types and enum constructors should use `PascalCase`, i.e.
+  each word capitalized. The exceptions are the built-in boolean, integer and
+  floating point types.
+- The names of constants should use `SCREAMING_SNAKE_CASE`, i.e. all uppercase
+  with words separated by `_`.
 - A leading underscore can be used to signal that a value is unused.
 
 (lang_locals)=
@@ -124,15 +124,15 @@ if x {
     // y is implicitly dropped here
 }
 print(f"{x}"); // ok!
-print(f"{y}"); // this is not possible: y has been dropped!
+print(f"{y}"); // this is not possible: y is no longer in scope!
 ```
 
 ## Built-in Types
 
 ### Primitive Types
 
-There are several types at Roto's core, which can be expressed as
-literals.
+There are several core types at Roto which can be expressed as
+literals:
 
 - {roto:ref}`bool`: boolean
 - {roto:ref}`u8`, {roto:ref}`u16`, {roto:ref}`u32`,
@@ -149,8 +149,8 @@ literals.
 - {roto:ref}`Asn`: AS number
 
 There are many more types available that have more to do with BGP. These
-are described elsewhere. Note that Roto is case-sensitive; writing the
-`String` type as `STRING` or `string` won\'t work.
+are described elsewhere. Note that as for identifiers, Roto types are
+case-sensitive; writing the `String` type as `STRING` or `string` won\'t work.
 
 (lang_unit)=
 ### Unit Type
@@ -178,7 +178,7 @@ such as `&&` (logical and), `||` (logical or) and `!` (logical negation).
 (lang_integers)=
 ### Integers
 
-There are several types for integers in Roto. This might be familiar to
+There are several integer types in Roto. This might be familiar to
 users of languages such as C and Rust, but not for users of Python and
 similar languages which only have one integer type.
 
@@ -236,9 +236,9 @@ Strings can be concatenated with `+`:
 let s = "race" + "car"; // yields the string "racecar"
 ```
 
-It also has some methods such as {roto:ref}`String.contains` that can be
-very useful. See the documentation for the {roto:ref}`String` type for more
-information.
+The `String` type has some useful built-in methods such as
+{roto:ref}`String.contains`. See the documentation for the {roto:ref}`String`
+type for more information.
 
 #### Escape sequences
 
@@ -256,20 +256,21 @@ Strings can contain the following escape sequences:
 
 In addition, any Unicode character can be represented by its scalar
 value. This can be done with `\x` followed by 2 hexadecimal digits or
-with `\u{...}` where the `...` is a hexadecimal number.
+with `\u{...}` where the `...` is a hexadecimal number representing a Unicode
+code point.
 
-Finally, Roto will ignore any whitespace after a `\` followed by a
-newline.
+Finally, Roto will ignore any whitespace after a `\` followed by a newline, so
+long lines can be broken into multiple indented lines without introducing spaces
+when they are reassembled.
 
 (lang_string_formatting)=
 #### String Formatting
 
-Roto supports a Python-like syntax for string formatting. Any string
-literal prefixed with `f` will become a format string (or "f-string"),
-that interpolates the expressions between `{` and `}`. The f-string will
-insert a call to the `to_string` method for displaying the value.
-Therefore, any type with a `to_string` method can be put in an f-string,
-including registered types.
+Roto supports a Python-like syntax for string formatting. Any string literal
+prefixed with `f` will become a format string (or "f-string"), that interpolates
+the expressions between `{` and `}`. The f-string will insert a call to the
+`to_string` method for displaying the value. Therefore, any type implementing a
+`to_string` method can be put in an f-string, including registered types.
 
 ```roto
 let x = 10;
@@ -671,7 +672,7 @@ i.e., when it is wrapped in `{}`.
 The current implementation of this feature is very limited: you can only
 match against `variant` types and only match against the constructor,
 not against the contents of the constructor. See [issue
-124](https://codeberg.org/NLnetLabs/roto/issues/124) for the status on
+124](https://codeberg.org/NLnetLabs/roto/issues/124) for the status of
 these limitations.
 
 ```roto

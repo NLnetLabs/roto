@@ -1,6 +1,6 @@
 # f64
 `````{roto:type} f64
-The 64-bit floating point type
+The 64-bit floating point type.
 `````
 
 
@@ -41,6 +41,6 @@ Returns the square root of a number.
 ````
 
 ````{roto:function} to_string(self: f64) -> String
-Convert this value into a `String`
+Convert this value into a `String`.
 ````
 

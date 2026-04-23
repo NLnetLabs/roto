@@ -1,6 +1,6 @@
 # List[T]
 `````{roto:type} List[T]
-A growable array
+A growable array.
 `````
 
 
@@ -15,6 +15,7 @@ The arguments are not mutated by this function.
 ````
 
 ````{roto:function} contains(self: List[T], item: T) -> bool
+Returns `true` if this list contains the given item, and `false` otherwise.
 ````
 
 ````{roto:function} get(self: List[T], idx: u64) -> Option[T]
@@ -24,6 +25,8 @@ This function returns `None` if the index is out of bounds.
 ````
 
 ````{roto:function} index(self: List[T], item: T) -> Option[u64]
+Returns the index of the first occurrence of the given item in
+this list, or `None` if the item is not found.
 ````
 
 ````{roto:function} is_empty(self: List[T]) -> bool
@@ -31,7 +34,7 @@ Returns whether is list is empty.
 ````
 
 ````{roto:function} join(self: List[String], separator: String) -> String
-Join the strings in a list into a single string
+Join the strings in a list into a single string.
 ````
 
 ````{roto:function} len(self: List[T]) -> u64
@@ -43,7 +46,7 @@ Create a new empty list.
 ````
 
 ````{roto:function} push(self: List[T], elem: T)
-Push an element to the end of this list.
+Append an element to the end of this list.
 ````
 
 ````{roto:function} swap(self: List[T], i: u64, j: u64)

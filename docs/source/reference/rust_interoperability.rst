@@ -3,8 +3,8 @@
 Rust Interoperability
 =====================
 
-This pages details how Roto types map to Rust types for interoperability. The
-``inetnum`` types use the `inetnum crate <https://crates.io/crates/inetnum>`_.
+Roto types map directly to Rust types for interoperability. The ``inetnum``
+types use the `inetnum crate <https://crates.io/crates/inetnum>`_.
 
 +-------------------------+-------------------------+
 |        Roto type        |        Rust type        |

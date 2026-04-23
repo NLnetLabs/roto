@@ -1,12 +1,12 @@
 # i16
 `````{roto:type} i16
-The signed 16-bit integer type
+The signed 16-bit integer type.
 
-This type can represent integers from -32768 up to (and including) 32767.
+This type can represent integers from -32,768 up to (and including) 32,767.
 `````
 
 
 ````{roto:function} to_string(self: i16) -> String
-Convert this value into a `String`
+Convert this value into a `String`.
 ````
 
