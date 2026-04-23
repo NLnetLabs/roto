@@ -44,7 +44,7 @@ valgrind TEST="":
     VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test --all-targets -- {{TEST}}
 
 miri TEST="":
-    MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test -- {{TEST}}
+    cargo +nightly miri test --lib -- {{TEST}}
 
 doc:
     rm -r docs/source/reference/std

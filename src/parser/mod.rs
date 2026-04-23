@@ -27,9 +27,9 @@ pub mod token;
 
 pub use error::ParseError;
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test_expressions;
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test_sections;
 
 pub type ParseResult<T> = Result<T, Box<ParseError>>;

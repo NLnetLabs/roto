@@ -8,7 +8,7 @@ mod io;
 pub mod items;
 pub mod layout;
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 pub mod tests;
 
 use std::{

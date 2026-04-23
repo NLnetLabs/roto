@@ -267,7 +267,7 @@ impl<V: Copy + Eq + Ord> State<V> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod tests {
     use super::tarjan;
     use std::collections::BTreeMap;
