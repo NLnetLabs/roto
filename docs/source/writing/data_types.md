@@ -5,9 +5,17 @@ can only get you so far; you can construct your own types too!
 
 ## Anonymous Records
 
-The simplest way to group some values is with an *anonymous record*. Create one using curly braces `{}` to wrap a list of the fields and their respective types. Create a value of that same type by using the same braces and assigning a value for every field. This is a convenient way to return multiple values from a function.
+The simplest way to group some values is with an *anonymous record*. Create
+one using curly braces `{}` to wrap a list of the fields and their respective
+types. Create a value of that same type by using the same braces and assigning
+a value for every field. This is a convenient way to return multiple values from
+a function.
 
-In this example, the function accepts an anonymous record containing two `f64` fields, `x` and `y`, and returns a new record with those fields doubled. The body of the function takes the values from the `a` parameter and multiplies them by 2 to create the new record that matches the "shape" of the declared return type.
+In this example, the function accepts an anonymous record containing two `f64`
+fields, `x` and `y`, and returns a new record with those fields doubled. The
+body of the function takes the values from the `a` parameter and multiplies them
+by 2 to create the new record that matches the "shape" of the declared return
+type.
 
 ```roto
 fn double_both(a: {x: f64, y: f64}) -> {x: f64, y: f64} {
@@ -31,15 +39,16 @@ two.y = 40
 :::
 
 :::{seealso}
-[`anonymous records`](lang_anonymous_records) in the language reference
+[](lang_anonymous_records) in the language reference
 :::
 
 ## Record Types
 
-Of course, writing the same anonymous record types gets tedious, so you
-can also make *named* record types with the [`record`](lang_named_records) keyword.
+Of course, writing the same anonymous record types gets tedious, so you can also
+make *named* record types with the [`record`](lang_named_records) keyword.
 
-Here is the same snippet as before but using a named record type instead of an anonymous one:
+Here is the same snippet as before but using a named record type instead of an
+anonymous one:
 
 ```roto
 record Vec2 {
@@ -68,7 +77,7 @@ A `record` in Roto is similar to a `struct` or `class` in other languages.
 :::
 
 :::{seealso}
-[`named_records`](lang_named_records) in the language reference
+[](lang_named_records) in the language reference
 :::
 
 ## Enum Types
@@ -140,8 +149,9 @@ ___Ho!____
 Enum types can also carry data in their constructors by specifying a list
 of types enclosed in `()`. You can extract the values of these fields while
 matching on the type. Below, we create a type `Range` that represents a range of
-`i64` numbers, where you can either specify no bounds, a lower bound, an upper bound or
-both. The `contains` function then checks whether a number is within that range.
+`i64` numbers, where you can either specify no bounds, a lower bound, an upper
+bound or both. The `contains` function then checks whether a number is within
+that range.
 
 ```roto
 enum Range {
@@ -174,5 +184,5 @@ a = true, b = false, c = true, d = false
 :::
 
 :::{seealso}
-[`enum`](lang_enum_type) and [`match`](lang_match) in the language reference
+[](lang_enum_type) and [](lang_match) in the language reference
 :::

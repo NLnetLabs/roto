@@ -6,7 +6,7 @@
 The first thing you should know about Roto is how to make it print something.
 That is done with the {roto:ref}`print` function, which takes a single
 {roto:ref}`String` as input. [Strings](lang_strings) are delimited by double
-quotes `"`.
+quotes (`"`).
 
 ```roto
 fn main() {
@@ -18,9 +18,14 @@ fn main() {
 Hello, World!
 ```
 
-Variables are created with [`let`](lang_locals). In the example below, we create a variable called `first_name` that holds a string.
-A variable's type is usually inferred (in this example, the fact that we are assigning a string literal to the variable implies that it is a string type), but you can be explicit about it by adding a _type annotation_. Roto's type checker will then check that the variable has that type
-and produce an error if you try to use it in a way that is not compatible with the string type. Because it's a string, we can join it to other strings using the `+` operator.
+Variables are created with [`let`](lang_locals). In the example below, we create
+a variable called `first_name` that holds a string. A variable's type is usually
+inferred (in this example, the fact that we are assigning a string literal to
+the variable implies that it is a string type), but you can be explicit about
+it by adding a _type annotation_. Roto's type checker will then check that the
+variable has that type and produce an error if you try to use it in a way that
+is not compatible with the string type. Because it's a string, we can join it to
+other strings using the `+` operator.
 
 ```roto
 fn main() {
@@ -42,7 +47,10 @@ Bye, John Doe!
 A more convenient way to build complex strings is with string
 formatting. A string prefixed with `f` will act as a [format string (or
 f-string)](lang_string_formatting) where code in curly braces (`{}`) will be
-evaluated as a Roto expression and inserted at that location in the string. Usefully, this includes the ability to perform a conversion from the variable's type to a string (assuming the type knows how to do that), so we don't have to worry about that when using f-strings.
+evaluated as a Roto expression and inserted at that location in the string.
+Usefully, this includes the ability to perform a conversion from the variable's
+type to a string (assuming the type knows how to do that), so we don't have to
+worry about that when using f-strings.
 
 ```roto
 fn main() {
@@ -83,12 +91,14 @@ The {roto:ref}`print` function.
 ## Simple Calculations
 
 Of course, Roto doesn't just have strings. The next thing we should introduce
-are Roto's numeric types. The simplest numeric types in Roto are integers.
-There are two main kinds of integers: signed and unsigned. Since integers
-are used very often, we use short names for them. Types of signed integers
-are prefixed with `i` followed by their size in bits: {roto:ref}`i8`,
-{roto:ref}`i16`, {roto:ref}`i32` and {roto:ref}`i64`. Unsigned integers are the
-same but with `u` instead of `i`. Signed integers can express negative values, but have half the size of unsigned integers. So for example, `i8` can express values from -128 to 127, while `u8` can express values from 0 to 255.
+are Roto's numeric types. The simplest numeric types in Roto are integers. There
+are two main kinds of integers: signed and unsigned. Since integers are used
+very often, we use short names for them. Types of signed integers are prefixed
+with `i` followed by their size in bits: {roto:ref}`i8`, {roto:ref}`i16`,
+{roto:ref}`i32` and {roto:ref}`i64`. Unsigned integers are the same but with `u`
+instead of `i`. Signed integers can express negative values, but have half the
+size of unsigned integers. So for example, `i8` can express values from -128 to
+127, while `u8` can express values from 0 to 255.
 
 The integers support many operators that you might expect, such as `+`
 for addition, `-` for subtraction, `*` for multiplication, `/` for
@@ -149,8 +159,9 @@ floating point types: {roto:ref}`f32` and {roto:ref}`f64` which are 32- and
 64-bit, respectively. They support all the same operators as integers, except
 for `%`.
 
-To disambiguate floating point numbers from integers, especially when inferring types, floating point literals must include a period `.`.
-So `10` is always an integer, but `10.` and `10.0` are always floating point numbers.
+To disambiguate floating point numbers from integers, especially when inferring
+types, floating point literals must include a period `.`. So `10` is always an
+integer, but `10.` and `10.0` are always floating point numbers.
 
 ```roto
 fn main() {
@@ -224,7 +235,9 @@ The other important operators for boolean values are the `&&` and `||`
 operators that represent the "logical and" and "logical or"
 operations, respectively.
 
-Booleans can also be created as the result of comparisons. In Roto, you can use the equality operator `==` on all types (note that's a _double_ equals sign; the single equals sign is used for assignment, as we have already seen).
+Booleans can also be created as the result of comparisons. In Roto, you can use
+the equality operator `==` on all types (note that's a _double_ equals sign; the
+single equals sign is used for assignment, as we have already seen).
 
 ```roto
 fn main() {
@@ -278,8 +291,10 @@ true
 
 ## Lists
 
-[Lists](lang_lists) are the most common (and currently also the only) collection type in Roto.
-Create a list by wrapping the set of values in `[]`, and separating the elements using commas. A List's type is {roto:ref}`List[T]` where `T` is the type of the elements.
+[Lists](lang_lists) are the most common (and currently also the only) collection
+type in Roto. Create a list by wrapping the set of values in `[]`, and
+separating the elements using commas. A List's type is {roto:ref}`List[T]` where
+`T` is the type of the elements.
 
 ```roto
 fn main() {
@@ -299,8 +314,9 @@ x contains 2: true
 x contains 3: false
 :::
 
-Unlike in some other scripting languages, all the elements of a list must be of
-the same type. You'll get a type checking error if you try to make a list containing an integer and a string for example:
+Unlike in some other scripting languages, all the elements of a list must be
+of the same type. You'll get a type checking error if you try to make a list
+containing an integer and a string for example:
 
 {class="test-error"}
 ```roto

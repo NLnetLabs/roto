@@ -41,10 +41,10 @@ The order in which functions are defined does not matter; pick any order
 that you like!
 :::
 
-Recursion is also supported; functions can call themselves. For example, here is a recursive definition of the
-factorial function. Note that the entire [`if`](lang_if_else) is the final
-expression which is returned, so we do not need any [`return`](lang_functions)
-statements.
+Recursion is also supported; functions can call themselves. For example, here
+is a recursive definition of the factorial function. Note that the entire
+[`if`](lang_if_else) is the final expression which is returned, so we do not
+need any [`return`](lang_functions) statements.
 
 ```roto
 fn factorial(n: u64) -> u64 {
