@@ -183,6 +183,7 @@ fn to_tokens(
     item_list: ItemList,
     ty: Option<&syn::Type>,
 ) -> syn::Result<proc_macro2::TokenStream> {
+    const ERROR_MSG: &str = "library add failed";
     let mut items = Vec::new();
     for ItemWithDocs { doc, item } in item_list.items {
         let new = match item {
@@ -198,7 +199,7 @@ fn to_tokens(
                         #ident_str,
                         #doc,
                         #location,
-                    ).unwrap()
+                    ).expect(#ERROR_MSG)
                 }
             }
             Item::Let(mut item) => {
@@ -249,7 +250,7 @@ fn to_tokens(
                             #roto_sig,
                             vec![#(#vtables),*],
                             #location,
-                        )}.unwrap()
+                        )}.expect(#ERROR_MSG)
                     }
                 } else {
                     quote! {
@@ -259,7 +260,7 @@ fn to_tokens(
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
                             #expr,
                             #location,
-                        ).unwrap()
+                        ).expect(#ERROR_MSG)
                     }
                 }
             }
@@ -413,7 +414,7 @@ fn to_tokens(
                             #roto_sig,
                             vec![#(#vtables),*],
                             #location,
-                        )}.unwrap()
+                        )}.expect(#ERROR_MSG)
                     }}
                 } else {
                     quote_spanned! {span=> {
@@ -425,7 +426,7 @@ fn to_tokens(
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
                             #ident,
                             #location,
-                         ).unwrap()
+                         ).expect(#ERROR_MSG)
                     }}
                 }
             }
@@ -438,7 +439,7 @@ fn to_tokens(
                         #ident_str,
                         #doc,
                         #location,
-                    ).unwrap();
+                    ).expect(#ERROR_MSG);
                     module.add(#items);
                     module
                 }}
@@ -464,7 +465,7 @@ fn to_tokens(
                         #doc,
                         #expr,
                         #location,
-                    ).unwrap()
+                    ).expect(#ERROR_MSG)
                 }
             }
             Item::Include(item) => {
@@ -705,7 +706,7 @@ pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
             #docstring,
             #parameter_names,
             #ident,
-        ).unwrap();
+        ).expect("failed to register function");
     };
 
     TokenStream::from(expanded)

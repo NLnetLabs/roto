@@ -35,10 +35,10 @@ fn main() {
     let x = 100;
     let sign = if x > 0 {
         print("x is positive");
-        1       # <- No semicolon!
+        1       // <- No semicolon!
     } else {
         print("x is negative");
-        -1      # <- No semicolon!
+        -1      // <- No semicolon!
     };
     print(f"{sign}");
 }
@@ -58,9 +58,9 @@ for any block of statements in Roto that is delimited by `{}`.
 fn main() {
     if true {
         let x = 10;
-        print(f"{x}"); # This is fine!
+        print(f"{x}"); // This is fine!
     }
-    print(f"{x}"); # This errors during type checking as x no longer exists here!
+    print(f"{x}"); // This errors during type checking as x no longer exists here!
 }
 ```
 
@@ -78,7 +78,7 @@ We can loop in Roto using a [`while`](lang_while) loop. As in many other languag
 The body of the block is run repeatedly until the condition evaluates to `false`.
 
 ```roto
-# Euclidean algorithm for greatest common divisor
+// Euclidean algorithm for greatest common divisor
 fn main() {
     let a_initial = 125;
     let b_initial = 50;

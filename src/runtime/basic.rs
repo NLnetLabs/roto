@@ -112,13 +112,13 @@ fn ip_addr_methods() -> Library {
             /// all their bits are equal.
             ///
             /// ```roto
-            /// let a = 192.0.0.0 == 192.0.0.0;   # -> true
-            /// let b = ::0 == ::0;               # -> true
-            /// let c = 192.0.0.0 == 192.0.0.1;   # -> false
-            /// let d = 0.0.0.0 == 0::0;          # -> false
+            /// let a = 192.0.0.0 == 192.0.0.0;   // -> true
+            /// let b = ::0 == ::0;               // -> true
+            /// let c = 192.0.0.0 == 192.0.0.1;   // -> false
+            /// let d = 0.0.0.0 == 0::0;          // -> false
             ///
-            /// # or equivalently:
-            /// let e = 192.0.0.0.eq(192.0.0.0);  # -> true
+            /// // or equivalently:
+            /// let e = 192.0.0.0.eq(192.0.0.0);  // -> true
             /// ```
             fn eq(self, other: IpAddr) -> bool {
                 self == other
@@ -127,8 +127,8 @@ fn ip_addr_methods() -> Library {
             /// Returns true if this address is an IPv4 address, and false otherwise.
             ///
             /// ```roto
-            /// let a = 1.1.1.1.is_ipv4(); # -> true
-            /// let b = ::.is_ipv4();      # -> false
+            /// let a = 1.1.1.1.is_ipv4(); // -> true
+            /// let b = ::.is_ipv4();      // -> false
             /// ```
             fn is_ipv4(self) -> bool {
                 self.is_ipv4()
@@ -137,8 +137,8 @@ fn ip_addr_methods() -> Library {
             /// Returns true if this address is an IPv6 address, and false otherwise.
             ///
             /// ```roto
-            /// let a = 1.1.1.1.is_ipv6(); # -> false
-            /// let b = ::.is_ipv6();      # -> true
+            /// let a = 1.1.1.1.is_ipv6(); // -> false
+            /// let b = ::.is_ipv6();      // -> true
             /// ```
             fn is_ipv6(self) -> bool {
                 self.is_ipv6()
@@ -164,7 +164,7 @@ fn string_methods() -> Library {
             /// Create a new string from a list of characters.
             ///
             /// ```roto
-            /// let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); # -> "hello"
+            /// let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); // -> "hello"
             /// ```
             fn from_chars(chars: List<char>) -> String {
                 String::from_chars(chars)
@@ -173,7 +173,7 @@ fn string_methods() -> Library {
             /// Append a string to another, creating a new string.
             ///
             /// ```roto
-            /// let a = "hello".append(" ").append("world"); # -> "hello world"
+            /// let a = "hello".append(" ").append("world"); // -> "hello world"
             /// ```
             fn append(self, other: Self) -> Self {
                 format!("{self}{other}").into()
@@ -182,8 +182,8 @@ fn string_methods() -> Library {
             /// Check whether a string contains another string.
             ///
             /// ```roto
-            /// let a = "haystack".contains("hay");  # -> true
-            /// let b = "haystack".contains("corn"); # -> false
+            /// let a = "haystack".contains("hay");  // -> true
+            /// let b = "haystack".contains("corn"); // -> false
             /// ```
             fn contains(self, needle: Self) -> bool {
                 self.contains(&needle)
@@ -192,8 +192,8 @@ fn string_methods() -> Library {
             /// Check whether a string starts with a given prefix.
             ///
             /// ```roto
-            /// let a = "haystack".starts_with("hay");   # -> true
-            /// let b = "haystack".starts_with("trees"); # -> false
+            /// let a = "haystack".starts_with("hay");   // -> true
+            /// let b = "haystack".starts_with("trees"); // -> false
             /// ```
             fn starts_with(self, prefix: Self) -> bool {
                 self.starts_with(&prefix)
@@ -202,8 +202,8 @@ fn string_methods() -> Library {
             /// Check whether a string ends with a given suffix.
             ///
             /// ```roto
-            /// let a = "haystack".ends_with("stack"); # -> true
-            /// let b = "haystack".ends_with("black"); # -> false
+            /// let a = "haystack".ends_with("stack"); // -> true
+            /// let b = "haystack".ends_with("black"); // -> false
             /// ```
             fn ends_with(self, suffix: Self) -> bool {
                 self.ends_with(&suffix)
@@ -212,7 +212,7 @@ fn string_methods() -> Library {
             /// Create a new string with all characters converted to lowercase.
             ///
             /// ```roto
-            /// let a = "LOUD".to_lowercase(); # -> "loud"
+            /// let a = "LOUD".to_lowercase(); // -> "loud"
             /// ```
             fn to_lowercase(self) -> Self {
                 self.to_lowercase()
@@ -221,7 +221,7 @@ fn string_methods() -> Library {
             /// Create a new string with all characters converted to uppercase.
             ///
             /// ```roto
-            /// let a = "quiet".to_uppercase(); # -> "QUIET"
+            /// let a = "quiet".to_uppercase(); // -> "QUIET"
             /// ```
             fn to_uppercase(self) -> Self {
                 self.to_uppercase()
@@ -230,7 +230,7 @@ fn string_methods() -> Library {
             /// Repeat a string `n` times and join them.
             ///
             /// ```roto
-            /// let a = "ha".repeat(6); # -> "hahahahahaha"
+            /// let a = "ha".repeat(6); // -> "hahahahahaha"
             /// ```
             fn repeat(self, n: u64) -> Self {
                 self.repeat(n as usize)
@@ -244,7 +244,7 @@ fn string_methods() -> Library {
             /// Replace all occurrences of `from` with `to`.
             ///
             /// ```roto
-            /// let a = "In rust we trust".replace("rust", "roto"); # -> "In roto we troto"
+            /// let a = "In rust we trust".replace("rust", "roto"); // -> "In roto we troto"
             /// ```
             fn replace(self, from: Self, to: Self) -> Self {
                 self.replace(&from, &to)
@@ -253,7 +253,7 @@ fn string_methods() -> Library {
             /// Split a string by a separator.
             ///
             /// ```roto
-            /// let a = "one, two, three".split(", "); # -> ["one", "two", "three"]
+            /// let a = "one, two, three".split(", "); // -> ["one", "two", "three"]
             /// ```
             fn split(self, separator: String) -> List<String> {
                 self.split(&separator)
@@ -272,6 +272,56 @@ fn string_methods() -> Library {
             /// Get a view of this string indexed by lines.
             fn lines(self) -> StringLines {
                 self.lines()
+            }
+
+            /// Create a new string by removing leading and trailing
+            /// whitespace.
+            ///
+            /// ```roto
+            /// let a = "  Roto!  ".trim(); // -> "Roto!"
+            /// ```
+            fn trim(self) -> Self {
+                self.trim()
+            }
+
+            /// Create a new string by removing leading whitespace.
+            ///
+            /// ```roto
+            /// let a = "  Roto!  ".trim_start(); // -> "Roto!  "
+            /// ```
+            fn trim_start(self) -> Self {
+                self.trim_start()
+            }
+
+            /// Create a new string by removing trailing whitespace.
+            ///
+            /// ```roto
+            /// let a = "  Roto!  ".trim_end(); // -> "  Roto!"
+            /// ```
+            fn trim_end(self) -> Self {
+                self.trim_end()
+            }
+
+            /// Create a new string by removing a given prefix.
+            ///
+            /// Returns `None` if the string does not contain the prefix.
+            ///
+            /// ```roto
+            /// let a = "RustRoto!".strip_prefix("Rust"); // -> "Roto!"
+            /// ```
+            fn strip_prefix(self, prefix: String) -> Option<String> {
+                self.strip_prefix(&prefix)
+            }
+
+            /// Create a new string by removing a given suffix.
+            ///
+            /// Returns `None` if the string does not contain the suffix.
+            ///
+            /// ```roto
+            /// let a = "Roto!Rust".strip_suffix("Rust"); // -> "Roto!"
+            /// ```
+            fn strip_suffix(self, suffix: String) -> Option<String> {
+                self.strip_suffix(&suffix)
             }
         }
 
@@ -452,12 +502,12 @@ pub fn built_ins() -> Library {
         /// For IPv4, only dot-separated quad notation is supported.
         ///
         /// ```roto
-        /// # IPv4 examples
+        /// // IPv4 examples
         /// let a = 127.0.0.1;
         /// let b = 0.0.0.0;
         /// let c = 255.255.255.255;
         ///
-        /// # IPv6 examples
+        /// // IPv6 examples
         /// let d = 0:0:0:0:0:0:0:1;
         /// let e = ::1;
         /// let f = ::;
@@ -533,7 +583,7 @@ pub fn built_ins() -> Library {
             /// ```roto
             /// let a = Prefix.new(192.169.0.0, 16);
             ///
-            /// # or equivalently
+            /// // or equivalently
             /// let b = 192.169.0.0 / 16;
             /// ```
             fn new(ip: IpAddr, len: u8) -> Prefix {

@@ -15,7 +15,7 @@ semicolon at the end. You can also explicitly return early using the
 
 ```roto
 fn double(x: u32) -> u32 {
-    2 * x    # <- no semicolon!
+    2 * x    // <- no semicolon!
 }
 
 fn triple(x: u32) -> u32 {

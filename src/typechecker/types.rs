@@ -344,7 +344,17 @@ impl TypeDisplay for Type {
         type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        let fmt_args = |args: &[Type]| {
+        // The return type must be specified explicitly because the question
+        // marks use Into and Rust must therefore know what the type to convert
+        // to is. Usually, there is only one possible conversion (the identity),
+        // in which case Rust will pick that one. However, as soon as another
+        // From<std::fmt::Error> implementation appears this will start failing.
+        //
+        // This currently happens with the log crate when the kv_serde feature
+        // flag is enabled somewhere in the dependency tree which we will
+        // observe via feature unification. So, ehh, don't remove this return
+        // type!
+        let fmt_args = |args: &[Type]| -> Result<String, std::fmt::Error> {
             use std::fmt::Write;
             let mut iter = args.iter();
             let mut s = String::new();
@@ -669,7 +679,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         types.push((name, "".into(), TypeDefinition::Primitive(p)))
     }
 
-    struct VariantType {
+    struct EnumType {
         name: &'static str,
         doc: &'static str,
         params: Vec<&'static str>,
@@ -677,11 +687,11 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     }
 
     let compound_types = vec![
-        VariantType {
+        EnumType {
             name: "Option",
             doc: "An optional value.\n\
             \n\
-            The `Option[T]` is a variant type with two constructors: `Some(T)` \
+            The `Option[T]` is an enum with two constructors: `Some(T)` \
             and `None`. To get the value of an `Option`, you can either match \
             on it or use the `?` operator.\n\
             \n\
@@ -694,7 +704,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
                 ("None", vec![]),
             ],
         },
-        VariantType {
+        EnumType {
             name: "Verdict",
             doc: "The verdict that a filter reaches about a value, that is, \
             whether to accept or reject it.\n\
@@ -710,7 +720,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         },
     ];
 
-    for VariantType {
+    for EnumType {
         name,
         doc,
         params,

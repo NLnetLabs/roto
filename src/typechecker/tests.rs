@@ -746,7 +746,7 @@ fn return_keyword() {
 fn unit_block() {
     let s = src!(
         "
-        # workaround for not having a ()
+        // workaround for not having a ()
         fn unit() {}
 
         fn bar() -> Bool {
@@ -1105,25 +1105,25 @@ fn invalid_type_in_f_string() {
 }
 
 #[test]
-fn two_variants() {
+fn two_enums() {
     let s = src!(
         r#"
-          variant Foo { Bar }
-          variant Foo { Baz }  
+          enum Foo { Bar }
+          enum Foo { Baz }  
         "#
     );
     typecheck(s).unwrap_err();
 }
 
 #[test]
-fn assign_to_variant_with_different_type_param() {
+fn assign_to_enum_with_different_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar(T) }
+          enum Foo[T] { Bar(T) }
 
           fn foo() {
               let x: Foo[i32] = Foo.Bar(10);
-              let y: Foo[f32] = x; # should error!
+              let y: Foo[f32] = x; // should error!
           }
         "#
     );
@@ -1131,10 +1131,10 @@ fn assign_to_variant_with_different_type_param() {
 }
 
 #[test]
-fn variant_with_unused_type_param() {
+fn enum_with_unused_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x = Foo.Bar;
@@ -1145,10 +1145,10 @@ fn variant_with_unused_type_param() {
 }
 
 #[test]
-fn variant_with_never_type_param() {
+fn enum_with_never_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x: Foo[!] = Foo.Bar;
@@ -1207,4 +1207,204 @@ fn assign_generic_to_another_type() {
     );
 
     typecheck(s).unwrap_err();
+}
+
+#[test]
+fn simple_constant() {
+    let s = src!(
+        "
+        const A: u32 = 4;
+
+        fn foo() {
+            let x: u32 = A;
+        }       
+     "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn simple_constant_mismatch() {
+    let s = src!(
+        "
+        const A: u32 = false;
+     "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn constant_self_reference() {
+    let s = src!(
+        "
+        const A: u32 = A;
+     "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn constant_cycle() {
+    let s = src!(
+        "
+        const A: u32 = B;
+        const B: u32 = C;
+        const C: u32 = D;
+        const D: u32 = A;
+     "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn constant_cycle_through_function() {
+    let s = src!(
+        "
+        const A: u32 = B;
+        const B: u32 = foo();
+        const C: u32 = D;
+        const D: u32 = bar();
+
+        fn foo() {
+            C
+        }
+
+        fn bar() {
+            A
+        }
+     "
+    );
+
+    typecheck(s).unwrap_err();
+}
+
+#[test]
+fn complex_constant_dependencies() {
+    let s = src!(
+        "
+        const A: u32 = foo(C);
+        const B: u32 = 5;
+        const C: u32 = 10;
+
+        fn foo(n: u32) -> u32 {
+            if n > 0 {
+                B + bar(n-1)
+            } else {
+                0
+            }
+        }
+
+        fn bar(n: u32) -> u32 {
+            foo(n)
+        }
+     "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn constant_using_constant() {
+    let s = src!(
+        "
+        const A: u32 = 4;
+        const B: u32 = A;
+     "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn stress_test_reference_analysis() {
+    let s = src!(
+        "
+        const A: u32 = foo();
+        const B: u32 = 10;
+
+        fn foo() -> u32 {
+            bar() + baz()
+        }
+
+        fn bar() -> u32 {
+            B
+        }
+
+        fn baz() -> u32 {
+            B
+        }
+     "
+    );
+
+    typecheck(s).unwrap();
+}
+
+#[test]
+fn constant_uses_context() {
+    #[derive(Clone, Context)]
+    struct Ctx {
+        pub foo: u8,
+    }
+
+    let rt = Runtime::new().with_context_type::<Ctx>().unwrap();
+
+    let s = src!(
+        "
+        const FOO: u8 = foo;
+        "
+    );
+
+    typecheck_with_runtime(s, rt).unwrap_err();
+}
+
+#[test]
+fn constant_uses_context_indirectly() {
+    #[derive(Clone, Context)]
+    struct Ctx {
+        pub foo: u8,
+    }
+
+    let rt = Runtime::new().with_context_type::<Ctx>().unwrap();
+
+    let s = src!(
+        "
+        const FOO: u8 = my_func();
+
+        fn my_func() -> u8 {
+            foo
+        }
+        "
+    );
+
+    typecheck_with_runtime(s, rt).unwrap_err();
+}
+
+#[test]
+fn constant_uses_context_very_indirectly() {
+    #[derive(Clone, Context)]
+    struct Ctx {
+        pub foo: u8,
+    }
+
+    let rt = Runtime::new().with_context_type::<Ctx>().unwrap();
+
+    let s = src!(
+        "
+        const FOO: u8 = my_func_1();
+
+        fn my_func_1() -> u8 {
+            my_func_2()
+        }
+
+        fn my_func_2() -> u8 {
+            foo
+        }
+        "
+    );
+
+    typecheck_with_runtime(s, rt).unwrap_err();
 }

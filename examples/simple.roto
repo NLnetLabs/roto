@@ -1,4 +1,4 @@
-# checks whether ip addr is 0.0.0.0
+// checks whether ip addr is 0.0.0.0
 fn is_zero(x: IpAddr) -> bool {
     x == 0.0.0.0
 }
@@ -19,7 +19,7 @@ test is_zero_true {
 }
 
 test is_zero_false {
-    if not is_zero(0.0.0.0) {
+    if !is_zero(0.0.0.0) {
         reject
     }
     accept

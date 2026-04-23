@@ -9,8 +9,8 @@ use log::trace;
 use crate::{
     ast::Identifier,
     lir::{
-        FloatCmp, Function, Instruction, IntCmp, Operand, ValueOrSlot, Var,
-        VarKind, value::IrValue,
+        FloatCmp, Instruction, IntCmp, Item, ItemKind, Operand, ValueOrSlot,
+        Var, VarKind, value::IrValue,
     },
     runtime::{ConstantValue, Rt, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
@@ -285,19 +285,27 @@ impl Allocation {
 /// by strings and therefore stored as a hashmap.
 pub fn eval(
     rt: &Rt,
-    p: &[Function],
+    p: &[Item],
     filter_map: &str,
     mem: &mut Memory,
     ctx: IrValue,
     args: Vec<IrValue>,
 ) -> Option<IrValue> {
     let filter_map_ident = Identifier::from(format!("pkg.{filter_map}"));
-    let f = p
+    let item = p
         .iter()
         .find(|f| f.name == filter_map_ident)
         .expect("Need a main function!");
 
-    let parameters = f.ir_signature.parameters.clone();
+    let parameters = match &item.kind {
+        ItemKind::Constant { .. } => &[] as &[_],
+        ItemKind::Function { ir_signature, .. } => &ir_signature.parameters,
+    };
+
+    let return_ptr = match &item.kind {
+        ItemKind::Constant { .. } => true,
+        ItemKind::Function { ir_signature, .. } => ir_signature.return_ptr,
+    };
 
     // Make the program easier to work with by collecting all instructions
     // and constructing a map from labels to indices.
@@ -318,7 +326,7 @@ pub fn eval(
     // This is our working memory for the interpreter
     let mut vars = HashMap::<Var, IrValue>::new();
 
-    if f.ir_signature.return_ptr {
+    if return_ptr {
         assert_eq!(
             parameters.len(),
             args.len() - 1,
@@ -334,16 +342,16 @@ pub fn eval(
 
     vars.insert(
         Var {
-            scope: f.scope,
+            scope: item.scope,
             kind: VarKind::Context,
         },
         ctx,
     );
     let mut values = args.into_iter();
-    if f.ir_signature.return_ptr {
+    if return_ptr {
         vars.insert(
             Var {
-                scope: f.scope,
+                scope: item.scope,
                 kind: VarKind::Return,
             },
             values.next().unwrap(),
@@ -353,21 +361,21 @@ pub fn eval(
     for ((x, _), v) in parameters.iter().zip(values) {
         vars.insert(
             Var {
-                scope: f.scope,
+                scope: item.scope,
                 kind: VarKind::Explicit(*x),
             },
             v,
         );
     }
 
-    for (var, val_or_slot) in &f.variables {
+    for (var, val_or_slot) in &item.variables {
         if let ValueOrSlot::StackSlot(layout) = val_or_slot {
             let ptr = mem.allocate(layout.size());
             vars.insert(var.clone(), IrValue::Pointer(ptr));
         }
     }
 
-    let mut program_counter = block_map[&f.entry_block];
+    let mut program_counter = block_map[&item.entry_block];
 
     loop {
         let instruction = &instructions[program_counter];
@@ -450,9 +458,14 @@ pub fn eval(
                     );
                 }
 
-                let names = f.ir_signature.parameters.iter().map(|p| p.0);
+                let names = match &f.kind {
+                    ItemKind::Function { ir_signature, .. } => {
+                        Some(ir_signature.parameters.iter().map(|p| p.0))
+                    }
+                    ItemKind::Constant { .. } => None,
+                };
 
-                for (name, arg) in names.zip(args) {
+                for (name, arg) in names.into_iter().flatten().zip(args) {
                     let val = eval_operand(&vars, arg);
                     vars.insert(
                         Var {

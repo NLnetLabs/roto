@@ -67,7 +67,7 @@ pub enum DeclarationKind {
     Function(Option<FunctionDeclaration>),
     Module,
     Method(Option<FunctionDeclaration>),
-    Variant(Option<(TypeDefinition, EnumVariant)>),
+    Enum(Option<(TypeDefinition, EnumVariant)>),
     TypeParam(Identifier),
 }
 
@@ -120,6 +120,7 @@ pub enum ScopeType {
     MatchArm(usize, Option<usize>),
     Type(Identifier),
     TypeParams,
+    Block(usize),
 }
 
 #[derive(Clone)]
@@ -306,6 +307,23 @@ impl ScopeGraph {
         Ok(dec.name)
     }
 
+    pub fn insert_const(
+        &mut self,
+        scope: ScopeRef,
+        ident: &Meta<Identifier>,
+        ty: &Type,
+    ) -> Result<ResolvedName, MetaId> {
+        let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
+        let dec = self.insert_declaration(
+            scope,
+            ident,
+            kind,
+            String::new(),
+            |_| false,
+        )?;
+        Ok(dec.name)
+    }
+
     pub fn insert_type(
         &mut self,
         scope: ScopeRef,
@@ -482,6 +500,9 @@ impl ScopeGraph {
                 ScopeType::Root => break,
                 ScopeType::Module(m) => self.module_name(m),
                 ScopeType::Function(name) => name.as_str().to_string(),
+                ScopeType::Block(idx) => {
+                    format!("$block_{idx}")
+                }
                 ScopeType::Then(idx) => {
                     format!("$if_{idx}_then")
                 }

@@ -274,7 +274,7 @@ fn inversion() {
     let s = src!(
         "
         filtermap main(x: i32) {
-            if not (x == 10) {
+            if !(x == 10) {
                 accept
             } else {
                 reject
@@ -304,7 +304,7 @@ fn not_not() {
     let s = src!(
         "
         fn main(x: i32) -> bool {
-            not not (x == 10)
+            !!(x == 10)
         }
     "
     );
@@ -397,8 +397,8 @@ fn record_with_fields_flipped() {
         record Foo { a: i32, b: i32 }
 
         filtermap main(x: i32) {
-            # These are flipped, to ensure that the order in which
-            # the fields are given doesn't matter:
+            // These are flipped, to ensure that the order in which
+            // the fields are given doesn't matter:
             let foo = Foo { b: 20, a: x };
             if foo.a == foo.b {
                 accept
@@ -1646,7 +1646,7 @@ fn use_a_test() {
     let s = src!(
         "
         fn double(x: i32) -> i32 {
-            x # oops! not correct
+            x // oops! not correct
         }
 
         test check_double {
@@ -1988,8 +1988,8 @@ fn match_option_value() {
         "
         fn or_fortytwo(x: u32?) -> u32 {
             match x {
-                Some(x) -> x,
-                None -> 42,
+                Some(x) => x,
+                None => 42,
             }
         }
         "
@@ -2017,8 +2017,8 @@ fn match_option_string() {
 
         fn bar() -> Verdict[String, String] {
             match foo() {
-                Some(v) -> accept v,
-                _ -> reject \"nope\",
+                Some(v) => accept v,
+                _ => reject \"nope\",
             }
         }
         "
@@ -2040,12 +2040,12 @@ fn match_on_string_with_guards() {
         r#"
         fn foo(s: String?, x: i32) -> String {
             match s {
-                Some(s) | s == "hello" -> "hey!",
-                _ | x == 5 ->  "x is 5",
-                Some(s) | s.starts_with("lorem ipsum") -> {
+                Some(s) if s == "hello" => "hey!",
+                _ if x == 5 =>  "x is 5",
+                Some(s) if s.starts_with("lorem ipsum") => {
                     "You've generated lorem ipsum: " + s
                 }
-                _ -> "Can't recognize",
+                _ => "Can't recognize",
             }
         }
         "#
@@ -2205,8 +2205,8 @@ fn match_on_verdict() {
 
         filtermap foo(x: i32) {
             match over_10(x) {
-                Accept(x) -> accept x + 1,
-                Reject(x) -> reject x,
+                Accept(x) => accept x + 1,
+                Reject(x) => reject x,
             };
         }
         "
@@ -2885,19 +2885,25 @@ fn use_type_from_other_module_in_type() {
 
 #[test]
 fn mutate() {
-    #[derive(Copy, Clone, Debug)]
     struct MyType {
-        i: i16,
+        i: AtomicI32,
     }
 
-    let rt = Runtime::from_lib(library! {
-        #[copy] type MyType = Val<*mut MyType>;
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    struct Ptr(*mut MyType);
 
-        impl Val<*mut MyType> {
-            fn increase(mut self) {
-                eprintln!("increase, pre: {}", unsafe { (**self).i });
-                unsafe { (**self).i += 1 };
-                eprintln!("increase, post: {}", unsafe { (**self).i });
+    unsafe impl Send for Ptr {}
+    unsafe impl Sync for Ptr {}
+
+    let rt = Runtime::from_lib(library! {
+        #[copy] type MyType = Val<Ptr>;
+
+        impl Val<Ptr> {
+            fn increase(self) {
+                use std::sync::atomic::Ordering::Relaxed;
+                eprintln!("increase, pre: {}", unsafe { (*self.0.0).i.load(Relaxed) });
+                unsafe { (*self.0.0).i.fetch_add(1, Relaxed) };
+                eprintln!("increase, post: {}", unsafe { (*self.0.0).i.load(Relaxed) });
             }
         }
     })
@@ -2914,21 +2920,25 @@ fn mutate() {
 
     let mut p = compile_with_runtime(s, rt);
     let f = p
-        .get_function::<fn(Val<*mut MyType>) -> Verdict<Val<*mut MyType>, ()>>("main")
+        .get_function::<fn(Val<Ptr>) -> Verdict<Val<Ptr>, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let mut t = MyType { i: 0 };
-    let res = f.call(Val(&mut t));
+    let mut t = MyType {
+        i: AtomicI32::new(0),
+    };
+    let ptr = Ptr(&mut t as *mut _);
+    let res = f.call(Val(ptr));
 
+    use std::sync::atomic::Ordering::Relaxed;
     match res {
         Verdict::Accept(val) => {
-            let val = unsafe { &*val.0 };
-            assert_eq!(val.i, 1, "returned value should be 1")
+            let val = unsafe { (*val.0.0).i.load(Relaxed) };
+            assert_eq!(val, 1, "returned value should be 1")
         }
         Verdict::Reject(_) => todo!(),
     }
 
-    assert_eq!(t.i, 1, "mutated value should be 1");
+    assert_eq!(t.i.load(Relaxed), 1, "mutated value should be 1");
 }
 
 #[test]
@@ -3383,8 +3393,8 @@ fn layered_option_matching_none() {
         "
         fn reproducer() -> String? {
           let s = match None {
-            Some(v) -> v,
-            None -> { return None; },
+            Some(v) => v,
+            None => { return None; },
           };
           Some(s)
         }
@@ -3718,10 +3728,10 @@ fn prefix_eq() {
 }
 
 #[test]
-fn define_variant_type() {
+fn define_enum_type() {
     let s = src!(
         "
-       variant Foo {
+       enum Foo {
            Bar,
            Baz,
        }
@@ -3736,8 +3746,8 @@ fn define_variant_type() {
 
        fn match_on_foo(x: bool) -> i32 {
            match make_foo(x) {
-               Bar -> 10,
-               Baz -> 20,
+               Bar => 10,
+               Baz => 20,
            }
        }
     "
@@ -3757,7 +3767,7 @@ fn define_variant_type() {
 fn haskeller_wants_to_feel_at_home() {
     let s = src!(
         "
-       variant Maybe {
+       enum Maybe {
            Just(i32),
            Nothing,
        }
@@ -3766,15 +3776,15 @@ fn haskeller_wants_to_feel_at_home() {
 
        fn from_option(x: i32?) -> Maybe {
            match x {
-               None -> Nothing,
-               Some(x) -> Just(x)
+               None => Nothing,
+               Some(x) => Just(x)
            }
        }
 
        fn to_option(x: Maybe) -> i32? {
            match x {
-               Nothing -> None,
-               Just(x) -> Some(x),
+               Nothing => None,
+               Just(x) => Some(x),
            }
        }
 
@@ -3800,7 +3810,7 @@ fn haskeller_wants_to_feel_at_home() {
 fn generic_haskeller_wants_to_feel_at_home() {
     let s = src!(
         "
-       variant Maybe[T] {
+       enum Maybe[T] {
            Just(T),
            Nothing,
        }
@@ -3809,15 +3819,15 @@ fn generic_haskeller_wants_to_feel_at_home() {
 
        fn from_option(x: i32?) -> Maybe[i32] {
            match x {
-               None -> Nothing,
-               Some(x) -> Just(x)
+               None => Nothing,
+               Some(x) => Just(x)
            }
        }
 
        fn to_option(x: Maybe[i32]) -> i32? {
            match x {
-               Nothing -> None,
-               Just(x) -> Some(x),
+               Nothing => None,
+               Just(x) => Some(x),
            }
        }
 
@@ -3840,10 +3850,10 @@ fn generic_haskeller_wants_to_feel_at_home() {
 }
 
 #[test]
-fn match_on_empty_variant() {
+fn match_on_empty_enum() {
     let s = src!(
         "
-        variant Foo {}
+        enum Foo {}
 
         fn foo(x: Foo) {
             match x {}
@@ -3855,10 +3865,10 @@ fn match_on_empty_variant() {
 }
 
 #[test]
-fn match_on_empty_variant_2() {
+fn match_on_empty_enum_2() {
     let s = src!(
         "
-        variant Foo {}
+        enum Foo {}
 
         fn foo() {
             let x: Foo = return;
@@ -3876,11 +3886,11 @@ fn match_on_empty_variant_2() {
 fn match_on_uninhabited_variant() {
     let s = src!(
         "
-        variant Foo { Baz(!) }
+        enum Foo { Baz(!) }
 
         fn foo(x: Foo) {
             match x {
-                Baz(x) -> {}
+                Baz(x) => {}
             }
         }
     "
@@ -3893,7 +3903,7 @@ fn match_on_uninhabited_variant() {
 fn lets_make_a_result() {
     let s = src!(
         "
-        variant Result[T, E] {
+        enum Result[T, E] {
             Ok(T),
             Err(E),
         }
@@ -3902,15 +3912,15 @@ fn lets_make_a_result() {
 
         fn from(x: Verdict[i32, u32]) -> Result[i32, u32] {
            match x {
-               Reject(x) -> Err(x),
-               Accept(x) -> Ok(x)
+               Reject(x) => Err(x),
+               Accept(x) => Ok(x)
            }
         }
 
         fn to(x: Result[i32, u32]) -> Verdict[i32, u32] {
            match x {
-               Ok(x) -> Verdict.Accept(x),
-               Err(x) -> Verdict.Reject(x),
+               Ok(x) => Verdict.Accept(x),
+               Err(x) => Verdict.Reject(x),
            }
         }
 
@@ -3929,10 +3939,10 @@ fn lets_make_a_result() {
 }
 
 #[test]
-fn variant_with_unused_type_param() {
+fn enum_with_unused_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x = Foo.Bar;
@@ -3945,10 +3955,10 @@ fn variant_with_unused_type_param() {
 }
 
 #[test]
-fn variant_with_never_type_param() {
+fn enum_with_never_type_param() {
     let s = src!(
         r#"
-          variant Foo[T] { Bar }
+          enum Foo[T] { Bar }
 
           fn foo() {
               let x: Foo[!] = Foo.Bar;
@@ -4029,7 +4039,7 @@ fn generic_record_inferred() {
         }
 
         fn wrap(x: i32) -> Foo[i32] {
-            { x: x } # this is now inferred to be Foo[i32]
+            { x: x } // this is now inferred to be Foo[i32]
         }
 
         fn unwrap(x: Foo[i32]) -> i32 {
@@ -4068,8 +4078,8 @@ fn generics_all_the_way_down() {
                 }),
             };
             match foo.bar {
-                Some(bar) -> bar.inner,
-                None -> 0,
+                Some(bar) => bar.inner,
+                None => 0,
             }
         }
     "
@@ -4765,7 +4775,7 @@ fn string_replace() {
     let s = src!(
         r#"
         fn main() -> String {
-            # Note: there are better ways to write this in Roto!
+            // Note: there are better ways to write this in Roto!
             "Hello $NAME".replace("$NAME", "John")
         }
     "#
@@ -4830,6 +4840,125 @@ fn string_lines() {
 
     let res = f.call();
     assert_eq!(res.to_vec(), vec!["One line".into(), "And another".into()]);
+}
+
+#[test]
+fn string_trim() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "  Rust!  ".trim()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "Rust!".into());
+}
+
+#[test]
+fn string_trim_start() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "  Rust!  ".trim_start()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "Rust!  ".into());
+}
+
+#[test]
+fn string_trim_end() {
+    let s = src!(
+        r#"
+        fn main() -> String {
+            "  Rust!  ".trim_end()
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "  Rust!".into());
+}
+
+#[test]
+fn string_strip_prefix_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "RotoRust!".strip_prefix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, Some("Rust!".into()));
+}
+
+#[test]
+fn string_strip_prefix_not_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "Rust!".strip_prefix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, None);
+}
+
+#[test]
+fn string_strip_suffix_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "Rust!Roto".strip_suffix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, Some("Rust!".into()));
+}
+
+#[test]
+fn string_strip_suffix_not_found() {
+    let s = src!(
+        r#"
+        fn main() -> String? {
+            "Rust!".strip_suffix("Roto")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<String>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, None);
 }
 
 #[test]
@@ -5139,4 +5268,167 @@ fn list_index_string() {
     assert_eq!(f.call("Jasper".into()), Some(1));
     assert_eq!(f.call("Luuk".into()), Some(2));
     assert_eq!(f.call("Martin".into()), None);
+}
+
+#[test]
+fn block_expression() {
+    let s = src!(
+        r#"
+        fn main(x: u64) -> u64 {
+            let y = {
+                let a = 2 * x;
+                2 * a
+            };
+            y
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(u64) -> u64>("main").unwrap();
+
+    assert_eq!(f.call(10), 40);
+}
+
+#[test]
+fn simple_roto_constant() {
+    let s = src!(
+        r#"
+        const FOO: u8 = 8;
+
+        fn main() -> u8 {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u8>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 8);
+}
+
+#[test]
+fn simple_roto_constant_string() {
+    let s = src!(
+        r#"
+        const FOO: String = "foo";
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foo".into());
+}
+
+#[test]
+fn simple_roto_constant_string_2() {
+    let s = src!(
+        r#"
+        const BAR: String = "bar";
+        const FOO: String = "foo" + BAR;
+
+        fn main() -> String {
+            FOO
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foobar".into());
+}
+
+#[test]
+fn roto_constants_through_functions() {
+    let s = src!(
+        r#"
+        const BAR: String = foofoo() + foofoo();
+        const FOO: String = "foo";
+
+        fn foofoo() -> String {
+            FOO + FOO
+        }
+
+        fn main() -> String {
+            BAR
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> String>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, "foofoofoofoo".into());
+}
+
+#[test]
+fn registered_constant_in_roto_constant() {
+    let s = src!(
+        r#"
+         const FOO: u32 = BAR + 1;  
+
+         fn main() -> u32 {
+             FOO
+         }
+       "#
+    );
+
+    let lib = library! {
+        const BAR: u32 = 4;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> u32>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res, 5);
+}
+
+#[test]
+fn runtime_type_constant() {
+    let s = src!(
+        r#"
+         const FOO: Foo = Foo.new(4);  
+
+         fn main() -> Foo {
+             FOO
+         }
+       "#
+    );
+
+    #[derive(Clone, PartialEq)]
+    struct Foo {
+        x: i32,
+    }
+
+    let lib = library! {
+        #[clone] type Foo = Val<Foo>;
+
+        impl Val<Foo> {
+            fn new(x: i32) -> Self {
+                Val(Foo { x })
+            }
+        }
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
+
+    let res = f.call();
+    assert_eq!(res.0.x, 4);
 }

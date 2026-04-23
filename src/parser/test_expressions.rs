@@ -103,8 +103,8 @@ fn test_value_expr() {
 fn test_match() {
     let s = "
         match x {
-            A(x) -> b(),
-            C(y) -> d(),
+            A(x) => b(),
+            C(y) => d(),
         }
     ";
     parse_expr(s).unwrap();
@@ -114,11 +114,11 @@ fn test_match() {
 fn test_match_block() {
     let s = "
         match x {
-            A(x) -> {
+            A(x) => {
                 a == b;
                 a && b;
             }
-            C(y) -> d(),
+            C(y) => d(),
         }
     ";
     parse_expr(s).unwrap();
@@ -162,13 +162,13 @@ fn test_if_else_if_else() {
 
 #[test]
 fn test_not_true() {
-    let s = "not true";
+    let s = "!true";
     parse_expr(s).unwrap();
 }
 
 #[test]
 fn test_not_true_is_true() {
-    let s = "not true == true";
+    let s = "!true == true";
     parse_expr(s).unwrap();
 }
 
@@ -182,8 +182,8 @@ fn hex_number() {
 fn match_without_trailing_comma() {
     let s = "
       match s {
-          Foo -> 10,
-          Bar -> 20
+          Foo => 10,
+          Bar => 20
       }
     ";
     parse_expr(s).unwrap();
@@ -193,8 +193,8 @@ fn match_without_trailing_comma() {
 fn match_with_trailing_comma() {
     let s = "
       match s {
-          Foo -> 10,
-          Bar -> 20,
+          Foo => 10,
+          Bar => 20,
       }
     ";
     parse_expr(s).unwrap();
@@ -204,8 +204,8 @@ fn match_with_trailing_comma() {
 fn match_with_braces_and_commas() {
     let s = "
       match s {
-          Foo -> { 10 },
-          Bar -> { 20 },
+          Foo => { 10 },
+          Bar => { 20 },
       }
     ";
     parse_expr(s).unwrap();
@@ -214,9 +214,25 @@ fn match_with_braces_and_commas() {
 fn match_with_braces_without_commas() {
     let s = "
       match s {
-          Foo -> { 10 }
-          Bar -> { 20 }
+          Foo => { 10 }
+          Bar => { 20 }
       }
+    ";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn anonymous_record() {
+    let s = "
+        { foo: 10, bar: 20 }
+    ";
+    parse_expr(s).unwrap();
+}
+
+#[test]
+fn block() {
+    let s = "
+        { foo = 10; bar = 20 }
     ";
     parse_expr(s).unwrap();
 }

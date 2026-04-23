@@ -9,7 +9,7 @@ use crate::{
 use super::{
     TypeChecker, TypeResult,
     expr::Context,
-    scope::{ScopeRef, ScopeType},
+    scope::{ResolvedName, ScopeRef, ScopeType},
     types::Type,
 };
 
@@ -17,7 +17,7 @@ impl TypeChecker {
     /// Type check a filter map
     pub fn filter_map(
         &mut self,
-        scope: ScopeRef,
+        outer_scope: ScopeRef,
         filter_map: &ast::FilterMap,
     ) -> TypeResult<()> {
         let ast::FilterMap {
@@ -33,7 +33,7 @@ impl TypeChecker {
         let scope = self
             .type_info
             .scope_graph
-            .wrap(scope, ScopeType::Function(ident.node));
+            .wrap(outer_scope, ScopeType::Function(ident.node));
         self.type_info.function_scopes.insert(ident.id, scope);
 
         let params = self.params(scope, params)?;
@@ -44,8 +44,13 @@ impl TypeChecker {
         let ctx = Context {
             expected_type: return_type.clone(),
             function_return_type: Some(return_type.clone()),
+            item: ResolvedName {
+                scope: outer_scope,
+                ident: **ident,
+            },
         };
 
+        self.references.add_node(ctx.item);
         self.block(scope, &ctx, body)?;
         self.resolve_obligations()?;
 
@@ -54,7 +59,7 @@ impl TypeChecker {
 
     pub fn function(
         &mut self,
-        scope: ScopeRef,
+        outer_scope: ScopeRef,
         function: &ast::FunctionDeclaration,
     ) -> TypeResult<()> {
         let ast::FunctionDeclaration {
@@ -67,7 +72,7 @@ impl TypeChecker {
         let scope = self
             .type_info
             .scope_graph
-            .wrap(scope, ScopeType::Function(ident.node));
+            .wrap(outer_scope, ScopeType::Function(ident.node));
 
         self.type_info.function_scopes.insert(ident.id, scope);
 
@@ -85,9 +90,46 @@ impl TypeChecker {
         let ctx = Context {
             expected_type: ret.clone(),
             function_return_type: Some(ret),
+            item: ResolvedName {
+                scope: outer_scope,
+                ident: **ident,
+            },
         };
 
+        self.references.add_node(ctx.item);
         self.block(scope, &ctx, body)?;
+        self.resolve_obligations()?;
+
+        Ok(())
+    }
+
+    pub fn constant(
+        &mut self,
+        outer_scope: ScopeRef,
+        constant: &ast::ConstantDeclaration,
+    ) -> TypeResult<()> {
+        let ast::ConstantDeclaration { ident, ty, expr } = constant;
+
+        let scope = self
+            .type_info
+            .scope_graph
+            .wrap(outer_scope, ScopeType::Function(ident.node));
+
+        self.type_info.function_scopes.insert(ident.id, scope);
+
+        let ty = self.evaluate_type_expr(outer_scope, ty)?;
+        let ctx = Context {
+            expected_type: ty,
+            function_return_type: None,
+            item: ResolvedName {
+                scope: outer_scope,
+                ident: **ident,
+            },
+        };
+
+        self.references.add_node(ctx.item);
+
+        self.expr(scope, &ctx, expr)?;
         self.resolve_obligations()?;
 
         Ok(())
@@ -95,7 +137,7 @@ impl TypeChecker {
 
     pub fn test(
         &mut self,
-        scope: ScopeRef,
+        outer_scope: ScopeRef,
         test: &ast::Test,
     ) -> TypeResult<()> {
         let ast::Test { ident, body } = test;
@@ -106,7 +148,7 @@ impl TypeChecker {
             node: name,
         };
         self.insert_function(
-            scope,
+            outer_scope,
             name.clone(),
             super::types::FunctionDefinition::Roto,
             Vec::new(),
@@ -121,7 +163,7 @@ impl TypeChecker {
         let scope = self
             .type_info
             .scope_graph
-            .wrap(scope, ScopeType::Function(name.node));
+            .wrap(outer_scope, ScopeType::Function(name.node));
 
         self.type_info.function_scopes.insert(name.id, scope);
 
@@ -129,7 +171,12 @@ impl TypeChecker {
         let ctx = Context {
             expected_type: ret.clone(),
             function_return_type: Some(ret),
+            item: ResolvedName {
+                scope: outer_scope,
+                ident: *name,
+            },
         };
+        self.references.add_node(ctx.item);
         self.block(scope, &ctx, body)?;
         self.resolve_obligations()?;
         Ok(())

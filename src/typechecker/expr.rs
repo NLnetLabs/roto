@@ -25,14 +25,16 @@ use super::{
 };
 
 /// The context for type checking expressions
-///
-/// This holds:
-///  - the type that this expression is expected to have and
-///  - the type that the current function should return.
 #[derive(Clone)]
 pub struct Context {
+    /// The type that this expression is expected to have and
     pub expected_type: Type,
+
+    /// The type that the current function should return.
     pub function_return_type: Option<Type>,
+
+    /// The name of the item we are currently in
+    pub item: ResolvedName,
 }
 
 impl Context {
@@ -223,6 +225,15 @@ impl TypeChecker {
                 Ok(true)
             }
             Literal(l) => self.literal(ctx, l),
+            Block(b) => {
+                let idx = self.block_counter;
+                self.block_counter += 1;
+                let block_scope = self
+                    .type_info
+                    .scope_graph
+                    .wrap(scope, ScopeType::Block(idx));
+                self.block(block_scope, ctx, b)
+            }
             Match(m) => self.match_expr(scope, ctx, m),
             FunctionCall(e, args) => match &e.node {
                 ast::Expr::Path(p) => {
@@ -254,7 +265,8 @@ impl TypeChecker {
             Assign(p, e) => {
                 self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
 
-                let resolved_path = self.resolve_expression_path(scope, p)?;
+                let resolved_path =
+                    self.resolve_expression_path(scope, ctx, p)?;
                 self.type_info
                     .path_kinds
                     .insert(p.id, resolved_path.clone());
@@ -269,7 +281,8 @@ impl TypeChecker {
             }
             Path(p) => {
                 let last_ident = p.idents.last().unwrap();
-                let resolved_path = self.resolve_expression_path(scope, p)?;
+                let resolved_path =
+                    self.resolve_expression_path(scope, ctx, p)?;
                 self.type_info
                     .path_kinds
                     .insert(p.id, resolved_path.clone());
@@ -1142,6 +1155,7 @@ impl TypeChecker {
     fn resolve_expression_path(
         &mut self,
         scope: ScopeRef,
+        ctx: &Context,
         ast::Path { idents }: &ast::Path,
     ) -> TypeResult<ResolvedPath> {
         let mut idents = idents.iter();
@@ -1175,6 +1189,8 @@ impl TypeChecker {
                 let signature =
                     func_dec.signature.instantiate(|| self.fresh_var());
 
+                self.references.add_edge(ctx.item, dec.name);
+
                 Ok(ResolvedPath::Function {
                     name: dec.name,
                     definition: func_dec.definition.clone(),
@@ -1186,6 +1202,10 @@ impl TypeChecker {
             DeclarationKind::Value(kind, root_ty) => {
                 let mut fields = Vec::new();
                 let mut ty = root_ty.clone();
+
+                if let ValueKind::Constant | ValueKind::Context(..) = kind {
+                    self.references.add_edge(ctx.item, dec.name);
+                }
 
                 // We loop until we either find the last field or a method.
                 // The method must be the last identifier.
@@ -1226,7 +1246,7 @@ impl TypeChecker {
                     fields,
                 }))
             }
-            DeclarationKind::Variant(Some((ty, variant))) => {
+            DeclarationKind::Enum(Some((ty, variant))) => {
                 if let Some(_field) = idents.next() {
                     todo!("make a nice error for variant cannot have field")
                 }
@@ -1235,7 +1255,7 @@ impl TypeChecker {
                     variant: variant.clone(),
                 })
             }
-            DeclarationKind::Variant(None)
+            DeclarationKind::Enum(None)
             | DeclarationKind::Function(None)
             | DeclarationKind::Method(None) => {
                 ice!("These should be declared at this point")
@@ -1257,7 +1277,7 @@ impl TypeChecker {
             DeclarationKind::Value(..)
             | DeclarationKind::Function(..)
             | DeclarationKind::Method(..)
-            | DeclarationKind::Variant(..)
+            | DeclarationKind::Enum(..)
             | DeclarationKind::Module => {
                 Err(self.error_expected_type(ident, declaration))
             }
@@ -1343,7 +1363,7 @@ impl TypeChecker {
         args: &Meta<Vec<Meta<ast::Expr>>>,
     ) -> TypeResult<bool> {
         let last_ident = p.idents.last().unwrap();
-        let resolved_path = self.resolve_expression_path(scope, p)?;
+        let resolved_path = self.resolve_expression_path(scope, ctx, p)?;
 
         self.type_info
             .path_kinds

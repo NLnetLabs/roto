@@ -296,17 +296,28 @@ pub enum ValueOrSlot {
 }
 
 #[derive(Debug)]
-pub struct Function {
-    /// Identifier of the function
+pub enum ItemKind {
+    Constant {
+        ty: typechecker::types::Type,
+        layout: Option<Layout>,
+        type_id: usize,
+        name: ResolvedName,
+    },
+    Function {
+        signature: typechecker::types::Signature,
+        ir_signature: Signature,
+    },
+}
+
+#[derive(Debug)]
+pub struct Item {
+    /// Full name of the function
     pub name: Identifier,
 
     /// Scope of the function
     pub scope: ScopeRef,
 
-    pub signature: typechecker::types::Signature,
-
-    /// Signature of the function
-    pub ir_signature: Signature,
+    pub kind: ItemKind,
 
     /// Entry block of the function
     pub entry_block: LabelRef,
@@ -342,5 +353,5 @@ pub struct Block {
 }
 
 pub struct Lir {
-    pub functions: Vec<Function>,
+    pub functions: Vec<Item>,
 }

@@ -1,7 +1,7 @@
 //! Lexer for Roto scripts
 
 use core::{ops::Range, str};
-use std::{fmt::Display, ops::ControlFlow};
+use std::{collections::VecDeque, fmt::Display, ops::ControlFlow};
 
 use unicode_ident::{is_xid_continue, is_xid_start};
 
@@ -22,6 +22,8 @@ pub enum Token<'s> {
     Comma,
     Eq,
     EqEq,
+    FatArrow,
+    Hash,
     Hyphen,
     HyphenHyphen,
     Period,
@@ -31,7 +33,6 @@ pub enum Token<'s> {
     QuestionMark,
     SemiColon,
     Slash,
-    SlashSlash,
     SlashStar,
     Star,
     Percent,
@@ -78,8 +79,10 @@ pub enum FStringToken<'s> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Keyword {
     Accept,
+    Const,
     Dep,
     Else,
+    Enum,
     Filter,
     FilterMap,
     For,
@@ -89,7 +92,6 @@ pub enum Keyword {
     In,
     Let,
     Match,
-    Not,
     Pkg,
     Record,
     Reject,
@@ -97,31 +99,53 @@ pub enum Keyword {
     Std,
     Super,
     Test,
-    Variant,
     While,
 }
 
 pub struct Lexer<'a> {
     input: &'a str,
     original_length: usize,
-    peeked: Option<(Result<Token<'a>, ()>, Range<usize>)>,
+    peeked: VecDeque<(Result<Token<'a>, ()>, Range<usize>)>,
     pub almost_keyword:
         Option<(Identifier, Range<usize>, Option<&'static str>)>,
 }
 
 impl<'a> Lexer<'a> {
     pub fn next(&mut self) -> Option<(Result<Token<'a>, ()>, Range<usize>)> {
-        if self.peeked.is_some() {
-            return self.peeked.take();
+        if let Some(t) = self.peeked.pop_front() {
+            return Some(t);
         }
         self.next_inner()
     }
 
-    pub fn peek(&mut self) -> &Option<(Result<Token<'a>, ()>, Range<usize>)> {
-        if self.peeked.is_none() {
-            self.peeked = self.next_inner();
+    pub fn peek(&mut self) -> Option<&(Result<Token<'a>, ()>, Range<usize>)> {
+        if self.peeked.is_empty()
+            && let Some(t) = self.next_inner()
+        {
+            self.peeked.push_back(t);
         }
-        &self.peeked
+        self.peeked.front()
+    }
+
+    pub fn peek_many<const N: usize>(&mut self) -> Option<[&Token<'a>; N]> {
+        for _ in 0..N - self.peeked.len() {
+            if let Some(t) = self.next_inner() {
+                self.peeked.push_back(t);
+            } else {
+                return None;
+            }
+        }
+
+        // Start with some random tokens that we will override.
+        let mut tokens = [const { &Token::AmpAmp }; N];
+        for (i, token) in tokens.iter_mut().enumerate() {
+            let (Ok(t), _) = self.peeked.get(i).unwrap() else {
+                return None;
+            };
+            *token = t;
+        }
+
+        Some(tokens)
     }
 
     fn next_inner(
@@ -147,7 +171,7 @@ impl<'s> Lexer<'s> {
         Self {
             input,
             original_length: input.len(),
-            peeked: None,
+            peeked: VecDeque::new(),
             almost_keyword: None,
         }
     }
@@ -190,7 +214,7 @@ impl<'s> Lexer<'s> {
     fn skip_whitespace(&mut self) {
         loop {
             self.input = self.input.trim_start();
-            if self.input.as_bytes().first() == Some(&b'#') {
+            if self.input.as_bytes().first_chunk() == Some(b"//") {
                 let n = self.input.find('\n').unwrap_or(self.input.len());
                 self.bump(n);
             } else {
@@ -214,9 +238,9 @@ impl<'s> Lexer<'s> {
             [b'>', b'='] => Token::AngleRightEq,
             [b'<', b'='] => Token::AngleLeftEq,
             [b'-', b'>'] => Token::Arrow,
+            [b'=', b'>'] => Token::FatArrow,
 
             // These are added for better diagnostics
-            [b'/', b'/'] => Token::SlashSlash,
             [b'/', b'*'] => Token::SlashStar,
             [b'-', b'-'] => Token::HyphenHyphen,
 
@@ -257,6 +281,7 @@ impl<'s> Lexer<'s> {
             b'<' => Token::AngleLeft,
             b'>' => Token::AngleRight,
             b'%' => Token::Percent,
+            b'#' => Token::Hash,
             _ => return ControlFlow::Continue(()),
         };
 
@@ -548,8 +573,10 @@ impl<'s> Lexer<'s> {
 
         let kw = match ident {
             "accept" => Keyword::Accept,
+            "const" => Keyword::Const,
             "dep" => Keyword::Dep,
             "else" => Keyword::Else,
+            "enum" => Keyword::Enum,
             "filter" => Keyword::Filter,
             "filtermap" => Keyword::FilterMap,
             "for" => Keyword::For,
@@ -559,7 +586,6 @@ impl<'s> Lexer<'s> {
             "in" => Keyword::In,
             "let" => Keyword::Let,
             "match" => Keyword::Match,
-            "not" => Keyword::Not,
             "pkg" => Keyword::Pkg,
             "record" => Keyword::Record,
             "reject" => Keyword::Reject,
@@ -567,7 +593,6 @@ impl<'s> Lexer<'s> {
             "std" => Keyword::Std,
             "super" => Keyword::Super,
             "test" => Keyword::Test,
-            "variant" => Keyword::Variant,
             "while" => Keyword::While,
             // ----
             "true" => return ControlFlow::Break((Token::Bool(true), span)),
@@ -583,7 +608,6 @@ impl<'s> Lexer<'s> {
     fn record_almost_keyword(&mut self, x: &str, span: Range<usize>) {
         let suggestion = match x {
             "loop" => None,
-            "enum" => Some("variant"),
             "struct" => Some("record"),
             "class" => Some("record"),
             "data" => Some("record"),
@@ -619,6 +643,8 @@ impl Display for Token<'_> {
             Token::Comma => ",",
             Token::Eq => "=",
             Token::EqEq => "==",
+            Token::FatArrow => "=>",
+            Token::Hash => "#",
             Token::Hyphen => "-",
             Token::HyphenHyphen => "--",
             Token::Period => ".",
@@ -628,7 +654,6 @@ impl Display for Token<'_> {
             Token::QuestionMark => "?",
             Token::SemiColon => ";",
             Token::Slash => "/",
-            Token::SlashSlash => "//",
             Token::SlashStar => "/*",
             Token::Star => "*",
             Token::Percent => "%",
@@ -669,8 +694,10 @@ impl Keyword {
     fn as_str(&self) -> &'static str {
         match self {
             Keyword::Accept => "accept",
+            Keyword::Const => "const",
             Keyword::Dep => "dep",
             Keyword::Else => "else",
+            Keyword::Enum => "enum",
             Keyword::Filter => "filter",
             Keyword::FilterMap => "filtermap",
             Keyword::For => "for",
@@ -680,7 +707,6 @@ impl Keyword {
             Keyword::In => "in",
             Keyword::Let => "let",
             Keyword::Match => "match",
-            Keyword::Not => "not",
             Keyword::Pkg => "pkg",
             Keyword::Record => "record",
             Keyword::Reject => "reject",
@@ -688,7 +714,6 @@ impl Keyword {
             Keyword::Std => "std",
             Keyword::Super => "super",
             Keyword::Test => "test",
-            Keyword::Variant => "variant",
             Keyword::While => "while",
         }
     }

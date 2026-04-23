@@ -348,19 +348,17 @@ impl Parser<'_, '_> {
     /// Parse a negation expression
     ///
     /// ```ebnf
-    /// Negation ::= 'not' Access
+    /// Negation ::= ('!' | '-')* Access
     /// ```
     fn negation(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
-        // TODO: A negation should be a unary `-`. The `not` operator should
-        // have much lower precedence.
-        if self.peek_is(Token::Keyword(Keyword::Not)) {
-            let span = self.take(Token::Keyword(Keyword::Not))?;
+        if self.peek_is(Token::Bang) {
+            let span = self.take(Token::Bang)?;
             let expr = self.negation(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Not(Box::new(expr))))
         } else if self.peek_is(Token::Hyphen) {
             let span = self.take(Token::Hyphen)?;
-            let expr = self.access(r)?;
+            let expr = self.negation(r)?;
             let span = span.merge(self.get_span(&expr));
             Ok(self.spans.add(span, Expr::Negate(Box::new(expr))))
         } else {
@@ -448,9 +446,22 @@ impl Parser<'_, '_> {
         }
 
         if self.peek_is(Token::CurlyLeft) {
-            let key_values = self.record()?;
-            let span = self.spans.get(&key_values);
-            return Ok(self.spans.add(span, Expr::Record(key_values)));
+            let is_anonymous_record = matches!(
+                self.peek_many::<2>(),
+                Some([Token::CurlyLeft, Token::CurlyRight])
+            ) || matches!(
+                self.peek_many::<3>(),
+                Some([Token::CurlyLeft, Token::Ident(_), Token::Colon])
+            );
+            if is_anonymous_record {
+                let key_values = self.record()?;
+                let span = self.spans.get(&key_values);
+                return Ok(self.spans.add(span, Expr::Record(key_values)));
+            } else {
+                let block = self.block()?;
+                let span = self.get_span(&block);
+                return Ok(self.spans.add(span, Expr::Block(block)));
+            }
         }
 
         if let Some(Token::Keyword(
@@ -617,8 +628,8 @@ impl Parser<'_, '_> {
     ///
     /// ```ebnf
     /// MatchExpr    ::= 'match' Expr '{' MatchArm* MatchArmLast? '}'
-    /// MatchArm     ::= Pattern ('|' Expr)? '->' (Block | (Expr ','))
-    /// MatchArmLast ::= Pattern ('|' Expr)? '->' Expr
+    /// MatchArm     ::= Pattern ('|' Expr)? '=>' (Block | (Expr ','))
+    /// MatchArmLast ::= Pattern ('|' Expr)? '=>' Expr
     /// ```
     fn match_expr(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::Keyword(Keyword::Match))?;
@@ -656,13 +667,13 @@ impl Parser<'_, '_> {
 
             let pattern = self.add_span(span, pattern);
 
-            let guard = if self.next_is(Token::Pipe) {
+            let guard = if self.next_is(Token::Keyword(Keyword::If)) {
                 Some(self.expr()?)
             } else {
                 None
             };
 
-            self.take(Token::Arrow)?;
+            self.take(Token::FatArrow)?;
 
             let body = if self.peek_is(Token::CurlyLeft) {
                 let exprs = self.block()?;

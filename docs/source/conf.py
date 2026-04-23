@@ -20,7 +20,7 @@ import sys
 import os
 import datetime
 import sphinx_rtd_theme
-from pygments.lexer import RegexLexer, words
+from pygments.lexer import RegexLexer, words, include
 from pygments import token
 from sphinx.highlighting import lexers
 
@@ -265,15 +265,18 @@ class RotoLexer(RegexLexer):
 
     tokens = {
         'root': [
-            (r'#.*?$', token.Comment.Singleline),
+            (r'//.*?$', token.Comment.Singleline),
             (
                 words(
                     (
                         'accept',
+                        'const',
                         'dep',
                         'else',
+                        'enum',
                         'filter',
                         'filtermap',
+                        'for',
                         'fn',
                         'if',
                         'import',
@@ -286,7 +289,6 @@ class RotoLexer(RegexLexer):
                         'std',
                         'super',
                         'test',
-                        'variant',
                         'while',
                     ),
                     suffix=r'\b'
@@ -294,17 +296,33 @@ class RotoLexer(RegexLexer):
                 token.Keyword
             ),
             (words(('+', '-', '/', '*', '%', '==', '>=', '>', '<=', '<', '=', '&&', '||', '?', '!')), token.Operator),
-            (words(('{', '}', '(', ')', '[', ']', ':', '.', ';', ',')), token.Punctuation),
+            (words(('(', ')', '[', ']', ':', '.', ';', ',')), token.Punctuation),
+            (r'\{', token.Punctuation, "block"),
+            (r'f"', token.String, "f-string"),
             (r'[a-zA-Z_][a-zA-Z0-9_]*', token.Name),
             (r'[0-9]', token.Number),
             (r'\s+', token.Text.Whitespace),
             (r'"', token.String, "string"),
             (r"'\w'", token.String),
         ],
+        'block': [
+            (r'\}', token.Punctuation, "#pop"),
+            include('root'),
+        ],
         'string': [
             (r'[^"]', token.String),
             (r'"', token.String, "#pop"),
-        ]
+        ],
+        'f-string': [
+            (r'\{\{', token.String),
+            (r'\{', token.String.Interpol, "expr-inside-f-string"),
+            (r'[^"]', token.String),
+            (r'"', token.String, "#pop"),
+        ],
+        'expr-inside-f-string': [            
+            (r'\}', token.String.Interpol, "#pop"),
+            include('root'),
+        ],
     }
 
 lexers['roto'] = RotoLexer(startinline=True)
