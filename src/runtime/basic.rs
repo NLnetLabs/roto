@@ -9,7 +9,7 @@ use crate::{
     Library, List, Val, library,
     runtime::func::OutPtr,
     value::{
-        DynVal, ErasedList, String, StringBuf, StringBytes, StringChars,
+        DynVal, ErasedList, RotoString, StringBuf, StringBytes, StringChars,
         StringLines, VTable, list::ffi::list_get,
     },
 };
@@ -30,7 +30,7 @@ macro_rules! to_string_impl {
         library! {
             impl $t {
                 /// Convert this value into a `String`
-                fn to_string(self) -> String {
+                fn to_string(self) -> RotoString {
                     self.to_string().into()
                 }
             }
@@ -160,14 +160,14 @@ fn ip_addr_methods() -> Library {
 
 fn string_methods() -> Library {
     library! {
-        impl String {
+        impl RotoString {
             /// Create a new string from a list of characters.
             ///
             /// ```roto
             /// let a = String.from_chars(['h', 'e', 'l', 'l', 'o']); // -> "hello"
             /// ```
-            fn from_chars(chars: List<char>) -> String {
-                String::from_chars(chars)
+            fn from_chars(chars: List<char>) -> RotoString {
+                RotoString::from_chars(chars)
             }
 
             /// Append a string to another, creating a new string.
@@ -255,7 +255,7 @@ fn string_methods() -> Library {
             /// ```roto
             /// let a = "one, two, three".split(", "); // -> ["one", "two", "three"]
             /// ```
-            fn split(self, separator: String) -> List<String> {
+            fn split(self, separator: RotoString) -> List<RotoString> {
                 self.split(&separator)
             }
 
@@ -309,7 +309,7 @@ fn string_methods() -> Library {
             /// ```roto
             /// let a = "RustRoto!".strip_prefix("Rust"); // -> "Roto!"
             /// ```
-            fn strip_prefix(self, prefix: String) -> Option<String> {
+            fn strip_prefix(self, prefix: RotoString) -> Option<RotoString> {
                 self.strip_prefix(&prefix)
             }
 
@@ -320,7 +320,7 @@ fn string_methods() -> Library {
             /// ```roto
             /// let a = "Roto!Rust".strip_suffix("Rust"); // -> "Roto!"
             /// ```
-            fn strip_suffix(self, suffix: String) -> Option<String> {
+            fn strip_suffix(self, suffix: RotoString) -> Option<RotoString> {
                 self.strip_suffix(&suffix)
             }
         }
@@ -347,7 +347,7 @@ fn string_methods() -> Library {
             /// method also returns `None` if the resulting string would not be
             /// valid UTF-8, i.e. when the one of the indices is within a code
             /// point.
-            fn slice(self, start: u64, end: u64) -> Option<String> {
+            fn slice(self, start: u64, end: u64) -> Option<RotoString> {
                 let start = start.try_into().ok()?;
                 let end = end.try_into().ok()?;
                 self.slice(start, end)
@@ -378,7 +378,7 @@ fn string_methods() -> Library {
             ///
             /// This method returns `None` if either `start` or `end` is out of
             /// bounds or if `start` is greater than `end`.
-            fn slice(self, start: u64, end: u64) -> Option<String> {
+            fn slice(self, start: u64, end: u64) -> Option<RotoString> {
                 let start = start.try_into().ok()?;
                 let end = end.try_into().ok()?;
                 self.slice(start, end)
@@ -408,14 +408,14 @@ fn string_methods() -> Library {
             ///
             /// This method returns `None` if either `start` or `end` is out of
             /// bounds or if `start` is greater than `end`.
-            fn slice(self, start: u64, end: u64) -> Option<String> {
+            fn slice(self, start: u64, end: u64) -> Option<RotoString> {
                 let start = start.try_into().ok()?;
                 let end = end.try_into().ok()?;
                 self.slice(start, end)
             }
 
             /// Get a list of lines.
-            fn list(self) -> List<String> {
+            fn list(self) -> List<RotoString> {
                 self.list()
             }
         }
@@ -538,9 +538,9 @@ pub fn built_ins() -> Library {
         /// See [the language reference](#lang_strings) for more information.
         /// Roto supports string formatting when a string literal is prefixed
         /// with an `f`.
-        #[clone] type String = String;
+        #[clone] type String = RotoString;
 
-        impl String {
+        impl RotoString {
             /// Convert this value into a `String`
             fn to_string(self) -> Self {
                 self
@@ -635,7 +635,7 @@ pub fn built_ins() -> Library {
             }
 
             /// Create a `StringBuf` with an initial `String`
-            fn from(s: String) -> Self {
+            fn from(s: RotoString) -> Self {
                 Val(StringBuf::from(s))
             }
 
@@ -645,12 +645,12 @@ pub fn built_ins() -> Library {
             }
 
             /// Add a `String` to the end of this `StringBuf`
-            fn push_string(self, s: String) {
+            fn push_string(self, s: RotoString) {
                 self.0.push_string(s);
             }
 
             /// Get the underlying `String` of this `StringBuf`
-            fn as_string(self) -> String {
+            fn as_string(self) -> RotoString {
                 self.0.as_string()
             }
         }
@@ -748,8 +748,8 @@ pub fn built_ins() -> Library {
 
             /// Join the strings in a list into a single string
             #[sig = "fn(List[String], String) -> String"]
-            fn join(self, separator: String) -> String {
-                let list = unsafe { std::mem::transmute::<ErasedList, List<String>>(self) };
+            fn join(self, separator: RotoString) -> RotoString {
+                let list = unsafe { std::mem::transmute::<ErasedList, List<RotoString>>(self) };
 
                 let s: std::string::String = list
                     .to_vec()

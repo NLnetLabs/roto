@@ -1,7 +1,7 @@
 use super::{eval::Memory, value::IrValue};
 use crate::{
-    FileTree, Runtime, library, pipeline::LoweredToLir, runtime::OptCtx, src,
-    value::String,
+    FileTree, RotoString, Runtime, library, pipeline::LoweredToLir,
+    runtime::OptCtx, src,
 };
 
 #[track_caller]
@@ -450,7 +450,7 @@ fn string_global() {
     );
 
     let rt = Runtime::from_lib(library! {
-        const FOO: String = "BAR".into();
+        const FOO: RotoString = "BAR".into();
     })
     .unwrap();
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     library,
     runtime::items::Registerable as _,
-    value::{String, Val},
+    value::{RotoString, Val},
 };
 
 use super::Runtime;
@@ -171,7 +171,7 @@ fn function_and_constant_with_the_same_name_2() {
 fn register_option_arc_str() {
     // Cannot register Option
     let _ = library! {
-        #[clone] type OptStr = Option<String>;
+        #[clone] type OptStr = Option<RotoString>;
     };
 }
 
@@ -179,7 +179,7 @@ fn register_option_arc_str() {
 fn register_val_option_arc_str() {
     // But with Val it's fine
     Runtime::from_lib(library! {
-        #[clone] type OptStr = Val<Option<String>>;
+        #[clone] type OptStr = Val<Option<RotoString>>;
     })
     .unwrap();
 }
@@ -190,10 +190,10 @@ fn register_val_option_arc_str() {
 #[test]
 fn unwrap_or_empty() {
     let ty = library! {
-        #[clone] type OptStr = Val<Option<String>>;
+        #[clone] type OptStr = Val<Option<RotoString>>;
 
-        impl Val<Option<String>> {
-            fn unwrap_or_empty(x: Option<String>) -> String {
+        impl Val<Option<RotoString>> {
+            fn unwrap_or_empty(x: Option<RotoString>) -> RotoString {
                 x.unwrap_or_default()
             }
         }

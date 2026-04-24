@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use super::String;
+use super::RotoString;
 
 #[derive(Clone, Default)]
 pub struct StringBuf(Arc<Mutex<std::string::String>>);
@@ -10,7 +10,7 @@ impl StringBuf {
         Self(Default::default())
     }
 
-    pub fn from(s: String) -> Self {
+    pub fn from(s: RotoString) -> Self {
         Self(Arc::new(Mutex::new(s.as_ref().to_owned())))
     }
 
@@ -18,12 +18,12 @@ impl StringBuf {
         self.0.lock().unwrap().push(c)
     }
 
-    pub fn push_string(self, s: String) {
+    pub fn push_string(self, s: RotoString) {
         self.0.lock().unwrap().push_str(&s);
     }
 
     #[expect(clippy::wrong_self_convention)]
-    pub fn as_string(self) -> String {
+    pub fn as_string(self) -> RotoString {
         let s = self.0.lock().unwrap();
         (&**s).into()
     }

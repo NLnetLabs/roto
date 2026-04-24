@@ -244,7 +244,7 @@ then create and register the following type.
 .. code-block:: rust
 
     use std::sync::Arc;
-    use roto::{Context, String as RotoString};
+    use roto::{Context, RotoString};
 
     #[derive(Context)]
     struct Ctx {

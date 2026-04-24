@@ -6,12 +6,12 @@ use crate::List;
 #[derive(Clone, Default, PartialEq, Eq)]
 struct StringData(Arc<str>);
 
-/// Roto's builti-in string type
+/// Roto's built-in string type
 #[derive(Clone, Default, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct String(StringData);
+pub struct RotoString(StringData);
 
-impl String {
+impl RotoString {
     /// Create a new [`String`].
     pub fn new(x: impl Into<Arc<str>>) -> Self {
         Self(StringData(x.into()))
@@ -57,7 +57,7 @@ impl String {
     }
 
     /// Create a list of strings by splitting this string by the `separator`.
-    pub fn split(&self, separator: &str) -> List<String> {
+    pub fn split(&self, separator: &str) -> List<RotoString> {
         self.0.0.split(&separator).map(Into::into).collect()
     }
 
@@ -112,31 +112,31 @@ impl String {
     }
 }
 
-impl<T: Into<Arc<str>>> From<T> for String {
+impl<T: Into<Arc<str>>> From<T> for RotoString {
     fn from(value: T) -> Self {
-        String(StringData(value.into()))
+        RotoString(StringData(value.into()))
     }
 }
 
-impl From<String> for std::string::String {
-    fn from(value: String) -> std::string::String {
+impl From<RotoString> for std::string::String {
+    fn from(value: RotoString) -> std::string::String {
         std::string::String::from(&*value.0.0)
     }
 }
 
-impl AsRef<str> for String {
+impl AsRef<str> for RotoString {
     fn as_ref(&self) -> &str {
         &self.0.0
     }
 }
 
-impl Borrow<str> for String {
+impl Borrow<str> for RotoString {
     fn borrow(&self) -> &str {
         &self.0.0
     }
 }
 
-impl std::ops::Deref for String {
+impl std::ops::Deref for RotoString {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -144,13 +144,13 @@ impl std::ops::Deref for String {
     }
 }
 
-impl std::fmt::Display for String {
+impl std::fmt::Display for RotoString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.0.fmt(f)
     }
 }
 
-impl std::fmt::Debug for String {
+impl std::fmt::Debug for RotoString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.0.fmt(f)
     }
@@ -176,7 +176,7 @@ impl StringBytes {
     ///
     /// This method returns `None` if either `i` or `j` is out of bounds or if
     /// `i` is greater than `j`.
-    pub fn slice(&self, i: usize, j: usize) -> Option<String> {
+    pub fn slice(&self, i: usize, j: usize) -> Option<RotoString> {
         self.0.0.get(i..j).map(Into::into)
     }
 
@@ -207,7 +207,7 @@ impl StringChars {
     ///
     /// This method returns `None` if either `i` or `j` is out of bounds or if
     /// `i` is greater than `j`.
-    pub fn slice(&self, i: usize, j: usize) -> Option<String> {
+    pub fn slice(&self, i: usize, j: usize) -> Option<RotoString> {
         // If j is less than i, we return None.
         let len = j.checked_sub(i)?;
 
@@ -265,7 +265,7 @@ impl StringLines {
     ///
     /// This method returns `None` if either `i` or `j` is out of bounds or if
     /// `i` is greater than `j`.
-    pub fn slice(&self, i: usize, j: usize) -> Option<String> {
+    pub fn slice(&self, i: usize, j: usize) -> Option<RotoString> {
         // If j is less than i, we return None.
         let num = j.checked_sub(i)?;
 
@@ -291,7 +291,7 @@ impl StringLines {
         }
 
         if num == 0 {
-            return Some(String::new(""));
+            return Some(RotoString::new(""));
         }
 
         let mut iter = iter.chain(end);
@@ -307,7 +307,7 @@ impl StringLines {
     }
 
     /// Get a list of lines
-    pub fn list(&self) -> List<String> {
+    pub fn list(&self) -> List<RotoString> {
         // TODO: This could be optimized
         self.0.0.lines().map(Into::into).collect()
     }
@@ -317,9 +317,9 @@ impl StringLines {
 mod tests {
     #[test]
     fn string_line_slice() {
-        use super::String;
+        use super::RotoString;
 
-        let s = String::from("1\n2\n3\n4\n").lines();
+        let s = RotoString::from("1\n2\n3\n4\n").lines();
 
         assert_eq!(s.slice(0, 0), Some("".into()));
         assert_eq!(s.slice(0, 1), Some("1\n".into()));
@@ -328,7 +328,7 @@ mod tests {
         assert_eq!(s.slice(1, 4), Some("2\n3\n4\n".into()));
         assert_eq!(s.slice(1, 5), None);
 
-        let s = String::from("1\n2\n3\n4").lines();
+        let s = RotoString::from("1\n2\n3\n4").lines();
 
         assert_eq!(s.slice(0, 0), Some("".into()));
         assert_eq!(s.slice(0, 1), Some("1\n".into()));
@@ -337,7 +337,7 @@ mod tests {
         assert_eq!(s.slice(1, 4), Some("2\n3\n4".into()));
         assert_eq!(s.slice(1, 5), None);
 
-        let s = String::from("1\n2\n3\n4\n\n").lines();
+        let s = RotoString::from("1\n2\n3\n4\n\n").lines();
 
         assert_eq!(s.slice(0, 0), Some("".into()));
         assert_eq!(s.slice(0, 1), Some("1\n".into()));
@@ -346,7 +346,7 @@ mod tests {
         assert_eq!(s.slice(1, 5), Some("2\n3\n4\n\n".into()));
         assert_eq!(s.slice(1, 6), None);
 
-        let s = String::from("").lines();
+        let s = RotoString::from("").lines();
 
         assert_eq!(s.slice(0, 0), Some("".into()));
         assert_eq!(s.slice(0, 1), Some("".into()));

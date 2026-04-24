@@ -2,6 +2,7 @@ use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
 use crate::{
+    RotoString,
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
@@ -96,7 +97,7 @@ fn check_roto_type(
     let ASN: TypeId = TypeId::of::<Asn>();
     let IPADDR: TypeId = TypeId::of::<IpAddr>();
     let PREFIX: TypeId = TypeId::of::<Prefix>();
-    let STRING: TypeId = TypeId::of::<crate::String>();
+    let STRING: TypeId = TypeId::of::<RotoString>();
 
     let Some(rust_type) = TypeRegistry::get(rust_type) else {
         return Err(TypeMismatch {

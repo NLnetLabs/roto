@@ -1202,7 +1202,7 @@ fn array_layout(elem_layout: Layout, n: usize) -> Layout {
 mod tests {
     use std::sync::atomic::AtomicUsize;
 
-    use crate::Val;
+    use crate::{RotoString, Val};
 
     use super::boundary::List;
 
@@ -1224,12 +1224,10 @@ mod tests {
 
     #[test]
     fn list_of_strings() {
-        use crate::String;
-
         // Create a list of string to and concat it a few times, which
         // should exercise the clone and drop implementation (especially
         // under valgrind).
-        let l = List::<String>::from(["hello".into(), "world".into()]);
+        let l = List::<RotoString>::from(["hello".into(), "world".into()]);
 
         let l = l.concat(&l);
         let l = l.concat(&l);
@@ -1335,7 +1333,7 @@ mod tests {
 
     #[test]
     fn contains_str() {
-        let list = List::<crate::String>::from([
+        let list = List::<RotoString>::from([
             "Alpha".into(),
             "Beta".into(),
             "Gamma".into(),
@@ -1360,7 +1358,7 @@ mod tests {
 
     #[test]
     fn index_str() {
-        let list = List::<crate::String>::from([
+        let list = List::<RotoString>::from([
             "Alpha".into(),
             "Beta".into(),
             "Gamma".into(),

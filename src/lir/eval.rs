@@ -7,6 +7,7 @@
 use log::trace;
 
 use crate::{
+    RotoString,
     ast::Identifier,
     lir::{
         FloatCmp, Instruction, IntCmp, Item, ItemKind, Operand, ValueOrSlot,
@@ -763,11 +764,11 @@ pub fn eval(
             } => {
                 let layout = Primitive::String.layout();
                 let ptr = mem.allocate(layout.size());
-                let ptr_value = mem.get(ptr) as *mut crate::String;
+                let ptr_value = mem.get(ptr) as *mut RotoString;
                 unsafe {
                     std::ptr::write(
                         ptr_value,
-                        crate::String::from(string.as_ref()),
+                        RotoString::from(string.as_ref()),
                     )
                 };
                 vars.insert(to.clone(), IrValue::Pointer(ptr));

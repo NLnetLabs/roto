@@ -600,7 +600,7 @@ impl Primitive {
             Bool => Layout::new(1, 1),
             Char => Layout::of::<char>(),
             Asn => Layout::new(4, 4),
-            String => Layout::of::<crate::String>(),
+            String => Layout::of::<crate::RotoString>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
             Prefix => Layout::of::<inetnum::addr::Prefix>(),
         }

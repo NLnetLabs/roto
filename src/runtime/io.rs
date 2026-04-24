@@ -1,4 +1,4 @@
-use crate::{Runtime, library, runtime::OptCtx, value::String};
+use crate::{Runtime, library, runtime::OptCtx, value::RotoString};
 
 impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Add functions using I/O to the runtime.
@@ -11,7 +11,7 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
     pub fn add_io_functions(&mut self) {
         self.add(library! {
             /// Print a string to stdout
-            fn print(s: String) {
+            fn print(s: RotoString) {
                 println!("{s}");
             }
         })
