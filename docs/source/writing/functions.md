@@ -2,15 +2,15 @@
 
 To organize and reuse our code, we can create functions. You already know what a
 basic function looks like, because we've been using a `main` function as
-entry point of the program.
+the entry point of our example programs.
 
-Each function can take arguments, which require a name and a type separated by a
+A function can take arguments, which require a name and a type separated by a
 colon (`:`) and, of course, a function can also return a value. The return type
 is indicated by `->` after the list of arguments. A function that does not have
-an explicit return type returns the type `()`, which is the unit type.
+an explicit return type returns the type `()`, which is the *unit type*.
 
 The function body is a block that returns the last expression if there is no
-semicolon at the end. You can also return early using the
+semicolon at the end. You can also explicitly return early using the
 [`return`](lang_functions) keyword.
 
 ```roto
@@ -37,14 +37,14 @@ triple(14) = 42
 :::
 
 :::{hint}
-The order in which functions are defined does not matter. You can pick any order
+The order in which functions are defined does not matter; pick any order
 that you like!
 :::
 
-Recursion is also supported. For example, here is a recursive definition of the
-factorial function. Note that the entire [`if`](lang_if_else) is the final
-expression which is returned, so we do not need any [`return`](lang_functions)
-statements.
+Recursion is also supported; functions can call themselves. For example, here
+is a recursive definition of the factorial function. Note that the entire
+[`if`](lang_if_else) is the final expression which is returned, so we do not
+need any [`return`](lang_functions) statements.
 
 ```roto
 fn factorial(n: u64) -> u64 {
@@ -66,5 +66,5 @@ factorial(5) = 120
 :::
 
 :::{seealso}
-[](lang_functions) in the language reference
+[`functions`](lang_functions) in the language reference
 :::

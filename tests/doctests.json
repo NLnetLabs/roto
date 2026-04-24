@@ -553,7 +553,7 @@
         "lang": "roto",
         "code": "fn main() {\n    // Create a variable with the inferred type String\n    let first_name = \"John\";\n    print(\"Hello, \" + first_name);\n\n    // Create a variable with a type annotation\n    let last_name: String = \"Doe\";\n    print(\"Bye, \" + first_name + \" \" + last_name + \"!\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 27,
+        "line": 30,
         "testoutput": "Hello, John\nBye, John Doe!\n",
         "mode": "run"
     },
@@ -562,7 +562,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let first_name = \"John\";\n    let last_name = \"Doe\";\n    print(f\"Hello, {first_name} {last_name}!\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 49,
+        "line": 55,
         "testoutput": "Hello, John Doe!\n",
         "mode": "run"
     },
@@ -571,7 +571,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let name = \"John\";\n    print(f\"Hello, {name.to_uppercase()}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 65,
+        "line": 71,
         "testoutput": "Hello, JOHN\n",
         "mode": "run"
     },
@@ -580,7 +580,7 @@
         "lang": "roto",
         "code": "fn main() {\n    // We can specify the type to get a specific integer type\n    let a: u8 = 2 + 1;\n    print(f\"2 + 1 = {a}\");\n\n    // If we don't specify the type we get i32\n    let b = -10 + 3;\n    print(f\"-10 + 3 = {b}\");\n\n    let c = 2 * 3;\n    print(f\"2 * 3 = {c}\");\n\n    let d = 20 / 5;\n    print(f\"20 / 5 = {d}\");\n\n    let e = 23 % 5;\n    print(f\"23 % 5 = {e}\");\n\n    // Regular order of operations applies\n    let f = 1 + 4 * 5;\n    print(f\"1 + 4 * 5 = {f}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 102,
+        "line": 110,
         "testoutput": "2 + 1 = 3\n-10 + 3 = -7\n2 * 3 = 6\n20 / 5 = 4\n23 % 5 = 3\n1 + 4 * 5 = 21\n",
         "mode": "run"
     },
@@ -589,7 +589,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let a: u8 = 5;\n    let b: u32 = 10;\n\n    let c = a + b; // error!\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 140,
+        "line": 148,
         "testoutput": "",
         "mode": "error"
     },
@@ -598,7 +598,7 @@
         "lang": "roto",
         "code": "fn main() {\n    // We can specify the type to get a specific integer type\n    let a: f32 = 2.0 + 1.0; // -> 3.0\n    print(f\"2.0 + 1.0 = {a}\");\n\n    // We always have to write the period for floating point numbers\n    let b: f32 = 2. + 1.; // -> 3.0\n    print(f\"2. + 1. = {b}\");\n\n    // If we don't specify the type we get f64\n    let c = -12.3 + 4.5; // -> -7.8\n    print(f\"-12.3 + 4.5 = {c}\");\n\n    let d = 2.0 * 3.5; // -> 7.0\n    print(f\"2.0 * 3.5 = {d}\");\n\n    let e = 20.0 / 5.0; // -> 4.0\n    print(f\"20.0 / 5.0 = {e}\");\n\n    // Regular order of operations applies\n    let f = 1.0 + 4.0 * 5.0; // -> 21.0\n    print(f\"1.0 + 4.0 * 5.0 = {f}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 158,
+        "line": 166,
         "testoutput": "2.0 + 1.0 = 3\n2. + 1. = 3\n-12.3 + 4.5 = -7.800000000000001\n2.0 * 3.5 = 7\n20.0 / 5.0 = 4\n1.0 + 4.0 * 5.0 = 21\n",
         "mode": "run"
     },
@@ -607,7 +607,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let a = !false;\n    print(f\"{a}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 215,
+        "line": 223,
         "testoutput": "true\n",
         "mode": "run"
     },
@@ -616,7 +616,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = 5 == 5;\n    let y = \"hello\" == \"hello\";\n    let z = true == true;\n    print(f\"{x && y && z}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 233,
+        "line": 242,
         "testoutput": "true\n",
         "mode": "run"
     },
@@ -625,7 +625,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = 5 > 3;\n    print(f\"{x}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 259,
+        "line": 270,
         "testoutput": "true\n",
         "mode": "run"
     },
@@ -634,7 +634,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x: List[i32] = [1, 2, 4];\n    let len = x.len();\n    let contains_2 = x.contains(2);\n    let contains_3 = x.contains(3);\n    print(f\"length of x: {len}\");\n    print(f\"x contains 2: {contains_2}\");\n    print(f\"x contains 3: {contains_3}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 287,
+        "line": 299,
         "testoutput": "length of x: 3\nx contains 2: true\nx contains 3: false\n",
         "mode": "run"
     },
@@ -643,7 +643,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = [1, \"hello!\"];\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 310,
+        "line": 322,
         "testoutput": "",
         "mode": "error"
     },
@@ -652,7 +652,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = [1, 2, 3];\n    let y = [4, 5, 6];\n    let z = x + y;\n\n    let contains_2 = z.contains(2);\n    let contains_5 = z.contains(5);\n    print(f\"z contains 2: {contains_2}\");\n    print(f\"z contains 5: {contains_5}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/basics.md",
-        "line": 319,
+        "line": 331,
         "testoutput": "z contains 2: true\nz contains 5: true\n",
         "mode": "run"
     },
@@ -677,7 +677,7 @@
     {
         "src": "writing/control_flow",
         "lang": "roto",
-        "code": "fn main() {\n    if true {\n        let x = 10;\n        print(f\"{x}\"); // This is fine!\n    }\n    print(f\"{x}\"); // This errors during type checking!\n}\n",
+        "code": "fn main() {\n    if true {\n        let x = 10;\n        print(f\"{x}\"); // This is fine!\n    }\n    print(f\"{x}\"); // This errors during type checking as x no longer exists here!\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
         "line": 57,
         "testoutput": "",
@@ -688,7 +688,7 @@
         "lang": "roto",
         "code": "// Euclidean algorithm for greatest common divisor\nfn main() {\n    let a_initial = 125;\n    let b_initial = 50;\n\n    let a = a_initial;\n    let b = b_initial;\n    while b != 0 {\n        let t = b;\n        b = a % b;\n        a = t;\n    }\n\n    print(f\"gcd({a_initial}, {b_initial}) = {a}\")\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
-        "line": 77,
+        "line": 80,
         "testoutput": "gcd(125, 50) = 25\n",
         "mode": "run"
     },
@@ -697,7 +697,7 @@
         "lang": "roto",
         "code": "fn main() {\n    for x in [10, 20, 30] {\n        let squared = x * x;\n        print(f\"{x} squared is {squared}\");\n    }\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/control_flow.md",
-        "line": 108,
+        "line": 111,
         "testoutput": "10 squared is 100\n20 squared is 400\n30 squared is 900\n",
         "mode": "run"
     },
@@ -706,7 +706,7 @@
         "lang": "roto",
         "code": "fn double_both(a: {x: f64, y: f64}) -> {x: f64, y: f64} {\n    {\n        x: 2.0 * a.x,\n        y: 2.0 * a.y,\n    }\n}\n\nfn main() {\n    let one = { x: 10.0, y: 20.0 };\n    let two = double_both(one);\n    print(f\"two.x = {two.x}\");\n    print(f\"two.y = {two.y}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/data_types.md",
-        "line": 15,
+        "line": 20,
         "testoutput": "two.x = 20\ntwo.y = 40\n",
         "mode": "run"
     },
@@ -715,7 +715,7 @@
         "lang": "roto",
         "code": "record Vec2 {\n    x: f64,\n    y: f64,\n}\n\n\nfn double_both(a: Vec2) -> Vec2 {\n    Vec2 {\n        x: 2.0 * a.x,\n        y: 2.0 * a.y,\n    }\n}\n\nfn main() {\n    let one = { x: 10.0, y: 20.0 };\n    let two = double_both(one);\n    print(f\"two.x = {two.x}\");\n    print(f\"two.y = {two.y}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/data_types.md",
-        "line": 48,
+        "line": 53,
         "testoutput": "",
         "mode": "check"
     },
@@ -724,7 +724,7 @@
         "lang": "roto",
         "code": "enum Alignment {\n    Left,\n    Center,\n    Right,\n}\n\nfn align(x: String, size: u64, alignment: Alignment) -> String {\n    let x_size = x.chars().len();\n    if size <= x_size {\n        return x;\n    }\n\n    let pad = size - x_size;\n    let left = 0;\n    let right = 0;\n    match alignment {\n        Left => {\n            right = pad;\n        }\n        Right => {\n            left = pad;\n        }\n        Center => {\n            left = pad / 2;\n            right = pad / 2 + pad % 2;\n        }\n    }\n\n    let left_str = \"_\".repeat(left);\n    let right_str = \"_\".repeat(right);\n    f\"{left_str}{x}{right_str}\"\n}\n\nfn main() {\n    print(align(\"Hey!\", 10, Alignment.Left));\n    print(align(\"Hey!\", 10, Alignment.Right));\n    print(align(\"Hey!\", 10, Alignment.Center));\n    print(align(\"Ho!\", 10, Alignment.Left));\n    print(align(\"Ho!\", 10, Alignment.Right));\n    print(align(\"Ho!\", 10, Alignment.Center));\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/data_types.md",
-        "line": 91,
+        "line": 96,
         "testoutput": "Hey!______\n______Hey!\n___Hey!___\nHo!_______\n_______Ho!\n___Ho!____\n",
         "mode": "run"
     },
@@ -733,7 +733,7 @@
         "lang": "roto",
         "code": "enum Range {\n    Full,\n    From(i64),\n    Until(i64),\n    Between(i64, i64),\n}\n\nfn contains(range: Range, x: i64) -> bool {\n    match range {\n        Full => true,\n        From(a) => x >= a,\n        Until(a) => x <= a,\n        Between(a, b) => x >= a && x <= b,\n    }\n} \n\nfn main() {\n    let a = contains(Range.Full, 5);\n    let b = contains(Range.From(6), 5);\n    let c = contains(Range.Until(7), 5);\n    let d = contains(Range.Between(6, 10), 5);\n    print(f\"a = {a}, b = {b}, c = {c}, d = {d}\");\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/data_types.md",
-        "line": 150,
+        "line": 156,
         "testoutput": "a = true, b = false, c = true, d = false\n",
         "mode": "run"
     },
@@ -760,7 +760,7 @@
         "lang": "roto",
         "code": "fn main() {\n    // your code goes here\n}\n",
         "source": "/home/terts/code/roto/docs/source/writing/introduction.md",
-        "line": 28,
+        "line": 27,
         "testoutput": "",
         "mode": "check"
     }
