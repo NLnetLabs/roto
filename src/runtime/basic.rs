@@ -659,7 +659,7 @@ pub fn built_ins() -> Library {
                 self.0.push_char(c);
             }
 
-            /// Add a `String` to the end of this `StringBuf`,
+            /// Add a `String` to the end of this `StringBuf`.
             fn push_string(self, s: RotoString) {
                 self.0.push_string(s);
             }

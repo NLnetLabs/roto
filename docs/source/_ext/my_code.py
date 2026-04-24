@@ -13,6 +13,7 @@ from sphinx.directives.code import CodeBlock
 from sphinx import addnodes
 from sphinx.transforms import SphinxTransform
 from docutils.nodes import literal_block, Text
+from pathlib import Path
 import json
 
 class Testoutput(CodeBlock):
@@ -61,7 +62,7 @@ def find_code(app, doctree, fromdocname):
                 "src": fromdocname,
                 "lang": lang,
                 "code": subnode,
-                "source": node.source,
+                "source": str(Path(node.source).relative_to(Path.cwd())),
                 "line": node.line,
                 "testoutput": None,
                 "mode": mode,
