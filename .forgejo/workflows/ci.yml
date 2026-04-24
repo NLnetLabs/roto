@@ -5,6 +5,42 @@ on:
       - main
   pull_request:
 jobs:
+  manual:
+    name: Check docs up to date
+    runs-on: docker
+    steps:
+    - name: Run apt-get update
+      run: apt-get update
+    - name: Install pip
+      run: apt-get install -y python3 python3-pip python3-venv python-is-python3
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Make virtualenv
+      run: python -m venv sphinx-env
+    - name: Install docs requirements
+      run: |
+        source sphinx-env/bin/activate
+        cd docs
+        pip install -r requirements.txt
+    - name: Install Rust
+      uses: https://github.com/dtolnay/rust-toolchain@v1
+      with:
+        toolchain: stable
+        targets: x86_64-unknown-linux-gnu
+    - name: Remove old docs
+      run: rm -r docs/source/reference/std
+    - name: Run the doc generation
+      run: cargo run -- doc docs/source/reference/std
+    - name: Build the docs
+      run: |
+        source sphinx-env/bin/activate
+        cd docs
+        make html
+    - name: Check whether the docs are outdated
+      run: git diff --exit-code
+  
   test:
     name: test (${{ matrix.rust }}, ${{ matrix.args }})
     runs-on: docker
