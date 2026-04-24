@@ -10,7 +10,7 @@ mod ast;
 mod cli;
 mod codegen;
 mod file_tree;
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod file_tree_tests;
 mod ir_printer;
 mod label;
