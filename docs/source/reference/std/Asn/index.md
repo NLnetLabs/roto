@@ -1,6 +1,6 @@
 # Asn
 `````{roto:type} Asn
-An ASN: an Autonomous System Number
+An ASN: an Autonomous System Number.
 
 An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32).
 However, AS numbers cannot be manipulated with arithmetic operations. An AS number
@@ -17,6 +17,6 @@ let c = AS4294967295;
 
 
 ````{roto:function} to_string(self: Asn) -> String
-Convert this value into a `String`
+Convert this value into a `String`.
 ````
 

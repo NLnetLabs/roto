@@ -1,6 +1,6 @@
 # String
 `````{roto:type} String
-The string type
+The string type.
 
 A `String` literal is created by putting some text between double
 quotes.

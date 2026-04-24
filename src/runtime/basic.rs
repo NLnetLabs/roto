@@ -14,14 +14,29 @@ use crate::{
     },
 };
 
+fn format_num(val: i128) -> std::string::String {
+    let num = val
+        .abs()
+        .to_string()
+        .as_bytes()
+        .rchunks(3)
+        .rev()
+        .map(str::from_utf8)
+        .collect::<Result<Vec<&str>, _>>()
+        .unwrap()
+        .join(",");
+
+    if val < 0 { format!("-{num}") } else { num }
+}
+
 macro_rules! int_docs {
     ($t:ty) => {&{
         #[allow(unused_comparisons)]
         let signed = if <$t>::MIN < 0 { "signed" } else { "unsigned" };
         let bits = <$t>::BITS;
-        let min = <$t>::MIN;
-        let max = <$t>::MAX;
-        format!("The {signed} {bits}-bit integer type\n\nThis type can represent integers from {min} up to (and including) {max}.")
+        let min = format_num(<$t>::MIN as i128);
+        let max = format_num(<$t>::MAX as i128);
+        format!("The {signed} {bits}-bit integer type.\n\nThis type can represent integers from {min} up to (and including) {max}.")
     }};
 }
 
@@ -29,7 +44,7 @@ macro_rules! to_string_impl {
     ($t:ty) => {
         library! {
             impl $t {
-                /// Convert this value into a `String`
+                /// Convert this value into a `String`.
                 fn to_string(self) -> RotoString {
                     self.to_string().into()
                 }
@@ -43,7 +58,7 @@ macro_rules! float_docs {
         &{
             #[allow(unused_comparisons)]
             let bits = std::mem::size_of::<$t>() * 8;
-            format!("The {bits}-bit floating point type")
+            format!("The {bits}-bit floating point type.")
         }
     };
 }
@@ -104,7 +119,7 @@ macro_rules! float_impl {
 fn ip_addr_methods() -> Library {
     library! {
         impl IpAddr {
-            /// Check whether two IP addresses are equal
+            /// Check whether two IP addresses are equal.
             ///
             /// A more convenient but equivalent method for checking equality is via the `==` operator.
             ///
@@ -426,7 +441,7 @@ pub fn built_ins() -> Library {
     library! {
         use Option::{Some, None};
 
-        /// The boolean type
+        /// The boolean type.
         ///
         /// This type has two possible values: `true` and `false`. Several
         /// boolean operations can be used with booleans, such as `&&` (
@@ -474,13 +489,13 @@ pub fn built_ins() -> Library {
         #[value]
         type f64 = f64;
 
-        /// A character in a `String`
+        /// A character in a `String`.
         ///
         /// A `char` represents a Unicode code point.
         #[value]
         type char = char;
 
-        /// An ASN: an Autonomous System Number
+        /// An ASN: an Autonomous System Number.
         ///
         /// An AS number can contain a number of 32-bits and is therefore similar to a [`u32`](u32).
         /// However, AS numbers cannot be manipulated with arithmetic operations. An AS number
@@ -495,7 +510,7 @@ pub fn built_ins() -> Library {
         /// ```
         #[value] type Asn = Asn;
 
-        /// An IP address
+        /// An IP address.
         ///
         /// Can be either IPv4 or IPv6.
         ///
@@ -514,7 +529,7 @@ pub fn built_ins() -> Library {
         /// ```
         #[copy] type IpAddr = IpAddr;
 
-        /// An IP address prefix: the combination of an IP address and a prefix length
+        /// An IP address prefix: the combination of an IP address and a prefix length.
         ///
         /// A prefix can be constructed with the `/` operator or with the
         /// [`Prefix.new`](Prefix.new) function. This operator takes an [`IpAddr`](IpAddr)
@@ -526,7 +541,7 @@ pub fn built_ins() -> Library {
         /// ```
         #[copy] type Prefix = Prefix;
 
-        /// The string type
+        /// The string type.
         ///
         /// A `String` literal is created by putting some text between double
         /// quotes.
@@ -576,7 +591,7 @@ pub fn built_ins() -> Library {
         include!(float_impl!(f64));
 
         impl Prefix {
-            /// Construct a new prefix
+            /// Construct a new prefix.
             ///
             /// A prefix can also be constructed with the `/` operator.
             ///
@@ -612,7 +627,7 @@ pub fn built_ins() -> Library {
                 self.len()
             }
 
-            /// Check whether those prefixes are the same
+            /// Check whether those prefixes are the same.
             fn eq(self, other: Self) -> bool {
                 self == other
             }
@@ -621,7 +636,7 @@ pub fn built_ins() -> Library {
         include!(ip_addr_methods());
         include!(string_methods());
 
-        /// A mutable string type
+        /// A mutable string type.
         ///
         /// It is possible to mutate this type in place, allowing for faster
         /// manipulation. In particular, adding `char`s or `String` to the end
@@ -629,33 +644,33 @@ pub fn built_ins() -> Library {
         #[clone] type StringBuf = Val<StringBuf>;
 
         impl Val<StringBuf> {
-            /// Create a new empty `StringBuf`
+            /// Create a new empty `StringBuf`.
             fn new() -> Self {
                 Val(StringBuf::new())
             }
 
-            /// Create a `StringBuf` with an initial `String`
+             /// Create a `StringBuf` with an initial `String`.
             fn from(s: RotoString) -> Self {
                 Val(StringBuf::from(s))
             }
 
-            /// Add a `char` to the end of this `StringBuf`
+            /// Add a `char` to the end of this `StringBuf`.
             fn push_char(self, c: char) {
                 self.0.push_char(c);
             }
 
-            /// Add a `String` to the end of this `StringBuf`
+            /// Add a `String` to the end of this `StringBuf`,
             fn push_string(self, s: RotoString) {
                 self.0.push_string(s);
             }
 
-            /// Get the underlying `String` of this `StringBuf`
+            /// Get the underlying `String` of this `StringBuf`.
             fn as_string(self) -> RotoString {
                 self.0.as_string()
             }
         }
 
-        /// A growable array
+        /// A growable array.
         #[clone] type List<T> = ErasedList;
 
         impl ErasedList {
@@ -666,7 +681,7 @@ pub fn built_ins() -> Library {
                 Self::new(vtable)
             }
 
-            /// Push an element to the end of this list.
+            /// Append an element to the end of this list.
             #[sig = "fn[T](List[T], T)"]
             fn push(self, elem: DynVal) {
                 // SAFETY: Roto ensures we don't get a null value
@@ -677,6 +692,7 @@ pub fn built_ins() -> Library {
                 unsafe { self.push(ptr) };
             }
 
+            /// Returns `true` if this list contains the given item, and `false` otherwise.
             #[sig = "fn[T](List[T], T) -> bool"]
             fn contains(self, item: DynVal) -> bool {
                 // SAFETY: Roto ensures we don't get a null value
@@ -688,6 +704,8 @@ pub fn built_ins() -> Library {
                 unsafe { self.contains_owned(ptr) }
             }
 
+            /// Returns the index of the first occurrence of the given item in
+            /// this list, or `None` if the item is not found.
             #[sig = "fn[T](List[T], T) -> u64?"]
             fn index(self, item: DynVal) -> Option<u64> {
                 // SAFETY: Roto ensures we don't get a null value
@@ -746,7 +764,7 @@ pub fn built_ins() -> Library {
                 self.is_empty()
             }
 
-            /// Join the strings in a list into a single string
+            /// Join the strings in a list into a single string.
             #[sig = "fn(List[String], String) -> String"]
             fn join(self, separator: RotoString) -> RotoString {
                 let list = unsafe { std::mem::transmute::<ErasedList, List<RotoString>>(self) };

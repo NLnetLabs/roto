@@ -1,6 +1,6 @@
 # IpAddr
 `````{roto:type} IpAddr
-An IP address
+An IP address.
 
 Can be either IPv4 or IPv6.
 
@@ -21,7 +21,7 @@ let f = ::;
 
 
 ````{roto:function} eq(self: IpAddr, other: IpAddr) -> bool
-Check whether two IP addresses are equal
+Check whether two IP addresses are equal.
 
 A more convenient but equivalent method for checking equality is via the `==` operator.
 
@@ -62,6 +62,6 @@ Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise
 ````
 
 ````{roto:function} to_string(self: IpAddr) -> String
-Convert this value into a `String`
+Convert this value into a `String`.
 ````
 
