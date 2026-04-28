@@ -19,11 +19,11 @@ Released 2026-04-29
   post](https://community.nlnetlabs.nl/t/proposed-syntax-changes-for-0-11/3343)
   for the reasoning behind these changes.
 
-  - Change comment syntax from `#` to `//`. (#384)
-  - Change `variant` keyword to `enum`. (#384)
-  - Change match arm syntax from `->` to `=>`. (#384)
-  - Change boolean negation operator from `not` to `!`. (#384)
-  - Change match guard syntax from `|` to `if`. (#387)
+  - Change comment syntax from `#` to `//`. ([#384](https://codeberg.org/NLnetLabs/roto/pulls/384))
+  - Change `variant` keyword to `enum`. ([#384](https://codeberg.org/NLnetLabs/roto/pulls/384))
+  - Change match arm syntax from `->` to `=>`. ([#384](https://codeberg.org/NLnetLabs/roto/pulls/384))
+  - Change boolean negation operator from `not` to `!`. ([#384](https://codeberg.org/NLnetLabs/roto/pulls/384))
+  - Change match guard syntax from `|` to `if`. ([#387](https://codeberg.org/NLnetLabs/roto/pulls/387))
 
 ```roto
 // This is the new comment syntax!
@@ -44,7 +44,7 @@ fn choose_direction(choice: Direction, dont_go_left: bool) {
 
 - It is not allowed anymore to chain comparison operators (`==`, `!=`, `<=`,
   `>=`, `<`, `>`) without parentheses. This ensures that the associativity of
-  these operators is always clear. (#353)
+  these operators is always clear. ([#353](https://codeberg.org/NLnetLabs/roto/pulls/353))
 
 ```roto
 fn main() {
@@ -55,19 +55,19 @@ fn main() {
 
 - Many operators now parse left-associative instead of right-associative.
   This shouldn't normally make much of a difference, but in some edge cases (for
-  example with floats) it matters. (#353)
+  example with floats) it matters. ([#353](https://codeberg.org/NLnetLabs/roto/pulls/353))
 
 #### Added
 
 - Constants can now be defined in Roto scripts. They are computed at
-  compile-time and can be accessed in functions and other constants. (#371)
+  compile-time and can be accessed in functions and other constants. ([#371](https://codeberg.org/NLnetLabs/roto/pulls/371))
 
 ```roto
 const FOO: u32 = 10 + 5;
 ```
 
 - The `==` and `!=` operators can now be used on all types, including registered
-  types, records and enums. (#366)
+  types, records and enums. ([#366](https://codeberg.org/NLnetLabs/roto/pulls/366))
 
 ```roto
 record Vec2 {
@@ -84,7 +84,7 @@ fn main() {
 
 - Blocks (`{}`) can now be used as expressions. This is particularly useful
   for complex definition of constants. Note that an empty pair of braces `{}`
-  still parses as an anonymous record, not as an empty block. (#384)
+  still parses as an anonymous record, not as an empty block. ([#384](https://codeberg.org/NLnetLabs/roto/pulls/384))
 
 ```roto
 const FOO: u32 = {
@@ -93,7 +93,7 @@ const FOO: u32 = {
 };
 ```
 
-- Added the remainder operator `%` for integers. Thanks, @Wrimo! (#364)
+- Added the remainder operator `%` for integers. Thanks, @Wrimo! ([#364](https://codeberg.org/NLnetLabs/roto/pulls/364))
 
 ```roto
 fn is_even(x: u64) -> bool {
@@ -102,7 +102,7 @@ fn is_even(x: u64) -> bool {
 ```
 
 - Added `List.contains` and `List.index` methods to find elements in a list.
-  (#369)
+  ([#369](https://codeberg.org/NLnetLabs/roto/pulls/369))
 
 ```roto
 fn main() -> bool {
@@ -116,7 +116,7 @@ fn main() -> bool {
 ```
 
 - Added `List.join` method to join strings in a list into a single string.
-  (#357)
+  ([#357](https://codeberg.org/NLnetLabs/roto/pulls/357))
 
 ```roto
 fn main() -> bool {
@@ -125,12 +125,12 @@ fn main() -> bool {
 }
 ```
 
-- Added `String.from_chars`, `String.split`, `String.replace` methods. (#357)
+- Added `String.from_chars`, `String.split`, `String.replace` methods. ([#357](https://codeberg.org/NLnetLabs/roto/pulls/357))
 - Added `String.trim`, `String.trim_start`, `String.trim_end`,
   `String.strip_prefix`, `String.strip_suffix` methods. Thanks, @erikwastaken!
-  (#377)
+  ([#377](https://codeberg.org/NLnetLabs/roto/pulls/377))
 - Added `String.bytes`, `String.chars`, `String.lines` methods to give a view
-  over a string indexed by the respective unit. (#357)
+  over a string indexed by the respective unit. ([#357](https://codeberg.org/NLnetLabs/roto/pulls/357))
 
 ```roto
 fn main() -> bool {
@@ -144,18 +144,18 @@ fn main() -> bool {
 
 #### Bug fixes
 
-- Fixed a bug that caused some record fields not being when cloned. (#362)
+- Fixed a bug that caused some record fields not being when cloned. ([#362](https://codeberg.org/NLnetLabs/roto/pulls/362))
 
 ### Crate
 
 #### Breaking changes
 
-- All registered types are now required to implement `PartialEq`. (#366)
-- All registered types are now required to implement `Send + Sync`. (#371)
+- All registered types are now required to implement `PartialEq`. ([#366](https://codeberg.org/NLnetLabs/roto/pulls/366))
+- All registered types are now required to implement `Send + Sync`. ([#371](https://codeberg.org/NLnetLabs/roto/pulls/371))
 - The Rust type corresponding to a `String` in Roto is now `RotoString` instead
   of `Arc<str>`. For compatibility, `RotoString` can be converted from and into
   `Arc<str>` with `into`. This change allows us to optimize the string type
-  without breaking the API again at a later stage. (#357)
+  without breaking the API again at a later stage. ([#357](https://codeberg.org/NLnetLabs/roto/pulls/357))
 
 ```rust
 // Roto 0.10
@@ -168,32 +168,32 @@ let f = pkg.get_function::<fn(RotoString) -> RotoString>("main").unwrap();
 #### Added
 
 - `List<T>` now implements `FromIterator`. This means that you can `collect`
-  into a `List`. (#357)
+  into a `List`. ([#357](https://codeberg.org/NLnetLabs/roto/pulls/357))
 - `List<T>` now implements `From<Vec<T>>`, `From<&[T]>` and `From<[T; N]>`.
-  (#389)
-- `List<T>` now implements `IntoIterator`. (#389)
-- `List<T>` now implements `Debug`. (#389)
+  ([#389](https://codeberg.org/NLnetLabs/roto/pulls/389))
+- `List<T>` now implements `IntoIterator`. ([#389](https://codeberg.org/NLnetLabs/roto/pulls/389))
+- `List<T>` now implements `Debug`. ([#389](https://codeberg.org/NLnetLabs/roto/pulls/389))
 
 #### Bug fixes
 
 - Rename fields of `TypeMismatch` so that `unwrap` after `get_function` gives a
-  clearer error message. Thanks, @Teufelchen1! (#368)
+  clearer error message. Thanks, @Teufelchen1! ([#368](https://codeberg.org/NLnetLabs/roto/pulls/368))
 - Change `unwrap`s generated by the `library!` macro to `expect` to allow it in
-  cases where the `unwrap_used` lint is active. Thanks, @algernon! (#381)
-- Roto no longer fails to compile if `log`'s `kv_serde` feature is enabled. (#394)
+  cases where the `unwrap_used` lint is active. Thanks, @algernon! ([#381](https://codeberg.org/NLnetLabs/roto/pulls/381))
+- Roto no longer fails to compile if `log`'s `kv_serde` feature is enabled. ([#394](https://codeberg.org/NLnetLabs/roto/pulls/394))
 
 ### Documentation
 
-- New chapter "Writing Roto". (#380)
-- Many fixes and improvements due to review by @SynchroM. Thanks! (#397, #398)
-- Add instructions for Sublime Text support to the docs. Thanks, @Teufelchen1! (#367)
+- New chapter "Writing Roto". ([#380](https://codeberg.org/NLnetLabs/roto/pulls/380))
+- Many fixes and improvements due to review by @SynchroM. Thanks! ([#397](https://codeberg.org/NLnetLabs/roto/pulls/397), [#398](https://codeberg.org/NLnetLabs/roto/pulls/398))
+- Add instructions for Sublime Text support to the docs. Thanks, @Teufelchen1! ([#367](https://codeberg.org/NLnetLabs/roto/pulls/367))
 - Most code samples in CI are now tested, which should make them more reliable
-  and always up to date. (#380, #400)
+  and always up to date. ([#380](https://codeberg.org/NLnetLabs/roto/pulls/380), [#400](https://codeberg.org/NLnetLabs/roto/pulls/400))
 
 ### Tooling
 
-- Updated Sublime Text syntax definition. (#401)
-- Updated VS Code syntax definition. (#401)
+- Updated Sublime Text syntax definition. ([#401](https://codeberg.org/NLnetLabs/roto/pulls/401))
+- Updated VS Code syntax definition. ([#401](https://codeberg.org/NLnetLabs/roto/pulls/401))
 - Updated tree-sitter definition at <https://codeberg.org/NLnetLabs/tree-sitter-roto>.
 
 ## 0.10.0
@@ -202,13 +202,13 @@ Released 2026-01-14.
 
 ### Meta
 
-- We now have a `CONTRIBUTING.md`, `TESTING.md` and `SECURITY.md`. (#333)
+- We now have a `CONTRIBUTING.md`, `TESTING.md` and `SECURITY.md`. ([#333](https://codeberg.org/NLnetLabs/roto/pulls/333))
 
 ### Language
 
 #### Breaking changes
 
-- Changed the `type` keyword to `record`. (#297)
+- Changed the `type` keyword to `record`. ([#297](https://codeberg.org/NLnetLabs/roto/pulls/297))
 
 ```roto
 # Roto 0.9.0
@@ -224,11 +224,11 @@ record Vec2 {
 }
 ```
 - The `LOCALHOSTV4` and `LOCALHOSTV6` constants are not longer global but live
-  under `IpAddr` as associated constants. (#292)
+  under `IpAddr` as associated constants. ([#292](https://codeberg.org/NLnetLabs/roto/pulls/292))
 
 #### Added
 
-- Lists are now supported! See the documentation for more information. (#301)
+- Lists are now supported! See the documentation for more information. ([#301](https://codeberg.org/NLnetLabs/roto/pulls/301))
 
 ```roto
 let x: List[i32] = [1, 2, 3];
@@ -236,7 +236,7 @@ let y = [4, 5, 6];
 let z = x + y;
 ```
 
-- Roto now has `variant` types. These are much like `enum` types in Rust. (#293)
+- Roto now has `variant` types. These are much like `enum` types in Rust. ([#293](https://codeberg.org/NLnetLabs/roto/pulls/293))
 
 ```roto
 variant Either[L, R] {
@@ -245,7 +245,7 @@ variant Either[L, R] {
 }
 ```
 
-- Record types can now have type parameters. (#298)
+- Record types can now have type parameters. ([#298](https://codeberg.org/NLnetLabs/roto/pulls/298))
 
 ```roto
 record Pair[A, B] {
@@ -254,7 +254,7 @@ record Pair[A, B] {
 }
 ```
 
-- In addition to `while` loops, there are now `for` loops to iterate over lists. (#346)
+- In addition to `while` loops, there are now `for` loops to iterate over lists. ([#346](https://codeberg.org/NLnetLabs/roto/pulls/346))
 
 ```roto
 let total = 0;
@@ -264,7 +264,7 @@ for x in [1, 2, 3, 4] {
 ```
 
 - The `StringBuf` type was added to allow building strings character by
-  character more efficiently. (#300)
+  character more efficiently. ([#300](https://codeberg.org/NLnetLabs/roto/pulls/300))
 
 ```roto
 let buf = StringBuf.new();
@@ -274,7 +274,7 @@ buf.push_char('!');
 let s: String = buf.as_string();
 ```
 
-- The `char` type was added, representing a single Unicode code point. (#300)
+- The `char` type was added, representing a single Unicode code point. ([#300](https://codeberg.org/NLnetLabs/roto/pulls/300))
 
 ```roto
 let a: char = 'a';
@@ -282,33 +282,33 @@ let a: char = 'a';
 
 - The repository now contains a basic Sublime Text grammar. This can be used 
   for syntax highlighting in Sublime Text, VS Code, Typst and other
-  applications. (#291)
+  applications. ([#291](https://codeberg.org/NLnetLabs/roto/pulls/291))
 
 - If you use common keywords from other languages, Roto will now hint about what
-  the appropriate Roto keyword is. (#322)
+  the appropriate Roto keyword is. ([#322](https://codeberg.org/NLnetLabs/roto/pulls/322))
 
 - If you try to use `//` or `--` for comments, Roto will hint that you should
-  use `#`. (#322)
+  use `#`. ([#322](https://codeberg.org/NLnetLabs/roto/pulls/322))
 
 #### Bug fixes
 
-- Error messages with non-ASCII characters now display correctly. Thanks @LevitatingBusinessMan! (#325)
+- Error messages with non-ASCII characters now display correctly. Thanks @LevitatingBusinessMan! ([#325](https://codeberg.org/NLnetLabs/roto/pulls/325))
 - Type errors are now slightly more informative by printing the id's associated
-  with type variables, instead of printing just an `_`. (#308)
+  with type variables, instead of printing just an `_`. ([#308](https://codeberg.org/NLnetLabs/roto/pulls/308))
 
 ### Crate
 
 #### Breaking changes
 
-- The MSRV is now 1.85. (#288)
-- The context of a `Runtime` is now a type parameter of the `Runtime` type. (#274)
-- The `Reflect` trait has been renamed to `Value`. (#304)
+- The MSRV is now 1.85. ([#288](https://codeberg.org/NLnetLabs/roto/pulls/288))
+- The context of a `Runtime` is now a type parameter of the `Runtime` type. ([#274](https://codeberg.org/NLnetLabs/roto/pulls/274))
+- The `Reflect` trait has been renamed to `Value`. ([#304](https://codeberg.org/NLnetLabs/roto/pulls/304))
 - `Runtime` and `Package` now have a type parameter `C`, which can be either `NoCtx` or
-  `Ctx<T>`, representing whether it has a context type. (#274)
+  `Ctx<T>`, representing whether it has a context type. ([#274](https://codeberg.org/NLnetLabs/roto/pulls/274))
 - The method `Runtime::register_context_type` has been replaced with
   `Runtime::with_context_type` with slightly different behaviour. Instead of
   taking a mutable reference to the runtime, it takes it by value and returns
-  it. (#274)
+  it. ([#274](https://codeberg.org/NLnetLabs/roto/pulls/274))
 
 ```rust
 // Roto 0.9.0
@@ -319,7 +319,7 @@ rt.register_context_type::<MyContext>();
 let rt = Runtime::new().with_context_type::<MyContext>();
 ```
 
-- `Package::get_function` no longer has a type parameter for the context type. (#274)
+- `Package::get_function` no longer has a type parameter for the context type. ([#274](https://codeberg.org/NLnetLabs/roto/pulls/274))
 
 ```rust
 // Roto 0.9.0
@@ -330,7 +330,7 @@ let f = pkg.get_function::<fn(i32) -> i32>();
 ```
 
 - Calling a `TypedFunc` without a context no longer requires the annoying first
-  argument `&mut ()`. (#274)
+  argument `&mut ()`. ([#274](https://codeberg.org/NLnetLabs/roto/pulls/274))
 
 ```rust
 // Roto 0.9.0
@@ -354,7 +354,7 @@ pkg.run_tests();
 
 #### Added
 
-- It's now possible to register associated constants. (#292)
+- It's now possible to register associated constants. ([#292](https://codeberg.org/NLnetLabs/roto/pulls/292))
 
 ```rust
 let lib = library! {
@@ -366,20 +366,20 @@ let lib = library! {
 }
 ```
 
-- The `RotoFunc` trait is now exposed. (#299)
+- The `RotoFunc` trait is now exposed. ([#299](https://codeberg.org/NLnetLabs/roto/pulls/299))
 - The `selinux-fix` feature flag is added to allow running Roto under SE Linux
   systems. This might become the default behaviour in the future. Thanks
-  @LevitatingBusinessMan! (#279)
+  @LevitatingBusinessMan! ([#279](https://codeberg.org/NLnetLabs/roto/pulls/279))
 
 #### Bug fixes
 
-- Fixed a bug which prevented registering types in a module. (#315)
-- The `library!` macro will emit more precise errors when it fails to parse. (#306)
+- Fixed a bug which prevented registering types in a module. ([#315](https://codeberg.org/NLnetLabs/roto/pulls/315))
+- The `library!` macro will emit more precise errors when it fails to parse. ([#306](https://codeberg.org/NLnetLabs/roto/pulls/306))
 - The `library!` macro will be more precise in reporting the actual problems
-  when trait resolution fails on the generated code. (#318)
-- Tests are now sorted before being run. (#319)
+  when trait resolution fails on the generated code. ([#318](https://codeberg.org/NLnetLabs/roto/pulls/318))
+- Tests are now sorted before being run. ([#319](https://codeberg.org/NLnetLabs/roto/pulls/319))
 - We removed some unused dependencies from our dependency tree, though this only
-  concerned dev-dependencies. (#337)
+  concerned dev-dependencies. ([#337](https://codeberg.org/NLnetLabs/roto/pulls/337))
 
 ### Documentation
 
@@ -395,37 +395,37 @@ Released 2025-10-15.
 
 - Enums and records can no longer be compared with `==` and `!=`. This was
   previously allowed, but the generated code might have been wrong. This
-  feature might be brought back with a proper implementation later. (#289)
+  feature might be brought back with a proper implementation later. ([#289](https://codeberg.org/NLnetLabs/roto/pulls/289))
 
 #### Added
 
-- Added `addr`, `min_addr`, `max_addr`, `len` and `eq` methods to `Prefix`. (#289)
+- Added `addr`, `min_addr`, `max_addr`, `len` and `eq` methods to `Prefix`. ([#289](https://codeberg.org/NLnetLabs/roto/pulls/289))
 
 #### Bug fixes
 
 - Fixed a case where we dropped an uninitialized value that occurred when an
-  expression that might return was assigned to a variable. (#280)
+  expression that might return was assigned to a variable. ([#280](https://codeberg.org/NLnetLabs/roto/pulls/280))
 - Fixed some miscompilations around using the `==` and `!=` operators on
-`Prefix`. (#289)
+`Prefix`. ([#289](https://codeberg.org/NLnetLabs/roto/pulls/289))
 - The `to_string` method of expressions in f-strings are now resolved later, which
-  avoids some cryptic error messages. (#281)
+  avoids some cryptic error messages. ([#281](https://codeberg.org/NLnetLabs/roto/pulls/281))
 
 ### Crate
 
 #### Breaking changes
 
-- Make `RotoError` a private type. Thanks @you-win! (#270)
+- Make `RotoError` a private type. Thanks @you-win! ([#270](https://codeberg.org/NLnetLabs/roto/pulls/270))
 
 #### Added
 
-- Make the `RegistrationError` type public. (#271)
+- Make the `RegistrationError` type public. ([#271](https://codeberg.org/NLnetLabs/roto/pulls/271))
 - Implement `std::error::Error` for `FunctionRetrievalError`,
-  `RegistrationError`. Thanks @you-win! (#270)
+  `RegistrationError`. Thanks @you-win! ([#270](https://codeberg.org/NLnetLabs/roto/pulls/270))
 
 #### Bug fixes
 
 - Roto now works correctly again when it is compiled with static linking (such
-  as with the musl target). (#286)
+  as with the musl target). ([#286](https://codeberg.org/NLnetLabs/roto/pulls/286))
 
 ## 0.8.0
 
@@ -435,9 +435,9 @@ Released 2025-10-06.
 
 #### Bug fixes
 
-- The trailing comma of match arms is now optional, as it was supposed to be. (#253)
+- The trailing comma of match arms is now optional, as it was supposed to be. ([#253](https://codeberg.org/NLnetLabs/roto/pulls/253))
 
-- Fix an issue where the types of float literals weren't properly resolved. (#258)
+- Fix an issue where the types of float literals weren't properly resolved. ([#258](https://codeberg.org/NLnetLabs/roto/pulls/258))
 
 ### Crate
 
@@ -445,11 +445,11 @@ Released 2025-10-06.
 
 - The functions `SourceFile::read`, `FileTree::read`, `FileTree::single_file`
   and `FileTree::directory` now return `Result` and will no longer panic on
-  I/O errors. Thanks @algernon! (#250)
+  I/O errors. Thanks @algernon! ([#250](https://codeberg.org/NLnetLabs/roto/pulls/250))
 
 - All custom registered types now _always_ need to wrapped in `Val`. This fixes
   some bugs around registered types and should make it easier to understand when
-  `Val` has to be used. Below is a diff illustrating how to migrate. (#247)
+  `Val` has to be used. Below is a diff illustrating how to migrate. ([#247](https://codeberg.org/NLnetLabs/roto/pulls/247))
 
 ```diff
  runtime
@@ -467,13 +467,13 @@ Released 2025-10-06.
 
 #### New
 
-- The CLI can now run other functions than `main`. Thanks @pieterlexis! (#261)
+- The CLI can now run other functions than `main`. Thanks @pieterlexis! ([#261](https://codeberg.org/NLnetLabs/roto/pulls/261))
 
-- It is now possible to register closures. (#248)
+- It is now possible to register closures. ([#248](https://codeberg.org/NLnetLabs/roto/pulls/248))
 
 - There is an entirely new registration API using the new `library!` macro.
   The previous `Runtime::register_*` methods are all still available, but
-  deprecated. (#254 and #262)
+  deprecated. ([#254](https://codeberg.org/NLnetLabs/roto/pulls/254) and [#262](https://codeberg.org/NLnetLabs/roto/pulls/262))
 
 ```rust
 use roto::{Runtime, Val, library};
@@ -501,17 +501,17 @@ let rt = Runtime::from_lib(lib).unwrap();
 #### New
 
 - The generated documentation is now spread out over multiple pages. It
-  generates a page per module and per type. (#254)
-- There is a new "Syntax Overview" page in the documentation. (#263)
+  generates a page per module and per type. ([#254](https://codeberg.org/NLnetLabs/roto/pulls/254))
+- There is a new "Syntax Overview" page in the documentation. ([#263](https://codeberg.org/NLnetLabs/roto/pulls/263))
 - Added the following concepts to the language reference: identifiers, booleans,
-  `match`, local variables and string formatting. (#263)
+  `match`, local variables and string formatting. ([#263](https://codeberg.org/NLnetLabs/roto/pulls/263))
 
 #### Bug fixes
 
 - Fixed some examples so that they are consistent with the text and ensure that
-  they compile. Thanks @pieterlexis! (#260)
+  they compile. Thanks @pieterlexis! ([#260](https://codeberg.org/NLnetLabs/roto/pulls/260))
 - Fixed many spelling errors in the manual, API docs and the rest of the
-  codebase. Thanks @jsoref! (#264)
+  codebase. Thanks @jsoref! ([#264](https://codeberg.org/NLnetLabs/roto/pulls/264))
 
 ## 0.7.1
 
@@ -521,9 +521,9 @@ Released 2025-09-26.
 
 ### Bug fixes
 
-- `{{` and `}}` are now unescaped in f-strings. (#257)
-- `\u{xxxx}` and `\U{xxxx}` are now properly parsed in f-strings. (#257)
-- Fix an issue where function calls could not be used directly in f-strings. (#257)
+- `{{` and `}}` are now unescaped in f-strings. ([#257](https://codeberg.org/NLnetLabs/roto/pulls/257))
+- `\u{xxxx}` and `\U{xxxx}` are now properly parsed in f-strings. ([#257](https://codeberg.org/NLnetLabs/roto/pulls/257))
+- Fix an issue where function calls could not be used directly in f-strings. ([#257](https://codeberg.org/NLnetLabs/roto/pulls/257))
 
 ## 0.7.0
 
@@ -540,22 +540,22 @@ try out: <https://github.com/NLnetLabs/tree-sitter-roto>.
 
 #### Breaking changes
 
-- The `function` keyword was changed into the `fn` keyword. (#213)
-- The `Optional` type has been renamed to `Option`. (#216)
+- The `function` keyword was changed into the `fn` keyword. ([#213](https://codeberg.org/NLnetLabs/roto/pulls/213))
+- The `Optional` type has been renamed to `Option`. ([#216](https://codeberg.org/NLnetLabs/roto/pulls/216))
 - The `Unit` type has been renamed to `()`. It can also be constructed with
-  `()` (#225)
+  `()` ([#225](https://codeberg.org/NLnetLabs/roto/pulls/225))
 
 #### New
 
 - Roto now allows multiple items to be imported on a single line. Thanks
-  @Wrimo! (#180)
+  @Wrimo! ([#180](https://codeberg.org/NLnetLabs/roto/pulls/180))
 
 ```roto
 import foo.{bar1, bar2};
 import foo.{bar.fn1, bar2.{fn2, fn3}};
 ```
 
-- Variants, methods and static methods can now be imported directly. (#202)
+- Variants, methods and static methods can now be imported directly. ([#202](https://codeberg.org/NLnetLabs/roto/pulls/202))
 
 ```roto
 # Import variants
@@ -574,7 +574,7 @@ fn foo() {
 }
 ```
 
-- Methods can now be called as if they were static functions. (#202)
+- Methods can now be called as if they were static functions. ([#202](https://codeberg.org/NLnetLabs/roto/pulls/202))
 
 ```roto
 fn foo() {
@@ -586,7 +586,7 @@ fn foo() {
 }
 ```
 
-- Roto now has its first looping construct: `while`. (#194)
+- Roto now has its first looping construct: `while`. ([#194](https://codeberg.org/NLnetLabs/roto/pulls/194))
 
 ```roto
 fn factorial(x: u64) -> u64 {
@@ -601,7 +601,7 @@ fn factorial(x: u64) -> u64 {
 ```
 
 - A new `?` operator, will return a `Option.None` value or yield the value
-  inside `Option.Some`, much like the same operator in Rust. (#195)
+  inside `Option.Some`, much like the same operator in Rust. ([#195](https://codeberg.org/NLnetLabs/roto/pulls/195))
 
 ```roto
 fn small(x: i32) -> i32? {
@@ -619,7 +619,7 @@ fn foo(x: i32, y: i32) -> i32? {
 ```
 
 - The unary minus operator has been added to negate signed integers and
-  floating point numbers. (#196)
+  floating point numbers. ([#196](https://codeberg.org/NLnetLabs/roto/pulls/196))
 
 ```roto
 fn abs(x: i32) -> i32 {
@@ -627,7 +627,7 @@ fn abs(x: i32) -> i32 {
 }
 ```
 
-- It is now possible to add a type annotation on `let` bindings. (#197)
+- It is now possible to add a type annotation on `let` bindings. ([#197](https://codeberg.org/NLnetLabs/roto/pulls/197))
 
 ```roto
 fn foo() -> u64 {
@@ -639,8 +639,8 @@ fn foo() -> u64 {
 - Python-like f-strings have been added. This is a basic implementation
   that is still rough around the edges. All primitives and registered types
   with a `to_string` method can be put in a string prefixed with `f`. Any
-  expression evaluating to such a type is valid. See issue #244 for the
-  current limitations. (#220)
+  expression evaluating to such a type is valid. See issue [#244](https://codeberg.org/NLnetLabs/roto/pulls/244) for the
+  current limitations. ([#220](https://codeberg.org/NLnetLabs/roto/pulls/220))
 
 ```roto
 fn foo() -> String {
@@ -654,61 +654,61 @@ fn foo() -> String {
 - Roto now has an additional compiler pass: MIR. A lot of the code generation
   was rewritten from scratch for this change. With the MIR we model values
   passed to Roto in a more robust and several memory safety issues were fixed
-  in the process. (#182)
+  in the process. ([#182](https://codeberg.org/NLnetLabs/roto/pulls/182))
 
 - The error message for multiple item declarations with the same name have been
-  improved, especially when two tests with the same name are declared. (#191)
+  improved, especially when two tests with the same name are declared. ([#191](https://codeberg.org/NLnetLabs/roto/pulls/191))
 
-- The error messages for unresolved paths have been improved. (#198)
+- The error messages for unresolved paths have been improved. ([#198](https://codeberg.org/NLnetLabs/roto/pulls/198))
 
-- String literals are now properly unescaped. (#200)
+- String literals are now properly unescaped. ([#200](https://codeberg.org/NLnetLabs/roto/pulls/200))
 
 - The previous implementation of constants turned out to be unsound, so a new
-  implementation should fix memory safety issues around them. (#208)
+  implementation should fix memory safety issues around them. ([#208](https://codeberg.org/NLnetLabs/roto/pulls/208))
 
 - The `Reflect` and `RotoFunc` traits are now sealed because they should not
-  be implemented by downstream crates. (#214)
+  be implemented by downstream crates. ([#214](https://codeberg.org/NLnetLabs/roto/pulls/214))
 
-- Fixed a bug where it wasn't possible to use multiple `not` operators. (#195)
+- Fixed a bug where it wasn't possible to use multiple `not` operators. ([#195](https://codeberg.org/NLnetLabs/roto/pulls/195))
 
 - Fixed an incorrect error message for `==` that showed the wrong type as
-  expected. (#242)
+  expected. ([#242](https://codeberg.org/NLnetLabs/roto/pulls/242))
 
 ### Crate
 
 #### Breaking changes
 
-- The CLI is now gated by a `cli` feature flag. (#175)
-- Logging is now gated by a `logger` feature flag. (#175)
-- The fields of `Runtime` are now private. (#193)
+- The CLI is now gated by a `cli` feature flag. ([#175](https://codeberg.org/NLnetLabs/roto/pulls/175))
+- Logging is now gated by a `logger` feature flag. ([#175](https://codeberg.org/NLnetLabs/roto/pulls/175))
+- The fields of `Runtime` are now private. ([#193](https://codeberg.org/NLnetLabs/roto/pulls/193))
 - `Runtime` is passed by reference instead of moved to the compilation procedure,
-  allow for easier reuse across multiple compilations. (#193)
-- Registered constants are now required to be `Send + Sync`. (#208)
-- Registered constants are now required to have a valid identifier as name. (#223)
+  allow for easier reuse across multiple compilations. ([#193](https://codeberg.org/NLnetLabs/roto/pulls/193))
+- Registered constants are now required to be `Send + Sync`. ([#208](https://codeberg.org/NLnetLabs/roto/pulls/208))
+- Registered constants are now required to have a valid identifier as name. ([#223](https://codeberg.org/NLnetLabs/roto/pulls/223))
 
 #### New
 
 - There is a new `Compiled::get_tests` method to get the tests in a Roto script
   without running them. This allows more flexibility in how the tests are run
-  and what the output is. Thanks @algernon! (#185)
+  and what the output is. Thanks @algernon! ([#185](https://codeberg.org/NLnetLabs/roto/pulls/185))
 - The `Runtime::add_io_functions` method adds a `print` method to the runtime,
-  making it possible to write `"Hello, world!"` to the terminal! (#193)
+  making it possible to write `"Hello, world!"` to the terminal! ([#193](https://codeberg.org/NLnetLabs/roto/pulls/193))
 - `Runtime::compile` is a convenience function that will compile the script at
-  the given path. It is no longer necessary to make a `FileTree` first. (#193)
+  the given path. It is no longer necessary to make a `FileTree` first. ([#193](https://codeberg.org/NLnetLabs/roto/pulls/193))
 
 #### Bug fixes
 
 - Fixed some cases where it was impossible to return certain types from
-  registered functions. (#210)
+  registered functions. ([#210](https://codeberg.org/NLnetLabs/roto/pulls/210))
 
 #### Other changes
 
 - We switched from the `icu` crate to `unicode-ident` for the parsing of
-  identifiers. This shrinks the dependency graph of `roto`. (#173)
+  identifiers. This shrinks the dependency graph of `roto`. ([#173](https://codeberg.org/NLnetLabs/roto/pulls/173))
 - We removed unnecessary files from the crate as published on <crates.io>.
-  (#174)
+  ([#174](https://codeberg.org/NLnetLabs/roto/pulls/174))
 - `Runtime` has improved documentation that was previously on the non-public
-  `runtime` module. (#193)
+  `runtime` module. ([#193](https://codeberg.org/NLnetLabs/roto/pulls/193))
 
 ## 0.6.0
 
@@ -719,7 +719,7 @@ Released 2025-06-10.
 - The minimum supported Rust version is now 1.84.
 - The `Compiled::get_function` method no longer takes separate type parameters
   for the parameter types and the return type, but a single function pointer
-  type. (#163)
+  type. ([#163](https://codeberg.org/NLnetLabs/roto/pulls/163))
 
 ```rust
 // old
@@ -731,7 +731,7 @@ compiled.get_function::<Ctx, fn(bool, i32) -> Val<Verdict>>("main");
 
 - Registered functions no longer take arguments of runtime types by reference.
   Instead they take `Val<T>`, mirroring how they are passed in from Rust to Roto.
-  (#138)
+  ([#138](https://codeberg.org/NLnetLabs/roto/pulls/138))
 
 ```rust
 // old
@@ -748,35 +748,35 @@ fn foo(x: Val<Foo>) -> Val<Foo> {
 ```
 
 - The return type of registered functions now needs to implement the `Reflect`
-  trait. (#163)
+  trait. ([#163](https://codeberg.org/NLnetLabs/roto/pulls/163))
 
 ### New
 
 - Roto now features an assignment operator to update the value of a variable
-  or a field. (#158)
+  or a field. ([#158](https://codeberg.org/NLnetLabs/roto/pulls/158))
 - The CLI now has a subcommand `print` to print out a Roto file with basic
-  syntax highlighting. (#139)
+  syntax highlighting. ([#139](https://codeberg.org/NLnetLabs/roto/pulls/139))
 - The return type of registered functions can now be `Optional` or a `Verdict`.
-  (#163)
+  ([#163](https://codeberg.org/NLnetLabs/roto/pulls/163))
 - The `FileSpec` type is now public in the `roto` crate. This allows users to
-  set up their own systems for script discovery and easier testing. (#151)
+  set up their own systems for script discovery and easier testing. ([#151](https://codeberg.org/NLnetLabs/roto/pulls/151))
 - Roto will now give better error messages when keywords are used as
-  identifiers. (#157)
+  identifiers. ([#157](https://codeberg.org/NLnetLabs/roto/pulls/157))
 
 ### Bug fixes
 
-- Fixed the implementation of the `==` and `!=` operators for `String`. (#141)
+- Fixed the implementation of the `==` and `!=` operators for `String`. ([#141](https://codeberg.org/NLnetLabs/roto/pulls/141))
 - Fixed a couple of double frees and memory leaks. We now run the entire test
   suite under Valgrind to ensure that we will find these issues sooner.
-  (#147, #149, #158)
+  ([#147](https://codeberg.org/NLnetLabs/roto/pulls/147), [#149](https://codeberg.org/NLnetLabs/roto/pulls/149), [#158](https://codeberg.org/NLnetLabs/roto/pulls/158))
 - Fixed an issue with the type inference of the return types of `filtermaps`.
-  (#152)
+  ([#152](https://codeberg.org/NLnetLabs/roto/pulls/152))
 
 ### Other changes
 
 - Several outdated examples have been removed and examples of several errors
-  have been updated. (#164)
-- We now do snapshot testing of error messages emitted by Roto. (#165)
+  have been updated. ([#164](https://codeberg.org/NLnetLabs/roto/pulls/164))
+- We now do snapshot testing of error messages emitted by Roto. ([#165](https://codeberg.org/NLnetLabs/roto/pulls/165))
 
 ## 0.5.0
 
