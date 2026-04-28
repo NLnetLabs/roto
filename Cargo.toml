@@ -14,8 +14,7 @@ categories.workspace = true
 exclude = [
   "/.github",
   "/.forgejo",
-  "/tests",
-  "/vscode-extension",
+  "/tooling",
 ]
 
 [[bin]]
