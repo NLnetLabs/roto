@@ -2,6 +2,12 @@
     syntaxes: "roto.sublime-syntax",
 )
 
+= Comment
+
+```roto
+// This is a comment!
+```
+
 = Declarations
 
 ```roto
@@ -46,6 +52,8 @@ import foo.bar;
 import foo.{bar, baz};
 
 import foo.{bar.fn1, baz.{fn2, fn3}};
+
+const FOO: u32 = 10;
 ```
 
 = Expressions
@@ -159,15 +167,15 @@ fn foo() {
 
 fn foo() {
     match foo.is_cool() {
-        Foo(x) -> {}
-        Bar -> x,
+        Foo(x) => {}
+        Bar => x,
     }
 }
 
 fn foo() {
     match foo.is_cool() {
-        Foo(x,) -> {}
-        Bar -> x,
+        Foo(x,) => {}
+        Bar => x,
     }
 }
 
