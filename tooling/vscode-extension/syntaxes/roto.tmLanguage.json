@@ -3,29 +3,127 @@
 	"name": "Roto",
 	"patterns": [
 		{
-			"include": "#comments"
-		},
-		{
-			"include": "#keywords"
-		},
-		{
-			"include": "#strings"
-		},
-		{
-			"include": "#numbers"
-		},	
-		{
-			"include": "#booleans"
-		}	
+			"include": "#base"
+		}
 	],
 	"repository": {
-		"keywords": {
-			"patterns": [{
-				"name": "keyword.control.roto",
-				"match": "\\b(if|return|match|filter|filter-map|define|term|action|accept|reject|apply|rib|table|type|contains|rx|tx)\\b"
-			}]
+		"base": {
+			"patterns": [
+				{
+					"include": "#comment"
+				},
+				{
+					"include": "#block"
+				},
+				{
+					"include": "#bool"
+				},
+				{
+					"include": "#type_name"
+				},
+				{
+					"include": "#function_call"
+				},
+				{
+					"include": "#function_def"
+				},
+				{
+					"include": "#keyword"
+				},
+				{
+					"include": "#number"
+				},
+				{
+					"include": "#operator"
+				},
+				{
+					"include": "#punctuation"
+				},
+				{
+					"include": "#string"
+				},
+				{
+					"name": "variable.other.roto",
+					"match": "\\b[[:lower:]][_\\p{XID_Continue}]*\\b"
+				}
+			]
 		},
-		"strings": {
+		"block": {
+			"name": "punctuation.section.block.roto",
+			"begin": "{",
+			"end": "}",
+			"patterns": [
+				{
+					"include": "#base"
+				}
+			]
+		},
+		"type_name": {
+			"patterns": [
+				{
+					"name": "storage.type.roto",
+					"match": "\\b(u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|bool)\\b"
+				},
+				{
+					"name": "storage.type.roto",
+					"match": "\\b[[:upper:]][_\\p{XID_Continue}]*\\b"
+				}
+			]
+		},
+		"function_def": {
+			"match": "\\b(fn|filter|filtermap)(?:[[:space:]]+(\\b[_\\p{XID_Start}][_\\p{XID_Continue}]*\\b))?[[:space:]]*\\(",
+			"captures": {
+				"1": {
+					"name": "storage.type.function.roto"
+				},
+				"2": {
+					"name": "entity.name.function.roto"
+				}
+			}
+		},
+		"list": {
+			"name": "punctuation.section.sequence.roto",
+			"begin": "\\[",
+			"end": "\\]",
+			"patterns": [
+				{
+					"include": "#base"
+				}
+			]
+		},
+		"keyword": {
+			"patterns": [
+				{
+					"name": "keyword.declaration.roto",
+					"match": "\\b(let)\\b"
+				},
+				{
+					"name": "keyword.declaration.function.roto",
+					"match": "\\b(fn|filter|filtermap|test)\\b"
+				},
+				{
+					"name": "keyword.control.roto",
+					"match": "\\b(if|else|for|while|return|accept|reject|match)\\b"
+				},
+				{
+					"name": "keyword.control.import.roto",
+					"match": "\\b(import)\\b"
+				},
+				{
+					"name": "keyword.declaration.struct.roto",
+					"match": "\\b(record)\\b"
+				},
+				{
+					"name": "keyword.declaration.enum.roto",
+					"match": "\\b(enum)\\b"
+				},
+				{
+					"name": "entity.name.constant.roto",
+					"match": "\\b(const)\\b"
+				}
+			]
+		},
+		"string": {
 			"name": "string.quoted.double.roto",
 			"begin": "\"",
 			"end": "\"",
@@ -36,15 +134,71 @@
 				}
 			]
 		},
-		"numbers": {
-			"name": "constant.numeric.roto",
-			"match": "\\b\\d+\\b"
+		"number": {
+			"patterns": [
+				{
+					"name": "constant.numeric.float.roto",
+					"match": "\\b[0-9][0-9_]*(\\.[0-9]+([eE][+-]?[0-9_]*)?)\\b"
+				},
+				{
+					"name": "constant.numeric.integer.roto",
+					"match": "\\b[0-9][0-9_]*\\b"
+				}
+			]
 		},
-		"booleans": {
-			"name": "constant.other.roto",
+		"operator": {
+			"patterns": [
+				{
+					"name": "keyword.operator.roto",
+					"match": "(<=|>=|==|!=|<|>|<>)"
+				},
+				{
+					"name": "keyword.operator.roto",
+					"match": "!"
+				},
+				{
+					"name": "keyword.operator.assignment.roto",
+					"match": "="
+				},
+				{
+					"name": "keyword.operator.roto",
+					"match": "->"
+				},
+				{
+					"name": "keyword.operator.roto",
+					"match": "=>"
+				},
+				{
+					"name": "keyword.operator.arithmetic.roto",
+					"match": "(\\+|\\-|/|\\*)"
+				},
+				{
+					"name": "keyword.operator.logical.roto",
+					"match": "(&&|\\|\\|)"
+				}
+			]
+		},
+		"punctuation": {
+			"patterns": [
+				{
+					"name": "punctuation.accessor.roto",
+					"match": "\\."
+				},
+				{
+					"name": "punctuation.separator.roto",
+					"match": ","
+				},
+				{
+					"name": "punctuation.control.roto",
+					"match": ";"
+				}
+			]
+		},
+		"bool": {
+			"name": "constant.language.roto",
 			"match": "\\b(true|false)\\b"
 		},
-		"comments": {
+		"comment": {
 			"name": "comment.line.double-slash.roto",
 			"begin": "//",
 			"end": "\n"

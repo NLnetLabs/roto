@@ -103,6 +103,14 @@ contexts:
     - match: \b(record)\b
       scope: keyword.declaration.struct.roto
 
+    - match: \b(enum)\b
+      scope: keyword.declaration.enum.roto
+
+    - match: \b(const)\s+({{ident}})\b
+      captures:
+        1: storage.type.roto
+        2: entity.name.constant.roto
+
   number:
     - match: '\b[0-9][0-9_]*(\.[0-9]+([eE][+-]?[0-9_]*)?)\b'
       scope: constant.numeric.float.roto
@@ -113,9 +121,13 @@ contexts:
   operator:
     - match: '(<=|>=|==|!=|<|>|<>)'
       scope: keyword.operator.roto
+    - match: '!'
+      scope: keyword.operator.roto
     - match: '='
       scope: keyword.operator.assignment.roto
     - match: '->'
+      scope: keyword.operator.roto
+    - match: '=>'
       scope: keyword.operator.roto
     - match: '(\+|\-|/|\*)'
       scope: keyword.operator.arithmetic.roto
@@ -135,7 +147,7 @@ contexts:
       scope: constant.language.roto
 
   comment:
-    - match: '\#'
+    - match: '//'
       scope: punctuation.definition.comment.roto
       push:
         - meta_scope: comment.line.roto
