@@ -279,6 +279,38 @@ impl TypeChecker {
                 let diverges = self.expr(scope, &ctx, e)?;
                 Ok(diverges)
             }
+            CompoundAssign(c) => {
+                self.unify(&ctx.expected_type, &Type::unit(), id, None)?;
+
+                let resolved_path =
+                    self.resolve_expression_path(scope, ctx, &c.path)?;
+                self.type_info
+                    .path_kinds
+                    .insert(c.path.id, resolved_path.clone());
+                let ResolvedPath::Value(path_value) = resolved_path else {
+                    todo!("cannot assign to this");
+                };
+
+                let ty = path_value.final_type();
+                let ctx = ctx.with_type(ty);
+
+                let op = match c.op {
+                    ast::CompoundAssignOp::Add => ast::BinOp::Add,
+                    ast::CompoundAssignOp::Sub => ast::BinOp::Sub,
+                    ast::CompoundAssignOp::Mul => ast::BinOp::Mul,
+                    ast::CompoundAssignOp::Div => ast::BinOp::Div,
+                    ast::CompoundAssignOp::Mod => ast::BinOp::Mod,
+                };
+                let left = Meta {
+                    id: c.path_expr_id,
+                    node: ast::Expr::Path(c.path.clone()),
+                };
+                let diverges =
+                    self.binop(scope, &ctx, &op, c.binop_id, &left, &c.expr)?;
+
+                self.type_info.expr_types.insert(c.binop_id, ty.clone());
+                Ok(diverges)
+            }
             Path(p) => {
                 let last_ident = p.idents.last().unwrap();
                 let resolved_path =

@@ -3125,6 +3125,100 @@ fn assignment() {
 }
 
 #[test]
+fn add_assign() {
+    let s = src!(
+        "
+            fn foo() -> i32 {
+                let x = 1;
+                x += 2;
+                x += 3;
+                x
+            }
+        "
+    );
+
+    let mut compiled = compile(s);
+    let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(), 6);
+}
+
+#[test]
+fn sub_assign() {
+    let s = src!(
+        "
+            fn foo() -> i32 {
+                let x = 6;
+                x -= 2;
+                x -= 3;
+                x
+            }
+        "
+    );
+
+    let mut compiled = compile(s);
+    let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(), 1);
+}
+
+#[test]
+fn mul_assign() {
+    let s = src!(
+        "
+            fn foo() -> i32 {
+                let x = 6;
+                x *= 2;
+                x *= 3;
+                x
+            }
+        "
+    );
+
+    let mut compiled = compile(s);
+    let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(), 6 * 2 * 3);
+}
+
+#[test]
+fn div_assign() {
+    let s = src!(
+        "
+            fn foo() -> i32 {
+                let x = 60;
+                x /= 2;
+                x /= 3;
+                x
+            }
+        "
+    );
+
+    let mut compiled = compile(s);
+    let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(), 10);
+}
+
+#[test]
+fn mod_assign() {
+    let s = src!(
+        "
+            fn foo() -> i32 {
+                let x = 65;
+                x %= 10;
+                x
+            }
+        "
+    );
+
+    let mut compiled = compile(s);
+    let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
+
+    assert_eq!(func.call(), 5);
+}
+
+#[test]
 fn assignment_record_field() {
     let s = src!(
         "

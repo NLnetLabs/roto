@@ -4,9 +4,9 @@ use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, Expr, FStringPart, Identifier, Literal, Match,
-        MatchArm, Path, Pattern, Record, RecordType, ReturnKind, Stmt,
-        TypeExpr,
+        BinOp, Block, CompoundAssign, CompoundAssignOp, Expr, FStringPart,
+        Identifier, Literal, Match, MatchArm, Path, Pattern, Record,
+        RecordType, ReturnKind, Stmt, TypeExpr,
     },
     parser::{ParseError, precedence::Associativity},
 };
@@ -228,7 +228,7 @@ impl Parser<'_, '_> {
         if self.next_is(Token::Eq) {
             let Expr::Path(path) = &*left else {
                 return Err(ParseError::custom(
-                    "left-hand side of an expression must be a single identifier",
+                    "left-hand side of an assignment must be a single identifier",
                     "cannot assign to this expression",
                     self.get_span(&left),
                 ).into());
@@ -238,9 +238,52 @@ impl Parser<'_, '_> {
             Ok(self
                 .spans
                 .add(span, Expr::Assign(path.clone(), Box::new(right))))
+        } else if self.next_is(Token::PlusEq) {
+            self.compound_assign_expr(left, CompoundAssignOp::Add, r)
+        } else if self.next_is(Token::MinusEq) {
+            self.compound_assign_expr(left, CompoundAssignOp::Sub, r)
+        } else if self.next_is(Token::StarEq) {
+            self.compound_assign_expr(left, CompoundAssignOp::Mul, r)
+        } else if self.next_is(Token::SlashEq) {
+            self.compound_assign_expr(left, CompoundAssignOp::Div, r)
+        } else if self.next_is(Token::PercentEq) {
+            self.compound_assign_expr(left, CompoundAssignOp::Mod, r)
         } else {
             Ok(left)
         }
+    }
+
+    fn compound_assign_expr(
+        &mut self,
+        left: Meta<Expr>,
+        op: CompoundAssignOp,
+        r: Restrictions,
+    ) -> ParseResult<Meta<Expr>> {
+        let right = self.binop_expr(None, r)?;
+        let span = self.merge_spans(&left, &right);
+
+        let Expr::Path(path) = left.node else {
+            return Err(ParseError::custom(
+                "left-hand side of an assignment must be a single identifier",
+                "cannot assign to this expression",
+                self.get_span(&left),
+            )
+            .into());
+        };
+
+        // Generate an ID for the hidden binary operation
+        let binop_id = self.add_span(span, ()).id;
+
+        Ok(self.spans.add(
+            span,
+            Expr::CompoundAssign(CompoundAssign {
+                binop_id,
+                path_expr_id: left.id,
+                path,
+                op,
+                expr: Box::new(right),
+            }),
+        ))
     }
 
     /// Parse a binary expression

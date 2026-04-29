@@ -8,7 +8,7 @@ use std::fmt::Display;
 use inetnum::asn::Asn;
 use symbol_table::GlobalSymbol;
 
-use crate::parser::meta::Meta;
+use crate::parser::meta::{Meta, MetaId};
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
@@ -170,6 +170,11 @@ pub enum Expr {
     //       for now that's not supported.
     Assign(Meta<Path>, Box<Meta<Expr>>),
 
+    /// An assignment expression
+    // TODO: Arbitrary place expressions should be allowed at some point, but
+    //       for now that's not supported.
+    CompoundAssign(CompoundAssign),
+
     /// A binary operator expression
     ///
     /// Takes a left operand, the operator and the right operand
@@ -191,6 +196,15 @@ pub enum Expr {
 
     /// f-string
     FString(Vec<Meta<FStringPart>>),
+}
+
+#[derive(Clone, Debug)]
+pub struct CompoundAssign {
+    pub binop_id: MetaId,
+    pub path_expr_id: MetaId,
+    pub path: Meta<Path>,
+    pub op: CompoundAssignOp,
+    pub expr: Box<Meta<Expr>>,
 }
 
 #[derive(Clone, Debug)]
@@ -295,6 +309,15 @@ pub enum Literal {
     Float(f64),
     Bool(bool),
     Unit,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompoundAssignOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
