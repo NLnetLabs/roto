@@ -1,0 +1,7 @@
+enum Foo {
+    Bar
+}
+
+fn main() {
+    Foo.Bar = 10;
+}

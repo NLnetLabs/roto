@@ -36,6 +36,11 @@ pub enum Token<'s> {
     SlashStar,
     Star,
     Percent,
+    PlusEq,
+    MinusEq,
+    StarEq,
+    SlashEq,
+    PercentEq,
 
     // === Delimiters ===
     AngleLeft,
@@ -239,6 +244,11 @@ impl<'s> Lexer<'s> {
             [b'<', b'='] => Token::AngleLeftEq,
             [b'-', b'>'] => Token::Arrow,
             [b'=', b'>'] => Token::FatArrow,
+            [b'+', b'='] => Token::PlusEq,
+            [b'-', b'='] => Token::MinusEq,
+            [b'*', b'='] => Token::StarEq,
+            [b'/', b'='] => Token::SlashEq,
+            [b'%', b'='] => Token::PercentEq,
 
             // These are added for better diagnostics
             [b'/', b'*'] => Token::SlashStar,
@@ -657,6 +667,11 @@ impl Display for Token<'_> {
             Token::SlashStar => "/*",
             Token::Star => "*",
             Token::Percent => "%",
+            Token::PlusEq => "+=",
+            Token::MinusEq => "-=",
+            Token::StarEq => "*=",
+            Token::SlashEq => "/=",
+            Token::PercentEq => "%=",
 
             // Delimiters
             Token::AngleLeft => "<",
