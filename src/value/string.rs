@@ -110,6 +110,17 @@ impl RotoString {
     pub fn strip_suffix(self, suffix: &str) -> Option<Self> {
         self.0.0.strip_suffix(suffix).map(|s| s.into())
     }
+
+    /// Splits this string at `separator` at most `n` times.
+    pub fn splitn(self, n: usize, separator: &str) -> List<RotoString> {
+        self.0.0.splitn(n, separator).map(Into::into).collect()
+    }
+
+    /// Splits this string at `separator` at most `n` times starting from the
+    /// end.
+    pub fn rsplitn(self, n: usize, separator: &str) -> List<RotoString> {
+        self.0.0.rsplitn(n, separator).map(Into::into).collect()
+    }
 }
 
 impl<T: Into<Arc<str>>> From<T> for RotoString {

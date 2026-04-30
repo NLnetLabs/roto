@@ -338,6 +338,33 @@ fn string_methods() -> Library {
             fn strip_suffix(self, suffix: RotoString) -> Option<RotoString> {
                 self.strip_suffix(&suffix)
             }
+
+            /// Splits this string at `separator` at most `n` times.
+            ///
+            /// If there are more than `n - 1` separators, the last list element
+            /// will contain the rest of the string.
+            ///
+            /// ```roto
+            /// let a = "Rust!Roto!String".splitn(2, "!");
+            /// // -> ["Rust", "Roto!String"]
+            /// ```
+            fn splitn(self, n: u64, separator: RotoString) -> List<RotoString> {
+                self.splitn(n as usize, &separator)
+            }
+
+            /// Splits this string at `separator` at most `n` times starting
+            /// from the end.
+            ///
+            /// If there are more than `n - 1` separators, the last list element
+            /// will contain the remaining prefix of the string.
+            ///
+            /// ```roto
+            /// let a = "Rust!Roto!String".rsplitn(2, "!");
+            /// // -> ["String", "Rust!Roto"]
+            /// ```
+            fn rsplitn(self, n: u64, separator: RotoString) -> List<RotoString> {
+                self.rsplitn(n as usize, &separator)
+            }
         }
 
         impl StringBytes {

@@ -461,9 +461,27 @@
     {
         "src": "reference/std/String/index",
         "lang": "roto",
+        "code": "let a = \"Rust!Roto!String\".rsplitn(2, \"!\");\n// -> [\"String\", \"Rust!Roto\"]\n",
+        "source": "source/reference/std/String/index.md",
+        "line": 91,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/std/String/index",
+        "lang": "roto",
         "code": "let a = \"one, two, three\".split(\", \"); // -> [\"one\", \"two\", \"three\"]\n",
         "source": "source/reference/std/String/index.md",
-        "line": 87,
+        "line": 100,
+        "testoutput": "",
+        "mode": "check"
+    },
+    {
+        "src": "reference/std/String/index",
+        "lang": "roto",
+        "code": "let a = \"Rust!Roto!String\".splitn(2, \"!\");\n// -> [\"Rust\", \"Roto!String\"]\n",
+        "source": "source/reference/std/String/index.md",
+        "line": 111,
         "testoutput": "",
         "mode": "check"
     },
@@ -472,7 +490,7 @@
         "lang": "roto",
         "code": "let a = \"haystack\".starts_with(\"hay\");   // -> true\nlet b = \"haystack\".starts_with(\"trees\"); // -> false\n",
         "source": "source/reference/std/String/index.md",
-        "line": 95,
+        "line": 120,
         "testoutput": "",
         "mode": "check"
     },
@@ -481,7 +499,7 @@
         "lang": "roto",
         "code": "let a = \"RustRoto!\".strip_prefix(\"Rust\"); // -> \"Roto!\"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 106,
+        "line": 131,
         "testoutput": "",
         "mode": "check"
     },
@@ -490,7 +508,7 @@
         "lang": "roto",
         "code": "let a = \"Roto!Rust\".strip_suffix(\"Rust\"); // -> \"Roto!\"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 116,
+        "line": 141,
         "testoutput": "",
         "mode": "check"
     },
@@ -499,7 +517,7 @@
         "lang": "roto",
         "code": "let a = \"LOUD\".to_lowercase(); // -> \"loud\"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 124,
+        "line": 149,
         "testoutput": "",
         "mode": "check"
     },
@@ -508,7 +526,7 @@
         "lang": "roto",
         "code": "let a = \"quiet\".to_uppercase(); // -> \"QUIET\"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 136,
+        "line": 161,
         "testoutput": "",
         "mode": "check"
     },
@@ -517,7 +535,7 @@
         "lang": "roto",
         "code": "let a = \"  Roto!  \".trim(); // -> \"Roto!\"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 145,
+        "line": 170,
         "testoutput": "",
         "mode": "check"
     },
@@ -526,7 +544,7 @@
         "lang": "roto",
         "code": "let a = \"  Roto!  \".trim_end(); // -> \"  Roto!\"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 153,
+        "line": 178,
         "testoutput": "",
         "mode": "check"
     },
@@ -535,7 +553,7 @@
         "lang": "roto",
         "code": "let a = \"  Roto!  \".trim_start(); // -> \"Roto!  \"\n",
         "source": "source/reference/std/String/index.md",
-        "line": 161,
+        "line": 186,
         "testoutput": "",
         "mode": "check"
     },
