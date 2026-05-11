@@ -561,16 +561,19 @@ impl Lowerer<'_, '_> {
             // but if it is a DynVal, we have to ensure that the value is stored on a
             // stack slot and that we pass a pointer to it to the function.
             if !dyn_vals[i] {
+                let Some(ty) = self.lower_type(ty) else {
+                    continue;
+                };
                 args.push(arg.into());
-                parameters.push((
-                    i.to_string().into(),
-                    self.lower_type(ty).unwrap(),
-                ));
+                parameters.push((i.to_string().into(), ty));
                 continue;
             }
 
-            let elem_layout =
-                self.ctx.type_info.layout_of(ty, self.ctx.runtime).unwrap();
+            let Some(elem_layout) =
+                self.ctx.type_info.layout_of(ty, self.ctx.runtime)
+            else {
+                continue;
+            };
 
             // We have to ensure that the value is passed by pointer, so
             // we make a stack slot for it.
