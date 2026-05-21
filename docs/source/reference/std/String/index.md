@@ -81,11 +81,36 @@ let a = "In rust we trust".replace("rust", "roto"); // -> "In roto we troto"
 ```
 ````
 
+````{roto:function} rsplitn(self: String, n: u64, separator: String) -> List[String]
+Splits this string at `separator` at most `n` times starting
+from the end.
+
+If there are more than `n - 1` separators, the last list element
+will contain the remaining prefix of the string.
+
+```roto
+let a = "Rust!Roto!String".rsplitn(2, "!");
+// -> ["String", "Rust!Roto"]
+```
+````
+
 ````{roto:function} split(self: String, separator: String) -> List[String]
 Split a string by a separator.
 
 ```roto
 let a = "one, two, three".split(", "); // -> ["one", "two", "three"]
+```
+````
+
+````{roto:function} splitn(self: String, n: u64, separator: String) -> List[String]
+Splits this string at `separator` at most `n` times.
+
+If there are more than `n - 1` separators, the last list element
+will contain the rest of the string.
+
+```roto
+let a = "Rust!Roto!String".splitn(2, "!");
+// -> ["Rust", "Roto!String"]
 ```
 ````
 

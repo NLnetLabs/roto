@@ -4994,6 +4994,63 @@ fn string_strip_suffix_not_found() {
 }
 
 #[test]
+fn string_splitn_exact() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            "Rust!Roto!String".splitn(3, "!")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<RotoString>>("main")
+        .unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), ["Rust", "Roto", "String"].map(Into::into));
+}
+
+#[test]
+fn string_splitn_less() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            "Rust!Roto!String".splitn(2, "!")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<RotoString>>("main")
+        .unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), ["Rust", "Roto!String"].map(Into::into));
+}
+
+#[test]
+fn string_rsplitn() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            "Rust!Roto!String".rsplitn(2, "!")
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<RotoString>>("main")
+        .unwrap();
+
+    let res = f.call();
+    assert_eq!(res.to_vec(), ["String", "Rust!Roto"].map(Into::into));
+}
+
+#[test]
 fn string_line_slice() {
     let s = src!(
         r#"
@@ -5408,7 +5465,7 @@ fn roto_constants_through_functions() {
 fn registered_constant_in_roto_constant() {
     let s = src!(
         r#"
-         const FOO: u32 = BAR + 1;  
+         const FOO: u32 = BAR + 1;
 
          fn main() -> u32 {
              FOO
@@ -5433,7 +5490,7 @@ fn registered_constant_in_roto_constant() {
 fn runtime_type_constant() {
     let s = src!(
         r#"
-         const FOO: Foo = Foo.new(4);  
+         const FOO: Foo = Foo.new(4);
 
          fn main() -> Foo {
              FOO
