@@ -5464,3 +5464,40 @@ fn runtime_type_constant() {
     let res = f.call();
     assert_eq!(res.0.x, 4);
 }
+
+#[test]
+fn zero_sized_registered_type() {
+    let s = src!(
+        r#"
+         fn main() -> Foo {
+             let x = Foo.new();
+             x.do_something();
+             x
+         }
+       "#
+    );
+
+    #[derive(Clone, PartialEq)]
+    struct Foo {}
+
+    let lib = library! {
+        #[clone] type Foo = Val<Foo>;
+
+        impl Val<Foo> {
+            fn new() -> Self {
+                Val(Foo { })
+            }
+
+            fn do_something(self) {
+                println!("did something");
+            }
+        }
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
+
+    let _res = f.call();
+}
