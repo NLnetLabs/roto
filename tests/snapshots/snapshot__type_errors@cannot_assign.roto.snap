@@ -1,0 +1,14 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/cannot_assign.roto
+---
+Error: Type error: cannot assign to this expression
+   ╭─[ tests/scripts/type_errors/cannot_assign.roto:6:5 ]
+   │
+ 6 │     Foo.Bar = 10;
+   │     ───┬───  
+   │        ╰───── cannot assign to this
+   │ 
+   │ Note: you can only assign to a variable or fields of a variable
+───╯

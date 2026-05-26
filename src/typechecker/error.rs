@@ -3,7 +3,7 @@
 use std::fmt::Display;
 
 use crate::{
-    ast::{Expr, Identifier},
+    ast::{Expr, Identifier, Path},
     parser::meta::{Meta, MetaId},
     typechecker::scope::Declaration,
 };
@@ -55,6 +55,7 @@ pub struct TypeError {
     pub description: String,
     pub location: MetaId,
     pub labels: Vec<Label>,
+    pub notes: Vec<String>,
 }
 
 impl TypeChecker {
@@ -69,6 +70,7 @@ impl TypeChecker {
             description: description.to_string(),
             location: span,
             labels: vec![Label::error(msg, span)],
+            notes: Vec::new(),
         }
     }
 
@@ -91,6 +93,7 @@ impl TypeChecker {
                     )
                 })
                 .collect(),
+            notes: Vec::new(),
         }
     }
 
@@ -132,6 +135,7 @@ impl TypeChecker {
             description,
             location: span,
             labels,
+            notes: Vec::new(),
         }
     }
 
@@ -145,6 +149,7 @@ impl TypeChecker {
             description: format!("expected type, but found {kind} `{ident}`",),
             location: ident.id,
             labels: vec![Label::error("expected type", ident.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -163,6 +168,7 @@ impl TypeChecker {
                 format!("`{ident}` is a {kind}, not a module"),
                 ident.id,
             )],
+            notes: Vec::new(),
         }
     }
 
@@ -177,6 +183,7 @@ impl TypeChecker {
             ),
             location: id,
             labels: vec![Label::error("references itself", id)],
+            notes: Vec::new(),
         }
     }
 
@@ -191,6 +198,7 @@ impl TypeChecker {
             ),
             location: id,
             labels: vec![Label::error("depends on a context variable", id)],
+            notes: Vec::new(),
         }
     }
 
@@ -222,6 +230,7 @@ impl TypeChecker {
                     old_declaration,
                 ),
             ],
+            notes: Vec::new(),
         }
     }
 
@@ -230,6 +239,7 @@ impl TypeChecker {
             description: format!("cannot find value `{ident}` in this scope"),
             location: ident.id,
             labels: vec![Label::error("not found in this scope", ident.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -251,6 +261,7 @@ impl TypeChecker {
                 ),
                 method_name.id,
             )],
+            notes: Vec::new(),
         }
     }
 
@@ -273,6 +284,7 @@ impl TypeChecker {
                 ),
                 span,
             )],
+            notes: Vec::new(),
         }
     }
 
@@ -288,6 +300,7 @@ impl TypeChecker {
             ),
             location: variant.id,
             labels: vec![Label::error("unexpected data field", variant.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -303,6 +316,7 @@ impl TypeChecker {
             ),
             location: variant.id,
             labels: vec![Label::error("missing arguments", variant.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -324,6 +338,7 @@ impl TypeChecker {
                 ),
                 variant.id,
             )],
+            notes: Vec::new(),
         }
     }
 
@@ -357,6 +372,7 @@ impl TypeChecker {
             description: "mismatched types".into(),
             location: span,
             labels,
+            notes: Vec::new(),
         }
     }
 
@@ -378,6 +394,7 @@ impl TypeChecker {
                 format!("missing variants {}", join_quoted(missing_variants)),
                 span,
             )],
+            notes: Vec::new(),
         }
     }
 
@@ -389,6 +406,7 @@ impl TypeChecker {
             description: "expression is unreachable".into(),
             location: expr.id,
             labels: vec![Label::error("unreachable", expr.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -401,6 +419,7 @@ impl TypeChecker {
             description: format!("cannot `{divergence_type}` here"),
             location: expr.id,
             labels: vec![Label::error("not allowed", expr.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -426,6 +445,7 @@ impl TypeChecker {
                     declaration.id,
                 ),
             ],
+            notes: Vec::new(),
         }
     }
 
@@ -441,6 +461,7 @@ impl TypeChecker {
             ),
             location: expr.id,
             labels: vec![Label::error("not a numeric value", expr.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -456,6 +477,7 @@ impl TypeChecker {
             ),
             location: expr.id,
             labels: vec![Label::error("not an integer value", expr.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -472,6 +494,7 @@ impl TypeChecker {
             ),
             location: ident.id,
             labels: vec![Label::error("expected a value", ident.id)],
+            notes: Vec::new(),
         }
     }
     pub fn error_expected_function(
@@ -486,6 +509,7 @@ impl TypeChecker {
             ),
             location: ident.id,
             labels: vec![Label::error("expected a function", ident.id)],
+            notes: Vec::new(),
         }
     }
 
@@ -532,6 +556,22 @@ impl TypeChecker {
             format!("unknown field or method `{ident}`"),
             ident.id,
         )
+    }
+
+    pub fn error_cannot_assign_to_this_expression(
+        &self,
+        path: &Meta<Path>,
+    ) -> TypeError {
+        let mut err = self.error_simple(
+            "cannot assign to this expression",
+            "cannot assign to this",
+            path.id,
+        );
+        err.notes.push(
+            "you can only assign to a variable or fields of a variable"
+                .into(),
+        );
+        err
     }
 }
 

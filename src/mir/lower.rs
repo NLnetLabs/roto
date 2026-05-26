@@ -9,7 +9,7 @@ use super::{
 };
 
 use crate::{
-    ast::{self, Identifier, Literal},
+    ast::{self, CompoundAssignOp, Expr, Identifier, Literal},
     ice,
     ir_printer::{IrPrinter, Printable},
     label::{LabelRef, LabelStore},
@@ -459,6 +459,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Not(expr) => self.not(expr),
             ast::Expr::Negate(expr) => self.negate(expr),
             ast::Expr::Assign(expr, field) => self.assign(expr, field),
+            ast::Expr::CompoundAssign(c) => self.compound_assign(c),
             ast::Expr::BinOp(left, op, right) => self.binop(left, op, right),
             ast::Expr::IfElse(condition, then, r#else) => {
                 self.if_else(id, condition, then, r#else)
@@ -872,6 +873,25 @@ impl<'r> Lowerer<'r> {
         self.do_assign(place, ty, Value::Move(tmp));
 
         Value::Const(ast::Literal::Unit, Type::unit())
+    }
+
+    fn compound_assign(&mut self, c: &ast::CompoundAssign) -> Value {
+        let op = match c.op {
+            CompoundAssignOp::Add => ast::BinOp::Add,
+            CompoundAssignOp::Sub => ast::BinOp::Sub,
+            CompoundAssignOp::Mul => ast::BinOp::Mul,
+            CompoundAssignOp::Div => ast::BinOp::Div,
+            CompoundAssignOp::Mod => ast::BinOp::Mod,
+        };
+        let left = Meta {
+            id: c.path_expr_id,
+            node: Expr::Path(c.path.clone()),
+        };
+        let bin_expr = Meta {
+            id: c.binop_id,
+            node: Expr::BinOp(Box::new(left), op, c.expr.clone()),
+        };
+        self.assign(&c.path, &bin_expr)
     }
 
     fn binop(

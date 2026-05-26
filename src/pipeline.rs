@@ -195,7 +195,7 @@ impl RotoReport {
                     });
 
                     let span = self.spans.get(error.location);
-                    let report = Report::build(
+                    let mut report = Report::build(
                         ReportKind::Error,
                         (file, span.character_range(file_text)),
                     )
@@ -204,8 +204,10 @@ impl RotoReport {
                         "Type error: {}",
                         &error.description
                     ))
-                    .with_labels(labels)
-                    .finish();
+                    .with_labels(labels);
+
+                    report.with_notes(&error.notes);
+                    let report = report.finish();
 
                     let mut v = Vec::new();
                     report.write(&mut file_cache, &mut v).unwrap();
