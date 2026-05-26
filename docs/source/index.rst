@@ -1,5 +1,5 @@
-Roto
-====
+.. image:: resources/Roto_Logo_Chaos_Black.svg
+   :width: 100%
 
 .. note::
 

@@ -110,8 +110,8 @@ pygments_style = 'sphinx'
 #
 html_theme = 'sphinx_rtd_theme'
 # html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-html_logo = 'resources/roto-logo-white.svg'
-html_favicon = 'resources/rotonda-icon-offwhite-128x128.png'
+html_logo = 'resources/logo-off-white.svg'
+html_favicon = 'resources/icon.svg'
 html_theme_options = {
     'logo_only': True,
     'style_external_links': False,
