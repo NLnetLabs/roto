@@ -80,6 +80,7 @@ Roto is distributed under the terms of the BSD-3-clause license. See
    :name: toc-overview
 
    Introduction <self>
+   overview/why_roto
    overview/goals
    overview/installation
    overview/hello_world
