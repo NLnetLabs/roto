@@ -20,6 +20,14 @@ let f = ::;
 `````
 
 
+`````{roto:constant} LOCALHOSTV4: IpAddr
+The IPv4 address pointing to localhost: `127.0.0.1`
+`````
+
+`````{roto:constant} LOCALHOSTV6: IpAddr
+The IPv6 address pointing to localhost: `::1`
+`````
+
 ````{roto:function} eq(self: IpAddr, other: IpAddr) -> bool
 Check whether two IP addresses are equal.
 

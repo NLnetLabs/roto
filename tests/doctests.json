@@ -355,7 +355,7 @@
         "lang": "roto",
         "code": "let a = 192.0.0.0 == 192.0.0.0;   // -> true\nlet b = ::0 == ::0;               // -> true\nlet c = 192.0.0.0 == 192.0.0.1;   // -> false\nlet d = 0.0.0.0 == 0::0;          // -> false\n\n// or equivalently:\nlet e = 192.0.0.0.eq(192.0.0.0);  // -> true\n",
         "source": "source/reference/std/IpAddr/index.md",
-        "line": 31,
+        "line": 39,
         "testoutput": "",
         "mode": "check"
     },
@@ -364,7 +364,7 @@
         "lang": "roto",
         "code": "let a = 1.1.1.1.is_ipv4(); // -> true\nlet b = ::.is_ipv4();      // -> false\n",
         "source": "source/reference/std/IpAddr/index.md",
-        "line": 45,
+        "line": 53,
         "testoutput": "",
         "mode": "check"
     },
@@ -373,7 +373,7 @@
         "lang": "roto",
         "code": "let a = 1.1.1.1.is_ipv6(); // -> false\nlet b = ::.is_ipv6();      // -> true\n",
         "source": "source/reference/std/IpAddr/index.md",
-        "line": 54,
+        "line": 62,
         "testoutput": "",
         "mode": "check"
     },

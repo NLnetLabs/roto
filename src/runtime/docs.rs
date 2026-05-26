@@ -198,7 +198,11 @@ impl DocTy {
         writeln!(file, "`````\n")?;
         writeln!(file)?;
 
-        let (fs, _, _, _) = Rt::split_items(&self.items);
+        let (fs, cs, _, _) = Rt::split_items(&self.items);
+
+        for c in &cs {
+            c.print_md(&mut file)?;
+        }
         for f in &fs {
             f.print_md(&mut file)?;
         }
