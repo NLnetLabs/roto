@@ -33,23 +33,15 @@ instead. We can do that quite easily with the ``library!`` macro. Any function
 declared within that macro will then become available in the scripts you
 compile.
 
-.. note::
-
-    We use ``Arc<str>`` because that's the Rust type corresponding to Roto's
-    ``String`` type. You always have to use the Rust names of types when
-    registering functions. To learn how the types correspond to each other, see
-    :ref:`rust_interop`.
-
 .. code-block:: rust
 
-    use std::sync::Arc;
     use std::fs::OpenOptions;
     use std::io::Write;
-    use roto::{Runtime, roto_function};
+    use roto::{RotoString, Runtime, roto_function};
 
     let lib = library!{
         /// Print to the log file.
-        fn print(s: Arc<str>) {
+        fn print(s: RotoString) {
             let mut file = OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -81,15 +73,15 @@ Add types
 ---------
 
 We can also add our own types to Roto. As an example, we'll add a ``Range``
-type. All registered types must implement ``Clone``. Every type you register
-must be wrapped in `Val<T>`, which tells Roto that it is a custom type and
-not built in.
+type. All registered types must implement ``Clone`` and `PartialEq`. Every type
+you register must be wrapped in `Val<T>`, which tells Roto that it is a custom
+type and not built in.
 
 .. code-block:: rust
 
     use roto::{library, Runtime, Val};
 
-    #[derive(Clone, Copy, Debug)]
+    #[derive(Clone, Copy, Debug, PartialEq)]
     struct Range {
         low: i64,
         high: i64,
