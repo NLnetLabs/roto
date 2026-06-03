@@ -290,43 +290,54 @@ impl<'s> Lexer<'s> {
 
         // Get the first set of digits. We require at least one digit for both
         // integers and floats.
-        let ate_digits = tail.eat_while(char::is_ascii_digit);
-
-        if !ate_digits {
+        if !tail.starts_with(|c: char| c.is_ascii_digit()) {
             return ControlFlow::Continue(());
         }
+
+        tail.eat_while(is_roto_digit);
 
         // The literal is a float if we encounter a '.', 'e' or 'E'.
         let mut is_float = false;
 
-        if tail.starts_with('.') {
-            // Edge case: if we have `10..` or `10._hello` or `10.hello` we
-            // should treat this as an integer
-            if let Some(c) = tail.chars().nth(1)
-                && (is_xid_start(c) || c == '.' || c == '_')
-            {
-                let (tok, span) = self.bump_to(tail);
-                return ControlFlow::Break((Token::Integer(tok), span));
+        'float: {
+            if tail.starts_with('.') {
+                // Edge case: if we have `10..` or `10._hello` or `10.hello` we
+                // should treat this as an integer
+                if let Some(c) = tail.chars().nth(1)
+                    && (is_xid_start(c) || c == '.' || c == '_')
+                {
+                    break 'float;
+                }
+
+                is_float = true;
+                tail.eat_char('.');
+                tail.eat_while(is_roto_digit);
             }
 
-            is_float = true;
-            tail.eat_char('.');
-            tail.eat_while(char::is_ascii_digit);
+            if tail.eat_one_of(['e', 'E']) {
+                is_float = true;
+                tail.eat_one_of(['+', '-']);
+                tail.eat_while(is_roto_digit);
+            }
         }
 
-        if tail.eat_one_of(['e', 'E']) {
-            is_float = true;
-            tail.eat_one_of(['+', '-']);
-            tail.eat_while(char::is_ascii_digit);
-        }
+        let length = self.input.len() - tail.len();
+
+        // Eat the type suffix, i.e. the `u32` in `10u32`
+        tail.eat_while(|c| is_xid_continue(*c) || *c == '_');
 
         let (tok, span) = self.bump_to(tail);
-        let tok = if is_float {
-            Token::Float(tok)
-        } else {
-            Token::Integer(tok)
-        };
-        ControlFlow::Break((tok, span))
+
+        let (num, suffix) = tok.split_at(length);
+
+        ControlFlow::Break((
+            if is_float {
+                Token::Float(num, suffix)
+            } else {
+                Token::Integer(num, suffix)
+            },
+            span,
+        ))
     }
 
     fn f_string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
@@ -524,6 +535,10 @@ impl<'s> Lexer<'s> {
         let ident = Identifier::from(x);
         self.almost_keyword = Some((ident, span, suggestion));
     }
+}
+
+fn is_roto_digit(c: &char) -> bool {
+    c.is_ascii_digit() || *c == '_'
 }
 
 trait StrExt {

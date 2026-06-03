@@ -252,7 +252,7 @@ impl std::error::Error for RotoReport {}
 
 #[cfg(all(test, not(miri)))]
 macro_rules! src {
-    ($code:literal) => {
+    ($code:expr) => {
         $crate::FileTree::test_file(file!(), $code, line!() as usize - 1)
     };
 }

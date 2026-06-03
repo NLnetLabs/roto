@@ -53,8 +53,8 @@ pub enum Token<'s> {
     // === Literals ===
     String(&'s str),
     Char(&'s str),
-    Integer(&'s str),
-    Float(&'s str),
+    Integer(&'s str, &'s str),
+    Float(&'s str, &'s str),
     Hex(&'s str),
     Asn(&'s str),
     IpV4(&'s str),
@@ -154,8 +154,14 @@ impl Display for Token<'_> {
             // Literals
             Token::String(s) => s,
             Token::Char(s) => s,
-            Token::Integer(s) => s,
-            Token::Float(s) => s,
+            Token::Integer(s, suffix) => {
+                f.write_str(s)?;
+                return f.write_str(suffix);
+            }
+            Token::Float(s, suffix) => {
+                f.write_str(s)?;
+                return f.write_str(suffix);
+            }
             Token::Hex(s) => s,
             Token::Asn(s) => s,
             Token::IpV4(s) => s,

@@ -622,14 +622,34 @@ impl TypeChecker {
         use ast::Literal::*;
         let span = lit.id;
 
-        let t = match lit.node {
+        let t = match &lit.node {
             String(_) => Type::string(),
             Char(_) => Type::char(),
             Asn(_) => Type::asn(),
             IpAddress(_) => Type::ip_addr(),
             Bool(_) => Type::bool(),
-            Integer(_) => self.fresh_int(),
-            Float(_) => self.fresh_float(),
+            Integer(_, Some(ty)) => {
+                let ident = match ty {
+                    ast::IntType::I8 => "i8",
+                    ast::IntType::I16 => "i16",
+                    ast::IntType::I32 => "i32",
+                    ast::IntType::I64 => "i64",
+                    ast::IntType::U8 => "u8",
+                    ast::IntType::U16 => "u16",
+                    ast::IntType::U32 => "u32",
+                    ast::IntType::U64 => "u64",
+                };
+                Type::named(ident, Vec::new())
+            }
+            Integer(_, None) => self.fresh_int(),
+            Float(_, Some(ty)) => {
+                let ident = match ty {
+                    ast::FloatType::F32 => "f32",
+                    ast::FloatType::F64 => "f64",
+                };
+                Type::named(ident, Vec::new())
+            }
+            Float(_, None) => self.fresh_float(),
             Unit => Type::unit(),
         };
 

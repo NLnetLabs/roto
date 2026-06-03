@@ -9,7 +9,7 @@ use super::{
 };
 
 use crate::{
-    ast::{self, CompoundAssignOp, Expr, Identifier, Literal},
+    ast::{self, CompoundAssignOp, Expr, Identifier, IntType, Literal},
     ice,
     ir_printer::{IrPrinter, Printable},
     label::{LabelRef, LabelStore},
@@ -1266,7 +1266,10 @@ impl<'r> Lowerer<'r> {
         let list_value = self.expr(expr);
         let list_var = self.assign_to_var(list_value, list_ty.clone());
         let index_var = self.assign_to_var(
-            Value::Const(Literal::Integer(0), Type::u64()),
+            Value::Const(
+                Literal::Integer(0, Some(IntType::U64)),
+                Type::u64(),
+            ),
             Type::u64(),
         );
 
@@ -1277,7 +1280,10 @@ impl<'r> Lowerer<'r> {
         {
             self.new_block(lbl_increment);
             let one_var = self.assign_to_var(
-                Value::Const(Literal::Integer(1), Type::u64()),
+                Value::Const(
+                    Literal::Integer(1, Some(IntType::U64)),
+                    Type::u64(),
+                ),
                 Type::u64(),
             );
             let new_index = Value::BinOp {
