@@ -5652,3 +5652,54 @@ fn zero_sized_registered_type() {
 
     let _res = f.call();
 }
+
+#[test]
+fn zero_sized_type_as_argument() {
+    let s = src!(
+        r#"
+        fn helper(x: ()) -> () {
+            ()
+        }
+
+        fn main(x: ()) -> () {
+            helper(x)
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(()) -> ()>("main").unwrap();
+
+    f.call(());
+}
+
+#[test]
+fn zero_sized_registered_type_as_argument() {
+    let s = src!(
+        r#"
+        fn helper(app: Application) -> bool {
+            true
+        }
+
+        fn main(app: Application) -> bool {
+            helper(app)
+        }
+        "#
+    );
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Application;
+
+    let lib = library! {
+         #[clone] type Application = Val<Application>;
+    };
+
+    let rt = Runtime::from_lib(lib).unwrap();
+
+    let mut pkg = compile_with_runtime(s, rt);
+    let f = pkg
+        .get_function::<fn(Val<Application>) -> bool>("top")
+        .unwrap();
+
+    assert!(f.call(Val(Application)));
+}
