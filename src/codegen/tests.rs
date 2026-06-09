@@ -5698,7 +5698,7 @@ fn zero_sized_registered_type_as_argument() {
 
     let mut pkg = compile_with_runtime(s, rt);
     let f = pkg
-        .get_function::<fn(Val<Application>) -> bool>("top")
+        .get_function::<fn(Val<Application>) -> bool>("main")
         .unwrap();
 
     assert!(f.call(Val(Application)));

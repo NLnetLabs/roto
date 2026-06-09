@@ -48,6 +48,10 @@ impl Layout {
         Self { size, align }
     }
 
+    pub const fn is_zero_sized(&self) -> bool {
+        self.size == 0
+    }
+
     /// The size of the layout in bytes
     pub const fn size(&self) -> usize {
         self.size
