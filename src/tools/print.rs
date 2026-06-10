@@ -1,4 +1,5 @@
-use crate::parser::token::{Lexer, Token};
+use crate::parser::lexer::Lexer;
+use crate::parser::token::Token;
 
 #[allow(unused)]
 mod ansi {
