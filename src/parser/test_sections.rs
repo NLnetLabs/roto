@@ -217,3 +217,11 @@ fn enum_redundant_square_brackets() {
     ";
     parse(s).unwrap();
 }
+
+#[test]
+fn shebang() {
+    let s = "#!/usr/bin/roto run
+        fn foo() {}
+    ";
+    parse(s).unwrap();
+}

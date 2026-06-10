@@ -216,6 +216,15 @@ impl<'s> Lexer<'s> {
         ControlFlow::Continue(())
     }
 
+    pub fn skip_shebang(&mut self) {
+        if let Some(rest) = self.input.strip_prefix("#!")
+            && rest.starts_with(|c: char| !c.is_whitespace())
+        {
+            let n = self.input.find('\n').unwrap_or(self.input.len());
+            self.bump(n);
+        }
+    }
+
     fn skip_whitespace(&mut self) {
         loop {
             self.input = self.input.trim_start();
