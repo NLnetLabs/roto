@@ -189,6 +189,10 @@ impl<'s> Lexer<'s> {
         (a, start..end)
     }
 
+    fn bump_to(&mut self, tail: &str) -> (&'s str, Range<usize>) {
+        self.bump(self.input.len() - tail.len())
+    }
+
     fn is_empty(&self) -> bool {
         self.input.is_empty()
     }
@@ -206,8 +210,7 @@ impl<'s> Lexer<'s> {
         self.one_char_punctuation()?;
         self.as_number()?;
         self.hex_number()?;
-        self.float()?;
-        self.integer()?;
+        self.number()?;
         self.f_string()?;
         self.string()?;
         self.char()?;
@@ -217,23 +220,27 @@ impl<'s> Lexer<'s> {
     }
 
     pub fn skip_shebang(&mut self) {
-        if let Some(rest) = self.input.strip_prefix("#!")
-            && rest.starts_with(|c: char| !c.is_whitespace())
+        let mut tail = self.input;
+        if tail.eat_str("#!")
+            && tail.starts_with(|c: char| !c.is_whitespace())
         {
-            let n = self.input.find('\n').unwrap_or(self.input.len());
-            self.bump(n);
+            tail.eat_until('\n');
+            self.bump_to(tail);
         }
     }
 
     fn skip_whitespace(&mut self) {
+        let mut tail = self.input;
         loop {
-            self.input = self.input.trim_start();
-            if self.input.as_bytes().first_chunk() == Some(b"//") {
-                let n = self.input.find('\n').unwrap_or(self.input.len());
-                self.bump(n);
+            tail.eat_whitespace();
+            if tail.eat_str("//") {
+                tail.eat_until('\n');
             } else {
-                return;
+                break;
             }
+        }
+        if tail.len() < self.input.len() {
+            self.bump_to(tail);
         }
     }
 
@@ -310,156 +317,125 @@ impl<'s> Lexer<'s> {
     }
 
     fn ipv6(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let end = self
-            .input
-            .find(|c: char| !c.is_ascii_hexdigit() && c != ':')
-            .unwrap_or(self.input.len());
+        let mut tail = self.input;
 
-        // An IPv6 literal must have at least 2 colons
-        if self.input[..end].chars().filter(|&c| c == ':').count() < 2 {
-            return ControlFlow::Continue(());
+        let mut count = 0;
+        while count < 2 {
+            tail.eat_while(char::is_ascii_hexdigit);
+            if !tail.eat_char(':') {
+                return ControlFlow::Continue(());
+            }
+            count += 1;
         }
 
-        let (tok, span) = self.bump(end);
+        tail.eat_while(|c| char::is_ascii_hexdigit(c) || *c == ':');
+
+        let (tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::IpV6(tok), span))
     }
 
     fn ipv4(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let mut start_idx = 0;
+        let mut tail = self.input;
 
         let mut count = 0;
         while count < 3 {
-            let rest = &self.input[start_idx..];
-            let digit_idx = rest
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(rest.len());
-            if digit_idx == 0 {
+            if !tail.eat_while(char::is_ascii_digit) {
                 return ControlFlow::Continue(());
             }
-            start_idx += digit_idx;
-            if Some(&b'.') != self.input.as_bytes().get(start_idx) {
+            if !tail.eat_char('.') {
                 return ControlFlow::Continue(());
             }
-            start_idx += 1;
             count += 1;
         }
 
-        let rest = &self.input[start_idx..];
-        let digit_idx = rest
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(rest.len());
+        tail.eat_while(char::is_ascii_digit);
 
-        let final_idx = start_idx + digit_idx;
-        let (tok, span) = self.bump(final_idx);
+        let (tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::IpV4(tok), span))
     }
 
     fn as_number(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let Some(rest) = self.input.strip_prefix("AS") else {
+        let mut tail = self.input;
+
+        if !tail.eat_str("AS") {
             return ControlFlow::Continue(());
         };
 
-        let digit_idx = rest
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(rest.len());
+        let ate_digits = tail.eat_while(char::is_ascii_digit);
 
-        if digit_idx == 0 {
+        if !ate_digits {
             return ControlFlow::Continue(());
         }
 
-        let (tok, span) = self.bump(digit_idx + 2);
-
+        let (tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::Asn(tok), span))
     }
 
     fn hex_number(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let Some(rest) = self.input.strip_prefix("0x") else {
+        let mut tail = self.input;
+
+        if !tail.eat_str("0x") {
             return ControlFlow::Continue(());
         };
 
-        let digit_idx = rest
-            .find(|c: char| !c.is_ascii_hexdigit())
-            .unwrap_or(rest.len());
+        tail.eat_while(char::is_ascii_hexdigit);
 
-        let (tok, span) = self.bump(2 + digit_idx);
+        let (tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::Hex(tok), span))
     }
 
-    fn float(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let mut current_idx = self
-            .input
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(self.input.len());
+    fn number(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
+        let mut tail = self.input;
 
-        if current_idx == 0 {
+        // Get the first set of digits. We require at least one digit for both
+        // integers and floats.
+        let ate_digits = tail.eat_while(char::is_ascii_digit);
+
+        if !ate_digits {
             return ControlFlow::Continue(());
         }
 
-        let mut rest = &self.input[current_idx..];
-        if rest.starts_with('.') {
-            current_idx += 1;
-            rest = &self.input[current_idx..];
+        // The literal is a float if we encounter a '.', 'e' or 'E'.
+        let mut is_float = false;
 
-            // If we have `10..` or `10._hello` or `10.hello` we should treat this as an integer
-            if let Some(c) = rest.chars().next()
+        if tail.starts_with('.') {
+            // Edge case: if we have `10..` or `10._hello` or `10.hello` we
+            // should treat this as an integer
+            if let Some(c) = tail.chars().nth(1)
                 && (is_xid_start(c) || c == '.' || c == '_')
             {
-                return ControlFlow::Continue(());
+                let (tok, span) = self.bump_to(tail);
+                return ControlFlow::Break((Token::Integer(tok), span));
             }
 
-            current_idx += rest
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(rest.len());
-            rest = &self.input[current_idx..];
+            is_float = true;
+            tail.eat_char('.');
+            tail.eat_while(char::is_ascii_digit);
+        }
 
-            if rest.starts_with(['e', 'E']) {
-                current_idx += 1;
-                rest = &self.input[current_idx..];
-                if rest.starts_with(['+', '-']) {
-                    current_idx += 1;
-                    rest = &self.input[current_idx..];
-                }
-                current_idx += rest
-                    .find(|c: char| !c.is_ascii_digit())
-                    .unwrap_or(rest.len());
-            }
-        } else if rest.starts_with(['e', 'E']) {
-            current_idx += 1;
-            rest = &self.input[current_idx..];
-            if rest.starts_with(['+', '-']) {
-                current_idx += 1;
-                rest = &self.input[current_idx..];
-            }
-            current_idx += rest
-                .find(|c: char| !c.is_ascii_digit())
-                .unwrap_or(rest.len());
+        if tail.eat_one_of(['e', 'E']) {
+            is_float = true;
+            tail.eat_one_of(['+', '-']);
+            tail.eat_while(char::is_ascii_digit);
+        }
+
+        let (tok, span) = self.bump_to(tail);
+        let tok = if is_float {
+            Token::Float(tok)
         } else {
-            return ControlFlow::Continue(());
-        }
-
-        let (tok, span) = self.bump(current_idx);
-        ControlFlow::Break((Token::Float(tok), span))
-    }
-
-    fn integer(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let non_numeric_idx = self
-            .input
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(self.input.len());
-
-        if non_numeric_idx == 0 {
-            return ControlFlow::Continue(());
-        }
-
-        let (tok, span) = self.bump(non_numeric_idx);
-        ControlFlow::Break((Token::Integer(tok), span))
+            Token::Integer(tok)
+        };
+        ControlFlow::Break((tok, span))
     }
 
     fn f_string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let Some(_rest) = self.input.strip_prefix("f\"") else {
+        let mut tail = self.input;
+
+        if !tail.eat_str("f\"") {
             return ControlFlow::Continue(());
         };
-        let (_tok, span) = self.bump(2);
+
+        let (_tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::FStringStart, span))
     }
 
@@ -515,12 +491,14 @@ impl<'s> Lexer<'s> {
     }
 
     fn char(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let Some(rest) = self.input.strip_prefix('\'') else {
+        let mut tail = self.input;
+
+        if !tail.eat_char('\'') {
             return ControlFlow::Continue(());
         };
 
         let mut last_is_backslash = false;
-        let end_quote = rest.find(|c| {
+        tail.eat_until_fn(|c| {
             if last_is_backslash {
                 last_is_backslash = false;
                 return false;
@@ -536,21 +514,22 @@ impl<'s> Lexer<'s> {
             }
         });
 
-        let Some(end_quote) = end_quote else {
+        if tail.is_empty() {
             return ControlFlow::Continue(());
         };
 
-        let (tok, span) = self.bump(2 + end_quote);
+        let (tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::Char(tok), span))
     }
 
     fn string(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let Some(rest) = self.input.strip_prefix('"') else {
+        let mut tail = self.input;
+        if !tail.eat_char('\"') {
             return ControlFlow::Continue(());
         };
 
         let mut last_is_backslash = false;
-        let end_quote = rest.find(|c| {
+        tail.eat_until_fn(|c| {
             if last_is_backslash {
                 last_is_backslash = false;
                 return false;
@@ -566,16 +545,18 @@ impl<'s> Lexer<'s> {
             }
         });
 
-        let Some(end_quote) = end_quote else {
+        if tail.is_empty() {
             return ControlFlow::Continue(());
         };
 
-        let (tok, span) = self.bump(2 + end_quote);
+        let (tok, span) = self.bump_to(tail);
         ControlFlow::Break((Token::String(tok), span))
     }
 
     fn keyword_or_ident(&mut self) -> ControlFlow<(Token<'s>, Range<usize>)> {
-        let Some(c) = self.input.chars().next() else {
+        let mut tail = self.input;
+
+        let Some(c) = tail.chars().next() else {
             return ControlFlow::Continue(());
         };
 
@@ -583,12 +564,10 @@ impl<'s> Lexer<'s> {
             return ControlFlow::Continue(());
         }
 
-        let non_ident_idx = self
-            .input
-            .find(|c: char| !is_xid_continue(c))
-            .unwrap_or(self.input.len());
+        tail = &tail[1..];
+        tail.eat_while(|c: &char| is_xid_continue(*c));
 
-        let (ident, span) = self.bump(non_ident_idx);
+        let (ident, span) = self.bump_to(tail);
 
         let kw = match ident {
             "accept" => Keyword::Accept,
@@ -643,6 +622,75 @@ impl<'s> Lexer<'s> {
 
         let ident = Identifier::from(x);
         self.almost_keyword = Some((ident, span, suggestion));
+    }
+}
+
+trait StrExt {
+    fn eat_char(&mut self, c: char) -> bool;
+    fn eat_str(&mut self, s: &str) -> bool;
+    fn eat_one_of<const N: usize>(&mut self, options: [char; N]) -> bool;
+    fn eat_until(&mut self, c: char);
+    fn eat_until_fn(&mut self, c: impl FnMut(&char) -> bool);
+    fn eat_while(&mut self, pat: impl FnMut(&char) -> bool) -> bool;
+    fn eat_whitespace(&mut self);
+}
+
+impl StrExt for &str {
+    fn eat_char(&mut self, s: char) -> bool {
+        if let Some(new) = self.strip_prefix(s) {
+            *self = new;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn eat_str(&mut self, s: &str) -> bool {
+        if let Some(new) = self.strip_prefix(s) {
+            *self = new;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn eat_one_of<const N: usize>(&mut self, options: [char; N]) -> bool {
+        if let Some(new) = self.strip_prefix(options) {
+            *self = new;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn eat_until(&mut self, c: char) {
+        *self = if let Some((_, tail)) = self.split_once(c) {
+            tail
+        } else {
+            ""
+        };
+    }
+
+    fn eat_until_fn(&mut self, mut f: impl FnMut(&char) -> bool) {
+        *self = if let Some((_, tail)) = self.split_once(|c: char| f(&c)) {
+            tail
+        } else {
+            ""
+        };
+    }
+
+    fn eat_while(&mut self, mut pat: impl FnMut(&char) -> bool) -> bool {
+        let new = self.trim_start_matches(|c| pat(&c));
+        if self.len() != new.len() {
+            *self = new;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn eat_whitespace(&mut self) {
+        *self = self.trim_start();
     }
 }
 
