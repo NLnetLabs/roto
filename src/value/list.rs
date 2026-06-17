@@ -464,11 +464,17 @@ impl PartialEq for ErasedList {
             let elem1 = this.get(i).unwrap();
             let elem2 = other.get(i).unwrap();
 
+            let mut is_eq = false;
+
             // SAFETY: These values are valid because they are within the length of
             // the list. Note that this is of course not really safe, because the
             // types need to be the same, but we can't enforce that here.
-            let is_eq = unsafe {
-                (this.vtable.eq_fn)(elem1.as_ptr(), elem2.as_ptr())
+            unsafe {
+                (this.vtable.eq_fn)(
+                    &mut is_eq as *mut bool,
+                    elem1.as_ptr(),
+                    elem2.as_ptr(),
+                )
             };
 
             if !is_eq {
@@ -564,7 +570,7 @@ impl ErasedList {
             // SAFETY: The value is valid because we require it to be and we
             // haven't dropped it yet, because contains doesn't take
             // ownership.
-            unsafe { drop_fn(item_ptr.as_ptr()) };
+            unsafe { drop_fn(std::ptr::null_mut(), item_ptr.as_ptr()) };
         }
 
         res
@@ -601,7 +607,7 @@ impl ErasedList {
             // SAFETY: The value is valid because we require it to be and we
             // haven't dropped it yet, because contains doesn't take
             // ownership.
-            unsafe { drop_fn(item_ptr.as_ptr()) };
+            unsafe { drop_fn(std::ptr::null_mut(), item_ptr.as_ptr()) };
         }
 
         res
@@ -701,7 +707,7 @@ impl RawList {
 
             // SAFETY: We give drop_fn the pointer of the value to drop as
             // argument.
-            unsafe { (drop_fn)(ptr) }
+            unsafe { (drop_fn)(std::ptr::null_mut(), ptr) }
         }
     }
 
@@ -807,7 +813,7 @@ impl RawList {
                     let src = unsafe { self.ptr.byte_add(offset).as_ptr() };
 
                     // SAFETY: We drop we've just written to
-                    unsafe { (drop_fn)(src) }
+                    unsafe { (drop_fn)(std::ptr::null_mut(), src) }
                 }
             }
         }
@@ -975,10 +981,17 @@ impl RawList {
         for i in 0..self.len() {
             let elem = self.get(i).unwrap();
 
+            let mut is_eq = false;
+
             // SAFETY: The element is valid because we got it from the list and
             // the item is valid because we require it to be.
-            let is_eq =
-                unsafe { (self.vtable.eq_fn)(elem.as_ptr(), item.as_ptr()) };
+            unsafe {
+                (self.vtable.eq_fn)(
+                    &mut is_eq as *mut bool,
+                    elem.as_ptr(),
+                    item.as_ptr(),
+                )
+            };
 
             if is_eq {
                 return true;
@@ -999,10 +1012,17 @@ impl RawList {
         for i in 0..self.len() {
             let elem = self.get(i).unwrap();
 
+            let mut is_eq = false;
+
             // SAFETY: The element is valid because we got it from the list and
             // the item is valid because we require it to be.
-            let is_eq =
-                unsafe { (self.vtable.eq_fn)(elem.as_ptr(), item.as_ptr()) };
+            unsafe {
+                (self.vtable.eq_fn)(
+                    &mut is_eq as *mut bool,
+                    elem.as_ptr(),
+                    item.as_ptr(),
+                )
+            };
 
             if is_eq {
                 return Some(i);

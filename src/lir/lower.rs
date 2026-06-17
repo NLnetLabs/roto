@@ -51,7 +51,6 @@ struct Lowerer<'c, 'r> {
     function_scope: ScopeRef,
     tmp_idx: usize,
     return_type: TyRef,
-    force_reference_return: bool,
     variables: Vec<(Var, ValueOrSlot)>,
 }
 
@@ -122,10 +121,6 @@ impl Lowerer<'_, '_> {
             ctx,
             tmp_idx: item.tmp_idx,
             function_scope: item.scope,
-            force_reference_return: matches!(
-                &item.ty,
-                mir::ItemKind::Constant { .. }
-            ),
             return_type,
             blocks: Vec::new(),
             variables: Vec::new(),
@@ -171,14 +166,6 @@ impl Lowerer<'_, '_> {
         }
 
         let entry_block = lowerer.blocks[0].label;
-
-        let (return_ir_type, return_ptr) =
-            match lowerer.is_reference_type(return_type) {
-                Some(true) => (None, true),
-                Some(false) => (lowerer.lower_type(return_type), false),
-                None => (None, false),
-            };
-
         let kind = match item.ty {
             mir::ItemKind::Constant { name, ty, mir_ty } => {
                 ItemKind::Constant {
@@ -206,8 +193,6 @@ impl Lowerer<'_, '_> {
                         })
                         .collect(),
                     context: true,
-                    return_ptr,
-                    return_type: return_ir_type,
                 };
                 ItemKind::Function {
                     signature: Some(signature),
@@ -366,21 +351,8 @@ impl Lowerer<'_, '_> {
         mir_signature: mir::Signature,
     ) -> Option<Operand> {
         let return_type = mir_signature.return_type;
-        let reference_return = self.is_reference_type(return_type);
-        let (to, out_ptr) = match reference_return {
-            Some(true) => {
-                let layout = self.layout_of(return_type).unwrap();
-                let out_ptr = self.new_stack_slot(layout);
-                (None, Some(out_ptr))
-            }
-            Some(false) => {
-                let to = self
-                    .lower_type(return_type)
-                    .map(|ty| (self.new_tmp(ty), ty));
-                (to, None)
-            }
-            None => (None, None),
-        };
+        let layout = self.layout_of(return_type).unwrap();
+        let out_ptr = self.new_stack_slot(layout);
 
         let ctx = Var {
             scope: self.function_scope,
@@ -402,17 +374,20 @@ impl Lowerer<'_, '_> {
         let func = self.ctx.type_info.full_name(&func);
 
         self.emit(Instruction::Call {
-            to: to.clone(),
+            to: None,
             ctx: Some(ctx.into()),
             func,
             args,
-            return_ptr: out_ptr.clone(),
+            return_ptr: Some(out_ptr.clone()),
         });
 
-        if let Some(out_ptr) = out_ptr {
+        if self.is_reference_type(return_type)? {
             Some(out_ptr.into())
         } else {
-            to.map(|(to, _ty)| to.into())
+            let ty = self.lower_type(return_type)?;
+            let tmp = self.new_tmp(ty);
+            self.emit_read(tmp.clone(), out_ptr.into(), ty);
+            Some(tmp.into())
         }
     }
 
@@ -566,8 +541,6 @@ impl Lowerer<'_, '_> {
         let ir_signature = Signature {
             parameters,
             context: false,
-            return_ptr: true,
-            return_type: None,
         };
 
         self.ctx.runtime_functions.insert(func_ref, ir_signature);
@@ -727,7 +700,7 @@ impl Lowerer<'_, '_> {
         let layout = self.layout_of(self.return_type);
 
         if layout.as_ref().is_none_or(|l| l.size() == 0) {
-            self.emit_return(None);
+            self.emit_return();
             return;
         }
 
@@ -741,8 +714,8 @@ impl Lowerer<'_, '_> {
                 var.into(),
                 layout.unwrap().size() as u32,
             );
-            self.emit_return(None);
-        } else if self.force_reference_return {
+            self.emit_return();
+        } else {
             self.emit_write(
                 Var {
                     scope: self.function_scope,
@@ -751,9 +724,7 @@ impl Lowerer<'_, '_> {
                 .into(),
                 var.into(),
             );
-            self.emit_return(None);
-        } else {
-            self.emit_return(Some(var.into()));
+            self.emit_return();
         }
     }
 
@@ -1026,7 +997,7 @@ impl Lowerer<'_, '_> {
 
     fn emit_eq(
         &mut self,
-        to: Var,
+        to: Operand,
         left: Operand,
         right: Operand,
         eq_fn: EqFn,
@@ -1056,8 +1027,8 @@ impl Lowerer<'_, '_> {
         })
     }
 
-    fn emit_return(&mut self, var: Option<Operand>) {
-        self.emit(Instruction::Return(var))
+    fn emit_return(&mut self) {
+        self.emit(Instruction::Return)
     }
 
     fn emit_constant_address(&mut self, to: Var, name: ResolvedName) {

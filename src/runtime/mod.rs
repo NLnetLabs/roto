@@ -384,17 +384,18 @@ pub(crate) unsafe extern "C" fn extern_clone<T: Clone>(
     unsafe { std::ptr::write(to, from.clone()) };
 }
 
-pub(crate) unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
+pub(crate) unsafe extern "C" fn extern_drop<T>(_ret: *mut (), x: *mut ()) {
     unsafe { x.cast::<T>().drop_in_place() };
 }
 
 pub(crate) unsafe extern "C" fn extern_eq<T: PartialEq + 'static>(
+    ret: *mut bool,
     x: *const (),
     y: *const (),
-) -> bool {
+) {
     let x = unsafe { &*x.cast::<T>() };
     let y = unsafe { &*y.cast::<T>() };
-    x.eq(y)
+    unsafe { std::ptr::write(ret, x.eq(y)) };
 }
 
 #[derive(Clone, Debug)]

@@ -5,8 +5,8 @@ use crate::{
     ast::Identifier,
     ice,
     lir::{
-        Block, Instruction, IrType, Item, ItemKind, Operand, Signature, Var,
-        VarKind,
+        Block, Instruction, IrType, IrValue, Item, ItemKind, Operand,
+        Signature, Var, VarKind,
         lower::{LowerCtx, Lowerer},
     },
     mir::{Ty, TyRef},
@@ -48,13 +48,14 @@ impl Lowerer<'_, '_> {
         }
 
         // Finally, this might be a complex Roto type for which we generate a
-        // drop function
+        // drop function. We always pass a null return pointer here because
+        // that's what Roto's ABI requires, but we don't return anything.
         let type_id = ty.type_id();
         self.emit(Instruction::Call {
             to: None,
             ctx: None,
             func: format!("::generated::drop_{type_id}").into(),
-            args: vec![var],
+            args: vec![IrValue::Pointer(0).into(), var],
             return_ptr: None,
         });
 
@@ -135,7 +136,6 @@ impl Lowerer<'_, '_> {
         let mut lowerer = Lowerer {
             ctx,
             tmp_idx: 0,
-            force_reference_return: false,
             // The drop fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
@@ -150,8 +150,6 @@ impl Lowerer<'_, '_> {
         let ir_signature = Signature {
             parameters: vec![("val".into(), IrType::Pointer)],
             context: false,
-            return_ptr: false,
-            return_type: None,
         };
 
         let entry_block = lowerer.blocks[0].label;
@@ -194,7 +192,7 @@ impl Lowerer<'_, '_> {
                 var: root_var.clone().into(),
                 drop: Some(drop_fn),
             });
-            self.emit_return(None);
+            self.emit_return();
             return;
         }
 
@@ -202,7 +200,7 @@ impl Lowerer<'_, '_> {
             // These are all simple types. We can simply generate
             // a function that just returns.
             Ty::Unit | Ty::Never => {
-                self.emit_return(None);
+                self.emit_return();
             }
             Ty::Record(fields) => {
                 let fields = fields.clone();
@@ -215,12 +213,12 @@ impl Lowerer<'_, '_> {
             // We handled String above, the other primitives don't need to be
             // dropped.
             Ty::Primitive(_) => {
-                self.emit_return(None);
+                self.emit_return();
             }
             // If we get here with a runtime type, it implements Copy, so
             // doesn't need to be dropped.
             Ty::Runtime(_) => {
-                self.emit_return(None);
+                self.emit_return();
             }
             Ty::List(_) => {
                 ice!("list drop should have been handled above");
@@ -249,7 +247,7 @@ impl Lowerer<'_, '_> {
             self.call_drop_of(var.into(), ty);
         }
 
-        self.emit_return(None);
+        self.emit_return();
     }
 
     fn generate_drop_body_enum(
@@ -304,7 +302,7 @@ impl Lowerer<'_, '_> {
                 .collect::<Option<Vec<_>>>()
             else {
                 // If one of the items is uninhabited then we don't have to do anything here
-                self.emit(Instruction::Return(None));
+                self.emit_return();
                 continue;
             };
 
@@ -315,7 +313,7 @@ impl Lowerer<'_, '_> {
                 let var = self.offset(root_var.clone(), new_offset as u32);
                 self.call_drop_of(var.into(), *ty);
             }
-            self.emit(Instruction::Return(None));
+            self.emit_return();
         }
     }
 

@@ -167,7 +167,6 @@ pub struct Module<C: OptCtx> {
 #[derive(Clone)]
 pub struct TypedFunc<Ctx, F> {
     func: *const u8,
-    return_by_ref: bool,
 
     // The module holds the data for this function, that's why we need
     // to ensure that it doesn't get dropped. This field is ESSENTIAL
@@ -194,9 +193,7 @@ unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 impl<C: OptCtx, F: RotoFunc> TypedFunc<C, F> {
     /// Call this function with a tuple representing its arguments
     pub fn call_tuple(&self, ctx: &mut C::Ctx, args: F::Args) -> F::Return {
-        unsafe {
-            F::invoke::<C::Ctx>(ctx, args, self.func, self.return_by_ref)
-        }
+        unsafe { F::invoke::<C::Ctx>(ctx, args, self.func) }
     }
 }
 
@@ -255,7 +252,6 @@ call_impl!(A1, A2, A3, A4, A5, A7, A8);
 pub struct FunctionInfo {
     id: FuncId,
     signature: Option<types::Signature>,
-    return_by_ref: bool,
 }
 
 struct RotoConstant {
@@ -280,7 +276,7 @@ impl RotoConstant {
 
 impl Drop for RotoConstant {
     fn drop(&mut self) {
-        unsafe { (self.drop_fn)(self.ptr) };
+        unsafe { (self.drop_fn)(std::ptr::null_mut(), self.ptr) };
         let layout = Layout::from_size_align(self.size, self.align).unwrap();
         unsafe { std::alloc::dealloc(self.ptr as *mut u8, layout) };
     }
@@ -412,6 +408,7 @@ pub fn codegen<Ctx: OptCtx>(
     let pointer_ty = AbiParam::new(isa.pointer_type());
     let mut drop_signature = jit.make_signature();
     drop_signature.params.push(pointer_ty);
+    drop_signature.params.push(pointer_ty);
 
     let mut clone_signature = jit.make_signature();
     clone_signature.params.push(pointer_ty);
@@ -420,7 +417,7 @@ pub fn codegen<Ctx: OptCtx>(
     let mut eq_signature = jit.make_signature();
     eq_signature.params.push(pointer_ty);
     eq_signature.params.push(pointer_ty);
-    eq_signature.returns.push(AbiParam::new(I8));
+    eq_signature.params.push(pointer_ty);
 
     let mut init_string_signature = jit.make_signature();
     init_string_signature.params.push(pointer_ty);
@@ -460,9 +457,7 @@ pub fn codegen<Ctx: OptCtx>(
         for (_, ty) in &ir_sig.parameters {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
         }
-        if let Some(ty) = &ir_sig.return_type {
-            sig.returns.push(AbiParam::new(module.cranelift_type(ty)));
-        }
+
         let f = runtime.get_function(*func_ref);
         let Ok(func_id) = module.inner.declare_function(
             &format!("runtime_function_trampoline_{}", f.id),
@@ -567,10 +562,9 @@ impl ModuleBuilder {
 
         let mut sig = self.inner.make_signature();
 
-        if ir_signature.return_ptr {
-            sig.params
-                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
-        }
+        // Return pointer
+        sig.params
+            .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
 
         // This is the parameter for the context
         if ir_signature.context {
@@ -581,11 +575,6 @@ impl ModuleBuilder {
         for (_, ty) in &ir_signature.parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
         }
-
-        sig.returns = match &ir_signature.return_type {
-            Some(ty) => vec![AbiParam::new(self.cranelift_type(ty))],
-            None => Vec::new(),
-        };
 
         let func_id = self
             .inner
@@ -604,7 +593,6 @@ impl ModuleBuilder {
             name.to_string(),
             FunctionInfo {
                 id: func_id,
-                return_by_ref: ir_signature.return_ptr,
                 signature: signature.clone(),
             },
         );
@@ -652,29 +640,14 @@ impl ModuleBuilder {
             }
         };
 
-        let return_ty = match &kind {
-            ItemKind::Constant { .. } => None,
-            ItemKind::Function { ir_signature, .. } => {
-                ir_signature.return_type.as_ref()
-            }
-        };
-
-        let return_ptr = match &kind {
-            ItemKind::Constant { .. } => true,
-            ItemKind::Function { ir_signature, .. } => {
-                ir_signature.return_ptr
-            }
-        };
-
         let context = match &kind {
             ItemKind::Constant { .. } => false,
             ItemKind::Function { ir_signature, .. } => ir_signature.context,
         };
 
-        if return_ptr {
-            sig.params
-                .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
-        }
+        // return pointer
+        sig.params
+            .push(AbiParam::new(self.cranelift_type(&IrType::Pointer)));
 
         if context {
             sig.params
@@ -683,10 +656,6 @@ impl ModuleBuilder {
 
         for (_, ty) in parameters {
             sig.params.push(AbiParam::new(self.cranelift_type(ty)));
-        }
-
-        if let Some(ty) = &return_ty {
-            sig.returns.push(AbiParam::new(self.cranelift_type(ty)));
         }
 
         ctx.func.signature = sig;
@@ -731,13 +700,7 @@ impl ModuleBuilder {
             block_map: HashMap::new(),
         };
 
-        func_gen.entry_block(
-            &blocks[0],
-            parameters,
-            stack_slots,
-            return_ptr,
-            context,
-        );
+        func_gen.entry_block(&blocks[0], parameters, stack_slots, context);
 
         for block in &blocks[1..] {
             func_gen.block(block);
@@ -805,7 +768,6 @@ impl<'c> FuncGen<'c> {
         block: &lir::Block,
         parameters: &[(Identifier, IrType)],
         stack_slots: Vec<(Var, StackSlot)>,
-        return_ptr: bool,
         context: bool,
     ) {
         let entry_block = self.get_block(block.label);
@@ -822,16 +784,14 @@ impl<'c> FuncGen<'c> {
             );
         }
 
-        if return_ptr {
-            let ty = self.module.cranelift_type(&IrType::Pointer);
-            self.variable(
-                &Var {
-                    scope: self.scope,
-                    kind: VarKind::Return,
-                },
-                ty,
-            );
-        }
+        let ty = self.module.cranelift_type(&IrType::Pointer);
+        self.variable(
+            &Var {
+                scope: self.scope,
+                kind: VarKind::Return,
+            },
+            ty,
+        );
 
         for (x, ty) in parameters {
             let ty = self.module.cranelift_type(ty);
@@ -850,16 +810,14 @@ impl<'c> FuncGen<'c> {
         let args = self.builder.block_params(entry_block).to_owned();
         let mut args = args.into_iter();
 
-        if return_ptr {
-            self.def(
-                self.module.variable_map[&Var {
-                    scope: self.scope,
-                    kind: VarKind::Return,
-                }]
-                    .0,
-                args.next().unwrap(),
-            )
-        }
+        self.def(
+            self.module.variable_map[&Var {
+                scope: self.scope,
+                kind: VarKind::Return,
+            }]
+                .0,
+            args.next().unwrap(),
+        );
 
         if context {
             self.def(
@@ -988,11 +946,7 @@ impl<'c> FuncGen<'c> {
 
                 self.ins().call(func_ref, &new_args);
             }
-            lir::Instruction::Return(Some(v)) => {
-                let (val, _) = self.operand(v);
-                self.ins().return_(&[val]);
-            }
-            lir::Instruction::Return(None) => {
+            lir::Instruction::Return => {
                 self.ins().return_(&[]);
             }
             lir::Instruction::IntCmp {
@@ -1213,34 +1167,32 @@ impl<'c> FuncGen<'c> {
                 right,
                 eq_fn,
             } => {
+                let (to, _) = self.operand(to);
                 let (left, _) = self.operand(left);
                 let (right, _) = self.operand(right);
-
-                let var = self.variable(to, I8);
 
                 let pointer_ty = self.module.isa.pointer_type();
                 let eq_fn = self
                     .ins()
                     .iconst(pointer_ty, *eq_fn as *mut u8 as usize as i64);
-                let inst = self.builder.ins().call_indirect(
+                self.builder.ins().call_indirect(
                     self.eq_signature,
                     eq_fn,
-                    &[left, right],
+                    &[to, left, right],
                 );
-
-                self.def(var, self.builder.inst_results(inst)[0]);
             }
             lir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
                     let (var, _) = self.operand(var);
                     let pointer_ty = self.module.isa.pointer_type();
+                    let null = self.ins().iconst(pointer_ty, 0);
                     let drop = self
                         .ins()
                         .iconst(pointer_ty, *drop as *mut u8 as usize as i64);
                     self.builder.ins().call_indirect(
                         self.drop_signature,
                         drop,
-                        &[var],
+                        &[null, var],
                     );
                 }
             }
@@ -1491,7 +1443,6 @@ impl<Ctx: OptCtx> Module<Ctx> {
         let func_ptr = self.inner.0.cranelift_jit.get_finalized_function(id);
         Ok(TypedFunc {
             func: func_ptr,
-            return_by_ref: function_info.return_by_ref,
             _module: self.inner.clone(),
             _ty: PhantomData,
         })

@@ -4851,7 +4851,9 @@ fn for_loop_strings() {
     "#
     );
 
-    let mut pkg = compile(s);
+    let mut rt = Runtime::new();
+    rt.add_io_functions();
+    let mut pkg = compile_with_runtime(s, rt);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
     let res = f.call();
