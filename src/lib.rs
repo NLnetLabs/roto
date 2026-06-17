@@ -48,7 +48,9 @@ pub use runtime::{
         Use,
     },
 };
-pub use value::{RotoString, Val, Value, Verdict};
+pub use value::{
+    IntoScriptResult, RotoString, ScriptResult, Val, Value, Verdict,
+};
 
 /// Create a list of items to be registered.
 ///

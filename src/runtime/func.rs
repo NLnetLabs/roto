@@ -1,8 +1,10 @@
+use crate::ScriptResult;
 use std::any::{Any, TypeId};
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use crate::IntoScriptResult;
 use crate::Value;
 use crate::lir::{IrValue, Memory};
 
@@ -139,19 +141,30 @@ macro_rules! registerable_fn {
         impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r, WithoutOutPtr> for F
         where
             $($a: Value,)*
-            $r: Value,
+            $r: IntoScriptResult,
+            <$r as IntoScriptResult>::Inner: Value,
             F: Fn($($a,)*) -> $r + Send + 'static,
         {
             const HAS_OUT_PTR: bool = false;
 
-            type RustWrapper = extern "C" fn (*const Self, *mut $r::Transformed, $($a::AsParam),*) -> ();
+            type RustWrapper = extern "C" fn (*const Self, *mut ScriptResult<<<$r as IntoScriptResult>::Inner as Value>::Transformed>, $($a::AsParam),*) -> ();
 
             const TRAMPOLINE: Self::RustWrapper = {
-                extern "C" fn foo<$($a: Value,)* $r: Value>(x: *const impl Fn($($a,)*) -> $r, out: *mut $r::Transformed, $($a: $a::AsParam),*) -> () {
+                extern "C" fn foo<$($a: Value,)* $r: IntoScriptResult>(
+                    x: *const impl Fn($($a,)*) -> $r,
+                    out: *mut ScriptResult<<<$r as IntoScriptResult>::Inner as Value>::Transformed>,
+                    $($a: $a::AsParam),*
+                ) -> ()
+                where
+                    <$r as IntoScriptResult>::Inner: Value,
+                {
                     let res = (unsafe { &*x })(
                         $(<$a as Value>::untransform(<$a as Value>::to_value($a)),)*
                     );
-                    let res_transformed  = <$r as Value>::transform(res);
+                    let res_transformed = match <$r as IntoScriptResult>::into_script_result(res) {
+                        ScriptResult::Ok(res) => ScriptResult::Ok(<$r::Inner as Value>::transform(res)),
+                        ScriptResult::Panic(e) => ScriptResult::Panic(e),
+                    };
                     unsafe { std::ptr::write(out, res_transformed) };
                 }
                 foo
@@ -166,7 +179,7 @@ macro_rules! registerable_fn {
             }
 
             fn return_type() -> TypeId {
-                $r::resolve().type_id
+                $r::Inner::resolve().type_id
             }
 
             fn ir_function(&self) -> RustIrFunction {
@@ -189,12 +202,13 @@ macro_rules! registerable_fn {
                             panic!("Type of argument is not correct: {}", $a)
                         };
                     )*
-                    let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
-                    Self::TRAMPOLINE(
-                        f,
-                        $r as *mut <$r as Value>::Transformed,
-                        $($a),*
-                    );
+                    // let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
+                    // Self::TRAMPOLINE(
+                    //     f,
+                    //     $r as *mut <$r as Value>::Transformed,
+                    //     $($a),*
+                    // );
+                    todo!()
                 };
                 RustIrFunction(Arc::new(f))
             }
