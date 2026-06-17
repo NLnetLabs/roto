@@ -20,12 +20,12 @@ Read more about it in the [manual].
 ## Example
 
 ```roto
-# A function that returns true if an IP address is equal to 0.0.0.0
+// A function that returns true if an IP address is equal to 0.0.0.0
 fn is_zero(x: IpAddr) -> bool {
     x == 0.0.0.0
 }
 
-# A filtermap that only accepts IP addresses of 0.0.0.0
+// A filtermap that only accepts IP addresses of 0.0.0.0
 filtermap main(x: IpAddr) {
     if is_zero(x) {
         accept
