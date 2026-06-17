@@ -296,6 +296,7 @@ impl Type {
             TypeDescription::Val(_) => true,
             TypeDescription::Option(_) => false,
             TypeDescription::Verdict(_, _) => false,
+            TypeDescription::Result(_, _) => false,
             TypeDescription::List(_) => false,
         };
 

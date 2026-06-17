@@ -467,6 +467,7 @@ fn string_methods() -> Library {
 pub fn built_ins() -> Library {
     library! {
         use Option::{Some, None};
+        use Result::{Ok, Err};
 
         /// The boolean type.
         ///
