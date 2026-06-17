@@ -9,6 +9,7 @@ IpAddr <IpAddr/index>
 List[T] <List[T]/index>
 Option[T] <Option[T]/index>
 Prefix <Prefix/index>
+Result[T, E] <Result[T, E]/index>
 String <String/index>
 StringBuf <StringBuf/index>
 StringBytes <StringBytes/index>
