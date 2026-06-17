@@ -5,8 +5,8 @@ use inetnum::asn::Asn;
 use crate::{
     ast::{
         BinOp, Block, CompoundAssign, CompoundAssignOp, Expr, FStringPart,
-        Identifier, Literal, Match, MatchArm, Path, Pattern, Record,
-        RecordType, ReturnKind, Stmt, TypeExpr,
+        FloatType, Identifier, IntType, Literal, Match, MatchArm, Path,
+        Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
     },
     parser::{ParseError, precedence::Associativity},
 };
@@ -596,8 +596,8 @@ impl Parser<'_, '_> {
                 | Token::Ident(..)
                 | Token::Bang
                 | Token::Bool(_)
-                | Token::Integer(_)
-                | Token::Float(_)
+                | Token::Integer(_, _)
+                | Token::Float(_, _)
                 | Token::Hyphen
                 | Token::IpV4(_)
                 | Token::IpV6(_)
@@ -823,15 +823,75 @@ impl Parser<'_, '_> {
                 let unescaped = unescape_char(trimmed, span)?;
                 Literal::Char(unescaped)
             }
-            Token::Integer(s) => {
-                Literal::Integer(s.parse::<i64>().map_err(|e| {
-                    ParseError::invalid_literal("integer", token, e, span)
-                })?)
+            Token::Integer(s, int_ty) => {
+                let s = s.replace("_", "");
+                match int_ty {
+                    "f32" => {
+                        let f = s.parse::<f64>().map_err(|e| {
+                            ParseError::invalid_literal(
+                                "float", token, e, span,
+                            )
+                        })?;
+                        Literal::Float(f, Some(FloatType::F32))
+                    }
+                    "f64" => {
+                        let f = s.parse::<f64>().map_err(|e| {
+                            ParseError::invalid_literal(
+                                "float", token, e, span,
+                            )
+                        })?;
+                        Literal::Float(f, Some(FloatType::F64))
+                    }
+                    _ => {
+                        let n = s.parse::<i64>().map_err(|e| {
+                            ParseError::invalid_literal(
+                                "integer", &token, e, span,
+                            )
+                        })?;
+                        let ty = match int_ty {
+                            "i8" => Some(IntType::I8),
+                            "i16" => Some(IntType::I16),
+                            "i32" => Some(IntType::I32),
+                            "i64" => Some(IntType::I64),
+                            "u8" => Some(IntType::U8),
+                            "u16" => Some(IntType::U16),
+                            "u32" => Some(IntType::U32),
+                            "u64" => Some(IntType::U64),
+                            "" => None,
+                            _ => {
+                                return Err(ParseError::invalid_literal(
+                                    "integer",
+                                    token,
+                                    format!("invalid suffix `{int_ty}`"),
+                                    span,
+                                )
+                                .into());
+                            }
+                        };
+                        Literal::Integer(n, ty)
+                    }
+                }
             }
-            Token::Float(s) => {
-                Literal::Float(s.parse::<f64>().map_err(|e| {
-                    ParseError::invalid_literal("float", token, e, span)
-                })?)
+            Token::Float(s, float_ty) => {
+                let s = s.replace("_", "");
+                let f = s.parse::<f64>().map_err(|e| {
+                    ParseError::invalid_literal("float", &token, e, span)
+                })?;
+                let ty = match float_ty {
+                    "f32" => Some(FloatType::F32),
+                    "f64" => Some(FloatType::F64),
+                    "" => None,
+                    _ => {
+                        return Err(ParseError::invalid_literal(
+                            "float",
+                            token,
+                            format!("invalid suffix `{float_ty}`"),
+                            span,
+                        )
+                        .into());
+                    }
+                };
+                Literal::Float(f, ty)
             }
             Token::Hex(s) => Literal::Integer(
                 i64::from_str_radix(&s[2..], 16).map_err(|e| {
@@ -842,6 +902,7 @@ impl Parser<'_, '_> {
                         span,
                     )
                 })?,
+                None,
             ),
             Token::Asn(s) => match s[2..].parse::<u32>() {
                 Ok(x) => Literal::Asn(Asn::from_u32(x)),

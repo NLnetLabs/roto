@@ -268,8 +268,10 @@ impl Printable for Literal {
             Literal::Char(c) => c.to_string(),
             Literal::Asn(asn) => asn.to_string(),
             Literal::IpAddress(ip) => ip.to_string(),
-            Literal::Integer(i) => i.to_string(),
-            Literal::Float(f) => f.to_string(),
+            Literal::Integer(i, None) => i.to_string(),
+            Literal::Integer(i, Some(suffix)) => format!("{i}{suffix}"),
+            Literal::Float(f, None) => f.to_string(),
+            Literal::Float(f, Some(suffix)) => format!("{f}{suffix}"),
             Literal::Bool(b) => b.to_string(),
             Literal::Unit => "()".into(),
         }

@@ -33,7 +33,7 @@ use crate::{
     Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
     file_tree::FileTree,
-    parser::token::{Lexer, Token},
+    parser::{lexer::Lexer, token::Token},
     runtime::items::{
         Constant, Function, Item, Module, Registerable, Type, Use,
     },

@@ -903,7 +903,7 @@ impl Lowerer<'_, '_> {
                 });
                 to.into()
             }
-            Literal::Integer(x) => {
+            Literal::Integer(x, _) => {
                 match ty {
                     Type::IntVar(_, _) => {
                         return Some(IrValue::I32(*x as i32).into());
@@ -936,7 +936,7 @@ impl Lowerer<'_, '_> {
                 }
                 ice!("should be a type error");
             }
-            Literal::Float(x) => {
+            Literal::Float(x, _) => {
                 match ty {
                     Type::FloatVar(_) => {
                         return Some(IrValue::F64(*x).into());

@@ -1,4 +1,5 @@
-use crate::parser::token::{Lexer, Token};
+use crate::parser::lexer::Lexer;
+use crate::parser::token::Token;
 
 #[allow(unused)]
 mod ansi {
@@ -75,8 +76,8 @@ pub fn print_highlighted(s: &str) {
             Token::Keyword(_) => ansi::BLUE,
             Token::String(_) => ansi::GREEN,
             Token::Char(_) => ansi::GREEN,
-            Token::Integer(_) => ansi::PURPLE,
-            Token::Float(_) => ansi::PURPLE,
+            Token::Integer(_, _) => ansi::PURPLE,
+            Token::Float(_, _) => ansi::PURPLE,
             Token::Hex(_) => ansi::PURPLE,
             Token::Asn(_) => ansi::PURPLE,
             Token::IpV4(_) => ansi::PURPLE,

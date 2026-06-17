@@ -199,6 +199,160 @@ fn equal_to_10_with_function() {
 }
 
 #[test]
+fn integer_suffix() {
+    let s = src!(
+        "
+        fn main() -> i64 {
+            10i64
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> i64>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 10);
+}
+
+#[test]
+fn float_suffix_1() {
+    let s = src!(
+        "
+        fn main() -> f32 {
+            10f32
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> f32>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 10.0);
+}
+
+#[test]
+fn float_suffix_2() {
+    let s = src!(
+        "
+        fn main() -> f32 {
+            10.1f32
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> f32>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 10.1);
+}
+
+#[test]
+fn float_suffix_3() {
+    let s = src!(
+        "
+        fn main() -> f32 {
+            10.1e1f32
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> f32>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 101.0);
+}
+
+#[test]
+fn float_literals() {
+    for lit in [
+        "10000.0",
+        "10000.",
+        "10000.0f32",
+        "10_000.0f32",
+        "10__00__0.0__f32",
+        "100e2f32",
+        "100e___2___f32",
+    ] {
+        let s = src!(&format!(
+            "
+            fn main() -> f32 {{
+                {lit}
+            }}
+            "
+        ));
+
+        let mut p = compile(s);
+        let f = p
+            .get_function::<fn() -> f32>("main")
+            .expect("No function found (or mismatched types)");
+
+        assert_eq!(f.call(), 10000.0);
+    }
+}
+
+#[test]
+fn integer_underscores() {
+    let s = src!(
+        "
+        fn main() -> i64 {
+            10_000
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> i64>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 10_000);
+}
+
+#[test]
+fn integer_strange_underscores() {
+    let s = src!(
+        "
+        fn main() -> i64 {
+            1_0_0______0_0__
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> i64>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 10_000);
+}
+
+#[test]
+fn float_underscores() {
+    let s = src!(
+        "
+        fn main() -> f64 {
+            10_000.0
+        }
+        "
+    );
+
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> f64>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(), 10_000.0);
+}
+
+#[test]
 fn equal_to_10_with_two_functions() {
     let s = src!(
         "

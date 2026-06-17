@@ -13,13 +13,15 @@ use crate::{
     parser::error::Hint,
 };
 use error::ParseErrorKind;
-use token::{Keyword, Lexer, Token};
+use lexer::Lexer;
+use token::{Keyword, Token};
 
 use self::meta::{Meta, Span, Spans};
 
 mod error;
 mod expr;
 mod filter_map;
+pub mod lexer;
 pub mod meta;
 mod precedence;
 mod signature;

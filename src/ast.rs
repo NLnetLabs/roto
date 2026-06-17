@@ -305,10 +305,54 @@ pub enum Literal {
     Char(char),
     Asn(Asn),
     IpAddress(std::net::IpAddr),
-    Integer(i64),
-    Float(f64),
+    Integer(i64, Option<IntType>),
+    Float(f64, Option<FloatType>),
     Bool(bool),
     Unit,
+}
+
+#[derive(Clone, Debug)]
+pub enum IntType {
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+}
+
+impl Display for IntType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ident = match self {
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+        };
+        f.write_str(ident)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FloatType {
+    F32,
+    F64,
+}
+
+impl Display for FloatType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ident = match self {
+            Self::F32 => "i32",
+            Self::F64 => "i64",
+        };
+        f.write_str(ident)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
