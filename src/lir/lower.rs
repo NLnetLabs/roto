@@ -16,7 +16,7 @@ use crate::{
     },
     typechecker::{
         info::TypeInfo,
-        scope::{ResolvedName, ScopeRef},
+        scope::{DeclarationKind, ResolvedName, ScopeRef},
         scoped_display::TypeDisplay,
         types::{
             self, EnumVariant, FloatSize, IntKind, IntSize, Primitive, Type,
@@ -407,9 +407,28 @@ impl Lowerer<'_, '_> {
             kind: VarKind::Context,
         };
 
-        let func = self.ctx.type_info.full_name(&func);
+        let dec = self.ctx.type_info.scope_graph.get_declaration(func);
+        let DeclarationKind::Function(Some(f)) = dec.kind else {
+            ice!()
+        };
 
+        // Filter out any zero-sized arguments
+        let args: Vec<_> = args
+            .into_iter()
+            .zip(f.signature.parameter_types)
+            .filter_map(|(v, t)| {
+                self.ctx
+                    .type_info
+                    .layout_of(&t, self.ctx.runtime)
+                    .filter(|l| !l.is_zero_sized())
+                    .map(|_| v)
+            })
+            .collect();
+
+        // Transform all the arguments to LIR.
         let args = args.into_iter().map(|v| self.var(v).into()).collect();
+
+        let func = self.ctx.type_info.full_name(&func);
 
         self.emit(Instruction::Call {
             to: to.clone(),
