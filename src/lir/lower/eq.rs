@@ -69,21 +69,29 @@ impl Lowerer<'_, '_> {
         let to = self.new_tmp(IrType::Bool);
 
         if let Some(eq_fn) = self.get_runtime_eq(ty) {
-            self.emit_eq(to.clone(), left, right, eq_fn);
+            let layout = self.layout_of(TyRef::BOOL).unwrap();
+            let out_ptr = self.new_stack_slot(layout);
+            self.emit_eq(out_ptr.clone().into(), left, right, eq_fn);
+            self.emit_read(to.clone(), out_ptr.into(), IrType::Bool);
             if negated {
                 self.emit_not(to.clone(), to.clone().into());
             }
             return to.into();
         }
 
+        let layout = self.layout_of(TyRef::BOOL).unwrap();
+        let out_ptr = self.new_stack_slot(layout);
+
         let type_id = ty.type_id();
         self.emit(Instruction::Call {
-            to: Some((to.clone(), IrType::Bool)),
+            to: None,
             ctx: None,
             func: format!("::generated::eq_{type_id}").into(),
-            args: vec![left.clone(), right.clone()],
+            args: vec![out_ptr.clone().into(), left.clone(), right.clone()],
             return_ptr: None,
         });
+
+        self.emit_read(to.clone(), out_ptr.into(), IrType::Bool);
 
         // When that happens we also need to make sure that the clone function
         // will be generated.
@@ -160,7 +168,6 @@ impl Lowerer<'_, '_> {
         let mut lowerer = Lowerer {
             ctx,
             tmp_idx: 0,
-            force_reference_return: false,
             // The clone fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
@@ -178,8 +185,6 @@ impl Lowerer<'_, '_> {
                 ("right".into(), IrType::Pointer),
             ],
             context: false,
-            return_ptr: false,
-            return_type: Some(IrType::Bool),
         };
 
         let entry_block = lowerer.blocks[0].label;
@@ -221,7 +226,15 @@ impl Lowerer<'_, '_> {
 
         match self.ctx.type_info.ty_pool.get(ty) {
             Ty::Unit | Ty::Never => {
-                self.emit_return(Some(IrValue::Bool(true).into()));
+                self.emit_write(
+                    Var {
+                        scope: self.function_scope,
+                        kind: VarKind::Return,
+                    }
+                    .into(),
+                    IrValue::Bool(true).into(),
+                );
+                self.emit_return();
             }
             Ty::Record(fields) => {
                 let fields = fields.clone();
@@ -272,7 +285,15 @@ impl Lowerer<'_, '_> {
             right: right.into(),
         });
 
-        self.emit_return(Some(to.into()));
+        self.emit_write(
+            Var {
+                scope: self.function_scope,
+                kind: VarKind::Return,
+            }
+            .into(),
+            to.into(),
+        );
+        self.emit_return();
     }
 
     fn generate_float_eq(
@@ -297,7 +318,15 @@ impl Lowerer<'_, '_> {
             right: right.into(),
         });
 
-        self.emit_return(Some(to.into()));
+        self.emit_write(
+            Var {
+                scope: self.function_scope,
+                kind: VarKind::Return,
+            }
+            .into(),
+            to.into(),
+        );
+        self.emit_return();
     }
 
     fn generate_eq_body_record(
@@ -345,10 +374,26 @@ impl Lowerer<'_, '_> {
         }
 
         self.new_block(*lbls.last().unwrap());
-        self.emit_return(Some(IrValue::Bool(true).into()));
+        self.emit_write(
+            Var {
+                scope: self.function_scope,
+                kind: VarKind::Return,
+            }
+            .into(),
+            IrValue::Bool(true).into(),
+        );
+        self.emit_return();
 
         self.new_block(false_lbl);
-        self.emit_return(Some(IrValue::Bool(false).into()));
+        self.emit_write(
+            Var {
+                scope: self.function_scope,
+                kind: VarKind::Return,
+            }
+            .into(),
+            IrValue::Bool(false).into(),
+        );
+        self.emit_return();
     }
 
     fn generate_eq_body_enum(
@@ -439,9 +484,15 @@ impl Lowerer<'_, '_> {
                 .collect::<Option<Vec<_>>>()
             else {
                 // If one of the items is uninhabited then we don't have to do anything here
-                self.emit(Instruction::Return(Some(
+                self.emit_write(
+                    Var {
+                        scope: self.function_scope,
+                        kind: VarKind::Return,
+                    }
+                    .into(),
                     IrValue::Bool(true).into(),
-                )));
+                );
+                self.emit_return();
                 continue;
             };
 
@@ -462,11 +513,27 @@ impl Lowerer<'_, '_> {
             }
 
             self.new_block(*lbls.last().unwrap());
-            self.emit_return(Some(IrValue::Bool(true).into()));
+            self.emit_write(
+                Var {
+                    scope: self.function_scope,
+                    kind: VarKind::Return,
+                }
+                .into(),
+                IrValue::Bool(true).into(),
+            );
+            self.emit_return();
         }
 
         self.new_block(false_lbl);
-        self.emit_return(Some(IrValue::Bool(false).into()));
+        self.emit_write(
+            Var {
+                scope: self.function_scope,
+                kind: VarKind::Return,
+            }
+            .into(),
+            IrValue::Bool(false).into(),
+        );
+        self.emit_return();
     }
 
     fn generate_eq_runtime(
@@ -476,15 +543,17 @@ impl Lowerer<'_, '_> {
         ty: TyRef,
     ) {
         let eq_fn = self.get_runtime_eq(ty).unwrap();
-        let to = self.new_tmp(IrType::Bool);
+        let to = Var {
+            scope: self.function_scope,
+            kind: VarKind::Return,
+        };
         self.emit(Instruction::Eq {
-            to: to.clone(),
+            to: to.into(),
             left: left_ptr.into(),
             right: right_ptr.into(),
             eq_fn,
         });
-
-        self.emit_return(Some(to.into()));
+        self.emit_return();
     }
 
     fn get_runtime_eq(&mut self, ty: TyRef) -> Option<EqFn> {

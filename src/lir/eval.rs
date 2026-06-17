@@ -92,7 +92,6 @@ pub struct LocalPointer {
 struct StackFrame {
     id: usize,
     return_address: usize,
-    return_place: Option<Var>,
     allocations: Vec<Allocation>,
 }
 
@@ -118,7 +117,6 @@ impl Default for Memory {
             stack: vec![StackFrame {
                 id: 0,
                 return_address: 0,
-                return_place: None,
                 allocations: Vec::new(),
             }],
         }
@@ -168,17 +166,12 @@ impl Memory {
         }
     }
 
-    fn push_frame(
-        &mut self,
-        return_address: usize,
-        return_place: Option<Var>,
-    ) {
+    fn push_frame(&mut self, return_address: usize) {
         let id = self.id_counter;
         self.id_counter += 1;
         self.stack.push(StackFrame {
             id,
             return_address,
-            return_place,
             allocations: Vec::new(),
         });
     }
@@ -291,8 +284,9 @@ pub fn eval(
     mem: &mut Memory,
     ctx: IrValue,
     args: Vec<IrValue>,
-) -> Option<IrValue> {
+) {
     let filter_map_ident = Identifier::from(format!("pkg.{filter_map}"));
+
     let item = p
         .iter()
         .find(|f| f.name == filter_map_ident)
@@ -301,11 +295,6 @@ pub fn eval(
     let parameters = match &item.kind {
         ItemKind::Constant { .. } => &[] as &[_],
         ItemKind::Function { ir_signature, .. } => &ir_signature.parameters,
-    };
-
-    let return_ptr = match &item.kind {
-        ItemKind::Constant { .. } => true,
-        ItemKind::Function { ir_signature, .. } => ir_signature.return_ptr,
     };
 
     // Make the program easier to work with by collecting all instructions
@@ -327,19 +316,12 @@ pub fn eval(
     // This is our working memory for the interpreter
     let mut vars = HashMap::<Var, IrValue>::new();
 
-    if return_ptr {
-        assert_eq!(
-            parameters.len(),
-            args.len() - 1,
-            "incorrect number of arguments"
-        );
-    } else {
-        assert_eq!(
-            parameters.len(),
-            args.len(),
-            "incorrect number of arguments"
-        );
-    }
+    // We subtract one because we also have the return value as an argument.
+    assert_eq!(
+        parameters.len(),
+        args.len() - 1,
+        "incorrect number of arguments"
+    );
 
     vars.insert(
         Var {
@@ -349,15 +331,13 @@ pub fn eval(
         ctx,
     );
     let mut values = args.into_iter();
-    if return_ptr {
-        vars.insert(
-            Var {
-                scope: item.scope,
-                kind: VarKind::Return,
-            },
-            values.next().unwrap(),
-        );
-    }
+    vars.insert(
+        Var {
+            scope: item.scope,
+            kind: VarKind::Return,
+        },
+        values.next().unwrap(),
+    );
 
     for ((x, _), v) in parameters.iter().zip(values) {
         vars.insert(
@@ -420,7 +400,7 @@ pub fn eval(
                 );
             }
             Instruction::Call {
-                to,
+                to: _,
                 ctx,
                 func,
                 args,
@@ -428,7 +408,7 @@ pub fn eval(
             } => {
                 let f = p.iter().find(|f| f.name == *func).unwrap();
 
-                mem.push_frame(program_counter, to.clone().map(|to| to.0));
+                mem.push_frame(program_counter);
 
                 for (var, val_or_slot) in &f.variables {
                     if let ValueOrSlot::StackSlot(layout) = val_or_slot {
@@ -486,23 +466,17 @@ pub fn eval(
                     .collect();
                 call_runtime_function(rt, mem, *func, args);
             }
-            Instruction::Return(ret) => {
-                let val =
-                    ret.as_ref().map(|r| eval_operand(&vars, r).clone());
+            Instruction::Return => {
                 if let Some(StackFrame {
                     id: _,
                     allocations: _,
                     return_address,
-                    return_place,
                 }) = mem.pop_frame()
                 {
-                    if let Some(val) = val {
-                        vars.insert(return_place.unwrap(), val.clone());
-                    }
                     program_counter = return_address + 1;
                     continue;
                 } else {
-                    return val;
+                    return;
                 }
             }
             Instruction::IntCmp {
@@ -732,7 +706,7 @@ pub fn eval(
                     };
 
                     let p = mem.get(val);
-                    unsafe { (drop)(p) }
+                    unsafe { (drop)(std::ptr::null_mut(), p) }
                 }
             }
             Instruction::Eq {
@@ -741,6 +715,10 @@ pub fn eval(
                 right,
                 eq_fn,
             } => {
+                let &IrValue::Pointer(to) = eval_operand(&vars, to) else {
+                    panic!()
+                };
+
                 let &IrValue::Pointer(left) = eval_operand(&vars, left)
                 else {
                     panic!()
@@ -751,11 +729,10 @@ pub fn eval(
                     panic!()
                 };
 
+                let to = mem.get(to);
                 let left = mem.get(left);
                 let right = mem.get(right);
-                let res = unsafe { (eq_fn)(left, right) };
-
-                vars.insert(to.clone(), IrValue::Bool(res));
+                unsafe { (eq_fn)(to as *mut bool, left, right) };
             }
             Instruction::InitString {
                 to,

@@ -36,7 +36,7 @@ impl Printable for Item {
             ItemKind::Function { ir_signature, .. } => {
                 let _ = write!(
                     &mut s,
-                    "fn {}({}) {}{{",
+                    "fn {}(out: ptr{}) {{",
                     self.name,
                     ir_signature
                         .parameters
@@ -44,17 +44,9 @@ impl Printable for Item {
                         .map(|(a, t)| {
                             let a = a.print(&printer);
                             let t = t.display(printer.type_info);
-                            format!("{a}: {t}")
+                            format!(", {a}: {t}")
                         })
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    ir_signature
-                        .return_type
-                        .map(|t| {
-                            let t = t.display(printer.type_info);
-                            format!("-> {t} ")
-                        })
-                        .unwrap_or_default(),
+                        .collect::<String>(),
                 );
             }
         }
@@ -188,10 +180,7 @@ impl Printable for Instruction {
                     to.print(printer),
                 )
             }
-            Return(None) => "return".to_string(),
-            Return(Some(v)) => {
-                format!("return {}", v.print(printer))
-            }
+            Return => "return".to_string(),
             IntCmp {
                 to,
                 cmp,

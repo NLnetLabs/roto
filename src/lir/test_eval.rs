@@ -457,8 +457,11 @@ fn string_global() {
     let p = compile(s, &rt);
 
     let mut mem = Memory::new();
+    let res_ptr = mem.allocate(1);
+    let res = IrValue::Pointer(res_ptr);
     let ctx = IrValue::Pointer(mem.allocate(0));
-    let res = p.eval(&mut mem, ctx, Vec::new()).unwrap();
+    p.eval(&mut mem, ctx, vec![res]);
 
-    assert_eq!(res, IrValue::Bool(true));
+    let res = unsafe { *(mem.get(res_ptr) as *mut bool) };
+    assert!(res);
 }

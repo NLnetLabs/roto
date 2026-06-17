@@ -5,10 +5,12 @@ type T = ();
 pub type CloneFn = unsafe extern "C" fn(*mut T, *const T);
 
 /// A Roto drop function
-pub type DropFn = unsafe extern "C" fn(*mut T);
+///
+/// The first parameter is the return pointer, which is expected to be nul, which must be null.
+pub type DropFn = unsafe extern "C" fn(*mut T, *mut T);
 
-/// A Roto drop function
-pub type EqFn = unsafe extern "C" fn(*const T, *const T) -> bool;
+/// A Roto eq function
+pub type EqFn = unsafe extern "C" fn(*mut bool, *const T, *const T);
 
 /// Vtable of Roto values
 ///

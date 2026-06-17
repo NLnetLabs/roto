@@ -280,10 +280,7 @@ pub trait RotoFunc {
     type Return: Value;
 
     /// Type of a Roto function with this type using a return pointer
-    type RotoWithReturnPointer;
-
-    /// Type of a Roto function with this type returning directly
-    type RotoWithoutReturnPointer;
+    type RotoFn;
 
     /// Check whether these parameters match a parameter list from Roto.
     fn check_args(
@@ -319,7 +316,6 @@ pub trait RotoFunc {
         ctx: &mut Ctx,
         args: Self::Args,
         func_ptr: *const u8,
-        return_by_ref: bool,
     ) -> Self::Return;
 }
 
@@ -342,8 +338,7 @@ macro_rules! func {
             type Args = ($($a,)*);
             type Return = $r;
 
-            type RotoWithReturnPointer = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
-            type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> $r::Transformed;
+            type RotoFn = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
 
             fn check_args(
                 type_info: &mut TypeInfo,
@@ -366,7 +361,7 @@ macro_rules! func {
                 Ok(())
             }
 
-            unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8, return_by_ref: bool) -> R {
+            unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8) -> R {
                 let ($($a,)*) = args;
                 let mut transformed = ($(<$a as Value>::transform($a),)*);
                 let ($($a,)*) = &mut transformed;
@@ -378,22 +373,14 @@ macro_rules! func {
                 #[allow(forgetting_copy_types)]
                 std::mem::forget(transformed);
 
-                if return_by_ref {
-                    let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, Self::RotoWithReturnPointer>(func_ptr)
-                    };
-                    let mut ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
-                    func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
-                    let transformed_ret = unsafe { ret.assume_init() };
-                    let ret: Self::Return = Self::Return::untransform(transformed_ret);
-                    ret
-                } else {
-                    let func_ptr = unsafe {
-                        std::mem::transmute::<*const u8, Self::RotoWithoutReturnPointer>(func_ptr)
-                    };
-                    let ret = func_ptr(ctx as *mut Ctx as *mut (), $($a),*);
-                    <R as Value>::untransform(ret)
-                }
+                let func_ptr = unsafe {
+                    std::mem::transmute::<*const u8, Self::RotoFn>(func_ptr)
+                };
+                let mut ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
+                func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
+                let transformed_ret = unsafe { ret.assume_init() };
+                let ret: Self::Return = Self::Return::untransform(transformed_ret);
+                ret
             }
         }
     };

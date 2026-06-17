@@ -187,7 +187,6 @@ impl Lowerer<'_, '_> {
         let mut lowerer = Lowerer {
             ctx,
             tmp_idx: 0,
-            force_reference_return: false,
             // The clone fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
@@ -202,8 +201,6 @@ impl Lowerer<'_, '_> {
         let ir_signature = Signature {
             parameters: vec![("val".into(), IrType::Pointer)],
             context: false,
-            return_ptr: true,
-            return_type: None,
         };
 
         let entry_block = lowerer.blocks[0].label;
@@ -252,7 +249,7 @@ impl Lowerer<'_, '_> {
                 from: root_var.into(),
                 clone_fn,
             });
-            self.emit_return(None);
+            self.emit_return();
             return;
         }
 
@@ -261,7 +258,7 @@ impl Lowerer<'_, '_> {
             // these functions, but if we get here anyway, we can simply generate
             // a function that just returns.
             Ty::Unit | Ty::Never => {
-                self.emit_return(None);
+                self.emit_return();
             }
             Ty::Record(fields) => {
                 let fields = fields.clone();
@@ -277,7 +274,7 @@ impl Lowerer<'_, '_> {
             // cloned. And we'd never generate a clone method for them because
             // they can be memcpy'd
             Ty::Primitive(_) => {
-                self.emit_return(None);
+                self.emit_return();
             }
             // If we get here with a runtime type, it implements Copy, so
             // doesn't need to be cloned.
@@ -286,7 +283,7 @@ impl Lowerer<'_, '_> {
 
                 self.emit_memcpy(return_var.into(), root_var.into(), size);
 
-                self.emit_return(None);
+                self.emit_return();
             }
             Ty::List(_) => {
                 ice!("list clone should have been handled above");
@@ -321,7 +318,7 @@ impl Lowerer<'_, '_> {
             self.call_clone_of(to, from, ty);
         }
 
-        self.emit_return(None);
+        self.emit_return();
     }
 
     fn generate_clone_body_enum(
@@ -384,7 +381,7 @@ impl Lowerer<'_, '_> {
                 .collect::<Option<Vec<_>>>()
             else {
                 // If one of the items is uninhabited then we don't have to do anything here
-                self.emit(Instruction::Return(None));
+                self.emit_return();
                 continue;
             };
 
@@ -405,7 +402,7 @@ impl Lowerer<'_, '_> {
 
                 self.call_clone_of(from, to, *ty);
             }
-            self.emit(Instruction::Return(None));
+            self.emit_return();
         }
     }
 

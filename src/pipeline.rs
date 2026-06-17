@@ -395,12 +395,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
 }
 
 impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
-    pub fn eval(
-        &self,
-        mem: &mut Memory,
-        ctx: IrValue,
-        args: Vec<IrValue>,
-    ) -> Option<IrValue> {
+    pub fn eval(&self, mem: &mut Memory, ctx: IrValue, args: Vec<IrValue>) {
         eval::eval(
             &self.runtime.rt,
             &self.ir.functions,

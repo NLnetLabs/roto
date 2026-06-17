@@ -115,7 +115,7 @@ pub enum Instruction {
     },
 
     /// Return from the current function (or filtermap)
-    Return(Option<Operand>),
+    Return,
 
     /// Perform an integer comparison and store the result in `to`
     IntCmp {
@@ -214,9 +214,9 @@ pub enum Instruction {
         clone_fn: CloneFn,
     },
 
-    /// Eq a value with a Rust clone function
+    /// Eq a value with a Rust eq function
     Eq {
-        to: Var,
+        to: Operand,
         left: Operand,
         right: Operand,
         /// Pointer to the eq implementation of the type
@@ -340,12 +340,6 @@ pub struct Signature {
 
     /// Whether this function takes a context pointer
     pub context: bool,
-
-    /// Whether this function takes a pointer for the return value
-    /// passed as an argument
-    pub return_ptr: bool,
-
-    pub return_type: Option<IrType>,
 }
 
 #[derive(Debug)]
