@@ -6010,3 +6010,19 @@ fn return_in_or_expression() {
     assert!(f.call("d".into()).unwrap());
     assert!(!f.call("e".into()).unwrap());
 }
+
+#[test]
+fn panic() {
+    let s = src!(
+        r#"
+        fn main() {
+            panic("paniek!");
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn()>("main").unwrap();
+    let res = f.call().unwrap_err();
+    assert_eq!(&*res, "paniek!");
+}

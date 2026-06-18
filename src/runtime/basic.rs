@@ -6,7 +6,7 @@ use std::{
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
-    Library, List, Val, library,
+    Library, List, ScriptResult, Val, library,
     runtime::func::OutPtr,
     value::{
         DynVal, ErasedList, RotoString, StringBuf, StringBytes, StringChars,
@@ -617,6 +617,11 @@ pub fn built_ins() -> Library {
 
         include!(float_impl!(f32));
         include!(float_impl!(f64));
+
+        /// Exit the script immediately with a message.
+        fn panic(s: RotoString) -> ScriptResult<()> {
+            ScriptResult::Panic(s.as_ref().into())
+        }
 
         impl Prefix {
             /// Construct a new prefix.
