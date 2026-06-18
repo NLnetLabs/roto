@@ -9,19 +9,15 @@ use crate::{
     ice,
     label::{LabelRef, LabelStore},
     lir::{IrValue, ItemKind},
-    mir,
+    mir::{self, Ty, TyRef},
     runtime::{
         Rt, RuntimeFunctionRef, init_string,
         layout::{Layout, LayoutBuilder},
     },
     typechecker::{
         info::TypeInfo,
-        scope::{DeclarationKind, ResolvedName, ScopeRef},
-        scoped_display::TypeDisplay,
-        types::{
-            self, EnumVariant, FloatSize, IntKind, IntSize, Primitive, Type,
-            TypeDefinition,
-        },
+        scope::{ResolvedName, ScopeRef},
+        types::{self, FloatSize, IntKind, IntSize, Primitive},
     },
     value::{CloneFn, EqFn, VTable},
 };
@@ -42,11 +38,11 @@ pub struct LowerCtx<'c> {
     pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,
 
     /// Drop functions to generate at the end of lowering
-    pub drops_to_generate: VecDeque<Type>,
+    pub drops_to_generate: VecDeque<TyRef>,
     /// Clone functions to generate at the end of lowering
-    pub clones_to_generate: VecDeque<Type>,
+    pub clones_to_generate: VecDeque<TyRef>,
     /// Eq functions to generate at the end of lowering
-    pub eq_to_generate: VecDeque<Type>,
+    pub eq_to_generate: VecDeque<TyRef>,
 }
 
 struct Lowerer<'c, 'r> {
@@ -54,7 +50,7 @@ struct Lowerer<'c, 'r> {
     blocks: Vec<Block>,
     function_scope: ScopeRef,
     tmp_idx: usize,
-    return_type: Type,
+    return_type: TyRef,
     force_reference_return: bool,
     variables: Vec<(Var, ValueOrSlot)>,
 }
@@ -110,15 +106,15 @@ impl Lowerer<'_, '_> {
 
     fn item(ctx: &mut LowerCtx<'_>, item: mir::Item) -> Option<Item> {
         let return_type = match &item.ty {
-            mir::ItemKind::Constant { ty, .. } => {
+            mir::ItemKind::Constant { mir_ty, .. } => {
                 // Each constant needs to be dropped later when the module is
                 // dropped. Which means Rust needs to get a pointer to its drop
                 // function.
-                ctx.drops_to_generate.push_back(ty.clone());
-                ty.clone()
+                ctx.drops_to_generate.push_back(*mir_ty);
+                *mir_ty
             }
-            mir::ItemKind::Function { signature, .. } => {
-                signature.return_type.clone()
+            mir::ItemKind::Function { mir_signature, .. } => {
+                mir_signature.return_type
             }
         };
 
@@ -130,7 +126,7 @@ impl Lowerer<'_, '_> {
                 &item.ty,
                 mir::ItemKind::Constant { .. }
             ),
-            return_type: return_type.clone(),
+            return_type,
             blocks: Vec::new(),
             variables: Vec::new(),
         };
@@ -138,17 +134,11 @@ impl Lowerer<'_, '_> {
 
         // All parameters must be inhabited. If they aren't then we can skip
         // lowering this entire function.
-        if let mir::ItemKind::Function { signature, .. } = &item.ty {
-            signature
+        if let mir::ItemKind::Function { mir_signature, .. } = &item.ty {
+            mir_signature
                 .parameter_types
                 .iter()
-                .map(|ty| {
-                    lowerer
-                        .ctx
-                        .type_info
-                        .layout_of(ty, lowerer.ctx.runtime)
-                        .map(|_| ())
-                })
+                .map(|ty| lowerer.layout_of(*ty).map(|_| ()))
                 .collect::<Option<()>>()?;
         }
 
@@ -156,16 +146,8 @@ impl Lowerer<'_, '_> {
             .variables
             .iter()
             .filter_map(|(v, ty)| {
-                // The MIR can emit unresolved types in places where the never
-                // type is used. The instructions for those are eliminated by
-                // dead code elimination.
-                let ty = lowerer.ctx.type_info.resolve(ty);
-                if matches!(&ty, Type::Var(_)) {
-                    return None;
-                }
-
+                let is_reference_type = lowerer.is_reference_type(*ty)?;
                 let lir_v = lowerer.var(v.clone());
-                let is_reference_type = lowerer.is_reference_type(&ty)?;
                 let var_type = if is_reference_type {
                     // Parameters don't need a slot because they already
                     // live somewhere.
@@ -175,18 +157,14 @@ impl Lowerer<'_, '_> {
                     {
                         ValueOrSlot::Val(IrType::Pointer)
                     } else {
-                        let layout = lowerer
-                            .ctx
-                            .type_info
-                            .layout_of(&ty, lowerer.ctx.runtime)?;
-                        ValueOrSlot::StackSlot(layout)
+                        ValueOrSlot::StackSlot(lowerer.layout_of(*ty)?)
                     }
                 } else {
-                    ValueOrSlot::Val(lowerer.lower_type(&ty)?)
+                    ValueOrSlot::Val(lowerer.lower_type(*ty)?)
                 };
                 Some((lir_v, var_type))
             })
-            .collect::<Vec<_>>();
+            .collect();
 
         for block in item.blocks {
             lowerer.block(block);
@@ -195,32 +173,32 @@ impl Lowerer<'_, '_> {
         let entry_block = lowerer.blocks[0].label;
 
         let (return_ir_type, return_ptr) =
-            match lowerer.is_reference_type(&return_type) {
+            match lowerer.is_reference_type(return_type) {
                 Some(true) => (None, true),
-                Some(false) => (lowerer.lower_type(&return_type), false),
+                Some(false) => (lowerer.lower_type(return_type), false),
                 None => (None, false),
             };
 
         let kind = match item.ty {
-            mir::ItemKind::Constant { name, ty } => ItemKind::Constant {
-                layout: lowerer
-                    .ctx
-                    .type_info
-                    .layout_of(&ty, lowerer.ctx.runtime),
-                name,
-                type_id: lowerer.ctx.type_info.type_id(&ty),
-                ty,
-            },
+            mir::ItemKind::Constant { name, ty, mir_ty } => {
+                ItemKind::Constant {
+                    layout: lowerer.layout_of(mir_ty),
+                    name,
+                    type_id: mir_ty.type_id(),
+                    ty,
+                }
+            }
             mir::ItemKind::Function {
                 signature,
+                mir_signature,
                 parameters,
             } => {
                 let ir_signature = Signature {
                     parameters: parameters
                         .iter()
-                        .zip(&signature.parameter_types)
+                        .zip(&mir_signature.parameter_types)
                         .filter_map(|(def, ty)| {
-                            let ty = lowerer.lower_type(ty)?;
+                            let ty = lowerer.lower_type(*ty)?;
                             let mir::VarKind::Explicit(x) = def.kind else {
                                 ice!()
                             };
@@ -232,7 +210,7 @@ impl Lowerer<'_, '_> {
                     return_type: return_ir_type,
                 };
                 ItemKind::Function {
-                    signature,
+                    signature: Some(signature),
                     ir_signature,
                 }
             }
@@ -274,18 +252,18 @@ impl Lowerer<'_, '_> {
                 default,
             } => self.switch(examinee, branches, default),
             mir::Instruction::SetDiscriminant { to, ty, variant } => {
-                self.set_discriminant(to, &ty, &variant)
+                self.set_discriminant(to, ty, variant)
             }
             mir::Instruction::Return { var } => self.r#return(var),
             mir::Instruction::Drop { val, ty } => self.drop(val, ty),
         }
     }
 
-    fn assign(&mut self, to: mir::Place, ty: Type, value: mir::Value) {
-        let to = self.location(to, ty.clone());
+    fn assign(&mut self, to: mir::Place, ty: TyRef, value: mir::Value) {
+        let to = self.location(to, ty);
         let op = match value {
             mir::Value::Const(lit, ty) => {
-                let Some(op) = self.literal(&lit, &ty) else {
+                let Some(op) = self.literal(&lit, ty) else {
                     return;
                 };
                 op
@@ -301,7 +279,7 @@ impl Lowerer<'_, '_> {
                             base: ptr_var,
                             offset: 0,
                         },
-                        &ty,
+                        ty,
                     );
                 }
                 return;
@@ -315,7 +293,7 @@ impl Lowerer<'_, '_> {
                     offset: x,
                 };
                 if let Some(to) = to {
-                    self.call_clone_of(to, from, &ty);
+                    self.call_clone_of(to, from, ty);
                 }
                 return;
             }
@@ -328,16 +306,16 @@ impl Lowerer<'_, '_> {
             }
             mir::Value::Negate(var, ty) => {
                 let val = self.var(var);
-                let ty = self.lower_type(&ty).unwrap();
+                let ty = self.lower_type(ty).unwrap();
                 let tmp = self.new_tmp(ty);
                 self.emit_negate(tmp.clone(), val.into());
                 tmp.into()
             }
             mir::Value::Move(var) => self.var(var).into(),
             mir::Value::Clone(place) => {
-                let from = self.location(place, ty.clone());
+                let from = self.location(place, ty);
                 if let (Some(to), Some(from)) = (to, from) {
-                    self.call_clone_of(to, from, &ty);
+                    self.call_clone_of(to, from, ty);
                 }
                 return;
             }
@@ -347,8 +325,12 @@ impl Lowerer<'_, '_> {
                 ty,
                 right,
             } => self.binop(left, binop, ty, right),
-            mir::Value::Call { func, args } => {
-                let Some(op) = self.call(func, args, &ty) else {
+            mir::Value::Call {
+                func,
+                args,
+                mir_signature,
+            } => {
+                let Some(op) = self.call(func, args, mir_signature) else {
                     return;
                 };
                 op
@@ -356,10 +338,11 @@ impl Lowerer<'_, '_> {
             mir::Value::CallRuntime {
                 func_ref,
                 args,
-                type_params,
+                vtables,
+                mir_signature,
             } => {
                 let Some(op) =
-                    self.call_runtime(func_ref, type_params, args, &ty)
+                    self.call_runtime(func_ref, args, vtables, mir_signature)
                 else {
                     return;
                 };
@@ -372,7 +355,7 @@ impl Lowerer<'_, '_> {
         // unwrap `to` here, but we will simply only assign the value if it is
         // inhabited.
         if let Some(to) = to {
-            self.move_val(to, op, &ty);
+            self.move_val(to, op, ty);
         }
     }
 
@@ -380,16 +363,13 @@ impl Lowerer<'_, '_> {
         &mut self,
         func: ResolvedName,
         args: Vec<mir::Var>,
-        return_type: &Type,
+        mir_signature: mir::Signature,
     ) -> Option<Operand> {
+        let return_type = mir_signature.return_type;
         let reference_return = self.is_reference_type(return_type);
         let (to, out_ptr) = match reference_return {
             Some(true) => {
-                let layout = self
-                    .ctx
-                    .type_info
-                    .layout_of(return_type, self.ctx.runtime)
-                    .unwrap();
+                let layout = self.layout_of(return_type).unwrap();
                 let out_ptr = self.new_stack_slot(layout);
                 (None, Some(out_ptr))
             }
@@ -407,21 +387,12 @@ impl Lowerer<'_, '_> {
             kind: VarKind::Context,
         };
 
-        let dec = self.ctx.type_info.scope_graph.get_declaration(func);
-        let DeclarationKind::Function(Some(f)) = dec.kind else {
-            ice!()
-        };
-
         // Filter out any zero-sized arguments
         let args: Vec<_> = args
             .into_iter()
-            .zip(f.signature.parameter_types)
+            .zip(mir_signature.parameter_types)
             .filter_map(|(v, t)| {
-                self.ctx
-                    .type_info
-                    .layout_of(&t, self.ctx.runtime)
-                    .filter(|l| !l.is_zero_sized())
-                    .map(|_| v)
+                self.layout_of(t).filter(|l| !l.is_zero_sized()).map(|_| v)
             })
             .collect();
 
@@ -448,19 +419,13 @@ impl Lowerer<'_, '_> {
     fn call_runtime(
         &mut self,
         func_ref: RuntimeFunctionRef,
-        type_params: Vec<Type>,
         mir_args: Vec<mir::Var>,
-        return_type: &Type,
+        vtables: Vec<TyRef>,
+        mir_signature: mir::Signature,
     ) -> Option<Operand> {
-        // Take the signature of the function and substitute the type parameters in
-        let f = self.ctx.runtime.get_function(func_ref);
-        let sig = self.ctx.type_info.runtime_function_signature(func_ref);
-        let sig = sig.substitute(&type_params);
-
+        let return_type = mir_signature.return_type;
         let layout = self
-            .ctx
-            .type_info
-            .layout_of(return_type, self.ctx.runtime)
+            .layout_of(return_type)
             .unwrap_or_else(|| Layout::new(0, 1));
         let out_ptr = self.new_stack_slot(layout);
 
@@ -477,59 +442,51 @@ impl Lowerer<'_, '_> {
         //
         // The vtable we construct corresponds to the VTable type and
         // contains the layout, clone_fn and drop_fn.
-        for (i, type_idx) in f.vtables.iter().enumerate() {
-            let Some(ty) = type_params.get(*type_idx) else {
-                ice!("vtable index is out of bounds")
-            };
+        for (i, &ty_ref) in vtables.iter().enumerate() {
+            let type_id = ty_ref.type_id();
 
-            let clone_func_addr = if self.needs_clone(ty) {
-                let type_id = self.ctx.type_info.type_id(ty);
+            let clone_func_addr = if self.needs_clone(ty_ref) {
                 let tmp = self.new_tmp(IrType::Pointer);
                 self.emit(Instruction::FunctionAddress {
                     to: tmp.clone(),
                     name: format!("::generated::clone_{type_id}").into(),
                 });
                 // We need to make sure that the clone function will be generated.
-                self.ctx.clones_to_generate.push_back(ty.clone());
+                self.ctx.clones_to_generate.push_back(ty_ref);
                 tmp.into()
             } else {
                 Operand::Value(crate::lir::IrValue::Pointer(0))
             };
 
-            let drop_func_addr = if self.needs_drop(ty) {
-                let type_id = self.ctx.type_info.type_id(ty);
+            let drop_func_addr = if self.needs_drop(ty_ref) {
                 let tmp = self.new_tmp(IrType::Pointer);
                 self.emit(Instruction::FunctionAddress {
                     to: tmp.clone(),
                     name: format!("::generated::drop_{type_id}").into(),
                 });
                 // We need to make sure that the drop function will be generated.
-                self.ctx.drops_to_generate.push_back(ty.clone());
+                self.ctx.drops_to_generate.push_back(ty_ref);
                 tmp.into()
             } else {
                 Operand::Value(crate::lir::IrValue::Pointer(0))
             };
 
             let eq_func_addr = {
-                let type_id = self.ctx.type_info.type_id(ty);
                 let tmp = self.new_tmp(IrType::Pointer);
                 self.emit(Instruction::FunctionAddress {
                     to: tmp.clone(),
                     name: format!("::generated::eq_{type_id}").into(),
                 });
                 // We need to make sure that the drop function will be generated.
-                self.ctx.eq_to_generate.push_back(ty.clone());
+                self.ctx.eq_to_generate.push_back(ty_ref);
                 tmp.into()
             };
 
             let vtable_layout = Layout::of::<VTable>();
             let base = self.new_stack_slot(vtable_layout);
 
-            let ty_layout = self
-                .ctx
-                .type_info
-                .layout_of(ty, self.ctx.runtime)
-                .unwrap_or(Layout::of::<()>());
+            let ty_layout =
+                self.layout_of(ty_ref).unwrap_or(Layout::of::<()>());
 
             let mut builder = LayoutBuilder::new();
 
@@ -568,13 +525,12 @@ impl Lowerer<'_, '_> {
         }
 
         let dyn_vals = &self.ctx.runtime.get_function(func_ref).dyn_vals;
-        let parameter_types = sig.parameter_types;
 
         // After the vtables we get to the actual parameters.
         for (i, arg) in mir_args.into_iter().enumerate() {
             let arg = self.var(arg);
 
-            let ty = &parameter_types[i];
+            let ty = mir_signature.parameter_types[i];
 
             // If the argument is not a DynVal, it's easy, we treat it as a normal value,
             // but if it is a DynVal, we have to ensure that the value is stored on a
@@ -588,9 +544,7 @@ impl Lowerer<'_, '_> {
                 continue;
             }
 
-            let Some(elem_layout) =
-                self.ctx.type_info.layout_of(ty, self.ctx.runtime)
-            else {
+            let Some(elem_layout) = self.layout_of(ty) else {
                 continue;
             };
 
@@ -633,7 +587,7 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    fn move_val(&mut self, to: Location, val: Operand, ty: &Type) {
+    fn move_val(&mut self, to: Location, val: Operand, ty: TyRef) {
         let Some(ir_ty) = self.lower_type(ty) else {
             return;
         };
@@ -646,12 +600,7 @@ impl Lowerer<'_, '_> {
                 let to = self.offset(base, offset as u32);
                 match self.is_reference_type(ty) {
                     Some(true) => {
-                        let size = self
-                            .ctx
-                            .type_info
-                            .layout_of(ty, self.ctx.runtime)
-                            .unwrap()
-                            .size();
+                        let size = self.layout_of(ty).unwrap().size();
                         self.emit_memcpy(to.into(), val, size as u32);
                     }
                     Some(false) => self.emit_write(to.into(), val),
@@ -662,14 +611,10 @@ impl Lowerer<'_, '_> {
     }
 
     /// Returns `None` if the type uninhabited
-    fn location(&mut self, place: mir::Place, ty: Type) -> Option<Location> {
+    fn location(&mut self, place: mir::Place, ty: TyRef) -> Option<Location> {
         let root_ty = place.root_ty;
         if place.projection.is_empty() {
-            if self
-                .ctx
-                .type_info
-                .is_reference_type(&ty, self.ctx.runtime)?
-            {
+            if self.is_reference_type(ty)? {
                 Some(Location::Pointer {
                     base: self.var(place.var),
                     offset: 0,
@@ -685,41 +630,30 @@ impl Lowerer<'_, '_> {
             for p in place.projection {
                 match p {
                     mir::Projection::Field(ident) => {
-                        let (new_offset, new_ty) = self.get_field(&ty, ident);
+                        let (new_offset, new_ty) = self.get_field(ty, ident);
                         ty = new_ty;
                         offset += new_offset;
                     }
                     mir::Projection::VariantField(variant_name, n) => {
-                        let Type::Name(type_name) = &ty else { ice!() };
-                        let TypeDefinition::Enum(type_constructor, variants) =
-                            self.ctx.type_info.resolve_type_name(type_name)
+                        let Ty::Enum(variants) =
+                            self.ctx.type_info.ty_pool.get(ty)
                         else {
                             ice!()
                         };
-
-                        let subs: Vec<_> = type_constructor
-                            .arguments
-                            .iter()
-                            .zip(&type_name.arguments)
-                            .collect();
 
                         let mut builder = LayoutBuilder::new();
                         builder.add(&Layout::of::<u8>());
 
                         let variant = variants
                             .iter()
-                            .find(|v| v.name == variant_name)
+                            .find(|v| v.0 == variant_name)
                             .unwrap();
 
                         let mut last_ty = None;
                         let mut new_offset = 0;
-                        for field_ty in variant.fields.iter().take(n + 1) {
-                            let field_ty = field_ty.substitute_many(&subs);
+                        for &field_ty in variant.1.iter().take(n + 1) {
                             new_offset =
-                                builder.add(&self.ctx.type_info.layout_of(
-                                    &field_ty,
-                                    self.ctx.runtime,
-                                )?);
+                                builder.add(&self.layout_of(field_ty)?);
                             last_ty = Some(field_ty);
                         }
 
@@ -732,44 +666,17 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    fn get_field(&mut self, ty: &Type, ident: Identifier) -> (usize, Type) {
-        let res_ty = self.ctx.type_info.resolve(ty);
+    fn get_field(&mut self, ty: TyRef, ident: Identifier) -> (usize, TyRef) {
+        let res_ty = self.ctx.type_info.ty_pool.get(ty);
 
-        let fields = match res_ty {
-            Type::Name(name) => {
-                let TypeDefinition::Record(type_name, fields) =
-                    self.ctx.type_info.resolve_type_name(&name)
-                else {
-                    ice!()
-                };
-
-                let subs: Vec<_> =
-                    type_name.arguments.iter().zip(&name.arguments).collect();
-
-                fields
-                    .into_iter()
-                    .map(|(ident, ty)| (ident, ty.substitute_many(&subs)))
-                    .collect()
-            }
-            Type::Record(fields) | Type::RecordVar(_, fields) => fields,
-            _ => {
-                ice!(
-                    "Cannot get field {ident} of type {}",
-                    ty.display(self.ctx.type_info)
-                )
-            }
+        let Ty::Record(fields) = res_ty else {
+            ice!("Cannot get field {ident}",)
         };
 
         let mut builder = LayoutBuilder::new();
-        for (field, new_ty) in fields {
-            let offset = builder.add(
-                &self
-                    .ctx
-                    .type_info
-                    .layout_of(&new_ty, self.ctx.runtime)
-                    .unwrap(),
-            );
-            if *field == ident {
+        for &(field, new_ty) in fields {
+            let offset = builder.add(&self.layout_of(new_ty).unwrap());
+            if field == ident {
                 return (offset, new_ty);
             }
         }
@@ -803,42 +710,28 @@ impl Lowerer<'_, '_> {
     fn set_discriminant(
         &mut self,
         to: mir::Var,
-        ty: &Type,
-        variant: &EnumVariant,
+        ty: TyRef,
+        variant: Identifier,
     ) {
         let to = self.var(to);
-        let Type::Name(type_name) = ty else { ice!() };
-        let TypeDefinition::Enum(_, variants) =
-            self.ctx.type_info.resolve_type_name(type_name)
-        else {
-            ice!()
+        let Ty::Enum(variants) = self.ctx.type_info.ty_pool.get(ty) else {
+            ice!("Can only set discriminant of an enum type");
         };
-        let idx = variants
-            .iter()
-            .position(|v| v.name == variant.name)
-            .unwrap();
+        let idx = variants.iter().position(|v| v.0 == variant).unwrap();
         self.emit_write(to.into(), Operand::Value(IrValue::U8(idx as u8)));
     }
 
     fn r#return(&mut self, var: mir::Var) {
         let var = self.var(var);
 
-        let layout = self
-            .ctx
-            .type_info
-            .layout_of(&self.return_type, self.ctx.runtime);
+        let layout = self.layout_of(self.return_type);
 
         if layout.as_ref().is_none_or(|l| l.size() == 0) {
             self.emit_return(None);
             return;
         }
 
-        if self
-            .ctx
-            .type_info
-            .is_reference_type(&self.return_type, self.ctx.runtime)
-            .unwrap()
-        {
+        if self.is_reference_type(self.return_type).unwrap() {
             self.emit_memcpy(
                 Var {
                     scope: self.function_scope,
@@ -864,8 +757,8 @@ impl Lowerer<'_, '_> {
         }
     }
 
-    fn drop(&mut self, val: mir::Place, ty: Type) {
-        let Some(var) = self.location(val, ty.clone()) else {
+    fn drop(&mut self, val: mir::Place, ty: TyRef) {
+        let Some(var) = self.location(val, ty) else {
             return;
         };
 
@@ -875,7 +768,7 @@ impl Lowerer<'_, '_> {
             Location::Var(_var) => {}
             Location::Pointer { base, offset } => {
                 let op = self.offset(base, offset as u32);
-                self.call_drop_of(op.into(), &ty);
+                self.call_drop_of(op.into(), ty);
             }
         };
     }
@@ -893,7 +786,7 @@ impl Lowerer<'_, '_> {
     }
 
     /// Lower a literal
-    fn literal(&mut self, lit: &Literal, ty: &Type) -> Option<Operand> {
+    fn literal(&mut self, lit: &Literal, ty: TyRef) -> Option<Operand> {
         Some(match &lit {
             Literal::String(s) => {
                 let layout = Primitive::String.layout();
@@ -923,61 +816,38 @@ impl Lowerer<'_, '_> {
                 to.into()
             }
             Literal::Integer(x, _) => {
-                match ty {
-                    Type::IntVar(_, _) => {
-                        return Some(IrValue::I32(*x as i32).into());
-                    }
-                    Type::Name(type_name) => {
-                        if let TypeDefinition::Primitive(Primitive::Int(
-                            k,
-                            s,
-                        )) =
-                            self.ctx.type_info.resolve_type_name(type_name)
-                        {
-                            use types::IntKind::*;
-                            use types::IntSize::*;
-                            return Some(
-                                match (k, s) {
-                                    (Unsigned, I8) => IrValue::U8(*x as _),
-                                    (Unsigned, I16) => IrValue::U16(*x as _),
-                                    (Unsigned, I32) => IrValue::U32(*x as _),
-                                    (Unsigned, I64) => IrValue::U64(*x as _),
-                                    (Signed, I8) => IrValue::I8(*x as _),
-                                    (Signed, I16) => IrValue::I16(*x as _),
-                                    (Signed, I32) => IrValue::I32(*x as _),
-                                    (Signed, I64) => IrValue::I64(*x as _),
-                                }
-                                .into(),
-                            );
+                match self.ctx.type_info.ty_pool.get(ty) {
+                    Ty::Primitive(Primitive::Int(k, s)) => {
+                        use types::IntKind::*;
+                        use types::IntSize::*;
+                        match (k, s) {
+                            (Unsigned, I8) => IrValue::U8(*x as _),
+                            (Unsigned, I16) => IrValue::U16(*x as _),
+                            (Unsigned, I32) => IrValue::U32(*x as _),
+                            (Unsigned, I64) => IrValue::U64(*x as _),
+                            (Signed, I8) => IrValue::I8(*x as _),
+                            (Signed, I16) => IrValue::I16(*x as _),
+                            (Signed, I32) => IrValue::I32(*x as _),
+                            (Signed, I64) => IrValue::I64(*x as _),
                         }
+                        .into()
                     }
-                    _ => {}
+                    _ => {
+                        ice!("should be a type error");
+                    }
                 }
-                ice!("should be a type error");
             }
             Literal::Float(x, _) => {
-                match ty {
-                    Type::FloatVar(_) => {
-                        return Some(IrValue::F64(*x).into());
+                match self.ctx.type_info.ty_pool.get(ty) {
+                    Ty::Primitive(Primitive::Float(s)) => match s {
+                        FloatSize::F32 => IrValue::F32(*x as f32),
+                        FloatSize::F64 => IrValue::F64(*x),
                     }
-                    Type::Name(type_name) => {
-                        if let TypeDefinition::Primitive(Primitive::Float(
-                            s,
-                        )) =
-                            self.ctx.type_info.resolve_type_name(type_name)
-                        {
-                            return Some(
-                                match s {
-                                    FloatSize::F32 => IrValue::F32(*x as f32),
-                                    FloatSize::F64 => IrValue::F64(*x),
-                                }
-                                .into(),
-                            );
-                        }
+                    .into(),
+                    _ => {
+                        ice!("should be a type error");
                     }
-                    _ => {}
                 }
-                ice!("should be a type error");
             }
             Literal::Bool(x) => IrValue::Bool(*x).into(),
             Literal::Unit => return None,
@@ -988,21 +858,23 @@ impl Lowerer<'_, '_> {
         &mut self,
         left: mir::Var,
         binop: ast::BinOp,
-        ty: Type,
+        ty: TyRef,
         right: mir::Var,
     ) -> Operand {
         let left = self.var(left).into();
         let right = self.var(right).into();
 
         if binop == BinOp::Eq {
-            return self.call_eq_of(false, left, right, &ty);
+            return self.call_eq_of(false, left, right, ty);
         }
 
         if binop == BinOp::Ne {
-            return self.call_eq_of(true, left, right, &ty);
+            return self.call_eq_of(true, left, right, ty);
         }
 
-        if let Some((kind, _size)) = self.ctx.type_info.get_int_type(&ty) {
+        if let &Ty::Primitive(Primitive::Int(kind, _)) =
+            self.ctx.type_info.ty_pool.get(ty)
+        {
             if let Some(cmp) = binop_to_int_cmp(&binop, kind) {
                 let to = self.new_tmp(IrType::Bool);
                 self.emit(Instruction::IntCmp {
@@ -1014,7 +886,7 @@ impl Lowerer<'_, '_> {
                 return to.into();
             }
 
-            let ty = self.lower_type(&ty).unwrap();
+            let ty = self.lower_type(ty).unwrap();
             let to = self.new_tmp(ty);
             match binop {
                 ast::BinOp::Add => self.emit(Instruction::Add {
@@ -1050,7 +922,9 @@ impl Lowerer<'_, '_> {
             return to.into();
         }
 
-        if self.ctx.type_info.is_float_type(&ty) {
+        if let Ty::Primitive(Primitive::Float(..)) =
+            self.ctx.type_info.ty_pool.get(ty)
+        {
             if let Some(cmp) = binop_to_float_cmp(&binop) {
                 let to = self.new_tmp(IrType::Bool);
                 self.emit(Instruction::FloatCmp {
@@ -1062,7 +936,7 @@ impl Lowerer<'_, '_> {
                 return to.into();
             }
 
-            let ty = self.lower_type(&ty).unwrap();
+            let ty = self.lower_type(ty).unwrap();
             let to = self.new_tmp(ty);
             match binop {
                 ast::BinOp::Add => self.emit(Instruction::Add {
@@ -1091,7 +965,9 @@ impl Lowerer<'_, '_> {
             return to.into();
         }
 
-        if self.ctx.type_info.is_asn_type(&ty) {
+        if let Ty::Primitive(Primitive::Asn) =
+            self.ctx.type_info.ty_pool.get(ty)
+        {
             let Some(cmp) = binop_to_int_cmp(&binop, IntKind::Unsigned)
             else {
                 ice!();
@@ -1237,60 +1113,57 @@ impl Lowerer<'_, '_> {
         })
     }
 
-    fn lower_type(&mut self, ty: &Type) -> Option<IrType> {
-        let ty = self.ctx.type_info.resolve(ty);
-        if self
-            .ctx
-            .type_info
-            .layout_of(&ty, self.ctx.runtime)
-            .is_some_and(|l| l.size() == 0)
-        {
+    fn lower_type(&mut self, ty: TyRef) -> Option<IrType> {
+        if self.layout_of(ty).is_some_and(|l| l.size() == 0) {
             return None;
         }
 
-        if let Type::Name(type_name) = &ty {
-            let type_def = self.ctx.type_info.resolve_type_name(type_name);
-            if let TypeDefinition::Primitive(p) = type_def {
-                use FloatSize::*;
-                use IntKind::*;
-                use IntSize::*;
-                'prim: {
-                    return Some(match p {
-                        Primitive::Int(Unsigned, I8) => IrType::U8,
-                        Primitive::Int(Unsigned, I16) => IrType::U16,
-                        Primitive::Int(Unsigned, I32) => IrType::U32,
-                        Primitive::Int(Unsigned, I64) => IrType::U64,
-                        Primitive::Int(Signed, I8) => IrType::I8,
-                        Primitive::Int(Signed, I16) => IrType::I16,
-                        Primitive::Int(Signed, I32) => IrType::I32,
-                        Primitive::Int(Signed, I64) => IrType::I64,
-                        Primitive::Float(F32) => IrType::F32,
-                        Primitive::Float(F64) => IrType::F64,
-                        Primitive::Asn => IrType::U32,
-                        Primitive::Char => IrType::U32,
-                        Primitive::Bool => IrType::Bool,
-                        _ => break 'prim,
-                    });
-                }
+        let ty_kind = self.ctx.type_info.ty_pool.get(ty);
+        if let Ty::Primitive(p) = ty_kind {
+            use FloatSize::*;
+            use IntKind::*;
+            use IntSize::*;
+            'prim: {
+                return Some(match p {
+                    Primitive::Int(Unsigned, I8) => IrType::U8,
+                    Primitive::Int(Unsigned, I16) => IrType::U16,
+                    Primitive::Int(Unsigned, I32) => IrType::U32,
+                    Primitive::Int(Unsigned, I64) => IrType::U64,
+                    Primitive::Int(Signed, I8) => IrType::I8,
+                    Primitive::Int(Signed, I16) => IrType::I16,
+                    Primitive::Int(Signed, I32) => IrType::I32,
+                    Primitive::Int(Signed, I64) => IrType::I64,
+                    Primitive::Float(F32) => IrType::F32,
+                    Primitive::Float(F64) => IrType::F64,
+                    Primitive::Asn => IrType::U32,
+                    Primitive::Char => IrType::U32,
+                    Primitive::Bool => IrType::Bool,
+                    _ => break 'prim,
+                });
             }
-            if let TypeDefinition::List(_) = type_def {
-                return Some(IrType::Pointer);
-            }
-            if let TypeDefinition::Runtime(_, _) = type_def {
-                return Some(IrType::Pointer);
-            }
+        }
+        if let Ty::List(_) = ty_kind {
+            return Some(IrType::Pointer);
+        }
+        if let Ty::Runtime(_) = ty_kind {
+            return Some(IrType::Pointer);
         }
 
         Some(match ty {
-            Type::IntVar(_, _) => IrType::I32,
-            Type::FloatVar(_) => IrType::F64,
-            x if self.is_reference_type(&x)? => IrType::Pointer,
+            x if self.is_reference_type(x)? => IrType::Pointer,
             _ => ice!("could not lower: {ty:?}"),
         })
     }
 
-    fn is_reference_type(&mut self, ty: &Type) -> Option<bool> {
-        self.ctx.type_info.is_reference_type(ty, self.ctx.runtime)
+    fn layout_of(&self, ty: TyRef) -> Option<Layout> {
+        self.ctx.type_info.ty_pool.layout_of(ty, self.ctx.runtime)
+    }
+
+    fn is_reference_type(&mut self, ty: TyRef) -> Option<bool> {
+        self.ctx
+            .type_info
+            .ty_pool
+            .is_reference_type(ty, self.ctx.runtime)
     }
 }
 

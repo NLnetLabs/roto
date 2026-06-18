@@ -4386,6 +4386,21 @@ fn stringbuf() {
 }
 
 #[test]
+fn list_empty() {
+    let s = src!(
+        r#"
+        fn main() {
+            let list: List[i32] = List.new();
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> ()>("main").unwrap();
+    f.call();
+}
+
+#[test]
 fn list_basic() {
     let s = src!(
         r#"

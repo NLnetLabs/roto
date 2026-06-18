@@ -163,7 +163,7 @@ fn check_roto_type(
             };
 
             let TypeDefinition::Runtime(_, id) =
-                type_info.resolve_type_name(&type_name)
+                type_info.resolve_type_name(type_name.name)
             else {
                 return Err(error_message);
             };

@@ -3,18 +3,18 @@ use std::{any::TypeId, collections::HashSet, net::IpAddr};
 use inetnum::addr::Prefix;
 
 use crate::{
+    RotoString,
     ast::Identifier,
-    ice,
     label::LabelRef,
     lir::{
         Block, FloatCmp, Instruction, IntCmp, IrType, IrValue, Item,
         ItemKind, Operand, Signature, Var, VarKind,
     },
-    parser::meta::Meta,
+    mir::{Ty, TyRef},
     runtime::layout::{Layout, LayoutBuilder},
     typechecker::{
         scope::{ScopeRef, ScopeType},
-        types::{self, EnumVariant, Primitive, Type, TypeDefinition},
+        types::Primitive,
     },
     value::{EqFn, ErasedList},
 };
@@ -27,7 +27,7 @@ impl Lowerer<'_, '_> {
         negated: bool,
         left: Operand,
         right: Operand,
-        ty: &Type,
+        ty: TyRef,
     ) -> Operand {
         let Some(ir_ty) = self.lower_type(ty) else {
             return IrValue::Bool(true).into();
@@ -76,7 +76,7 @@ impl Lowerer<'_, '_> {
             return to.into();
         }
 
-        let type_id = self.ctx.type_info.type_id(ty);
+        let type_id = ty.type_id();
         self.emit(Instruction::Call {
             to: Some((to.clone(), IrType::Bool)),
             ctx: None,
@@ -87,7 +87,7 @@ impl Lowerer<'_, '_> {
 
         // When that happens we also need to make sure that the clone function
         // will be generated.
-        self.ctx.eq_to_generate.push_back(ty.clone());
+        self.ctx.eq_to_generate.push_back(ty);
 
         if negated {
             self.emit_not(to.clone(), to.clone().into());
@@ -100,7 +100,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         left_ptr: Var,
         right_ptr: Var,
-        ty: &Type,
+        ty: TyRef,
     ) -> Operand {
         let Some(is_ref) = self.is_reference_type(ty) else {
             return IrValue::Bool(true).into();
@@ -132,7 +132,7 @@ impl Lowerer<'_, '_> {
         // We don't use a for loop because we will add more types to the end
         // of the vecdeque while processing it.
         while let Some(ty) = ctx.eq_to_generate.pop_front() {
-            let type_id = ctx.type_info.type_id(&ty);
+            let type_id = ty.type_id();
 
             // HashMap::insert returns false when the value is not new, that is,
             // when we have already generated this clone function.
@@ -140,16 +140,15 @@ impl Lowerer<'_, '_> {
                 continue;
             }
 
-            let function = Self::generate_eq(ctx, &ty);
+            let function = Self::generate_eq(ctx, ty);
             functions.push(function);
         }
 
         functions
     }
 
-    fn generate_eq(ctx: &mut LowerCtx<'_>, ty: &Type) -> Item {
-        let ty = ctx.type_info.resolve(ty);
-        let type_id = ctx.type_info.type_id(&ty);
+    fn generate_eq(ctx: &mut LowerCtx<'_>, ty: TyRef) -> Item {
+        let type_id = ty.type_id();
 
         let ident = format!("::generated::eq_{type_id}").into();
         let root_scope = ctx.type_info.scope_graph.root();
@@ -165,18 +164,12 @@ impl Lowerer<'_, '_> {
             // The clone fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
-            return_type: Type::Unit,
+            return_type: TyRef::UNIT,
             blocks: Vec::new(),
             variables: Vec::new(),
         };
 
-        lowerer.generate_eq_body(ident, scope, &ty);
-
-        let signature = types::Signature {
-            types: Vec::new(),
-            parameter_types: vec![ty.clone(), ty.clone()],
-            return_type: Type::bool(),
-        };
+        lowerer.generate_eq_body(ident, scope, ty);
 
         // We need a unified signature for all types, so we always expect pointers
         let ir_signature = Signature {
@@ -195,7 +188,7 @@ impl Lowerer<'_, '_> {
             name: ident,
             scope,
             kind: ItemKind::Function {
-                signature,
+                signature: None,
                 ir_signature,
             },
             entry_block,
@@ -209,7 +202,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         ident: Identifier,
         scope: ScopeRef,
-        ty: &Type,
+        ty: TyRef,
     ) {
         self.blocks.push(Block {
             label: self.ctx.label_store.new_label(ident),
@@ -226,82 +219,43 @@ impl Lowerer<'_, '_> {
             kind: VarKind::Explicit("right".into()),
         };
 
-        match &ty {
-            Type::ExplicitVar(_) => {
-                ice!("Can't generate eq of explicit type variable")
-            }
-            Type::Function(_, _) => {
-                ice!("Can't generate eq of function")
-            }
-            Type::Unit | Type::Never | Type::Var(_) => {
+        match self.ctx.type_info.ty_pool.get(ty) {
+            Ty::Unit | Ty::Never => {
                 self.emit_return(Some(IrValue::Bool(true).into()));
             }
-            Type::IntVar(_, _) => {
-                self.generate_int_eq(left_ptr, right_ptr, ty);
+            Ty::Record(fields) => {
+                let fields = fields.clone();
+                self.generate_eq_body_record(left_ptr, right_ptr, &fields)
             }
-            Type::FloatVar(_) => {
-                self.generate_float_eq(left_ptr, right_ptr, ty);
+            Ty::Enum(variants) => {
+                let variants = variants.clone();
+                self.generate_eq_body_enum(left_ptr, right_ptr, &variants)
             }
-            Type::RecordVar(_, fields) | Type::Record(fields) => {
-                self.generate_eq_body_record(left_ptr, right_ptr, fields)
+            Ty::Runtime(_) => {
+                self.generate_eq_runtime(left_ptr, right_ptr, ty);
             }
-            Type::Name(type_name) => {
-                let type_def =
-                    self.ctx.type_info.resolve_type_name(type_name);
-
-                if let Some(fields) =
-                    type_def.record_fields(&type_name.arguments)
-                {
-                    self.generate_eq_body_record(
-                        left_ptr, right_ptr, &fields,
-                    );
-                    return;
+            Ty::Primitive(primitive) => match primitive {
+                Primitive::Char
+                | Primitive::Bool
+                | Primitive::Asn
+                | Primitive::Int(_, _) => {
+                    self.generate_int_eq(left_ptr, right_ptr, ty)
                 }
-
-                if let Some(variants) =
-                    type_def.match_patterns(&type_name.arguments)
-                {
-                    self.generate_eq_body_enum(
-                        left_ptr, right_ptr, &variants,
-                    );
-                    return;
+                Primitive::IpAddr | Primitive::Prefix => {
+                    self.generate_eq_runtime(left_ptr, right_ptr, ty)
                 }
-
-                match type_def {
-                    TypeDefinition::Enum(_, _) => {
-                        ice!("enum eq should have been handled above");
-                    }
-                    TypeDefinition::Record(_, _) => {
-                        ice!("record eq should have been handled above");
-                    }
-                    TypeDefinition::Runtime(_, _) => {
-                        self.generate_eq_runtime(left_ptr, right_ptr, ty);
-                    }
-                    TypeDefinition::Primitive(primitive) => {
-                        match primitive {
-                            Primitive::Char
-                            | Primitive::Bool
-                            | Primitive::Asn
-                            | Primitive::Int(_, _) => {
-                                self.generate_int_eq(left_ptr, right_ptr, ty)
-                            }
-                            Primitive::IpAddr | Primitive::Prefix => self
-                                .generate_eq_runtime(left_ptr, right_ptr, ty),
-                            Primitive::Float(_) => self
-                                .generate_float_eq(left_ptr, right_ptr, ty),
-                            Primitive::String => self
-                                .generate_eq_runtime(left_ptr, right_ptr, ty),
-                        }
-                    }
-                    TypeDefinition::List(_) => {
-                        self.generate_eq_runtime(left_ptr, right_ptr, ty)
-                    }
+                Primitive::Float(_) => {
+                    self.generate_float_eq(left_ptr, right_ptr, ty)
                 }
-            }
+                Primitive::String => {
+                    self.generate_eq_runtime(left_ptr, right_ptr, ty)
+                }
+            },
+            Ty::List(_) => self.generate_eq_runtime(left_ptr, right_ptr, ty),
         }
     }
 
-    fn generate_int_eq(&mut self, left_ptr: Var, right_ptr: Var, ty: &Type) {
+    fn generate_int_eq(&mut self, left_ptr: Var, right_ptr: Var, ty: TyRef) {
         let ir_ty = self.lower_type(ty).unwrap();
 
         let left = self.new_tmp(ir_ty);
@@ -325,7 +279,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         left_ptr: Var,
         right_ptr: Var,
-        ty: &Type,
+        ty: TyRef,
     ) {
         let ir_ty = self.lower_type(ty).unwrap();
 
@@ -350,7 +304,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         left_base: Var,
         right_base: Var,
-        fields: &[(Meta<Identifier>, Type)],
+        fields: &[(Identifier, TyRef)],
     ) {
         let mut builder = LayoutBuilder::new();
 
@@ -374,9 +328,7 @@ impl Lowerer<'_, '_> {
 
         for (i, (_, ty)) in fields.iter().enumerate() {
             self.new_block(lbls[i]);
-            let Some(layout) =
-                self.ctx.type_info.layout_of(ty, self.ctx.runtime)
-            else {
+            let Some(layout) = self.layout_of(*ty) else {
                 // This type is uninhabited, which we could check up front
                 // but it's not important.
                 self.emit_jump(lbls[i + 1]);
@@ -388,7 +340,7 @@ impl Lowerer<'_, '_> {
             let left = self.offset(left_base.clone(), offset as u32);
             let right = self.offset(right_base.clone(), offset as u32);
 
-            let out = self.call_eq_by_ptr(left, right, ty);
+            let out = self.call_eq_by_ptr(left, right, *ty);
             self.emit_switch(out, vec![(1, lbls[i + 1])], false_lbl);
         }
 
@@ -403,7 +355,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         left_base: Var,
         right_base: Var,
-        variants: &[EnumVariant],
+        variants: &[(Identifier, Vec<TyRef>)],
     ) {
         let current_label = self.current_label();
         let lbl_prefix = self
@@ -470,7 +422,7 @@ impl Lowerer<'_, '_> {
         for (idx, variant_lbl) in branches {
             let variant = &variants[idx];
 
-            let lbls: Vec<LabelRef> = (0..variant.fields.len() + 1)
+            let lbls: Vec<LabelRef> = (0..=variant.1.len())
                 .map(|i| {
                     let ident = Identifier::from(&format!("field_{i}"));
                     self.ctx.label_store.wrap_internal(variant_lbl, ident)
@@ -478,11 +430,10 @@ impl Lowerer<'_, '_> {
                 .collect();
 
             let Some(layouts) = variant
-                .fields
+                .1
                 .iter()
                 .map(|ty| {
-                    let layout =
-                        self.ctx.type_info.layout_of(ty, self.ctx.runtime)?;
+                    let layout = self.layout_of(*ty)?;
                     Some((ty, layout))
                 })
                 .collect::<Option<Vec<_>>>()
@@ -506,7 +457,7 @@ impl Lowerer<'_, '_> {
                 let left = self.offset(left_base.clone(), offset as u32);
                 let right = self.offset(right_base.clone(), offset as u32);
 
-                let out = self.call_eq_by_ptr(left, right, ty);
+                let out = self.call_eq_by_ptr(left, right, **ty);
                 self.emit_switch(out, vec![(1, lbls[i + 1])], false_lbl);
             }
 
@@ -522,7 +473,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         left_ptr: Var,
         right_ptr: Var,
-        ty: &Type,
+        ty: TyRef,
     ) {
         let eq_fn = self.get_runtime_eq(ty).unwrap();
         let to = self.new_tmp(IrType::Bool);
@@ -536,28 +487,16 @@ impl Lowerer<'_, '_> {
         self.emit_return(Some(to.into()));
     }
 
-    fn get_runtime_eq(&mut self, ty: &Type) -> Option<EqFn> {
+    fn get_runtime_eq(&mut self, ty: TyRef) -> Option<EqFn> {
+        let ty = self.ctx.type_info.ty_pool.get(ty);
         let id = match ty {
-            Type::Name(type_name) => {
-                let type_def =
-                    self.ctx.type_info.resolve_type_name(type_name);
-                match type_def {
-                    TypeDefinition::Runtime(_, id) => Some(id),
-                    TypeDefinition::Primitive(Primitive::String) => {
-                        Some(TypeId::of::<crate::value::RotoString>())
-                    }
-                    TypeDefinition::Primitive(Primitive::IpAddr) => {
-                        Some(TypeId::of::<IpAddr>())
-                    }
-                    TypeDefinition::Primitive(Primitive::Prefix) => {
-                        Some(TypeId::of::<Prefix>())
-                    }
-                    TypeDefinition::List(_) => {
-                        Some(TypeId::of::<ErasedList>())
-                    }
-                    _ => None,
-                }
+            Ty::Runtime(id) => Some(*id),
+            Ty::Primitive(Primitive::String) => {
+                Some(TypeId::of::<RotoString>())
             }
+            Ty::Primitive(Primitive::IpAddr) => Some(TypeId::of::<IpAddr>()),
+            Ty::Primitive(Primitive::Prefix) => Some(TypeId::of::<Prefix>()),
+            Ty::List(_) => Some(TypeId::of::<ErasedList>()),
             _ => None,
         };
 

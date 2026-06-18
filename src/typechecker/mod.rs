@@ -410,10 +410,6 @@ impl TypeChecker {
                 .map_err(|_| "name is declared twice")?
         };
 
-        self.type_info
-            .runtime_function_signatures
-            .insert(id, signature);
-
         Ok(())
     }
 
@@ -1252,7 +1248,7 @@ impl TypeChecker {
                 if !name.arguments.is_empty() {
                     return None;
                 }
-                let type_def = self.type_info.resolve_type_name(&name);
+                let type_def = self.type_info.resolve_type_name(name.name);
 
                 let correct = if s == MustBeSigned::Yes {
                     type_def.is_signed_int()
@@ -1274,7 +1270,7 @@ impl TypeChecker {
                 if !name.arguments.is_empty() {
                     return None;
                 }
-                let type_def = self.type_info.resolve_type_name(&name);
+                let type_def = self.type_info.resolve_type_name(name.name);
                 if !type_def.is_float() {
                     return None;
                 }
@@ -1309,7 +1305,7 @@ impl TypeChecker {
             }
             (RecordVar(var, fields), Name(name))
             | (Name(name), RecordVar(var, fields)) => {
-                let type_def = self.type_info.resolve_type_name(&name);
+                let type_def = self.type_info.resolve_type_name(name.name);
                 let named_fields = type_def.record_fields(&name.arguments)?;
 
                 self.unify_fields(&fields, &named_fields)?;

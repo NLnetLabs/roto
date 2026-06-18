@@ -254,7 +254,7 @@ call_impl!(A1, A2, A3, A4, A5, A7, A8);
 
 pub struct FunctionInfo {
     id: FuncId,
-    signature: types::Signature,
+    signature: Option<types::Signature>,
     return_by_ref: bool,
 }
 
@@ -1465,6 +1465,15 @@ impl<Ctx: OptCtx> Module<Ctx> {
 
         let sig = &function_info.signature;
         let id = function_info.id;
+
+        // If there's no signature then this was a generated function such as
+        // clone, drop or eq. These are not available to extract.
+        let Some(sig) = &sig else {
+            return Err(FunctionRetrievalError::DoesNotExist {
+                name: name.to_string(),
+                existing: self.functions.keys().cloned().collect(),
+            });
+        };
 
         F::check_args(&mut self.type_info, &sig.parameter_types)?;
 
