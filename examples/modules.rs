@@ -11,7 +11,7 @@ fn main() -> Result<(), roto::RotoReport> {
 
     let f = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
 
-    let x = f.call(4i32);
+    let x = f.call(4i32).unwrap();
     println!("main(4) = {x}");
     Ok(())
 }

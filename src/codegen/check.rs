@@ -2,7 +2,7 @@ use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
 use crate::{
-    RotoString,
+    RotoString, ScriptResult,
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
@@ -316,7 +316,7 @@ pub trait RotoFunc {
         ctx: &mut Ctx,
         args: Self::Args,
         func_ptr: *const u8,
-    ) -> Self::Return;
+    ) -> Result<Self::Return, Box<str>>;
 }
 
 /// Little helper macro to create a unit
@@ -338,7 +338,7 @@ macro_rules! func {
             type Args = ($($a,)*);
             type Return = $r;
 
-            type RotoFn = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
+            type RotoFn = extern "C" fn(*mut ScriptResult<$r::Transformed>, *mut (), $($a::AsParam),*) -> ();
 
             fn check_args(
                 type_info: &mut TypeInfo,
@@ -361,7 +361,7 @@ macro_rules! func {
                 Ok(())
             }
 
-            unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8) -> R {
+            unsafe fn invoke<Ctx: 'static>(ctx: &mut Ctx, args: Self::Args, func_ptr: *const u8) -> Result<R, Box<str>> {
                 let ($($a,)*) = args;
                 let mut transformed = ($(<$a as Value>::transform($a),)*);
                 let ($($a,)*) = &mut transformed;
@@ -376,11 +376,13 @@ macro_rules! func {
                 let func_ptr = unsafe {
                     std::mem::transmute::<*const u8, Self::RotoFn>(func_ptr)
                 };
-                let mut ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
+                let mut ret = MaybeUninit::<ScriptResult<<$r as Value>::Transformed>>::uninit();
                 func_ptr(ret.as_mut_ptr(), ctx as *mut Ctx as *mut (), $($a),*);
                 let transformed_ret = unsafe { ret.assume_init() };
-                let ret: Self::Return = Self::Return::untransform(transformed_ret);
-                ret
+                match transformed_ret {
+                    ScriptResult::Ok(x) => Ok(Self::Return::untransform(x)),
+                    ScriptResult::Panic(s) => Err(s),
+                }
             }
         }
     };

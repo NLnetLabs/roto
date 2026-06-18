@@ -224,6 +224,12 @@ impl Printable for Value {
 
                 format!("runtime_func_{func_ref}({args})")
             }
+            Value::UnwrapScriptResult { val } => {
+                format!("unwrap({})", val.print(printer))
+            }
+            Value::MakeScriptResult { var, ty: _ } => {
+                format!("scriptresult({})", var.print(printer))
+            }
         }
     }
 }

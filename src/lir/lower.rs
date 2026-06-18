@@ -333,6 +333,74 @@ impl Lowerer<'_, '_> {
                 };
                 op
             }
+            mir::Value::UnwrapScriptResult { val } => {
+                let Some(l) = self.layout_of(ty) else {
+                    return;
+                };
+                let Some(ir_ty) = self.lower_type(ty) else {
+                    return;
+                };
+                let Some(to) = to else {
+                    return;
+                };
+                let mut layout = LayoutBuilder::new();
+                layout.add(&Layout::of::<u8>());
+                let offset = layout.add(&l);
+
+                let base = self.var(val);
+
+                // We do the moving of the variable here directly because we can
+                // only clone otherwise, which would probably impact the runtime
+                // too much. So we do a direct read or memcopy.
+                match to {
+                    Location::Var(var) => {
+                        let from = self.offset(base, offset as u32);
+                        self.emit_read(var, from.into(), ir_ty);
+                    }
+                    Location::Pointer {
+                        base: base_to,
+                        offset: offset_to,
+                    } => {
+                        let from = self.offset(base, offset as u32);
+                        let to = self.offset(base_to, offset_to as u32);
+                        let size = l.size();
+                        self.emit_memcpy(to.into(), from.into(), size as u32);
+                    }
+                }
+
+                return;
+            }
+            mir::Value::MakeScriptResult { var, ty } => {
+                let Some(Location::Pointer { base, offset }) = to else {
+                    ice!()
+                };
+                let to = self.offset(base.clone(), offset as u32);
+                self.emit_write(to.into(), Operand::Value(IrValue::U8(0)));
+
+                let var = self.var(var);
+
+                let Some(l) = self.layout_of(ty) else {
+                    return;
+                };
+                if l.is_zero_sized() {
+                    return;
+                }
+                let Some(is_reference_type) = self.is_reference_type(ty)
+                else {
+                    return;
+                };
+
+                let mut layout = LayoutBuilder::new();
+                layout.add(&Layout::of::<u8>());
+                let offset2 = layout.add(&l);
+                let to = self.offset(base, (offset + offset2) as u32);
+                if is_reference_type {
+                    self.emit_memcpy(to.into(), var.into(), l.size() as u32);
+                } else {
+                    self.emit_write(to.into(), var.into());
+                }
+                return;
+            }
         };
 
         // There are valid assignments in MIR that have the never type. For
@@ -351,6 +419,9 @@ impl Lowerer<'_, '_> {
         mir_signature: mir::Signature,
     ) -> Option<Operand> {
         let return_type = mir_signature.return_type;
+        let return_type = Ty::ScriptResult(return_type);
+        let return_type = self.ctx.type_info.ty_pool.intern(return_type);
+
         let layout = self.layout_of(return_type).unwrap();
         let out_ptr = self.new_stack_slot(layout);
 
@@ -384,10 +455,7 @@ impl Lowerer<'_, '_> {
         if self.is_reference_type(return_type)? {
             Some(out_ptr.into())
         } else {
-            let ty = self.lower_type(return_type)?;
-            let tmp = self.new_tmp(ty);
-            self.emit_read(tmp.clone(), out_ptr.into(), ty);
-            Some(tmp.into())
+            unreachable!();
         }
     }
 
@@ -399,6 +467,9 @@ impl Lowerer<'_, '_> {
         mir_signature: mir::Signature,
     ) -> Option<Operand> {
         let return_type = mir_signature.return_type;
+        let return_type = Ty::ScriptResult(return_type);
+        let return_type = self.ctx.type_info.ty_pool.intern(return_type);
+
         let layout = self
             .layout_of(return_type)
             .unwrap_or_else(|| Layout::new(0, 1));
@@ -553,10 +624,7 @@ impl Lowerer<'_, '_> {
         if self.is_reference_type(return_type)? {
             Some(out_ptr.into())
         } else {
-            let ty = self.lower_type(return_type)?;
-            let tmp = self.new_tmp(ty);
-            self.emit_read(tmp.clone(), out_ptr.into(), ty);
-            Some(tmp.into())
+            unreachable!()
         }
     }
 
@@ -697,35 +765,25 @@ impl Lowerer<'_, '_> {
     fn r#return(&mut self, var: mir::Var) {
         let var = self.var(var);
 
-        let layout = self.layout_of(self.return_type);
+        let result_ty = Ty::ScriptResult(self.return_type);
+        let result_ty = self.ctx.type_info.ty_pool.intern(result_ty);
+        let layout = self.layout_of(result_ty);
 
         if layout.as_ref().is_none_or(|l| l.size() == 0) {
             self.emit_return();
             return;
         }
 
-        if self.is_reference_type(self.return_type).unwrap() {
-            self.emit_memcpy(
-                Var {
-                    scope: self.function_scope,
-                    kind: VarKind::Return,
-                }
-                .into(),
-                var.into(),
-                layout.unwrap().size() as u32,
-            );
-            self.emit_return();
-        } else {
-            self.emit_write(
-                Var {
-                    scope: self.function_scope,
-                    kind: VarKind::Return,
-                }
-                .into(),
-                var.into(),
-            );
-            self.emit_return();
-        }
+        self.emit_memcpy(
+            Var {
+                scope: self.function_scope,
+                kind: VarKind::Return,
+            }
+            .into(),
+            var.into(),
+            layout.unwrap().size() as u32,
+        );
+        self.emit_return();
     }
 
     fn drop(&mut self, val: mir::Place, ty: TyRef) {

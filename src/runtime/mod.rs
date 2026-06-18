@@ -28,7 +28,7 @@ use crate::{
 };
 use context::ContextDescription;
 use func::FunctionDescription;
-use layout::Layout;
+pub(crate) use layout::Layout;
 use sealed::sealed;
 
 use crate::{

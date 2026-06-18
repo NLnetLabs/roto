@@ -47,6 +47,7 @@ pub(crate) enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
     Type(TypeError),
+    ConstantEvalPanicked(Box<str>),
     TestsFailed(),
     CouldNotRetrieveFunction(FunctionRetrievalError),
     Custom(String),
@@ -216,6 +217,12 @@ impl RotoReport {
                 }
                 RotoError::TestsFailed() => {
                     write!(f, "Tests failed")?;
+                }
+                RotoError::ConstantEvalPanicked(e) => {
+                    write!(
+                        f,
+                        "A panic occurred while evaluating the constants: {e}"
+                    )?;
                 }
                 RotoError::CouldNotRetrieveFunction(e) => {
                     write!(f, "Could not retrieve function: {e}")?;
@@ -406,15 +413,15 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
         )
     }
 
-    pub fn codegen(self) -> Package<Ctx> {
+    pub fn codegen(self) -> Result<Package<Ctx>, Box<str>> {
         let module = codegen::codegen(
             self.runtime,
             &self.ir.functions,
             &self.runtime_functions,
             self.label_store,
             self.type_info,
-        );
-        Package { module }
+        )?;
+        Ok(Package { module })
     }
 }
 

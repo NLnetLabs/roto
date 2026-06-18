@@ -19,7 +19,7 @@ use crate::{
     },
     runtime::{
         ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
-        RuntimeFunctionRef, context::Context,
+        RuntimeFunctionRef, context::Context, layout::LayoutBuilder,
     },
     typechecker::{
         info::TypeInfo,
@@ -192,7 +192,11 @@ unsafe impl<Ctx, F> Sync for TypedFunc<Ctx, F> {}
 
 impl<C: OptCtx, F: RotoFunc> TypedFunc<C, F> {
     /// Call this function with a tuple representing its arguments
-    pub fn call_tuple(&self, ctx: &mut C::Ctx, args: F::Args) -> F::Return {
+    pub fn call_tuple(
+        &self,
+        ctx: &mut C::Ctx,
+        args: F::Args,
+    ) -> Result<F::Return, Box<str>> {
         unsafe { F::invoke::<C::Ctx>(ctx, args, self.func) }
     }
 }
@@ -207,13 +211,13 @@ macro_rules! call_impl {
             /// Call this function.
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
-            pub fn call(&self, $($ty: $ty,)*) -> Return {
+            pub fn call(&self, $($ty: $ty,)*) -> Result<Return, Box<str>> {
                 self.call_tuple(&mut NoCtx, ($($ty,)*))
             }
 
             /// Turn this into an `impl Fn` type, to use it as a regular function.
             #[allow(non_snake_case)]
-            pub fn into_func(self) -> impl Fn($($ty,)*) -> Return {
+            pub fn into_func(self) -> impl Fn($($ty,)*) -> Result<Return, Box<str>> {
                 move |$($ty,)*| self.call($($ty,)*)
             }
         }
@@ -226,13 +230,13 @@ macro_rules! call_impl {
             /// Call this function.
             #[allow(non_snake_case)]
             #[allow(clippy::too_many_arguments)]
-            pub fn call(&self, ctx: &mut C, $($ty: $ty,)*) -> Return {
+            pub fn call(&self, ctx: &mut C, $($ty: $ty,)*) -> Result<Return, Box<str>> {
                 self.call_tuple(ctx, ($($ty,)*))
             }
 
             /// Turn this into an `impl Fn` type, to use it as a regular function.
             #[allow(non_snake_case)]
-            pub fn into_func(self) -> impl Fn(&mut C, $($ty,)*) -> Return {
+            pub fn into_func(self) -> impl Fn(&mut C, $($ty,)*) -> Result<Return, Box<str>> {
                 move |ctx, $($ty,)*| self.call(ctx, $($ty,)*)
             }
         }
@@ -363,7 +367,7 @@ pub fn codegen<Ctx: OptCtx>(
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
-) -> Module<Ctx> {
+) -> Result<Module<Ctx>, Box<str>> {
     let runtime = &runtime.rt;
 
     // The ISA is the Instruction Set Architecture. We always compile for
@@ -506,11 +510,32 @@ pub fn codegen<Ctx: OptCtx>(
 
                 // TODO: Think about what happens if a constant is uninhabited.
                 let layout = layout.as_ref().unwrap();
-                let constant = RotoConstant::new(
-                    layout.size(),
-                    layout.align(),
-                    drop_ptr,
-                );
+
+                let (result_layout, offset, panic_offset) = {
+                    let mut b = LayoutBuilder::new();
+                    b.add(&crate::runtime::layout::Layout::of::<u8>());
+                    let panic_offset = b.add(
+                        &crate::runtime::layout::Layout::of::<Box<str>>(),
+                    );
+                    let mut l = b.finish();
+
+                    let mut b = LayoutBuilder::new();
+                    b.add(&crate::runtime::layout::Layout::of::<u8>());
+                    let offset = b.add(layout);
+                    l = l.union(&b.finish());
+
+                    (l, offset, panic_offset)
+                };
+
+                let ptr = unsafe {
+                    std::alloc::alloc(
+                        Layout::from_size_align(
+                            result_layout.size(),
+                            result_layout.align(),
+                        )
+                        .unwrap(),
+                    )
+                };
 
                 let func_ptr = module.inner.get_finalized_function(func_id);
                 let func_ptr = unsafe {
@@ -520,7 +545,31 @@ pub fn codegen<Ctx: OptCtx>(
                     >(func_ptr)
                 };
 
-                unsafe { (func_ptr)(constant.ptr) };
+                unsafe { (func_ptr)(ptr.cast::<()>()) };
+
+                let discriminant = unsafe { std::ptr::read::<u8>(ptr) };
+                if discriminant == 1 {
+                    let panic_data = unsafe { ptr.byte_add(panic_offset) };
+                    let panic_reason = unsafe {
+                        std::ptr::read(panic_data.cast::<Box<str>>())
+                    };
+                    return Err(panic_reason);
+                };
+
+                let constant = RotoConstant::new(
+                    layout.size(),
+                    layout.align(),
+                    drop_ptr,
+                );
+
+                let data = unsafe { ptr.byte_add(offset) };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        data,
+                        constant.ptr.cast::<u8>(),
+                        layout.size(),
+                    )
+                };
 
                 module.roto_constants.insert(*name, constant);
             }
@@ -530,7 +579,7 @@ pub fn codegen<Ctx: OptCtx>(
         }
     }
 
-    module.finalize()
+    Ok(module.finalize())
 }
 
 impl ModuleBuilder {

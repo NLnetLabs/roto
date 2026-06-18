@@ -48,6 +48,7 @@ pub enum Ty {
     Primitive(Primitive),
     List(TyRef),
     Runtime(std::any::TypeId),
+    ScriptResult(TyRef),
 }
 
 /// A function signature in the MIR
@@ -217,6 +218,21 @@ impl Pool {
                 layout?
             }
             Ty::List(_) => Layout::of::<ErasedList>(),
+            Ty::ScriptResult(inner) => {
+                let mut b = LayoutBuilder::new();
+                b.add(&Layout::of::<u8>());
+                b.add(&Layout::of::<Box<str>>());
+                let mut layout = b.finish();
+
+                if let Some(inner) = self.layout_of(*inner, rt) {
+                    let mut b = LayoutBuilder::new();
+                    b.add(&Layout::of::<u8>());
+                    b.add(&inner);
+                    layout = layout.union(&b.finish());
+                }
+
+                layout
+            }
         };
 
         Some(layout)
@@ -258,6 +274,7 @@ impl Pool {
                 | Primitive::Char
                 | Primitive::Asn,
             ) => false,
+            Ty::ScriptResult(_) => true,
         };
 
         Some(res)
@@ -336,6 +353,9 @@ impl TypeDisplay for Ty {
             }
             Ty::Runtime(type_id) => {
                 write!(f, "runtime({:?})", type_id)?;
+            }
+            Ty::ScriptResult(type_id) => {
+                write!(f, "scriptresult({:?})", type_id)?;
             }
         }
         Ok(())

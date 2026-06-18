@@ -316,7 +316,7 @@ fn to_tokens(
                         syn::ReturnType::Type(_, ty) => {
                             let span = ty.span();
                             Some(quote_spanned!(span=>
-                                roto::__internal::implements_value::<#ty>();
+                                roto::__internal::implements_into_script_result::<#ty>();
                             ))
                         }
                     })

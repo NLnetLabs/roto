@@ -13,7 +13,7 @@ fn main() -> Result<(), roto::RotoReport> {
         .inspect_err(|e| eprintln!("{e}"))
         .unwrap();
 
-    func.call();
+    func.call().unwrap();
 
     Ok(())
 }

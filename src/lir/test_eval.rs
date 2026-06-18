@@ -111,15 +111,17 @@ fn accept() {
     let mut mem = Memory::new();
     let rt = Runtime::new();
     let program = compile(s, &rt);
-    let pointer = mem.allocate(1);
+    let pointer = mem.allocate(24);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(
         &mut mem,
         ctx,
         vec![IrValue::Pointer(pointer), IrValue::U32(0)],
     );
-    let res = mem.read_array::<1>(pointer);
-    assert_eq!(0, u8::from_ne_bytes(res));
+    let [0, res] = mem.read_array::<2>(pointer) else {
+        panic!();
+    };
+    assert_eq!(0, res);
 }
 
 #[test]
@@ -135,11 +137,13 @@ fn reject() {
     let mut mem = Memory::new();
     let rt = Runtime::new();
     let program = compile(s, &rt);
-    let pointer = mem.allocate(1);
+    let pointer = mem.allocate(24);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
-    let res = mem.read_array::<1>(pointer);
-    assert_eq!(1, u8::from_ne_bytes(res));
+    let [0, res] = mem.read_array::<2>(pointer) else {
+        panic!();
+    };
+    assert_eq!(1, res);
 }
 
 #[test]
@@ -158,11 +162,13 @@ fn if_else() {
     let mut mem = Memory::new();
     let rt = Runtime::new();
     let program = compile(s, &rt);
-    let pointer = mem.allocate(1);
+    let pointer = mem.allocate(24);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
-    let res = mem.read_array::<1>(pointer);
-    assert_eq!(0, u8::from_ne_bytes(res));
+    let [0, res] = mem.read_array::<2>(pointer) else {
+        panic!();
+    };
+    assert_eq!(0, res);
 }
 
 #[test]
@@ -184,15 +190,17 @@ fn react_to_rx() {
 
     for i in 0..6 {
         let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
+        let pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(pointer), IrValue::U32(i)],
         );
-        let res = mem.read_array::<1>(pointer);
-        assert_eq!(u8::from_ne_bytes(res), (i > 4) as u8, "failed at: {i}");
+        let [0, res] = mem.read_array::<2>(pointer) else {
+            panic!();
+        };
+        assert_eq!(res, (i > 4) as u8, "failed at: {i}");
     }
 }
 
@@ -214,11 +222,13 @@ fn variable() {
     let mut mem = Memory::new();
     let rt = Runtime::new();
     let program = compile(s, &rt);
-    let pointer = mem.allocate(1);
+    let pointer = mem.allocate(24);
     let ctx = IrValue::Pointer(mem.allocate(0));
     program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
-    let res = mem.read_array::<1>(pointer);
-    assert_eq!(0, u8::from_ne_bytes(res));
+    let [0, res] = mem.read_array::<2>(pointer) else {
+        panic!();
+    };
+    assert_eq!(0, res);
 }
 
 #[test]
@@ -245,15 +255,17 @@ fn calling_function() {
 
     for x in 0..30 {
         let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
+        let pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(pointer), IrValue::U32(x)],
         );
-        let res = mem.read_array::<1>(pointer);
-        assert_eq!(!(10 < x && x < 20) as u8, u8::from_ne_bytes(res));
+        let [0, res] = mem.read_array::<2>(pointer) else {
+            panic!()
+        };
+        assert_eq!(!(10 < x && x < 20) as u8, res);
     }
 }
 
@@ -278,15 +290,17 @@ fn anonymous_record() {
 
     for x in 0..30 {
         let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
+        let pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(pointer), IrValue::U32(x)],
         );
-        let res = mem.read_array::<1>(pointer);
-        assert_eq!(!(10 < x && x < 20) as u8, u8::from_ne_bytes(res));
+        let [0, res] = mem.read_array::<2>(pointer) else {
+            panic!();
+        };
+        assert_eq!(!(10 < x && x < 20) as u8, res);
     }
 }
 
@@ -318,15 +332,17 @@ fn typed_record() {
 
     for x in 0..1 {
         let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
+        let pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(pointer), IrValue::U32(x)],
         );
-        let res = mem.read_array::<1>(pointer);
-        assert_eq!(u8::from_ne_bytes(res), !(10 < x && x < 20) as u8);
+        let [0, res] = mem.read_array::<2>(pointer) else {
+            panic!();
+        };
+        assert_eq!(res, !(10 < x && x < 20) as u8);
     }
 }
 
@@ -354,15 +370,17 @@ fn nested_record() {
 
     for x in 20..21 {
         let mut mem = Memory::new();
-        let pointer = mem.allocate(1);
+        let pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(pointer), IrValue::I32(x)],
         );
-        let res = mem.read_array::<1>(pointer);
-        assert_eq!((x != 20) as u8, u8::from_ne_bytes(res), "for x = {x}");
+        let [0, res] = mem.read_array::<2>(pointer) else {
+            panic!();
+        };
+        assert_eq!((x != 20) as u8, res, "for x = {x}");
     }
 }
 
@@ -391,15 +409,17 @@ fn call_runtime_function() {
 
     for (value, expected) in [(5, 1), (11, 0)] {
         let mut mem = Memory::new();
-        let verdict_pointer = mem.allocate(1);
+        let verdict_pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(verdict_pointer), IrValue::U32(value)],
         );
-        let res = mem.read_array::<1>(verdict_pointer);
-        assert_eq!(expected as u8, u8::from_ne_bytes(res));
+        let [0, res] = mem.read_array::<2>(verdict_pointer) else {
+            panic!();
+        };
+        assert_eq!(expected as u8, res);
     }
 }
 
@@ -429,15 +449,17 @@ fn u32_method() {
 
     for (value, expected) in [(5, 1), (6, 0)] {
         let mut mem = Memory::new();
-        let verdict_pointer = mem.allocate(1);
+        let verdict_pointer = mem.allocate(24);
         let ctx = IrValue::Pointer(mem.allocate(0));
         program.eval(
             &mut mem,
             ctx,
             vec![IrValue::Pointer(verdict_pointer), IrValue::U32(value)],
         );
-        let res = mem.read_array::<1>(verdict_pointer);
-        assert_eq!(expected, u8::from_ne_bytes(res));
+        let [0, res] = mem.read_array::<2>(verdict_pointer) else {
+            panic!();
+        };
+        assert_eq!(expected, res);
     }
 }
 
@@ -457,11 +479,13 @@ fn string_global() {
     let p = compile(s, &rt);
 
     let mut mem = Memory::new();
-    let res_ptr = mem.allocate(1);
+    let res_ptr = mem.allocate(24);
     let res = IrValue::Pointer(res_ptr);
     let ctx = IrValue::Pointer(mem.allocate(0));
     p.eval(&mut mem, ctx, vec![res]);
 
-    let res = unsafe { *(mem.get(res_ptr) as *mut bool) };
-    assert!(res);
+    let [0, res] = mem.read_array::<2>(res_ptr) else {
+        panic!();
+    };
+    assert!(res != 0);
 }

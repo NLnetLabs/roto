@@ -243,13 +243,18 @@ pub use roto_macros::library;
 
 /// Items exported only for use in macros
 pub mod __internal {
-    use crate::Value;
     pub use crate::runtime::context::ContextField;
+    use crate::{IntoScriptResult, Value};
 
     /// Stub function that can be used as an assertion that a type implements [`Value`].
     ///
     /// This is used by [`library!`](crate::library).
     pub fn implements_value<T: Value>() {}
+
+    /// Stub function that can be used as an assertion that a type implements [`IntoScriptResult`].
+    ///
+    /// This is used by [`library!`](crate::library).
+    pub fn implements_into_script_result<T: IntoScriptResult>() {}
 }
 
 pub(crate) const FIND_HELP: &str = "\n\

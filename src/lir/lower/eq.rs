@@ -5,6 +5,7 @@ use inetnum::addr::Prefix;
 use crate::{
     RotoString,
     ast::Identifier,
+    ice,
     label::LabelRef,
     lir::{
         Block, FloatCmp, Instruction, IntCmp, IrType, IrValue, Item,
@@ -265,6 +266,9 @@ impl Lowerer<'_, '_> {
                 }
             },
             Ty::List(_) => self.generate_eq_runtime(left_ptr, right_ptr, ty),
+            Ty::ScriptResult(_) => {
+                ice!("a scriptresult shouldn't be compared");
+            }
         }
     }
 

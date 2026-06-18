@@ -257,7 +257,7 @@ impl Lowerer<'_> {
 
             self.new_block(arm_labels[&arm_index]);
             let val = self.block(&arm.body);
-            self.emit_assign(Place::new(out.clone(), ty), ty, val);
+            self.do_assign(Place::new(out.clone(), ty), ty, val);
 
             let to_drop = self.stack_slots.pop().unwrap();
             for (var, ty) in to_drop.into_iter().rev() {

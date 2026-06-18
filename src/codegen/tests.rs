@@ -34,7 +34,7 @@ fn compile_with_runtime<Ctx: OptCtx>(
 
     let res = f.parse().and_then(|x| x.typecheck(&runtime)).map(|x| {
         let x = x.lower_to_mir().lower_to_lir();
-        x.codegen()
+        x.codegen().unwrap()
     });
 
     match res {
@@ -64,7 +64,7 @@ fn unit() {
         .get_function::<fn() -> ()>("unit_expression")
         .expect("No function found (or mismatched types)");
 
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn unit_type() {
         .get_function::<fn() -> ()>("unit_type")
         .expect("No function found (or mismatched types)");
 
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn accept() {
         .get_function::<fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -119,7 +119,7 @@ fn accept_with_semicolon() {
         .get_function::<fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -138,7 +138,7 @@ fn reject() {
         .get_function::<fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -161,10 +161,10 @@ fn equal_to_10() {
         .get_function::<fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call(10);
+    let res = f.call(10).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -191,10 +191,10 @@ fn equal_to_10_with_function() {
         .get_function::<fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call(10);
+    let res = f.call(10).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -213,7 +213,7 @@ fn integer_suffix() {
         .get_function::<fn() -> i64>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 10);
+    assert_eq!(f.call().unwrap(), 10);
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn float_suffix_1() {
         .get_function::<fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 10.0);
+    assert_eq!(f.call().unwrap(), 10.0);
 }
 
 #[test]
@@ -249,7 +249,7 @@ fn float_suffix_2() {
         .get_function::<fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 10.1);
+    assert_eq!(f.call().unwrap(), 10.1);
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn float_suffix_3() {
         .get_function::<fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 101.0);
+    assert_eq!(f.call().unwrap(), 101.0);
 }
 
 #[test]
@@ -294,7 +294,7 @@ fn float_literals() {
             .get_function::<fn() -> f32>("main")
             .expect("No function found (or mismatched types)");
 
-        assert_eq!(f.call(), 10000.0);
+        assert_eq!(f.call().unwrap(), 10000.0);
     }
 }
 
@@ -313,7 +313,7 @@ fn integer_underscores() {
         .get_function::<fn() -> i64>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 10_000);
+    assert_eq!(f.call().unwrap(), 10_000);
 }
 
 #[test]
@@ -331,7 +331,7 @@ fn integer_strange_underscores() {
         .get_function::<fn() -> i64>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 10_000);
+    assert_eq!(f.call().unwrap(), 10_000);
 }
 
 #[test]
@@ -349,7 +349,7 @@ fn float_underscores() {
         .get_function::<fn() -> f64>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), 10_000.0);
+    assert_eq!(f.call().unwrap(), 10_000.0);
 }
 
 #[test]
@@ -381,10 +381,10 @@ fn equal_to_10_with_two_functions() {
         .get_function::<fn(u32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(5), Verdict::Reject(()));
-    assert_eq!(f.call(10), Verdict::Accept(()));
-    assert_eq!(f.call(15), Verdict::Reject(()));
-    assert_eq!(f.call(20), Verdict::Accept(()));
+    assert_eq!(f.call(5).unwrap(), Verdict::Reject(()));
+    assert_eq!(f.call(10).unwrap(), Verdict::Accept(()));
+    assert_eq!(f.call(15).unwrap(), Verdict::Reject(()));
+    assert_eq!(f.call(20).unwrap(), Verdict::Accept(()));
 }
 
 #[test]
@@ -401,7 +401,7 @@ fn negated_literal() {
     let f = p
         .get_function::<fn() -> i32>("negate")
         .expect("No function found (or mismatched types)");
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, -5)
 }
 
@@ -419,7 +419,7 @@ fn negation() {
     let f = p
         .get_function::<fn(i32) -> i32>("negate")
         .expect("No function found (or mismatched types)");
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, -5)
 }
 
@@ -443,7 +443,7 @@ fn inversion() {
         .expect("No function found (or mismatched types)");
 
     for x in 0..20 {
-        let res = f.call(x);
+        let res = f.call(x).unwrap();
         let exp = if x != 10 {
             Verdict::Accept(())
         } else {
@@ -469,7 +469,7 @@ fn not_not() {
         .expect("No function found (or mismatched types)");
 
     for x in 0..20 {
-        let res = f.call(x);
+        let res = f.call(x).unwrap();
         assert_eq!(res, x == 10, "{x}");
     }
 }
@@ -506,7 +506,7 @@ fn a_bunch_of_comparisons() {
                 Verdict::Reject(())
             };
 
-        let res = f.call(x);
+        let res = f.call(x).unwrap();
         assert_eq!(res, expected);
     }
 }
@@ -539,7 +539,7 @@ fn record() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call(x);
+        let res = f.call(x).unwrap();
         assert_eq!(res, expected);
     }
 }
@@ -575,7 +575,7 @@ fn record_with_fields_flipped() {
         } else {
             Verdict::Reject(())
         };
-        let res = f(x);
+        let res = f(x).unwrap();
         assert_eq!(res, expected);
     }
 }
@@ -610,7 +610,7 @@ fn nested_record() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call(x);
+        let res = f.call(x).unwrap();
         assert_eq!(res, expected, "for {x}");
     }
 }
@@ -644,7 +644,7 @@ fn misaligned_fields() {
         } else {
             Verdict::Reject(())
         };
-        let res = f.call(x);
+        let res = f.call(x).unwrap();
         assert_eq!(res, expected, "for {x}");
     }
 }
@@ -668,13 +668,13 @@ fn arithmetic() {
         .get_function::<fn(i32) -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call(20);
+    let res = f.call(20).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call(100);
+    let res = f.call(100).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -707,7 +707,7 @@ fn call_runtime_function() {
     for (value, expected) in
         [(5, Verdict::Reject(())), (11, Verdict::Accept(()))]
     {
-        let res = f.call(value);
+        let res = f.call(value).unwrap();
         assert_eq!(res, expected);
     }
 }
@@ -743,7 +743,7 @@ fn call_runtime_method() {
     for (value, expected) in
         [(5, Verdict::Reject(())), (10, Verdict::Accept(()))]
     {
-        let res = f.call(value);
+        let res = f.call(value).unwrap();
         assert_eq!(res, expected);
     }
 }
@@ -763,7 +763,7 @@ fn int_var() {
         .get_function::<fn() -> Verdict<i32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    assert_eq!(f.call(), Verdict::Accept(32));
+    assert_eq!(f.call().unwrap(), Verdict::Accept(32));
 }
 
 #[test]
@@ -830,11 +830,11 @@ fn asn() {
         .expect("No function found (or mismatched types)");
 
     assert_eq!(
-        f.call(Asn::from_u32(1000)),
+        f.call(Asn::from_u32(1000)).unwrap(),
         Verdict::Accept(Asn::from_u32(1000))
     );
     assert_eq!(
-        f.call(Asn::from_u32(2000)),
+        f.call(Asn::from_u32(2000)).unwrap(),
         Verdict::Reject(Asn::from_u32(2000))
     );
 }
@@ -878,7 +878,7 @@ fn multiply() {
         .get_function::<fn(u8) -> Verdict<u8, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20);
+    let res = f.call(20).unwrap();
     assert_eq!(res, Verdict::Accept(40));
 }
 
@@ -900,7 +900,7 @@ fn remainder() {
         .get_function::<fn(u64, u64) -> u64>("remainder")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(55, 10);
+    let res = f.call(55, 10).unwrap();
     assert_eq!(res, 5);
 }
 
@@ -925,7 +925,7 @@ fn modulo_signed() {
                 continue;
             }
             let out = i.wrapping_rem(j);
-            let res = f.call(i, j);
+            let res = f.call(i, j).unwrap();
             assert_eq!(res, out);
         }
     }
@@ -952,7 +952,7 @@ fn modulo_unsigned() {
                 continue;
             }
             let out = i % j;
-            let res = f.call(i, j);
+            let res = f.call(i, j).unwrap();
             assert_eq!(res, out);
         }
     }
@@ -979,7 +979,7 @@ fn factorial() {
         .get_function::<fn(u64) -> u64>("factorial")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, 120);
 }
 
@@ -1008,7 +1008,7 @@ fn nested_while_loop() {
         .get_function::<fn() -> u64>("nested_while_loop")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 100);
 }
 
@@ -1032,7 +1032,7 @@ fn repeat_string_manually() {
         .get_function::<fn(RotoString, u64) -> RotoString>("repeat")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call("foo".into(), 6);
+    let res = f.call("foo".into(), 6).unwrap();
     assert_eq!(res, "foofoofoofoofoofoo".into());
 }
 
@@ -1051,7 +1051,7 @@ fn float_mul() {
         .get_function::<fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.0);
+    let res = f.call(20.0).unwrap();
     assert_eq!(res, Verdict::Accept(40.0));
 }
 
@@ -1070,7 +1070,7 @@ fn float_add() {
         .get_function::<fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.0);
+    let res = f.call(20.0).unwrap();
     assert_eq!(res, Verdict::Accept(22.0));
 }
 
@@ -1089,7 +1089,7 @@ fn float_sub() {
         .get_function::<fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(2.0);
+    let res = f.call(2.0).unwrap();
     assert_eq!(res, Verdict::Accept(18.0));
 }
 
@@ -1108,7 +1108,7 @@ fn float_cmp() {
         .get_function::<fn(f32) -> Verdict<bool, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.0);
+    let res = f.call(20.0).unwrap();
     assert_eq!(res, Verdict::Accept(true));
 }
 
@@ -1127,13 +1127,13 @@ fn float_div_zero() {
         .get_function::<fn(f32) -> Verdict<f32, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.0);
+    let res = f.call(20.0).unwrap();
     assert_eq!(res, Verdict::Accept(f32::INFINITY));
 
-    let res = f.call(-20.0);
+    let res = f.call(-20.0).unwrap();
     assert_eq!(res, Verdict::Accept(-f32::INFINITY));
 
-    let Verdict::Accept(res) = f.call(0.0) else {
+    let Verdict::Accept(res) = f.call(0.0).unwrap() else {
         panic!("should have returned accept")
     };
     assert!(res.is_nan());
@@ -1147,9 +1147,9 @@ fn float_floor() {
         .get_function::<fn(f32) -> f32>("floor")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.5);
+    let res = f.call(20.5).unwrap();
     assert_eq!(res, 20.0);
-    let res = f.call(-20.5);
+    let res = f.call(-20.5).unwrap();
     assert_eq!(res, -21.0);
 }
 
@@ -1161,9 +1161,9 @@ fn float_ceil() {
         .get_function::<fn(f32) -> f32>("ceil")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.5);
+    let res = f.call(20.5).unwrap();
     assert_eq!(res, 21.0);
-    let res = f.call(-20.5);
+    let res = f.call(-20.5).unwrap();
     assert_eq!(res, -20.0);
 }
 
@@ -1175,9 +1175,9 @@ fn float_round() {
         .get_function::<fn(f32) -> f32>("round")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.6);
+    let res = f.call(20.6).unwrap();
     assert_eq!(res, 21.0);
-    let res = f.call(20.4);
+    let res = f.call(20.4).unwrap();
     assert_eq!(res, 20.0);
 }
 
@@ -1189,9 +1189,9 @@ fn float_pow() {
         .get_function::<fn(f32, f32) -> f32>("pow")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(2.0, 2.0);
+    let res = f.call(2.0, 2.0).unwrap();
     assert_eq!(res, 4.0);
-    let res = f.call(25.0, 0.5);
+    let res = f.call(25.0, 0.5).unwrap();
     assert_eq!(res, 5.0);
 }
 
@@ -1204,7 +1204,7 @@ fn float_scientific_notation_one() {
         .get_function::<fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 20.0e4);
 }
 
@@ -1217,7 +1217,7 @@ fn float_scientific_notation_two() {
         .get_function::<fn() -> f32>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 20.0e-4);
 }
 
@@ -1236,7 +1236,7 @@ fn float_add_f64() {
         .get_function::<fn(f64) -> Verdict<f64, ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(20.0);
+    let res = f.call(20.0).unwrap();
     assert_eq!(res, Verdict::Accept(40.0));
 }
 
@@ -1256,7 +1256,7 @@ fn ip_output() {
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept(ip));
 }
 
@@ -1276,7 +1276,7 @@ fn ip_passthrough() {
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Accept(ip));
 }
 
@@ -1302,18 +1302,18 @@ fn ipv4_compare() {
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([0, 0, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Accept(ip));
     let ip = IpAddr::from([192, 168, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Reject(ip));
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Reject(ip));
 }
 
@@ -1341,19 +1341,19 @@ fn ipv6_compare() {
         .expect("No function found (or mismatched types)");
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([0, 0, 0, 0, 0, 0, 0, 1]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([192, 168, 0, 0]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Accept(ip));
 
     let ip = IpAddr::from([1, 2, 3, 4]);
-    let res = f.call(ip);
+    let res = f.call(ip).unwrap();
     assert_eq!(res, Verdict::Reject(ip));
 }
 
@@ -1372,7 +1372,7 @@ fn construct_prefix() {
         .expect("No function found (or mismatched types)");
 
     let p = Prefix::new("192.168.0.0".parse().unwrap(), 16).unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept(p));
 }
 
@@ -1396,7 +1396,7 @@ fn function_returning_unit() {
         .get_function::<fn() -> Verdict<(), ()>>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept(()));
 }
 
@@ -1436,7 +1436,7 @@ fn to_string() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "10 20 15.5 false 1.1.1.1 1.1.0.0/16 AS1000 foo".into());
 }
 
@@ -1455,7 +1455,7 @@ fn simple_f_string() {
         .get_function::<fn(RotoString) -> RotoString>("foo")
         .unwrap();
 
-    let res = f.call("John".into());
+    let res = f.call("John".into()).unwrap();
     assert_eq!(res, "Hello John!".into());
 }
 
@@ -1472,7 +1472,7 @@ fn simple_f_string_number() {
     let mut p = compile(s);
     let f = p.get_function::<fn(i32) -> RotoString>("foo").unwrap();
 
-    let res = f.call(10);
+    let res = f.call(10).unwrap();
     assert_eq!(res, "Hello 10!".into());
 }
 
@@ -1489,7 +1489,7 @@ fn complex_f_string() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "This is a string with another string which prints true, isn't that wonderful?".into());
 }
 
@@ -1506,7 +1506,7 @@ fn escape_curly_in_f_string() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "Here is a single curly { and a closing one }".into());
 }
 
@@ -1523,7 +1523,7 @@ fn unicode_val_in_f_string() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "Here is an uppercase A and a lowercase a.".into());
 }
 
@@ -1541,7 +1541,7 @@ fn f_string_and_int_var_1() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "This should just work: 10".into());
 }
 
@@ -1561,7 +1561,7 @@ fn f_string_and_int_var_2() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "This should just work: 10".into());
 }
 
@@ -1579,7 +1579,7 @@ fn f_string_and_float_var_1() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "This should just work: 10".into());
 }
 
@@ -1599,7 +1599,7 @@ fn f_string_and_float_var_2() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "This should just work: 10".into());
 }
 
@@ -1672,7 +1672,7 @@ fn arc_type() {
 
     println!("{input:?}");
 
-    let output = f.call(true, Val(input.clone()), Val(input));
+    let output = f.call(true, Val(input.clone()), Val(input)).unwrap();
 
     let output = output.into_result().unwrap().0;
     println!("{output:?}");
@@ -1697,7 +1697,7 @@ fn use_constant() {
 
     let mut p = compile(s);
     let f = p.get_function::<fn() -> Verdict<(), ()>>("main").unwrap();
-    let output = f.call();
+    let output = f.call().unwrap();
     assert_eq!(output, Verdict::Reject(()));
 }
 
@@ -1718,7 +1718,7 @@ fn import_associated_constant() {
 
     let mut p = compile(s);
     let f = p.get_function::<fn() -> Verdict<(), ()>>("main").unwrap();
-    let output = f.call();
+    let output = f.call().unwrap();
     assert_eq!(output, Verdict::Reject(()));
 }
 
@@ -1738,7 +1738,7 @@ fn registered_constant() {
 
     let mut p = compile_with_runtime(s, rt);
     let f = p.get_function::<fn(f64) -> f64>("circumference").unwrap();
-    let output = f.call(2.0);
+    let output = f.call(2.0).unwrap();
 
     let exp = 2.0 * std::f64::consts::PI * 2.0;
     assert!(exp - 0.1 < output && output < exp + 0.1);
@@ -1771,11 +1771,11 @@ fn use_context() {
     let f = p.get_function::<fn() -> Verdict<i32, ()>>("main").unwrap();
 
     let mut ctx = Ctx { foo: 9, bar: false };
-    let output = f.call(&mut ctx);
+    let output = f.call(&mut ctx).unwrap();
     assert_eq!(output, Verdict::Accept(9));
 
     let mut ctx = Ctx { foo: 10, bar: true };
-    let output = f.call(&mut ctx);
+    let output = f.call(&mut ctx).unwrap();
     assert_eq!(output, Verdict::Accept(11));
 }
 
@@ -1790,10 +1790,10 @@ fn use_a_roto_function() {
 
     let mut p = compile(s);
     let f = p.get_function::<fn(i32) -> i32>("double").unwrap();
-    let output = f.call(2);
+    let output = f.call(2).unwrap();
     assert_eq!(output, 4);
 
-    let output = f.call(16);
+    let output = f.call(16).unwrap();
     assert_eq!(output, 32);
 }
 
@@ -1891,7 +1891,7 @@ fn string() {
         .get_function::<fn() -> Verdict<RotoString, ()>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept("hello".into()));
 }
 
@@ -1909,7 +1909,7 @@ fn escape_string() {
 
     let f = p.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "\t\tfoo".into());
 }
 
@@ -1929,7 +1929,7 @@ fn string_append() {
         .get_function::<fn(RotoString) -> Verdict<RotoString, ()>>("main")
         .unwrap();
 
-    let res = f.call("Martin".into());
+    let res = f.call("Martin".into()).unwrap();
     assert_eq!(res, Verdict::Accept("Hello Martin!".into()));
 }
 
@@ -1949,7 +1949,7 @@ fn string_append_as_function_call() {
         .get_function::<fn(RotoString) -> RotoString>("main")
         .unwrap();
 
-    let res = f.call("Martin".into());
+    let res = f.call("Martin".into()).unwrap();
     assert_eq!(res, "Hello Martin".into());
 }
 
@@ -1971,7 +1971,7 @@ fn string_append_as_imported_function() {
         .get_function::<fn(RotoString) -> RotoString>("main")
         .unwrap();
 
-    let res = f.call("Martin".into());
+    let res = f.call("Martin".into()).unwrap();
     assert_eq!(res, "Hello Martin".into());
 }
 
@@ -1991,7 +1991,7 @@ fn string_plus_operator() {
         .get_function::<fn(RotoString) -> Verdict<RotoString, ()>>("main")
         .unwrap();
 
-    let res = f.call("Martin".into());
+    let res = f.call("Martin".into()).unwrap();
     assert_eq!(res, Verdict::Accept("Hello Martin!".into()));
 }
 
@@ -2015,16 +2015,16 @@ fn string_contains() {
         .get_function::<fn(RotoString) -> Verdict<(), ()>>("main")
         .unwrap();
 
-    let res = f.call("incompre".into());
+    let res = f.call("incompre".into()).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call("hensi".into());
+    let res = f.call("hensi".into()).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call("bilities".into());
+    let res = f.call("bilities".into()).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call("nananana".into());
+    let res = f.call("nananana".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -2048,16 +2048,16 @@ fn string_starts_with() {
         .get_function::<fn(RotoString) -> Verdict<(), ()>>("main")
         .unwrap();
 
-    let res = f.call("incompre".into());
+    let res = f.call("incompre".into()).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call("hensi".into());
+    let res = f.call("hensi".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call("bilities".into());
+    let res = f.call("bilities".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call("nananana".into());
+    let res = f.call("nananana".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -2081,16 +2081,16 @@ fn string_ends_with() {
         .get_function::<fn(RotoString) -> Verdict<(), ()>>("main")
         .unwrap();
 
-    let res = f.call("incompre".into());
+    let res = f.call("incompre".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call("hensi".into());
+    let res = f.call("hensi".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 
-    let res = f.call("bilities".into());
+    let res = f.call("bilities".into()).unwrap();
     assert_eq!(res, Verdict::Accept(()));
 
-    let res = f.call("nananana".into());
+    let res = f.call("nananana".into()).unwrap();
     assert_eq!(res, Verdict::Reject(()));
 }
 
@@ -2116,10 +2116,10 @@ fn string_to_lowercase_and_uppercase() {
         )
         .unwrap();
 
-    let res = f.call(true, "WHISPER THIS!".into());
+    let res = f.call(true, "WHISPER THIS!".into()).unwrap();
     assert_eq!(res, Verdict::Accept("whisper this!".into()));
 
-    let res = f.call(false, "now shout this!".into());
+    let res = f.call(false, "now shout this!".into()).unwrap();
     assert_eq!(res, Verdict::Accept("NOW SHOUT THIS!".into()));
 }
 
@@ -2140,7 +2140,7 @@ fn string_repeat() {
         .get_function::<fn(RotoString) -> Verdict<RotoString, ()>>("main")
         .unwrap();
 
-    let res = f.call("boo".into());
+    let res = f.call("boo".into()).unwrap();
     assert_eq!(res, Verdict::Accept("BOO! BOO! BOO! BOO! BOO!".into()));
 }
 
@@ -2163,9 +2163,9 @@ fn match_option_value() {
         .get_function::<fn(Option<u32>) -> u32>("or_fortytwo")
         .unwrap();
 
-    let res = f.call(Some(10));
+    let res = f.call(Some(10)).unwrap();
     assert_eq!(res, 10);
-    let res = f.call(None);
+    let res = f.call(None).unwrap();
     assert_eq!(res, 42);
 }
 
@@ -2192,7 +2192,7 @@ fn match_option_string() {
         .get_function::<fn() -> Verdict<RotoString, RotoString>>("bar")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Verdict::Accept("Foobar".into()));
 }
 
@@ -2219,19 +2219,19 @@ fn match_on_string_with_guards() {
         .get_function::<fn(Option<RotoString>, i32) -> RotoString>("foo")
         .unwrap();
 
-    let res = f.call(Some("hello".into()), 5);
+    let res = f.call(Some("hello".into()), 5).unwrap();
     assert_eq!(&*res, "hey!");
-    let res = f.call(Some("hello".into()), 4);
+    let res = f.call(Some("hello".into()), 4).unwrap();
     assert_eq!(&*res, "hey!");
 
-    let res = f.call(Some("lorem ipsum dolor".into()), 5);
+    let res = f.call(Some("lorem ipsum dolor".into()), 5).unwrap();
     assert_eq!(&*res, "x is 5");
-    let res = f.call(Some("lorem ipsum dolor".into()), 4);
+    let res = f.call(Some("lorem ipsum dolor".into()), 4).unwrap();
     assert_eq!(&*res, "You've generated lorem ipsum: lorem ipsum dolor");
 
-    let res = f.call(Some("nothing".into()), 5);
+    let res = f.call(Some("nothing".into()), 5).unwrap();
     assert_eq!(&*res, "x is 5");
-    let res = f.call(Some("nothing".into()), 4);
+    let res = f.call(Some("nothing".into()), 4).unwrap();
     assert_eq!(&*res, "Can't recognize");
 }
 
@@ -2253,9 +2253,9 @@ fn construct_option_value() {
 
     let f = p.get_function::<fn(u32) -> Option<u32>>("sub_one").unwrap();
 
-    let res = f.call(0);
+    let res = f.call(0).unwrap();
     assert_eq!(res, None);
-    let res = f.call(2);
+    let res = f.call(2).unwrap();
     assert_eq!(res, Some(1));
 }
 
@@ -2279,9 +2279,9 @@ fn construct_imported_option() {
 
     let f = p.get_function::<fn(u32) -> Option<u32>>("sub_one").unwrap();
 
-    let res = f.call(0);
+    let res = f.call(0).unwrap();
     assert_eq!(res, None);
-    let res = f.call(2);
+    let res = f.call(2).unwrap();
     assert_eq!(res, Some(1));
 }
 
@@ -2303,9 +2303,9 @@ fn construct_option_value_from_prelude() {
 
     let f = p.get_function::<fn(u32) -> Option<u32>>("sub_one").unwrap();
 
-    let res = f.call(0);
+    let res = f.call(0).unwrap();
     assert_eq!(res, None);
-    let res = f.call(2);
+    let res = f.call(2).unwrap();
     assert_eq!(res, Some(1));
 }
 
@@ -2328,9 +2328,9 @@ fn match_result_value() {
         .get_function::<fn(Result<u32, RotoString>) -> u32>("or_fortytwo")
         .unwrap();
 
-    let res = f.call(Ok(10));
+    let res = f.call(Ok(10)).unwrap();
     assert_eq!(res, 10);
-    let res = f.call(Err("Not found".into()));
+    let res = f.call(Err("Not found".into())).unwrap();
     assert_eq!(res, 42);
 }
 
@@ -2354,9 +2354,9 @@ fn create_result_value() {
         .get_function::<fn(u32) -> Result<u32, RotoString>>("main")
         .unwrap();
 
-    let res = f.call(10);
+    let res = f.call(10).unwrap();
     assert_eq!(res, Ok(10));
-    let res = f.call(0);
+    let res = f.call(0).unwrap();
     assert_eq!(res, Err("x is not positive".into()));
 }
 
@@ -2380,9 +2380,9 @@ fn filter_map_with_manual_verdict() {
         .get_function::<fn(i32) -> Verdict<i32, i32>>("foo")
         .unwrap();
 
-    let res = f.call(0);
+    let res = f.call(0).unwrap();
     assert_eq!(res, Verdict::Reject(10));
-    let res = f.call(12);
+    let res = f.call(12).unwrap();
     assert_eq!(res, Verdict::Accept(12));
 }
 
@@ -2401,7 +2401,7 @@ fn unused_accept() {
 
     let f = p.get_function::<fn() -> ()>("foo").unwrap();
 
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -2431,11 +2431,11 @@ fn match_on_verdict() {
         .get_function::<fn(i32) -> Verdict<i32, i32>>("foo")
         .unwrap();
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, Verdict::Reject(5));
-    let res = f.call(15);
+    let res = f.call(15).unwrap();
     assert_eq!(res, Verdict::Accept(16));
-    let res = f.call(25);
+    let res = f.call(25).unwrap();
     assert_eq!(res, Verdict::Accept(26));
 }
 
@@ -2452,7 +2452,7 @@ fn non_sugar_option() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> Option<u32>>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some(2));
 }
 
@@ -2470,7 +2470,7 @@ fn none_with_unknown_type() {
     let f = p.get_function::<fn() -> ()>("foo").unwrap();
 
     // We don't care about the output
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -2491,7 +2491,7 @@ fn question_mark() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> Option<u32>>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, None);
 }
 
@@ -2517,9 +2517,9 @@ fn question_mark_in_chain() {
     let mut p = compile(s);
     let f = p.get_function::<fn(f64) -> Option<f64>>("foo").unwrap();
 
-    let res = f.call(10.0);
+    let res = f.call(10.0).unwrap();
     assert_eq!(res, Some(100.0));
-    let res = f.call(f64::NAN);
+    let res = f.call(f64::NAN).unwrap();
     assert_eq!(res, None);
 }
 
@@ -2542,10 +2542,10 @@ fn question_unit() {
         .get_function::<fn(bool) -> Option<()>>("maybe_a_unit")
         .unwrap();
 
-    let res = f.call(false);
+    let res = f.call(false).unwrap();
     assert_eq!(res, None);
 
-    let res = f.call(true);
+    let res = f.call(true).unwrap();
     assert_eq!(res, Some(()));
 }
 
@@ -2572,10 +2572,10 @@ fn question_record() {
         .get_function::<fn(bool) -> Option<i32>>("maybe_an_i32")
         .unwrap();
 
-    let res = f.call(false);
+    let res = f.call(false).unwrap();
     assert_eq!(res, None);
 
-    let res = f.call(true);
+    let res = f.call(true).unwrap();
     assert_eq!(res, Some(5));
 }
 
@@ -2603,13 +2603,13 @@ fn add_options() {
         .get_function::<fn(i32, i32) -> Option<i32>>("foo")
         .unwrap();
 
-    let res = f.call(2, 2);
+    let res = f.call(2, 2).unwrap();
     assert_eq!(res, Some(4));
-    let res = f.call(5, 5);
+    let res = f.call(5, 5).unwrap();
     assert_eq!(res, Some(10));
-    let res = f.call(15, 5);
+    let res = f.call(15, 5).unwrap();
     assert_eq!(res, None);
-    let res = f.call(5, 10);
+    let res = f.call(5, 10).unwrap();
     assert_eq!(res, None);
 }
 
@@ -2631,7 +2631,7 @@ fn question_question() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> Option<u32>>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, None);
 }
 
@@ -2649,7 +2649,7 @@ fn question_mark_none() {
     let mut p = compile(s);
     let f = p.get_function::<fn() -> Option<u32>>("foo").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, None);
 }
 
@@ -2679,7 +2679,7 @@ fn top_level_import() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 8);
 }
 
@@ -2709,7 +2709,7 @@ fn local_import() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 8);
 }
 
@@ -2744,7 +2744,7 @@ fn parent_import() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 16);
 }
 
@@ -2779,7 +2779,7 @@ fn package_import() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 16);
 }
 
@@ -2818,7 +2818,7 @@ fn import_via_super() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 8);
 }
 
@@ -2858,7 +2858,7 @@ fn import_module_first() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 8);
 }
 
@@ -2898,7 +2898,7 @@ fn import_module_second() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 8);
 }
 
@@ -2928,7 +2928,7 @@ fn use_type_from_module() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 4);
 }
 
@@ -2959,7 +2959,7 @@ fn use_imported_type() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 4);
 }
 
@@ -2992,7 +2992,7 @@ fn use_type_in_function_argument() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 4);
 }
 
@@ -3026,7 +3026,7 @@ fn import_list() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(1);
+    let res = main.call(1).unwrap();
     assert_eq!(res, 6);
 }
 
@@ -3059,7 +3059,7 @@ fn use_type_in_function_return_type() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 4);
 }
 
@@ -3092,7 +3092,7 @@ fn use_type_from_other_module_in_type() {
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = main.call(4);
+    let res = main.call(4).unwrap();
     assert_eq!(res, 4);
 }
 
@@ -3140,7 +3140,7 @@ fn mutate() {
         i: AtomicI32::new(0),
     };
     let ptr = Ptr(&mut t as *mut _);
-    let res = f.call(Val(ptr));
+    let res = f.call(Val(ptr)).unwrap();
 
     use std::sync::atomic::Ordering::Relaxed;
     match res {
@@ -3181,7 +3181,7 @@ fn return_vec() {
         .expect("No function found (or mismatched types)");
 
     let t = MyType { v: vec![0x01] };
-    let res = f.call(Val(t));
+    let res = f.call(Val(t)).unwrap();
     println!("Returned with {:?}", res.0.v.as_ptr());
 }
 
@@ -3234,7 +3234,7 @@ fn name_collision() {
         .expect("No function found (or mismatched types)");
 
     let t = A { _x: 1 };
-    let res = f.call(Val(t));
+    let res = f.call(Val(t)).unwrap();
     assert_eq!(res, Verdict::Accept(true));
 }
 
@@ -3267,7 +3267,7 @@ fn refcounting_in_a_recursive_function() {
         .unwrap();
 
     let v = Arc::new(Foo);
-    let res = f.call(Val(v.clone()));
+    let res = f.call(Val(v.clone())).unwrap();
     assert_eq!(res, Verdict::Reject(3));
 
     assert_eq!(Arc::strong_count(&v), 1);
@@ -3288,8 +3288,8 @@ fn str_equals() {
         .get_function::<fn(RotoString) -> bool>("is_slash")
         .unwrap();
 
-    assert!(func.call("/".into()));
-    assert!(!func.call("foo".into()));
+    assert!(func.call("/".into()).unwrap());
+    assert!(!func.call("foo".into()).unwrap());
 }
 
 #[test]
@@ -3307,8 +3307,8 @@ fn str_not_equals() {
         .get_function::<fn(RotoString) -> bool>("is_not_slash")
         .unwrap();
 
-    assert!(func.call("foo".into()));
-    assert!(!func.call("/".into()));
+    assert!(func.call("foo".into()).unwrap());
+    assert!(!func.call("/".into()).unwrap());
 }
 
 #[test]
@@ -3326,7 +3326,7 @@ fn assignment() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 7);
+    assert_eq!(func.call().unwrap(), 7);
 }
 
 #[test]
@@ -3345,7 +3345,7 @@ fn add_assign() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 6);
+    assert_eq!(func.call().unwrap(), 6);
 }
 
 #[test]
@@ -3364,7 +3364,7 @@ fn sub_assign() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 1);
+    assert_eq!(func.call().unwrap(), 1);
 }
 
 #[test]
@@ -3383,7 +3383,7 @@ fn mul_assign() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 6 * 2 * 3);
+    assert_eq!(func.call().unwrap(), 6 * 2 * 3);
 }
 
 #[test]
@@ -3402,7 +3402,7 @@ fn div_assign() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 10);
+    assert_eq!(func.call().unwrap(), 10);
 }
 
 #[test]
@@ -3420,7 +3420,7 @@ fn mod_assign() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 5);
+    assert_eq!(func.call().unwrap(), 5);
 }
 
 #[test]
@@ -3438,7 +3438,7 @@ fn assignment_record_field() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 7);
+    assert_eq!(func.call().unwrap(), 7);
 }
 
 #[test]
@@ -3456,7 +3456,7 @@ fn assignment_record() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 7);
+    assert_eq!(func.call().unwrap(), 7);
 }
 
 #[test]
@@ -3476,7 +3476,7 @@ fn assignment_record_is_by_value() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 5);
+    assert_eq!(func.call().unwrap(), 5);
 }
 
 #[test]
@@ -3494,7 +3494,7 @@ fn assignment_nested_record_1() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 6);
+    assert_eq!(func.call().unwrap(), 6);
 }
 
 #[test]
@@ -3512,7 +3512,7 @@ fn assignment_nested_record_2() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 6);
+    assert_eq!(func.call().unwrap(), 6);
 }
 
 #[test]
@@ -3531,7 +3531,7 @@ fn assignment_string() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> RotoString>("foo").unwrap();
 
-    assert_eq!(func.call(), "foofoofoofoo".into());
+    assert_eq!(func.call().unwrap(), "foofoofoofoo".into());
 }
 
 #[test]
@@ -3550,7 +3550,7 @@ fn let_declaration_is_by_value() {
     let mut compiled = compile(s);
     let func = compiled.get_function::<fn() -> i32>("foo").unwrap();
 
-    assert_eq!(func.call(), 5);
+    assert_eq!(func.call().unwrap(), 5);
 }
 
 #[test]
@@ -3604,7 +3604,7 @@ fn sigill() {
 
     let mut compiled = compile_with_runtime(s, rt);
     let func = compiled.get_function::<fn() -> Val<Arcane>>("foo").unwrap();
-    let Val(a) = func.call();
+    let Val(a) = func.call().unwrap();
     assert_eq!(Arc::strong_count(&a.0), 1);
 }
 
@@ -3643,10 +3643,10 @@ fn rust_string_string() {
 
     let mut compiled = compile_with_runtime(s, rt);
     let func = compiled.get_function::<fn() -> Val<String>>("foo").unwrap();
-    assert_eq!(func.call(), Val("hello".into()));
+    assert_eq!(func.call().unwrap(), Val("hello".into()));
 
     let func = compiled.get_function::<fn() -> Val<String>>("bar").unwrap();
-    assert_eq!(func.call(), Val("hello".into()));
+    assert_eq!(func.call().unwrap(), Val("hello".into()));
 }
 
 #[test]
@@ -3671,7 +3671,7 @@ fn return_verdict_from_runtime_function() {
         .get_function::<fn() -> Verdict<(), ()>>("bar")
         .unwrap();
 
-    assert_eq!(Verdict::Accept(()), func.call());
+    assert_eq!(Verdict::Accept(()), func.call().unwrap());
 }
 
 #[test]
@@ -3690,7 +3690,7 @@ fn string_global() {
     let mut p = compile_with_runtime(s, rt);
     let f = p.get_function::<fn() -> RotoString>("use_foo").unwrap();
 
-    assert_eq!(f.call(), "BAR".into());
+    assert_eq!(f.call().unwrap(), "BAR".into());
 }
 
 // Originally from issue #234
@@ -3712,7 +3712,7 @@ fn layered_option_matching_none() {
         .get_function::<fn() -> Option<RotoString>>("reproducer")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, None);
 }
 
@@ -3731,10 +3731,10 @@ fn strings_from_if() {
         .get_function::<fn(bool) -> RotoString>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(false);
+    let res = f.call(false).unwrap();
     assert_eq!(res, "false".into());
 
-    let res = f.call(true);
+    let res = f.call(true).unwrap();
     assert_eq!(res, "true".into());
 }
 
@@ -3753,10 +3753,10 @@ fn bool_is_true() {
         .get_function::<fn(bool) -> bool>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(false);
+    let res = f.call(false).unwrap();
     assert!(!res);
 
-    let res = f.call(true);
+    let res = f.call(true).unwrap();
     assert!(res);
 }
 
@@ -3775,10 +3775,10 @@ fn bool_is_not_true() {
         .get_function::<fn(bool) -> bool>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(false);
+    let res = f.call(false).unwrap();
     assert!(res);
 
-    let res = f.call(true);
+    let res = f.call(true).unwrap();
     assert!(!res);
 }
 
@@ -3808,10 +3808,10 @@ fn register_on_optstr() {
         .get_function::<fn(Val<Option<RotoString>>) -> RotoString>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call(Val(None));
+    let res = f.call(Val(None)).unwrap();
     assert_eq!(res, "".into());
 
-    let res = f.call(Val(Some("hello".into())));
+    let res = f.call(Val(Some("hello".into()))).unwrap();
     assert_eq!(res, "hello".into());
 }
 
@@ -3837,7 +3837,7 @@ fn register_closure() {
         .get_function::<fn() -> i32>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 10);
 }
 
@@ -3866,7 +3866,7 @@ fn increment_via_closure() {
         .get_function::<fn()>("foo")
         .expect("No function found (or mismatched types)");
 
-    f.call();
+    f.call().unwrap();
     assert_eq!(COUNTER.load(Ordering::Relaxed), 2);
 }
 
@@ -3892,7 +3892,7 @@ fn call_runtime_function_in_f_string() {
         .get_function::<fn() -> RotoString>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "fooAS2bar".into());
 }
 
@@ -3920,7 +3920,7 @@ fn f32_issue() {
         .get_function::<fn()>("foo")
         .expect("No function found (or mismatched types)");
 
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -3957,7 +3957,7 @@ fn register_module() {
         .get_function::<fn() -> f32>("foo")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert!(-1.1 < res && res < -0.9);
 }
 
@@ -3996,7 +3996,7 @@ fn register_type_in_module() {
         .get_function::<fn() -> u32>("main")
         .expect("No function found (or mismatched types)");
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 3);
 }
 
@@ -4014,7 +4014,7 @@ fn assignment_with_question_mark() {
     );
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> Option<()>>("foo").unwrap();
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -4031,7 +4031,7 @@ fn prefix_eq() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> bool>("foo").unwrap();
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -4063,10 +4063,10 @@ fn define_enum_type() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> i32>("match_on_foo").unwrap();
 
-    let res = f.call(true);
+    let res = f.call(true).unwrap();
     assert_eq!(res, 10);
 
-    let res = f.call(false);
+    let res = f.call(false).unwrap();
     assert_eq!(res, 20);
 }
 
@@ -4106,10 +4106,10 @@ fn haskeller_wants_to_feel_at_home() {
         .get_function::<fn(Option<i32>) -> Option<i32>>("useless")
         .unwrap();
 
-    let res = f.call(Some(5));
+    let res = f.call(Some(5)).unwrap();
     assert_eq!(res, Some(5));
 
-    let res = f.call(None);
+    let res = f.call(None).unwrap();
     assert_eq!(res, None);
 }
 
@@ -4149,10 +4149,10 @@ fn generic_haskeller_wants_to_feel_at_home() {
         .get_function::<fn(Option<i32>) -> Option<i32>>("useless")
         .unwrap();
 
-    let res = f.call(Some(5));
+    let res = f.call(Some(5)).unwrap();
     assert_eq!(res, Some(5));
 
-    let res = f.call(None);
+    let res = f.call(None).unwrap();
     assert_eq!(res, None);
 }
 
@@ -4186,7 +4186,7 @@ fn match_on_empty_enum_2() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> ()>("foo").unwrap();
-    f.call()
+    f.call().unwrap()
 }
 
 #[test]
@@ -4241,8 +4241,8 @@ fn lets_make_a_result() {
     let f = pkg
         .get_function::<fn(Verdict<i32, u32>) -> Verdict<i32, u32>>("useless")
         .unwrap();
-    assert_eq!(f.call(Verdict::Accept(2)), Verdict::Accept(2));
-    assert_eq!(f.call(Verdict::Reject(4)), Verdict::Reject(4));
+    assert_eq!(f.call(Verdict::Accept(2)).unwrap(), Verdict::Accept(2));
+    assert_eq!(f.call(Verdict::Reject(4)).unwrap(), Verdict::Reject(4));
 }
 
 #[test]
@@ -4258,7 +4258,7 @@ fn enum_with_unused_type_param() {
     );
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn()>("foo").unwrap();
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -4274,7 +4274,7 @@ fn enum_with_never_type_param() {
     );
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn()>("foo").unwrap();
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
@@ -4301,7 +4301,7 @@ fn generic_record() {
     );
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(i32) -> i32>("bar").unwrap();
-    let res = f.call(23);
+    let res = f.call(23).unwrap();
     assert_eq!(res, 23);
 }
 
@@ -4331,9 +4331,9 @@ fn generic_record_contains_option() {
     let f = pkg
         .get_function::<fn(Option<i32>) -> Option<i32>>("bar")
         .unwrap();
-    let res = f.call(None);
+    let res = f.call(None).unwrap();
     assert_eq!(res, None);
-    let res = f.call(Some(20));
+    let res = f.call(Some(20)).unwrap();
     assert_eq!(res, Some(20));
 }
 
@@ -4362,7 +4362,7 @@ fn generic_record_inferred() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(i32) -> i32>("bar").unwrap();
-    let res = f.call(23);
+    let res = f.call(23).unwrap();
     assert_eq!(res, 23);
 }
 
@@ -4394,7 +4394,7 @@ fn generics_all_the_way_down() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
-    let res = f.call(23);
+    let res = f.call(23).unwrap();
     assert_eq!(res, 23);
 }
 
@@ -4410,7 +4410,7 @@ fn char_literal() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> char>("main").unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 'a');
 }
 
@@ -4432,7 +4432,7 @@ fn stringbuf() {
     let f = pkg
         .get_function::<fn(RotoString) -> RotoString>("quote")
         .unwrap();
-    let res = f.call("hello".into());
+    let res = f.call("hello".into()).unwrap();
     assert_eq!(res, "\"hello\"".into());
 }
 
@@ -4448,25 +4448,28 @@ fn list_empty() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> ()>("main").unwrap();
-    f.call();
+    f.call().unwrap();
 }
 
 #[test]
 fn list_basic() {
     let s = src!(
         r#"
-        fn main() -> i32? {
+        fn main() -> i32 {
             let list = List.new();
             list.push(5);
-            list.get(0)
+            match list.get(0) {
+                Some(x) => x,
+                None => 0,
+            }
         }
     "#
     );
 
     let mut pkg = compile(s);
-    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
-    let res = f.call();
-    assert_eq!(res, Some(5));
+    let f = pkg.get_function::<fn() -> i32>("main").unwrap();
+    let res = f.call().unwrap();
+    assert_eq!(res, 5);
 }
 
 #[test]
@@ -4486,7 +4489,7 @@ fn list_push_twice() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some(5));
 }
 
@@ -4513,7 +4516,7 @@ fn list_get_many() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some(50));
 }
 
@@ -4533,7 +4536,7 @@ fn list_len() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> u64>("main").unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 3);
 }
 
@@ -4550,7 +4553,7 @@ fn list_is_empty_1() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> bool>("main").unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert!(res);
 }
 
@@ -4568,7 +4571,7 @@ fn list_is_empty_2() {
 
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> bool>("main").unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert!(!res);
 }
 
@@ -4589,7 +4592,7 @@ fn list_of_strings_1() {
     let f = pkg
         .get_function::<fn() -> Option<RotoString>>("main")
         .unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some("hello".into()));
 }
 
@@ -4611,7 +4614,7 @@ fn list_of_strings_2() {
     let f = pkg
         .get_function::<fn() -> Option<RotoString>>("main")
         .unwrap();
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some("hello world".into()));
 }
 
@@ -4635,7 +4638,7 @@ fn list_through_script() {
     let x = List::new();
     x.push(1);
     x.push(2);
-    let res = f.call(x);
+    let res = f.call(x).unwrap();
     assert_eq!(res.to_vec(), vec![1, 2, 3, 4]);
 }
 
@@ -4665,7 +4668,7 @@ fn list_of_lists() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> List<List<u64>>>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(
         res.to_vec().iter().map(|l| l.to_vec()).collect::<Vec<_>>(),
         vec![vec![1, 2], vec![3, 4]]
@@ -4685,7 +4688,7 @@ fn list_literal() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> List<u64>>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), vec![1, 2, 3, 4]);
 }
 
@@ -4702,7 +4705,7 @@ fn list_concat() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> List<u64>>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), vec![1, 2, 3, 4, 5, 6, 7, 8]);
 }
 
@@ -4721,7 +4724,7 @@ fn list_concat_strings() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     let expected: Vec<RotoString> =
         ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
@@ -4744,7 +4747,7 @@ fn list_swap() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> List<i32>>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     let expected: Vec<i32> = vec![4, 3, 2, 1];
     assert_eq!(res.to_vec(), expected);
@@ -4765,7 +4768,7 @@ fn list_plus_strings() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     let expected: Vec<RotoString> =
         ["a", "b", "c", "d"].into_iter().map(Into::into).collect();
@@ -4787,7 +4790,7 @@ fn list_of_options() {
         .get_function::<fn() -> List<Option<i32>>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     let expected = vec![Some(1), None, Some(2), None];
     assert_eq!(res.to_vec(), expected);
@@ -4808,7 +4811,7 @@ fn list_of_option_of_strings() {
         .get_function::<fn() -> List<Option<RotoString>>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     let expected: Vec<Option<RotoString>> =
         vec![Some("hello".into()), None, Some("bonjour".into()), None];
@@ -4832,7 +4835,7 @@ fn for_loop() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> u64>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     assert_eq!(res, 10);
 }
@@ -4856,7 +4859,7 @@ fn for_loop_strings() {
     let mut pkg = compile_with_runtime(s, rt);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     assert_eq!(res, "abcd".into());
 }
@@ -4878,7 +4881,7 @@ fn empty_for_loop() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> u64>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     assert_eq!(res, 0);
 }
@@ -4902,7 +4905,7 @@ fn cartesian_for_loop() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> u64>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
 
     assert_eq!(res, 100);
 }
@@ -4930,7 +4933,7 @@ fn cloning_a_record_with_a_copy_field() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> i64>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 5);
 }
 
@@ -4947,16 +4950,16 @@ fn string_get() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(u64) -> Option<char>>("main").unwrap();
 
-    let res = f.call(2);
+    let res = f.call(2).unwrap();
     assert_eq!(res, Some('l'));
 
-    let res = f.call(0);
+    let res = f.call(0).unwrap();
     assert_eq!(res, Some('h'));
 
-    let res = f.call(10);
+    let res = f.call(10).unwrap();
     assert_eq!(res, None);
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, None);
 }
 
@@ -4973,16 +4976,16 @@ fn string_get_non_ascii() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(u64) -> Option<char>>("main").unwrap();
 
-    let res = f.call(1);
+    let res = f.call(1).unwrap();
     assert_eq!(res, Some('ö'));
 
-    let res = f.call(5);
+    let res = f.call(5).unwrap();
     assert_eq!(res, Some('老'));
 
-    let res = f.call(8);
+    let res = f.call(8).unwrap();
     assert_eq!(res, Some('L'));
 
-    let res = f.call(16);
+    let res = f.call(16).unwrap();
     assert_eq!(res, None);
 }
 
@@ -5001,25 +5004,25 @@ fn string_slice() {
         .get_function::<fn(u64, u64) -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call(0, 2);
+    let res = f.call(0, 2).unwrap();
     assert_eq!(res, Some("he".into()));
 
-    let res = f.call(0, 1);
+    let res = f.call(0, 1).unwrap();
     assert_eq!(res, Some("h".into()));
 
-    let res = f.call(0, 5);
+    let res = f.call(0, 5).unwrap();
     assert_eq!(res, Some("hello".into()));
 
-    let res = f.call(1, 3);
+    let res = f.call(1, 3).unwrap();
     assert_eq!(res, Some("el".into()));
 
-    let res = f.call(0, 0);
+    let res = f.call(0, 0).unwrap();
     assert_eq!(res, Some("".into()));
 
-    let res = f.call(1, 0);
+    let res = f.call(1, 0).unwrap();
     assert_eq!(res, None);
 
-    let res = f.call(0, 8);
+    let res = f.call(0, 8).unwrap();
     assert_eq!(res, None);
 }
 
@@ -5038,12 +5041,12 @@ fn string_slice_non_ascii() {
         .get_function::<fn(u64, u64) -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call(0, 4);
+    let res = f.call(0, 4).unwrap();
     assert_eq!(res, Some("Löwe".into()));
 
-    let res = f.call(5, 7);
+    let res = f.call(5, 7).unwrap();
     assert_eq!(res, Some("老虎".into()));
-    let res = f.call(8, 15);
+    let res = f.call(8, 15).unwrap();
     assert_eq!(res, Some("Léopard".into()));
 }
 
@@ -5062,10 +5065,10 @@ fn string_join() {
         .get_function::<fn(RotoString) -> RotoString>("main")
         .unwrap();
 
-    let res = f.call("".into());
+    let res = f.call("".into()).unwrap();
     assert_eq!(res, "hello".into());
 
-    let res = f.call(" ".into());
+    let res = f.call(" ".into()).unwrap();
     assert_eq!(res, "h e l l o".into());
 }
 
@@ -5084,7 +5087,7 @@ fn string_split() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(
         res.to_vec(),
         vec!["one".into(), "two".into(), "three".into()]
@@ -5104,7 +5107,7 @@ fn string_join_chars() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "hello".into());
 }
 
@@ -5122,7 +5125,7 @@ fn string_replace() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "Hello John".into());
 }
 
@@ -5139,10 +5142,10 @@ fn string_len() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(RotoString) -> u64>("main").unwrap();
 
-    let res = f.call("hello".into());
+    let res = f.call("hello".into()).unwrap();
     assert_eq!(res, 5);
 
-    let res = f.call("老虎".into());
+    let res = f.call("老虎".into()).unwrap();
     assert_eq!(res, 2);
 }
 
@@ -5159,7 +5162,7 @@ fn string_chars() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> List<char>>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), vec!['R', 'u', 's', 't', '!']);
 }
 
@@ -5178,7 +5181,7 @@ fn string_lines() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), vec!["One line".into(), "And another".into()]);
 }
 
@@ -5195,7 +5198,7 @@ fn string_trim() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "Rust!".into());
 }
 
@@ -5212,7 +5215,7 @@ fn string_trim_start() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "Rust!  ".into());
 }
 
@@ -5229,7 +5232,7 @@ fn string_trim_end() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "  Rust!".into());
 }
 
@@ -5248,7 +5251,7 @@ fn string_strip_prefix_found() {
         .get_function::<fn() -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some("Rust!".into()));
 }
 
@@ -5267,7 +5270,7 @@ fn string_strip_prefix_not_found() {
         .get_function::<fn() -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, None);
 }
 
@@ -5286,7 +5289,7 @@ fn string_strip_suffix_found() {
         .get_function::<fn() -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, Some("Rust!".into()));
 }
 
@@ -5305,7 +5308,7 @@ fn string_strip_suffix_not_found() {
         .get_function::<fn() -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, None);
 }
 
@@ -5324,7 +5327,7 @@ fn string_splitn_exact() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), ["Rust", "Roto", "String"].map(Into::into));
 }
 
@@ -5343,7 +5346,7 @@ fn string_splitn_less() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), ["Rust", "Roto!String"].map(Into::into));
 }
 
@@ -5362,7 +5365,7 @@ fn string_rsplitn() {
         .get_function::<fn() -> List<RotoString>>("main")
         .unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.to_vec(), ["String", "Rust!Roto"].map(Into::into));
 }
 
@@ -5381,7 +5384,7 @@ fn string_line_slice() {
         .get_function::<fn(u64, u64) -> Option<RotoString>>("main")
         .unwrap();
 
-    let res = f.call(0, 2);
+    let res = f.call(0, 2).unwrap();
     assert_eq!(res, Some("1\n2\n".into()));
 }
 
@@ -5417,8 +5420,8 @@ fn record_equality() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
 
-    assert!(f.call(true));
-    assert!(!f.call(false));
+    assert!(f.call(true).unwrap());
+    assert!(!f.call(false).unwrap());
 }
 
 #[test]
@@ -5453,8 +5456,8 @@ fn record_inequality() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
 
-    assert!(!f.call(true));
-    assert!(f.call(false));
+    assert!(!f.call(true).unwrap());
+    assert!(f.call(false).unwrap());
 }
 
 #[test]
@@ -5472,12 +5475,12 @@ fn option_equality() {
         .get_function::<fn(Option<u64>, Option<u64>) -> bool>("main")
         .unwrap();
 
-    assert!(f.call(None, None));
-    assert!(f.call(Some(10), Some(10)));
-    assert!(f.call(Some(20), Some(20)));
-    assert!(!f.call(Some(10), None));
-    assert!(!f.call(None, Some(10)));
-    assert!(!f.call(Some(20), Some(10)));
+    assert!(f.call(None, None).unwrap());
+    assert!(f.call(Some(10), Some(10)).unwrap());
+    assert!(f.call(Some(20), Some(20)).unwrap());
+    assert!(!f.call(Some(10), None).unwrap());
+    assert!(!f.call(None, Some(10)).unwrap());
+    assert!(!f.call(Some(20), Some(10)).unwrap());
 }
 
 #[test]
@@ -5495,12 +5498,12 @@ fn option_inequality() {
         .get_function::<fn(Option<u64>, Option<u64>) -> bool>("main")
         .unwrap();
 
-    assert!(!f.call(None, None));
-    assert!(!f.call(Some(10), Some(10)));
-    assert!(!f.call(Some(20), Some(20)));
-    assert!(f.call(Some(10), None));
-    assert!(f.call(None, Some(10)));
-    assert!(f.call(Some(20), Some(10)));
+    assert!(!f.call(None, None).unwrap());
+    assert!(!f.call(Some(10), Some(10)).unwrap());
+    assert!(!f.call(Some(20), Some(20)).unwrap());
+    assert!(f.call(Some(10), None).unwrap());
+    assert!(f.call(None, Some(10)).unwrap());
+    assert!(f.call(Some(20), Some(10)).unwrap());
 }
 
 #[test]
@@ -5521,8 +5524,8 @@ fn list_equality() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
 
-    assert!(f.call(true));
-    assert!(!f.call(false));
+    assert!(f.call(true).unwrap());
+    assert!(!f.call(false).unwrap());
 }
 
 #[test]
@@ -5543,8 +5546,8 @@ fn list_inequality() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
 
-    assert!(!f.call(true));
-    assert!(f.call(false));
+    assert!(!f.call(true).unwrap());
+    assert!(f.call(false).unwrap());
 }
 
 #[test]
@@ -5566,8 +5569,8 @@ fn anonymous_record_equality() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
 
-    assert!(f.call(true));
-    assert!(!f.call(false));
+    assert!(f.call(true).unwrap());
+    assert!(!f.call(false).unwrap());
 }
 
 #[test]
@@ -5589,8 +5592,8 @@ fn anonymous_record_inequality() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(bool) -> bool>("main").unwrap();
 
-    assert!(!f.call(true));
-    assert!(f.call(false));
+    assert!(!f.call(true).unwrap());
+    assert!(f.call(false).unwrap());
 }
 
 #[test]
@@ -5606,11 +5609,11 @@ fn list_contains_int() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(i32) -> bool>("main").unwrap();
 
-    assert!(!f.call(0));
-    assert!(f.call(1));
-    assert!(f.call(2));
-    assert!(f.call(3));
-    assert!(!f.call(4));
+    assert!(!f.call(0).unwrap());
+    assert!(f.call(1).unwrap());
+    assert!(f.call(2).unwrap());
+    assert!(f.call(3).unwrap());
+    assert!(!f.call(4).unwrap());
 }
 
 #[test]
@@ -5626,11 +5629,11 @@ fn list_contains_string() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(RotoString) -> bool>("main").unwrap();
 
-    assert!(!f.call("Alex".into()));
-    assert!(f.call("Terts".into()));
-    assert!(f.call("Jasper".into()));
-    assert!(f.call("Luuk".into()));
-    assert!(!f.call("Martin".into()));
+    assert!(!f.call("Alex".into()).unwrap());
+    assert!(f.call("Terts".into()).unwrap());
+    assert!(f.call("Jasper".into()).unwrap());
+    assert!(f.call("Luuk".into()).unwrap());
+    assert!(!f.call("Martin".into()).unwrap());
 }
 
 #[test]
@@ -5646,11 +5649,11 @@ fn list_index_int() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(i32) -> Option<u64>>("main").unwrap();
 
-    assert_eq!(f.call(0), None);
-    assert_eq!(f.call(10), Some(0));
-    assert_eq!(f.call(20), Some(1));
-    assert_eq!(f.call(30), Some(2));
-    assert_eq!(f.call(40), None);
+    assert_eq!(f.call(0).unwrap(), None);
+    assert_eq!(f.call(10).unwrap(), Some(0));
+    assert_eq!(f.call(20).unwrap(), Some(1));
+    assert_eq!(f.call(30).unwrap(), Some(2));
+    assert_eq!(f.call(40).unwrap(), None);
 }
 
 #[test]
@@ -5668,11 +5671,11 @@ fn list_index_string() {
         .get_function::<fn(RotoString) -> Option<u64>>("main")
         .unwrap();
 
-    assert_eq!(f.call("Alex".into()), None);
-    assert_eq!(f.call("Terts".into()), Some(0));
-    assert_eq!(f.call("Jasper".into()), Some(1));
-    assert_eq!(f.call("Luuk".into()), Some(2));
-    assert_eq!(f.call("Martin".into()), None);
+    assert_eq!(f.call("Alex".into()).unwrap(), None);
+    assert_eq!(f.call("Terts".into()).unwrap(), Some(0));
+    assert_eq!(f.call("Jasper".into()).unwrap(), Some(1));
+    assert_eq!(f.call("Luuk".into()).unwrap(), Some(2));
+    assert_eq!(f.call("Martin".into()).unwrap(), None);
 }
 
 #[test]
@@ -5692,7 +5695,7 @@ fn block_expression() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(u64) -> u64>("main").unwrap();
 
-    assert_eq!(f.call(10), 40);
+    assert_eq!(f.call(10).unwrap(), 40);
 }
 
 #[test]
@@ -5710,7 +5713,7 @@ fn simple_roto_constant() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> u8>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 8);
 }
 
@@ -5729,7 +5732,7 @@ fn simple_roto_constant_string() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "foo".into());
 }
 
@@ -5749,7 +5752,7 @@ fn simple_roto_constant_string_2() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "foobar".into());
 }
 
@@ -5773,7 +5776,7 @@ fn roto_constants_through_functions() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, "foofoofoofoo".into());
 }
 
@@ -5798,7 +5801,7 @@ fn registered_constant_in_roto_constant() {
     let mut pkg = compile_with_runtime(s, rt);
     let f = pkg.get_function::<fn() -> u32>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res, 5);
 }
 
@@ -5834,7 +5837,7 @@ fn runtime_type_constant() {
     let mut pkg = compile_with_runtime(s, rt);
     let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
 
-    let res = f.call();
+    let res = f.call().unwrap();
     assert_eq!(res.0.x, 4);
 }
 
@@ -5872,7 +5875,7 @@ fn zero_sized_registered_type() {
     let mut pkg = compile_with_runtime(s, rt);
     let f = pkg.get_function::<fn() -> Val<Foo>>("main").unwrap();
 
-    let _res = f.call();
+    let _res = f.call().unwrap();
 }
 
 #[test]
@@ -5892,7 +5895,7 @@ fn zero_sized_type_as_argument() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(()) -> ()>("main").unwrap();
 
-    f.call(());
+    f.call(()).unwrap();
 }
 
 #[test]
@@ -5923,7 +5926,7 @@ fn zero_sized_registered_type_as_argument() {
         .get_function::<fn(Val<Application>) -> bool>("main")
         .unwrap();
 
-    assert!(f.call(Val(Application)));
+    assert!(f.call(Val(Application)).unwrap());
 }
 
 #[test]
@@ -5939,9 +5942,9 @@ fn string_eq_shortcircuit_or() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(RotoString) -> bool>("main").unwrap();
 
-    assert!(f.call("a".into()));
-    assert!(f.call("b".into()));
-    assert!(!f.call("c".into()));
+    assert!(f.call("a".into()).unwrap());
+    assert!(f.call("b".into()).unwrap());
+    assert!(!f.call("c".into()).unwrap());
 }
 
 #[test]
@@ -5957,9 +5960,9 @@ fn string_eq_shortcircuit_and() {
     let mut pkg = compile(s);
     let f = pkg.get_function::<fn(RotoString) -> bool>("main").unwrap();
 
-    assert!(!f.call("a".into()));
-    assert!(!f.call("b".into()));
-    assert!(f.call("c".into()));
+    assert!(!f.call("a".into()).unwrap());
+    assert!(!f.call("b".into()).unwrap());
+    assert!(f.call("c".into()).unwrap());
 }
 
 #[test]
@@ -5981,8 +5984,8 @@ fn return_in_one_branch_of_if() {
         .get_function::<fn(RotoString) -> bool>("or_executes")
         .unwrap();
 
-    assert!(f.call("a".into()));
-    assert!(!f.call("c".into()));
+    assert!(f.call("a".into()).unwrap());
+    assert!(!f.call("c".into()).unwrap());
 }
 
 #[test]
@@ -6001,9 +6004,9 @@ fn return_in_or_expression() {
         .get_function::<fn(RotoString) -> bool>("or_executes")
         .unwrap();
 
-    assert!(f.call("a".into()));
-    assert!(f.call("b".into()));
-    assert!(f.call("c".into()));
-    assert!(f.call("d".into()));
-    assert!(!f.call("e".into()));
+    assert!(f.call("a".into()).unwrap());
+    assert!(f.call("b".into()).unwrap());
+    assert!(f.call("c".into()).unwrap());
+    assert!(f.call("d".into()).unwrap());
+    assert!(!f.call("e".into()).unwrap());
 }

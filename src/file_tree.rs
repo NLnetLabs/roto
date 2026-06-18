@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptCtx};
+use crate::{
+    Package, RotoError, RotoReport, Runtime, parser::meta::Spans,
+    runtime::OptCtx,
+};
 
 fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
     RotoReport {
@@ -95,7 +98,16 @@ impl FileTree {
         rt: &Runtime<Ctx>,
     ) -> Result<Package<Ctx>, RotoReport> {
         let checked = self.parse()?.typecheck(rt)?;
-        let pkg = checked.lower_to_mir().lower_to_lir().codegen();
+        let pkg = checked
+            .lower_to_mir()
+            .lower_to_lir()
+            .codegen()
+            // TODO: This error message should be improved.
+            .map_err(|s| RotoReport {
+                files: Vec::new(),
+                errors: vec![RotoError::ConstantEvalPanicked(s)],
+                spans: Spans::default(),
+            })?;
         Ok(pkg)
     }
 }

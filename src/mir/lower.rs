@@ -266,20 +266,10 @@ impl<'r> Lowerer<'r> {
         self.stack_slots.push(Vec::new());
 
         let last = self.expr(&constant.expr);
+        let _ = self.return_value(last);
 
         let ty = self.type_info.type_of(&constant.ident);
         let mir_ty = self.type_info.convert(&ty);
-
-        let tmp = self.assign_to_var(last, mir_ty);
-
-        self.remove_live_variable(&tmp);
-
-        let to_drop = self.stack_slots.pop().unwrap();
-        for (var, ty) in to_drop.into_iter().rev() {
-            self.emit_drop(Place::new(var, ty), ty);
-        }
-
-        self.emit_return(tmp);
 
         let resolved_name = self.type_info.resolved_name(&constant.ident);
         let name = self.type_info.full_name(&resolved_name);
@@ -343,20 +333,13 @@ impl<'r> Lowerer<'r> {
         };
 
         let last = self.block(body);
-        let return_type = self.type_info.convert(return_type);
-        let tmp = self.assign_to_var(last, return_type);
+        let _ = self.return_value(last);
 
+        let return_type = self.type_info.convert(return_type);
         let mir_signature = ty::Signature {
             parameter_types: mir_parameter_types,
             return_type,
         };
-
-        let to_drop = self.stack_slots.pop().unwrap();
-        for (var, ty) in to_drop.into_iter().rev() {
-            self.emit_drop(Place::new(var, ty), ty);
-        }
-
-        self.emit_return(tmp);
 
         let name = self.type_info.resolved_name(ident);
         let name = self.type_info.full_name(&name);
@@ -418,6 +401,8 @@ impl<'r> Lowerer<'r> {
             }
         }
 
+        // Final var is live in the slot above
+        self.add_live_variable(final_var.clone(), ty);
         Value::Move(final_var)
     }
 
@@ -565,14 +550,32 @@ impl<'r> Lowerer<'r> {
 
     fn return_value(&mut self, val: Value) -> Value {
         let var = self.assign_to_var(val, self.return_type);
-        let _ty = self.remove_live_variable(&var);
+        self.remove_live_variable(&var);
+
+        let result_ty = Ty::ScriptResult(self.return_type);
+        let result_ty = self.type_info.ty_pool.intern(result_ty);
+        let result = self.tmp(result_ty);
+        self.do_assign(
+            Place::new(result.clone(), result_ty),
+            result_ty,
+            Value::MakeScriptResult {
+                var,
+                ty: self.return_type,
+            },
+        );
+
+        self.remove_live_variable(&result);
+        self.drop_all();
+        self.emit_return(result);
+        Value::Const(ast::Literal::Unit, TyRef::UNIT)
+    }
+
+    fn drop_all(&mut self) {
         for frame in self.stack_slots.clone().iter().rev() {
             for (var, ty) in frame.iter().rev() {
                 self.emit_drop(Place::new(var.clone(), *ty), *ty);
             }
         }
-        self.emit_return(var);
-        Value::Const(ast::Literal::Unit, TyRef::UNIT)
     }
 
     fn function_call(
@@ -656,6 +659,7 @@ impl<'r> Lowerer<'r> {
             tmp
         }));
 
+        let return_type = self.type_info.convert(&func.signature.return_type);
         let mir_signature = ty::Signature {
             parameter_types: func
                 .signature
@@ -663,10 +667,16 @@ impl<'r> Lowerer<'r> {
                 .iter()
                 .map(|ty| self.type_info.convert(ty))
                 .collect(),
-            return_type: self.type_info.convert(&func.signature.return_type),
+            return_type,
         };
 
-        match func.definition {
+        let current_lbl = self.current_label();
+        let continue_lbl = self.label_store.next(current_lbl);
+        let panic_lbl = self
+            .label_store
+            .wrap_internal(current_lbl, Identifier::from("on_panic"));
+
+        let f_val = match func.definition {
             FunctionDefinition::Runtime(func_ref) => {
                 let mut vtables = Vec::new();
                 for idx in &self.runtime.get_function(func_ref).vtables {
@@ -687,7 +697,37 @@ impl<'r> Lowerer<'r> {
                 args,
                 mir_signature,
             },
-        }
+        };
+
+        let result_ty = Ty::ScriptResult(return_type);
+        let result_ty_ref = self.type_info.ty_pool.intern(result_ty);
+
+        let result = self.tmp(result_ty_ref);
+        self.emit_assign(
+            Place::new(result.clone(), result_ty_ref),
+            result_ty_ref,
+            f_val,
+        );
+        self.remove_live_variable(&result);
+
+        let discriminant = self.tmp(TyRef::U8);
+        self.emit_assign(
+            Place::new(discriminant.clone(), TyRef::U8),
+            TyRef::U8,
+            Value::Discriminant(result.clone()),
+        );
+        self.emit_switch(
+            discriminant,
+            vec![(1, panic_lbl)],
+            Some(continue_lbl),
+        );
+
+        self.new_block(panic_lbl);
+        self.drop_all();
+        self.emit_return(result.clone());
+
+        self.new_block(continue_lbl);
+        Value::UnwrapScriptResult { val: result }
     }
 
     fn enum_constructor(
@@ -821,14 +861,18 @@ impl<'r> Lowerer<'r> {
 
         let tmp = self.tmp(ty);
 
+        let result_ty = self.type_info.ty_pool.intern(Ty::ScriptResult(ty));
+        let result_var = self.tmp(result_ty);
+        self.remove_live_variable(&result_var);
+
         let func_ref = self.find_method(TypeId::of::<ErasedList>(), "new");
         self.emit(Instruction::Assign {
             to: Place {
-                var: tmp.clone(),
-                root_ty: ty,
+                var: result_var.clone(),
+                root_ty: result_ty,
                 projection: Vec::new(),
             },
-            ty,
+            ty: result_ty,
             value: Value::CallRuntime {
                 func_ref,
                 args: Vec::new(),
@@ -839,8 +883,17 @@ impl<'r> Lowerer<'r> {
                 vtables: vec![inner],
             },
         });
+        self.emit_assign(
+            Place::new(tmp.clone(), ty),
+            ty,
+            Value::UnwrapScriptResult { val: result_var },
+        );
 
-        let unit_tmp = self.tmp(TyRef::UNIT);
+        let result_ty =
+            self.type_info.ty_pool.intern(Ty::ScriptResult(TyRef::UNIT));
+        let result_var = self.tmp(result_ty);
+        self.remove_live_variable(&result_var);
+
         for expr in list {
             let list_var = Value::Clone(Place::new(tmp.clone(), ty));
             let list_var = self.assign_to_var(list_var, ty);
@@ -860,13 +913,16 @@ impl<'r> Lowerer<'r> {
 
             let func_ref =
                 self.find_method(TypeId::of::<ErasedList>(), "push");
+
+            // Assuming that this call doesn't panic, we can just not do anything
+            // wit the scriptresult.
             self.emit(Instruction::Assign {
                 to: Place {
-                    var: unit_tmp.clone(),
-                    root_ty: TyRef::UNIT,
+                    var: result_var.clone(),
+                    root_ty: result_ty,
                     projection: Vec::new(),
                 },
-                ty: TyRef::UNIT,
+                ty: result_ty,
                 value: Value::CallRuntime {
                     func_ref,
                     args: vec![list_var, elem_var],
@@ -1193,7 +1249,6 @@ impl<'r> Lowerer<'r> {
         let r = self.assign_to_var(r, r_ty);
 
         let return_type = self.type_info.convert(&return_type);
-        let tmp = self.tmp(return_type);
         let mir_signature = ty::Signature {
             parameter_types: vec![l_ty, r_ty],
             return_type,
@@ -1204,10 +1259,16 @@ impl<'r> Lowerer<'r> {
             mir_signature,
             vec![l, r],
         );
+        let result_ty = Ty::ScriptResult(return_type);
+        let result_ty = self.type_info.ty_pool.intern(result_ty);
+        let result = self.tmp(result_ty);
+        self.do_assign(Place::new(result.clone(), result_ty), result_ty, val);
+        self.remove_live_variable(&result);
+        let tmp = self.tmp(return_type);
         self.do_assign(
             Place::new(tmp.clone(), return_type),
             return_type,
-            val,
+            Value::UnwrapScriptResult { val: result },
         );
 
         Value::Move(tmp)
@@ -1265,14 +1326,14 @@ impl<'r> Lowerer<'r> {
         let ty = self.type_info.convert(&ty);
 
         let res = self.undropped_tmp();
-        self.emit_assign(Place::new(res.clone(), ty), ty, op);
+        self.do_assign(Place::new(res.clone(), ty), ty, op);
 
         self.emit_jump(lbl_cont);
 
         if let Some(r#else) = r#else {
             self.new_block(lbl_else);
             let op = self.block(r#else);
-            self.emit_assign(Place::new(res.clone(), ty), ty, op);
+            self.do_assign(Place::new(res.clone(), ty), ty, op);
             self.emit_jump(lbl_cont);
         }
         self.new_block(lbl_cont);
@@ -1358,9 +1419,14 @@ impl<'r> Lowerer<'r> {
 
         let elem_ty = self.type_info.convert(&elem_ty);
         let opt_elem_ty = self.type_info.convert(&opt_elem_ty);
+        let opt_elem_result_ty =
+            self.type_info.ty_pool.intern(Ty::ScriptResult(opt_elem_ty));
 
         let opt_elem_var = self.undropped_tmp();
+        let opt_elem_result_var = self.undropped_tmp();
         self.vars.push((opt_elem_var.clone(), opt_elem_ty));
+        self.vars
+            .push((opt_elem_result_var.clone(), opt_elem_result_ty));
 
         // This is the setup for the iteration. We evaluate the expression for
         // the list and set the index to 0.
@@ -1417,8 +1483,11 @@ impl<'r> Lowerer<'r> {
                 return_type: opt_elem_ty,
             };
             self.emit(Instruction::Assign {
-                to: Place::new(opt_elem_var.clone(), opt_elem_ty),
-                ty: opt_elem_ty,
+                to: Place::new(
+                    opt_elem_result_var.clone(),
+                    opt_elem_result_ty,
+                ),
+                ty: opt_elem_result_ty,
                 value: Value::CallRuntime {
                     func_ref,
                     args: vec![new_list_var, index_var],
@@ -1426,6 +1495,13 @@ impl<'r> Lowerer<'r> {
                     vtables: Vec::new(),
                 },
             });
+            self.emit_assign(
+                Place::new(opt_elem_var.clone(), opt_elem_ty),
+                opt_elem_ty,
+                Value::UnwrapScriptResult {
+                    val: opt_elem_result_var.clone(),
+                },
+            );
 
             let discriminant = self.undropped_tmp();
             self.emit_assign(
@@ -1590,6 +1666,11 @@ impl<'r> Lowerer<'r> {
         let type_id = TypeId::of::<crate::RotoString>();
         let func_ref = self.find_method(type_id, "append");
 
+        let return_ty = Ty::ScriptResult(TyRef::STRING);
+        let return_ty = self.type_info.ty_pool.intern(return_ty);
+        let return_var = self.tmp(return_ty);
+        self.remove_live_variable(&return_var);
+
         for part in parts {
             let id = part.id;
             let new_string = match &part.node {
@@ -1620,6 +1701,11 @@ impl<'r> Lowerer<'r> {
                 vec![string.clone(), new_string],
             );
 
+            self.emit_assign(
+                Place::new(return_var.clone(), return_ty),
+                return_ty,
+                val,
+            );
             self.stack_slots
                 .last_mut()
                 .unwrap()
@@ -1627,7 +1713,9 @@ impl<'r> Lowerer<'r> {
             self.do_assign(
                 Place::new(string.clone(), TyRef::STRING),
                 TyRef::STRING,
-                val,
+                Value::UnwrapScriptResult {
+                    val: return_var.clone(),
+                },
             );
         }
 

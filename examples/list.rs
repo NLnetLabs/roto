@@ -24,7 +24,7 @@ fn main() -> ExitCode {
     let list = List::new();
     list.push(0);
 
-    let new_list = func.call(list);
+    let new_list = func.call(list).unwrap();
     let v = new_list.to_vec();
     println!("Result: {v:?}");
 

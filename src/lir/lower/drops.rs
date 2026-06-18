@@ -88,6 +88,9 @@ impl Lowerer<'_, '_> {
                     .movability();
                 matches!(m, Movability::CloneDrop(..))
             }
+            Ty::ScriptResult(_) => {
+                ice!("a scriptresult shouldn't be dropped")
+            }
         }
     }
 
@@ -222,6 +225,9 @@ impl Lowerer<'_, '_> {
             }
             Ty::List(_) => {
                 ice!("list drop should have been handled above");
+            }
+            Ty::ScriptResult(_) => {
+                ice!("a scriptresult shouldn't be dropped");
             }
         }
     }

@@ -136,6 +136,13 @@ pub enum Value {
         vtables: Vec<TyRef>,
         mir_signature: ty::Signature,
     },
+    UnwrapScriptResult {
+        val: Var,
+    },
+    MakeScriptResult {
+        var: Var,
+        ty: TyRef,
+    },
 }
 
 #[derive(Clone, Debug)]

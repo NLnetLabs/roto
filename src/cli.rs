@@ -92,7 +92,8 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
-                .codegen();
+                .codegen()
+                .unwrap();
 
             if let Err(()) = p.run_tests() {
                 return Err(RotoReport {
@@ -114,7 +115,8 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 .typecheck(&rt)?
                 .lower_to_mir()
                 .lower_to_lir()
-                .codegen();
+                .codegen()
+                .unwrap();
 
             let f =
                 p.get_function::<fn()>(function).map_err(|e| RotoReport {
@@ -122,7 +124,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                     ..Default::default()
                 })?;
 
-            f.call()
+            f.call().unwrap()
         }
         Command::Print { file } => {
             let s = std::fs::read_to_string(file).unwrap();

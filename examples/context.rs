@@ -17,5 +17,5 @@ fn main() {
         first_name: "John".into(),
         last_name: "Doe".into(),
     };
-    println!("{}", f.call(&mut ctx));
+    println!("{}", f.call(&mut ctx).unwrap());
 }

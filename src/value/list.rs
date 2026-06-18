@@ -27,7 +27,7 @@ use crate::value::{VTable, vtable::DropFn};
 
 /// The functions for list operations that we call from Roto
 pub mod ffi {
-    use crate::value::RotoOption;
+    use crate::{ScriptResult, value::RotoOption};
 
     use super::ErasedList;
 
@@ -45,12 +45,30 @@ pub mod ffi {
     ///    value.
     ///
     pub unsafe fn list_get(
-        out: *mut RotoOption<T>,
+        out: *mut ScriptResult<RotoOption<T>>,
         this: ErasedList,
         idx: u64,
     ) {
         let idx = idx.try_into().ok();
-        match idx.and_then(|idx| this.get(idx)) {
+
+        let raw = this.0.lock().unwrap();
+        let size = raw.vtable.size();
+        let alignment = raw.vtable.align();
+
+        // SAFETY: 0 is the discriminant of `Ok`. We asserted that
+        // `out` must be a valid ScriptResult<RotoOption<T>>.
+        unsafe { out.cast::<u8>().write(0) };
+
+        let discriminant_offset = 1usize.next_multiple_of(alignment);
+
+        // SAFETY: `out` is an uninitialized properly aligned value of
+        // ScriptResult<RotoOption<T>> so we can write the discriminant
+        // of the option at the right alignment by writing it to the
+        // next multiple of the alignment. The offset is therefore the
+        // correct byte offset.
+        let discriminant = unsafe { out.byte_add(discriminant_offset) };
+
+        match idx.and_then(|idx| raw.get(idx)) {
             Some(src) => {
                 // We got a pointer into the list, clone it into out at the correct alignment
 
@@ -60,18 +78,16 @@ pub mod ffi {
                 // clone has succeeded.
 
                 // SAFETY: 1 is the discriminant of `None`. We asserted that
-                // `out` must be a valid RotoOption<T>.
-                unsafe { out.cast::<u8>().write(1) };
+                // `out` must be a valid ScriptResult<RotoOption<T>>.
+                unsafe { discriminant.cast::<u8>().write(1) };
 
-                let raw = this.0.lock().unwrap();
-                let size = raw.vtable.size();
-                let alignment = raw.vtable.align();
-                let offset = 1usize.next_multiple_of(alignment);
+                let offset = (discriminant_offset + 1usize)
+                    .next_multiple_of(alignment);
 
                 // SAFETY: `out` is an uninitialized properly aligned value of
-                // RotoOption<T> so we can write the T at the right alignment
-                // by writing it to the next multiple of the alignment. The offset
-                // is therefore the correct byte offset.
+                // ScriptResult<RotoOption<T>> so we can write the T at the
+                // right alignment by writing it to the next multiple of the
+                // alignment. The offset is therefore the correct byte offset.
                 let dst = unsafe { out.byte_add(offset) };
 
                 // If there is no clone function, we can optimize this by doing a memcpy.
@@ -98,14 +114,14 @@ pub mod ffi {
 
                 // SAFETY: 0 is the discriminant of `Some`. We asserted that
                 // `out` must be a valid RotoOption<T>.
-                unsafe { out.cast::<u8>().write(0) };
+                unsafe { discriminant.cast::<u8>().write(0) };
             }
             None => {
                 // write None to out
 
                 // SAFETY: 1 is the discriminant of `None`. We asserted that
                 // `out` must be a valid RotoOption<T>.
-                unsafe { out.cast::<u8>().write(1) };
+                unsafe { discriminant.cast::<u8>().write(1) };
             }
         }
     }

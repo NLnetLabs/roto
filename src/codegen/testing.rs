@@ -22,8 +22,9 @@ impl<C: OptCtx> TestCase<C> {
 impl<C: OptCtx> TestCase<C> {
     pub fn run(&self, ctx: &mut C::Ctx) -> Result<(), ()> {
         match self.func.call_tuple(ctx, ()) {
-            Verdict::Accept(()) => Ok(()),
-            Verdict::Reject(()) => Err(()),
+            Ok(Verdict::Accept(())) => Ok(()),
+            Ok(Verdict::Reject(())) => Err(()),
+            Err(_) => Err(()),
         }
     }
 }

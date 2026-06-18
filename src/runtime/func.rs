@@ -11,7 +11,7 @@ use crate::lir::{IrValue, Memory};
 /// A type that indicates that a parameter is an out ptr.
 #[repr(transparent)]
 pub struct OutPtr<T: Value> {
-    pub ptr: *mut T::Transformed,
+    pub ptr: *mut ScriptResult<T::Transformed>,
 }
 
 pub struct WithOutPtr;
@@ -202,13 +202,11 @@ macro_rules! registerable_fn {
                             panic!("Type of argument is not correct: {}", $a)
                         };
                     )*
-                    // let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
-                    // Self::TRAMPOLINE(
-                    //     f,
-                    //     $r as *mut <$r as Value>::Transformed,
-                    //     $($a),*
-                    // );
-                    todo!()
+                    Self::TRAMPOLINE(
+                        f,
+                        $r as *mut ScriptResult<<<$r as IntoScriptResult>::Inner as Value>::Transformed>,
+                        $($a),*
+                    );
                 };
                 RustIrFunction(Arc::new(f))
             }
@@ -237,10 +235,12 @@ macro_rules! registerable_fn_out_ptr {
             F: Fn(OutPtr<$r>, $($a,)*) + Send + 'static,
         {
             const HAS_OUT_PTR: bool = true;
-            type RustWrapper = extern "C" fn (*const Self, *mut $r::Transformed, $($a::AsParam),*) -> ();
+            type RustWrapper = extern "C" fn (*const Self, *mut ScriptResult<$r::Transformed>, $($a::AsParam),*) -> ();
 
             const TRAMPOLINE: Self::RustWrapper = {
-                extern "C" fn foo<$($a: Value,)* $r: Value>(x: *const impl Fn(OutPtr<$r>, $($a,)*), out: *mut $r::Transformed, $($a: $a::AsParam),*) -> () {
+                extern "C" fn foo<$($a: Value,)* $r: Value>(
+                    x: *const impl Fn(OutPtr<$r>, $($a,)*),
+                    out: *mut ScriptResult<$r::Transformed>, $($a: $a::AsParam),*) -> () {
                     (unsafe { &*x })(
                         OutPtr { ptr: out },
                         $(<$a as Value>::untransform(<$a as Value>::to_value($a)),)*
@@ -284,7 +284,7 @@ macro_rules! registerable_fn_out_ptr {
                     let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
                     Self::TRAMPOLINE(
                         f,
-                        $r as *mut <$r as Value>::Transformed,
+                        $r as *mut ScriptResult<<$r as Value>::Transformed>,
                         $($a),*
                     );
                 };
