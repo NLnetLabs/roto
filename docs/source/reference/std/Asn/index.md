@@ -16,7 +16,7 @@ let c = AS4294967295;
 `````
 
 
-````{roto:function} to_string(self: Asn) -> String
+````{roto:method} Asn.to_string(self: Asn) -> String
 Convert this value into a `String`.
 ````
 

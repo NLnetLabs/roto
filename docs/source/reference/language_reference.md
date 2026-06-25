@@ -915,7 +915,7 @@ const FOO: u32 = BAR;
 const BAR: u32 = FOO;
 ```
 
-(lang_context=)
+(lang_context)=
 ## Context Variables
 
 Context variables are global variables that are passed to each invocation of
@@ -1001,16 +1001,16 @@ a path.
 
 {class="test-ignore"}
 ```roto
-# in pkg.roto
+// in pkg.roto
 foo.square
 
-# in foo.roto
+// in foo.roto
 square
 
-# in bar.roto
+// in bar.roto
 super.foo.square
 
-# in bar/baz.roto
+// in bar/baz.roto
 super.super.foo.square
 ```
 

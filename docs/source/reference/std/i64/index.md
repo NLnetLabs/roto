@@ -6,7 +6,7 @@ This type can represent integers from -9,223,372,036,854,775,808 up to (and incl
 `````
 
 
-````{roto:function} to_string(self: i64) -> String
+````{roto:method} i64.to_string(self: i64) -> String
 Convert this value into a `String`.
 ````
 

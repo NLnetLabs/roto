@@ -39,18 +39,7 @@ class RotoFunctionLike(ObjectDescription):
             )
             sig_param_list += sig_param
 
-        signode += addnodes.desc_annotation(text=self.class_name)
-
-        if receiver:
-            signode += addnodes.pending_xref(
-                "",
-                addnodes.desc_addname(text=receiver),
-                refdomain="roto",
-                reftype="ref",
-                reftarget=receiver,
-            )
-            signode += addnodes.desc_sig_punctuation(text='.')
-    
+        signode += addnodes.desc_annotation(text=self.class_name)    
         signode += addnodes.desc_name(text=name)
         signode += addnodes.desc_sig_punctuation('(')
         signode += sig_param_list

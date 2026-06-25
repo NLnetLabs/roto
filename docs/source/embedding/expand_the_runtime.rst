@@ -191,6 +191,8 @@ The registered ``new`` function can be used in Roto like this:
     let range = Range.new(0, 99);
     range.contains(50)
 
+.. _add-constants:
+
 Add constants
 -------------
 
