@@ -8,17 +8,19 @@
 mod dead_code;
 mod lower;
 mod print;
+mod ty;
 
 use crate::{
     ast::{BinOp, Identifier, Literal},
     label::LabelRef,
     runtime,
     typechecker::{
+        self,
         scope::{ResolvedName, ScopeRef},
-        types::{EnumVariant, Signature, Type},
     },
 };
 pub use lower::lower_to_mir;
+pub use ty::{Pool, Signature, Ty, TyRef};
 
 /// Human-readable place
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -42,12 +44,14 @@ pub struct Mir {
 #[derive(Clone, Debug)]
 pub enum ItemKind {
     Constant {
-        ty: Type,
+        ty: typechecker::types::Type,
+        mir_ty: TyRef,
         name: ResolvedName,
     },
     Function {
         parameters: Vec<Var>,
-        signature: Signature,
+        signature: typechecker::types::Signature,
+        mir_signature: Signature,
     },
 }
 
@@ -64,7 +68,7 @@ pub struct Item {
     pub scope: ScopeRef,
 
     /// Variables used in this function
-    pub variables: Vec<(Var, Type)>,
+    pub variables: Vec<(Var, TyRef)>,
 
     /// Basic blocks of this function
     ///
@@ -84,12 +88,12 @@ pub struct Block {
 #[derive(Clone, Debug)]
 pub struct Place {
     pub var: Var,
-    pub root_ty: Type,
+    pub root_ty: TyRef,
     pub projection: Vec<Projection>,
 }
 
 impl Place {
-    pub fn new(value: Var, ty: Type) -> Self {
+    pub fn new(value: Var, ty: TyRef) -> Self {
         Self {
             var: value,
             root_ty: ty,
@@ -107,28 +111,30 @@ pub enum Projection {
 #[derive(Clone, Debug)]
 #[must_use]
 pub enum Value {
-    Const(Literal, Type),
-    Constant(ResolvedName, Type),
+    Const(Literal, TyRef),
+    Constant(ResolvedName, TyRef),
     Context(usize),
     Clone(Place),
     Discriminant(Var),
     Not(Var),
-    Negate(Var, Type),
+    Negate(Var, TyRef),
     Move(Var),
     BinOp {
         left: Var,
         binop: BinOp,
-        ty: Type,
+        ty: TyRef,
         right: Var,
     },
     Call {
         func: ResolvedName,
         args: Vec<Var>,
+        mir_signature: ty::Signature,
     },
     CallRuntime {
         func_ref: runtime::RuntimeFunctionRef,
         args: Vec<Var>,
-        type_params: Vec<Type>,
+        vtables: Vec<TyRef>,
+        mir_signature: ty::Signature,
     },
 }
 
@@ -146,14 +152,14 @@ pub enum Instruction {
 
     Assign {
         to: Place,
-        ty: Type,
+        ty: TyRef,
         value: Value,
     },
 
     SetDiscriminant {
         to: Var,
-        ty: Type,
-        variant: EnumVariant,
+        ty: TyRef,
+        variant: Identifier,
     },
 
     /// Return from the current function (or filtermap)
@@ -163,6 +169,6 @@ pub enum Instruction {
 
     Drop {
         val: Place,
-        ty: Type,
+        ty: TyRef,
     },
 }

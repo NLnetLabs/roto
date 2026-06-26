@@ -119,7 +119,7 @@ impl Printable for Instruction {
                     "{}.$discriminant = {}.{}",
                     to.print(printer),
                     ty.display(printer.type_info),
-                    variant.name
+                    variant
                 )
             }
             Return { var: value } => {
@@ -197,7 +197,11 @@ impl Printable for Value {
                 let right = right.print(printer);
                 format!("{left} {binop}({ty}) {right}")
             }
-            Value::Call { func, args } => {
+            Value::Call {
+                func,
+                args,
+                mir_signature: _,
+            } => {
                 let func = func.print(printer);
                 let args = args
                     .iter()
@@ -209,7 +213,8 @@ impl Printable for Value {
             Value::CallRuntime {
                 func_ref,
                 args,
-                type_params,
+                vtables: _,
+                mir_signature: _,
             } => {
                 let args = args
                     .iter()
@@ -217,17 +222,7 @@ impl Printable for Value {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                let type_params = type_params
-                    .iter()
-                    .map(|t| t.display(printer.type_info).to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                if type_params.is_empty() {
-                    format!("runtime_func_{func_ref}({args})")
-                } else {
-                    format!("runtime_func_{func_ref}[{type_params}]({args})")
-                }
+                format!("runtime_func_{func_ref}({args})")
             }
         }
     }

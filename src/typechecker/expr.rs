@@ -214,14 +214,6 @@ impl TypeChecker {
                     self.unify(&expected_type, &Type::unit(), id, None)?;
                 }
 
-                self.type_info.return_types.insert(
-                    id,
-                    ctx.function_return_type
-                        .as_ref()
-                        .unwrap_or(&Type::unit())
-                        .clone(),
-                );
-
                 Ok(true)
             }
             Literal(l) => self.literal(ctx, l),
@@ -442,7 +434,7 @@ impl TypeChecker {
 
                 let operand_ty = self.type_info.resolve(&operand_ty);
                 if let Type::Name(name) = &operand_ty {
-                    let def = self.type_info.resolve_type_name(name);
+                    let def = self.type_info.resolve_type_name(name.name);
                     let is_unsigned = matches!(
                         def,
                         TypeDefinition::Primitive(Primitive::Int(
@@ -683,7 +675,7 @@ impl TypeChecker {
             return Err(self.error_can_only_match_on_enum(&t_expr, expr.id));
         };
 
-        let type_def = self.type_info.resolve_type_name(type_name);
+        let type_def = self.type_info.resolve_type_name(type_name.name);
         let Some(variants) = type_def.match_patterns(&type_name.arguments)
         else {
             return Err(self.error_can_only_match_on_enum(&t_expr, expr.id));
@@ -1393,7 +1385,7 @@ impl TypeChecker {
         let fields = match &ty {
             Type::Record(fields) | Type::RecordVar(_, fields) => Some(fields),
             Type::Name(name) => {
-                let type_def = self.type_info.resolve_type_name(name);
+                let type_def = self.type_info.resolve_type_name(name.name);
                 fields_vec = type_def.record_fields(&name.arguments);
                 fields_vec.as_ref()
             }

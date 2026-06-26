@@ -308,16 +308,6 @@ impl TypeName {
     }
 }
 
-impl Primitive {
-    pub fn i32() -> Self {
-        Self::Int(IntKind::Signed, IntSize::I32)
-    }
-
-    pub fn f64() -> Self {
-        Self::Float(FloatSize::F64)
-    }
-}
-
 impl Display for Primitive {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -482,15 +472,6 @@ impl TypeDefinition {
 
     pub fn is_float(&self) -> bool {
         matches!(self, Self::Primitive(Primitive::Float(_)))
-    }
-
-    pub fn type_parameters(&self) -> usize {
-        match self {
-            Self::Enum(type_name, _)
-            | Self::Record(type_name, _)
-            | Self::List(type_name) => type_name.arguments.len(),
-            Self::Runtime(..) | Self::Primitive(..) => 0,
-        }
     }
 }
 

@@ -9,15 +9,14 @@ use crate::{
         VarKind,
         lower::{LowerCtx, Lowerer},
     },
-    parser::meta::Meta,
+    mir::{Ty, TyRef},
     runtime::{
         Movability,
         layout::{Layout, LayoutBuilder},
     },
     typechecker::{
         scope::{ScopeRef, ScopeType},
-        scoped_display::TypeDisplay,
-        types::{self, EnumVariant, Primitive, Type, TypeDefinition},
+        types::Primitive,
     },
     value::{DropFn, ErasedList},
 };
@@ -33,7 +32,7 @@ impl Lowerer<'_, '_> {
     ///
     /// This function also checks whether the value needs to be dropped in the
     /// first place.
-    pub fn call_drop_of(&mut self, var: Operand, ty: &Type) {
+    pub fn call_drop_of(&mut self, var: Operand, ty: TyRef) {
         // The easy case, we don't need to drop this.
         if !self.needs_drop(ty) {
             return;
@@ -50,7 +49,7 @@ impl Lowerer<'_, '_> {
 
         // Finally, this might be a complex Roto type for which we generate a
         // drop function
-        let type_id = self.ctx.type_info.type_id(ty);
+        let type_id = ty.type_id();
         self.emit(Instruction::Call {
             to: None,
             ctx: None,
@@ -61,45 +60,32 @@ impl Lowerer<'_, '_> {
 
         // When that happens we also need to make sure that drop function will
         // be generated.
-        self.ctx.drops_to_generate.push_back(ty.clone());
+        self.ctx.drops_to_generate.push_back(ty);
     }
 
-    pub fn needs_drop(&mut self, ty: &Type) -> bool {
-        let ty = self.ctx.type_info.resolve(ty);
-
-        match &ty {
-            Type::Record(items) | Type::RecordVar(_, items) => {
-                items.iter().any(|i| self.needs_drop(&i.1))
+    pub fn needs_drop(&mut self, ty: TyRef) -> bool {
+        let ty = self.ctx.type_info.ty_pool.get(ty);
+        match ty {
+            Ty::Unit => false,
+            Ty::Never => false,
+            Ty::Record(fields) => {
+                fields.iter().any(|&(_, t)| self.needs_clone(t))
             }
-            Type::IntVar(_, _)
-            | Type::FloatVar(_)
-            | Type::Unit
-            | Type::Var(_) // assumed to be Unit
-            | Type::Never => false,
-            Type::Name(type_name) => {
-                let type_def =
-                    self.ctx.type_info.resolve_type_name(type_name);
-
-                if let Some(items) =
-                    type_def.record_fields(&type_name.arguments)
-                {
-                    items.iter().any(|i| self.needs_drop(&i.1))
-                } else if let Some(variants) =
-                    type_def.match_patterns(&type_name.arguments)
-                {
-                    variants
-                        .iter()
-                        .flat_map(|v| &v.fields)
-                        .any(|i| self.needs_drop(i))
-                } else {
-                    self.get_runtime_drop(&ty).is_some()
-                }
-            }
-            Type::Function(_, _) | Type::ExplicitVar(_) => {
-                ice!(
-                    "Can't check whether {} needs drop",
-                    ty.display(self.ctx.type_info)
-                )
+            Ty::Enum(variants) => variants
+                .iter()
+                .flat_map(|v| &v.1)
+                .any(|&t| self.needs_clone(t)),
+            Ty::Primitive(Primitive::String) => true,
+            Ty::Primitive(_) => false,
+            Ty::List(_) => true,
+            Ty::Runtime(type_id) => {
+                let m = self
+                    .ctx
+                    .runtime
+                    .get_runtime_type(*type_id)
+                    .unwrap()
+                    .movability();
+                matches!(m, Movability::CloneDrop(..))
             }
         }
     }
@@ -121,7 +107,7 @@ impl Lowerer<'_, '_> {
         // We don't use a for loop because we will add more types to the end
         // of the vecdeque while processing it.
         while let Some(ty) = ctx.drops_to_generate.pop_front() {
-            let type_id = ctx.type_info.type_id(&ty);
+            let type_id = ty.type_id();
 
             // HashMap::insert returns false when the value is not new, that is,
             // when we have already generated this drop function.
@@ -129,15 +115,15 @@ impl Lowerer<'_, '_> {
                 continue;
             }
 
-            let function = Self::generate_drop(ctx, &ty);
+            let function = Self::generate_drop(ctx, ty);
             functions.push(function);
         }
 
         functions
     }
 
-    fn generate_drop(ctx: &mut LowerCtx<'_>, ty: &Type) -> Item {
-        let type_id = ctx.type_info.type_id(ty);
+    fn generate_drop(ctx: &mut LowerCtx<'_>, ty: TyRef) -> Item {
+        let type_id = ty.type_id();
 
         let ident = format!("::generated::drop_{type_id}").into();
         let root_scope = ctx.type_info.scope_graph.root();
@@ -153,18 +139,12 @@ impl Lowerer<'_, '_> {
             // The drop fn doesn't need to access anything, so the
             // scope doesn't really matter.
             function_scope: scope,
-            return_type: Type::Unit,
+            return_type: TyRef::UNIT,
             blocks: Vec::new(),
             variables: Vec::new(),
         };
 
         lowerer.generate_drop_body(ident, scope, ty);
-
-        let signature = types::Signature {
-            types: Vec::new(),
-            parameter_types: vec![ty.clone()],
-            return_type: Type::Unit,
-        };
 
         // We need a unified signature for all types, so we always expect a pointer
         let ir_signature = Signature {
@@ -180,7 +160,7 @@ impl Lowerer<'_, '_> {
             name: ident,
             scope,
             kind: ItemKind::Function {
-                signature,
+                signature: None,
                 ir_signature,
             },
             entry_block,
@@ -194,7 +174,7 @@ impl Lowerer<'_, '_> {
         &mut self,
         ident: Identifier,
         scope: ScopeRef,
-        ty: &Type,
+        ty: TyRef,
     ) {
         self.blocks.push(Block {
             label: self.ctx.label_store.new_label(ident),
@@ -207,11 +187,9 @@ impl Lowerer<'_, '_> {
             kind: VarKind::Explicit("val".into()),
         };
 
-        let ty = self.ctx.type_info.resolve(ty);
-
         // This takes care of String and Clone registered types, so we don't
         // have to consider those later.
-        if let Some(drop_fn) = self.get_runtime_drop(&ty) {
+        if let Some(drop_fn) = self.get_runtime_drop(ty) {
             self.emit(Instruction::Drop {
                 var: root_var.clone().into(),
                 drop: Some(drop_fn),
@@ -220,62 +198,32 @@ impl Lowerer<'_, '_> {
             return;
         }
 
-        match ty {
-            Type::ExplicitVar(_) => {
-                ice!("Can't generate drop of explicit type variable")
-            }
+        match self.ctx.type_info.ty_pool.get(ty) {
             // These are all simple types. We can simply generate
             // a function that just returns.
-            Type::Unit
-            | Type::Never
-            | Type::IntVar(_, _)
-            | Type::FloatVar(_)
-            | Type::Function(_, _)
-            | Type::Var(_) => {
+            Ty::Unit | Ty::Never => {
                 self.emit_return(None);
             }
-            Type::RecordVar(_, fields) | Type::Record(fields) => {
-                self.generate_drop_body_record(root_var, &fields)
+            Ty::Record(fields) => {
+                let fields = fields.clone();
+                self.generate_drop_body_record(root_var, &fields);
             }
-            Type::Name(type_name) => {
-                let type_def =
-                    self.ctx.type_info.resolve_type_name(&type_name);
-
-                if let Some(fields) =
-                    type_def.record_fields(&type_name.arguments)
-                {
-                    self.generate_drop_body_record(root_var.clone(), &fields);
-                    return;
-                }
-
-                if let Some(variants) =
-                    type_def.match_patterns(&type_name.arguments)
-                {
-                    self.generate_drop_body_enum(root_var, &variants);
-                    return;
-                }
-
-                match type_def {
-                    // We handled String above, the other primitives don't need to be
-                    // dropped.
-                    TypeDefinition::Primitive(_) => {
-                        self.emit_return(None);
-                    }
-                    // If we get here with a runtime type, it implements Copy, so
-                    // doesn't need to be dropped.
-                    TypeDefinition::Runtime(_, _) => {
-                        self.emit_return(None);
-                    }
-                    TypeDefinition::List(_) => {
-                        ice!("list drop should have been handled above");
-                    }
-                    TypeDefinition::Enum(_, _) => {
-                        ice!("enum drop should have been handled above");
-                    }
-                    TypeDefinition::Record(_, _) => {
-                        ice!("record drop should have been handled above");
-                    }
-                }
+            Ty::Enum(variants) => {
+                let variants = variants.clone();
+                self.generate_drop_body_enum(root_var, &variants);
+            }
+            // We handled String above, the other primitives don't need to be
+            // dropped.
+            Ty::Primitive(_) => {
+                self.emit_return(None);
+            }
+            // If we get here with a runtime type, it implements Copy, so
+            // doesn't need to be dropped.
+            Ty::Runtime(_) => {
+                self.emit_return(None);
+            }
+            Ty::List(_) => {
+                ice!("list drop should have been handled above");
             }
         }
     }
@@ -283,13 +231,11 @@ impl Lowerer<'_, '_> {
     fn generate_drop_body_record(
         &mut self,
         root_var: Var,
-        fields: &[(Meta<Identifier>, Type)],
+        fields: &[(Identifier, TyRef)],
     ) {
         let mut builder = LayoutBuilder::new();
-        for (_, ty) in fields {
-            let Some(layout) =
-                self.ctx.type_info.layout_of(ty, self.ctx.runtime)
-            else {
+        for &(_, ty) in fields {
+            let Some(layout) = self.layout_of(ty) else {
                 continue;
             };
 
@@ -309,7 +255,7 @@ impl Lowerer<'_, '_> {
     fn generate_drop_body_enum(
         &mut self,
         root_var: Var,
-        variants: &[EnumVariant],
+        variants: &[(Identifier, Vec<TyRef>)],
     ) {
         let current_label = self.current_label();
         let lbl_prefix = self
@@ -349,11 +295,10 @@ impl Lowerer<'_, '_> {
             let variant = &variants[idx];
 
             let Some(layouts) = variant
-                .fields
+                .1
                 .iter()
                 .map(|ty| {
-                    let layout =
-                        self.ctx.type_info.layout_of(ty, self.ctx.runtime)?;
+                    let layout = self.layout_of(*ty)?;
                     Some((ty, layout))
                 })
                 .collect::<Option<Vec<_>>>()
@@ -368,29 +313,21 @@ impl Lowerer<'_, '_> {
             for (ty, layout) in layouts {
                 let new_offset = builder.add(&layout);
                 let var = self.offset(root_var.clone(), new_offset as u32);
-                self.call_drop_of(var.into(), ty);
+                self.call_drop_of(var.into(), *ty);
             }
             self.emit(Instruction::Return(None));
         }
     }
 
     /// Returns the drop function of a registered type
-    fn get_runtime_drop(&mut self, ty: &Type) -> Option<DropFn> {
+    fn get_runtime_drop(&mut self, ty: TyRef) -> Option<DropFn> {
+        let ty = self.ctx.type_info.ty_pool.get(ty);
         let id = match ty {
-            Type::Name(type_name) => {
-                let type_def =
-                    self.ctx.type_info.resolve_type_name(type_name);
-                match type_def {
-                    TypeDefinition::Runtime(_, id) => Some(id),
-                    TypeDefinition::Primitive(Primitive::String) => {
-                        Some(TypeId::of::<RotoString>())
-                    }
-                    TypeDefinition::List(_) => {
-                        Some(TypeId::of::<ErasedList>())
-                    }
-                    _ => None,
-                }
+            Ty::Runtime(id) => Some(*id),
+            Ty::Primitive(Primitive::String) => {
+                Some(TypeId::of::<RotoString>())
             }
+            Ty::List(_) => Some(TypeId::of::<ErasedList>()),
             _ => None,
         };
 

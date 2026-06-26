@@ -5,12 +5,9 @@ use std::{collections::HashMap, fmt::Debug};
 use crate::{
     ast::Identifier,
     ice,
+    mir::{Ty, TyRef},
     parser::meta::MetaId,
-    runtime::{
-        Rt, RuntimeFunctionRef,
-        layout::{Layout, LayoutBuilder},
-    },
-    value::ErasedList,
+    typechecker::types::TypeName,
 };
 
 use super::{
@@ -20,7 +17,7 @@ use super::{
     },
     types::{
         Function, IntKind, IntSize, Primitive, Signature, Type,
-        TypeDefinition, TypeName,
+        TypeDefinition,
     },
     unionfind::UnionFind,
 };
@@ -30,6 +27,8 @@ use super::{
 pub struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
+
+    pub ty_pool: crate::mir::Pool,
 
     /// All declarations in the program, extracted from the scope graph
     pub scope_graph: ScopeGraph,
@@ -53,19 +52,11 @@ pub struct TypeInfo {
 
     pub(super) function_signatures: HashMap<MetaId, Signature>,
 
-    pub(super) runtime_function_signatures:
-        HashMap<RuntimeFunctionRef, Signature>,
-
     /// The ids of all the `Expr::Access` nodes that should be interpreted
     /// as enum variant constructors.
     pub(super) path_kinds: HashMap<MetaId, ResolvedPath>,
 
     pub(super) diverges: HashMap<MetaId, bool>,
-
-    /// Type for return/accept/reject that it constructs and returns.
-    pub(super) return_types: HashMap<MetaId, Type>,
-
-    pub(super) type_ids: HashMap<Type, usize>,
 }
 
 impl TypeInfo {
@@ -75,12 +66,6 @@ impl TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn type_id(&mut self, ty: &Type) -> usize {
-        let ty = self.resolve(ty);
-        let len = self.type_ids.len();
-        *self.type_ids.entry(ty).or_insert(len + 1)
-    }
-
     pub fn resolved_name(
         &self,
         x: impl Into<MetaId> + Debug,
@@ -99,11 +84,6 @@ impl TypeInfo {
 
     pub fn diverges(&mut self, x: impl Into<MetaId>) -> bool {
         self.diverges[&x.into()]
-    }
-
-    pub fn return_type_of(&mut self, x: impl Into<MetaId>) -> Type {
-        let ty = self.return_types[&x.into()].clone();
-        self.resolve(&ty)
     }
 
     pub fn function(&self, x: impl Into<MetaId>) -> &Function {
@@ -125,35 +105,13 @@ impl TypeInfo {
         s.into()
     }
 
-    pub fn runtime_function_signature(
-        &self,
-        func_ref: RuntimeFunctionRef,
-    ) -> Signature {
-        self.runtime_function_signatures
-            .get(&func_ref)
-            .unwrap()
-            .clone()
-    }
-
     pub fn is_numeric_type(&mut self, ty: &Type) -> bool {
         let ty = self.resolve(ty);
         match ty {
             Type::FloatVar(_) | Type::IntVar(_, _) => true,
             Type::Name(name) => {
-                let type_def = self.resolve_type_name(&name);
+                let type_def = self.resolve_type_name(name.name);
                 type_def.is_float() || type_def.is_int()
-            }
-            _ => false,
-        }
-    }
-
-    pub fn is_float_type(&mut self, ty: &Type) -> bool {
-        let ty = self.resolve(ty);
-        match ty {
-            Type::FloatVar(_) => true,
-            Type::Name(name) => {
-                let type_def = self.resolve_type_name(&name);
-                type_def.is_float()
             }
             _ => false,
         }
@@ -168,7 +126,7 @@ impl TypeInfo {
         match ty {
             Type::IntVar(_, _) => Some((IntKind::Signed, IntSize::I32)),
             Type::Name(name) => {
-                let type_def = self.resolve_type_name(&name);
+                let type_def = self.resolve_type_name(name.name);
                 if let TypeDefinition::Primitive(Primitive::Int(kind, size)) =
                     type_def
                 {
@@ -181,193 +139,26 @@ impl TypeInfo {
         }
     }
 
-    pub fn is_asn_type(&mut self, ty: &Type) -> bool {
-        let ty = self.resolve(ty);
-        match ty {
-            Type::Name(name) => {
-                let type_def = self.resolve_type_name(&name);
-                matches!(type_def, TypeDefinition::Primitive(Primitive::Asn))
-            }
-            _ => false,
-        }
-    }
-
     pub fn is_list_type(&mut self, ty: &Type) -> bool {
         let ty = self.resolve(ty);
         match ty {
             Type::Name(name) => {
-                let type_def = self.resolve_type_name(&name);
+                let type_def = self.resolve_type_name(name.name);
                 matches!(type_def, TypeDefinition::List(_))
             }
             _ => false,
         }
     }
 
-    /// Whether or not the type is passed around by reference or by value
-    ///
-    /// Roto always has by-value semantics, but we still have types that we
-    /// store in stack slots and then operate on by pointer. That is what
-    /// we mean here with a reference type.
-    ///
-    /// Registered types, enums, records, ip addrs, prefixes and strings are all
-    /// reference types. Integers, floats, booleans and AS numbers are not.
-    ///
-    /// This returns `None` if the type is uninhabited (e.g. `!`)
-    pub(crate) fn is_reference_type(
+    pub fn resolve_type_name(
         &mut self,
-        ty: &Type,
-        rt: &Rt,
-    ) -> Option<bool> {
-        let ty = self.resolve(ty);
-        if self.layout_of(&ty, rt)?.size() == 0 {
-            return Some(false);
-        }
-        match ty {
-            Type::Record(..) | Type::RecordVar(..) => Some(true),
-            Type::Name(name) => {
-                let type_def = self.resolve_type_name(&name);
-                let is_ref = matches!(
-                    type_def,
-                    TypeDefinition::Enum(..)
-                        | TypeDefinition::List(..)
-                        | TypeDefinition::Record(..)
-                        | TypeDefinition::Runtime(..)
-                        | TypeDefinition::Primitive(
-                            Primitive::IpAddr
-                                | Primitive::Prefix
-                                | Primitive::String,
-                        )
-                );
-                Some(is_ref)
-            }
-            _ => Some(false),
-        }
-    }
-
-    pub fn resolve_type_name(&mut self, ty: &TypeName) -> TypeDefinition {
-        let name = ty.name;
+        name: ResolvedName,
+    ) -> TypeDefinition {
         let dec = self.scope_graph.get_declaration(name);
         let DeclarationKind::Type(TypeOrStub::Type(ty)) = dec.kind else {
             ice!()
         };
         ty
-    }
-
-    /// Compute the layout of a Roto type
-    ///
-    /// The layout of Roto types match the C representation of Rust types,
-    /// because we cannot rely on the Rust representation.
-    ///
-    /// The C representation is described in the [Rust reference].
-    ///
-    /// The general rules are as follows:
-    ///
-    ///  - The minimum layout of any type is a size of 0 and an alignment of 1
-    ///  - Each primitive has a size and alignment equal to itself.
-    ///  - Each composite type has the alignment of the most-aligned field in it.
-    ///  - Fields are laid out in order, each padded to their alignment.
-    ///  - The size **must** be a multiple of the alignment.
-    ///
-    /// For enums we use the `#[repr(C, u8)]` representation, because other the
-    /// other representations are platform-specific. This means that the tag for
-    /// enums is a `u8` and therefore 1 byte.
-    ///
-    /// To implement these rules, we rely on the [`Layout`] struct from the Rust
-    /// standard library. This also allows to get the layout of some Rust types
-    /// we rely on.
-    ///
-    /// This function returns `None` if the type is uninhabited.
-    ///
-    /// [Rust reference]: https://doc.rust-lang.org/reference/type-layout.html
-    pub(crate) fn layout_of(&mut self, ty: &Type, rt: &Rt) -> Option<Layout> {
-        let ty = self.resolve(ty);
-        let layout = match ty {
-            Type::ExplicitVar(_) => {
-                ice!("Can't get the layout of an unconcrete type: {:?}", ty)
-            }
-            Type::Function(_, _) => {
-                ice!("Can't get the layout of a function type")
-            }
-            Type::Unit => Layout::new(0, 1),
-            Type::Var(_) | Type::Never => return None,
-            Type::IntVar(_, _) => Primitive::i32().layout(),
-            Type::FloatVar(_) => Primitive::f64().layout(),
-            Type::RecordVar(_, fields) | Type::Record(fields) => {
-                let layouts = fields
-                    .iter()
-                    .map(|(_, f)| self.layout_of(f, rt))
-                    .collect::<Option<Vec<_>>>()?;
-                Layout::concat(layouts)
-            }
-            Type::Name(type_name) => {
-                let type_def = self.resolve_type_name(&type_name);
-                match type_def {
-                    TypeDefinition::List(_) => Layout::of::<ErasedList>(),
-                    TypeDefinition::Enum(type_constructor, variants) => {
-                        let subs: Vec<_> = type_constructor
-                            .arguments
-                            .iter()
-                            .zip(&type_name.arguments)
-                            .collect();
-
-                        let mut layout = None;
-                        for variant in &variants {
-                            let mut builder = LayoutBuilder::new();
-                            builder.add(&Layout::of::<u8>());
-
-                            let builder = variant.fields.iter().try_fold(
-                                builder,
-                                |mut b, t| {
-                                    let t = t.substitute_many(&subs);
-                                    let layout = self.layout_of(&t, rt)?;
-                                    b.add(&layout);
-                                    Some(b)
-                                },
-                            );
-
-                            // If the variant contains uninhabited fields, the
-                            // entire variant is uninhabited, so we don't need
-                            // to consider it.
-                            let Some(builder) = builder else {
-                                continue;
-                            };
-
-                            let variant_layout = builder.finish();
-
-                            layout = Some(layout.map_or(
-                                variant_layout.clone(),
-                                |l: Layout| l.union(&variant_layout),
-                            ));
-                        }
-
-                        layout?
-                    }
-                    TypeDefinition::Record(type_constructor, fields) => {
-                        let subs: Vec<_> = type_constructor
-                            .arguments
-                            .iter()
-                            .zip(&type_name.arguments)
-                            .collect();
-
-                        // If any of the fields of the record are uninhabited
-                        // the entire record is uninhabited.
-                        let mut builder = LayoutBuilder::new();
-                        for (_, t) in fields {
-                            let t = t.substitute_many(&subs);
-                            builder.add(&self.layout_of(&t, rt)?);
-                        }
-                        builder.finish()
-                    }
-                    TypeDefinition::Runtime(_, type_id) => {
-                        rt.get_runtime_type(type_id).unwrap().layout()
-                    }
-                    TypeDefinition::Primitive(primitive) => {
-                        primitive.layout()
-                    }
-                }
-            }
-        };
-        Some(layout)
     }
 
     pub fn resolve_ref<'a>(&'a self, mut t: &'a Type) -> &'a Type {
@@ -394,5 +185,80 @@ impl TypeInfo {
         }
 
         t
+    }
+
+    pub fn convert(&mut self, ty: &Type) -> TyRef {
+        let ty = self.resolve(ty);
+        let ty = match ty {
+            Type::Var(_) => return TyRef::NEVER,
+            Type::ExplicitVar(e) => ice!("Cannot convert {e}"),
+            Type::Never => return TyRef::UNIT,
+            Type::Function(_, _) => todo!(),
+            Type::IntVar(_, _) => return TyRef::I32,
+            Type::FloatVar(_) => return TyRef::F64,
+            Type::Record(items) | Type::RecordVar(_, items) => {
+                let items = items
+                    .iter()
+                    .map(|(n, t)| (n.node, self.convert(t)))
+                    .collect();
+                Ty::Record(items)
+            }
+            Type::Unit => Ty::Unit,
+            Type::Name(TypeName { name, arguments }) => {
+                let type_def = self.resolve_type_name(name);
+                match type_def {
+                    TypeDefinition::Enum(type_name, enum_variants) => {
+                        let subs: Vec<_> = type_name
+                            .arguments
+                            .iter()
+                            .zip(&arguments)
+                            .collect();
+
+                        let variants = enum_variants
+                            .iter()
+                            .map(|variant| {
+                                let variant = variant.substitute_many(&subs);
+                                let tys = variant
+                                    .fields
+                                    .iter()
+                                    .map(|ty| self.convert(ty))
+                                    .collect();
+                                (variant.name, tys)
+                            })
+                            .collect();
+
+                        Ty::Enum(variants)
+                    }
+                    TypeDefinition::Record(type_name, fields) => {
+                        let subs: Vec<_> = type_name
+                            .arguments
+                            .iter()
+                            .zip(&arguments)
+                            .collect();
+
+                        let fields = fields
+                            .into_iter()
+                            .map(|(ident, ty)| {
+                                let ty = ty.substitute_many(&subs);
+                                let ty = self.convert(&ty);
+                                (ident.node, ty)
+                            })
+                            .collect();
+
+                        Ty::Record(fields)
+                    }
+                    TypeDefinition::Runtime(_, type_id) => {
+                        Ty::Runtime(type_id)
+                    }
+                    TypeDefinition::Primitive(p) => Ty::Primitive(p),
+                    TypeDefinition::List(_type_name) => {
+                        let inner = &arguments[0];
+                        let inner = self.convert(inner);
+                        Ty::List(inner)
+                    }
+                }
+            }
+        };
+        self.ty_pool.intern(&ty)
     }
 }

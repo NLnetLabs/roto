@@ -305,7 +305,8 @@ pub enum ItemKind {
         name: ResolvedName,
     },
     Function {
-        signature: typechecker::types::Signature,
+        // Generated methods do not get a full signature
+        signature: Option<typechecker::types::Signature>,
         ir_signature: Signature,
     },
 }
