@@ -97,15 +97,16 @@ very often, we use short names for them. Types of signed integers are prefixed
 with `i` followed by their size in bits: {roto:ref}`i8`, {roto:ref}`i16`,
 {roto:ref}`i32` and {roto:ref}`i64`. Unsigned integers are the same but with `u`
 instead of `i`. Signed integers can express negative values, but have half the
-size of unsigned integers. So for example, `i8` can express values from -128 to
-127, while `u8` can express values from 0 to 255.
+size of unsigned integers. So for example, {roto:ref}`i8` can express values
+from -128 to 127, while {roto:ref}`u8` can express values from 0 to 255.
 
 The integers support many operators that you might expect, such as `+`
 for addition, `-` for subtraction, `*` for multiplication, `/` for
 division and `%` for remainder. These operators follow the conventional
 rules for precedence.
 
-While we can't print integers directly, we can use them in f-strings.
+While we can't print integers directly, we can use them in
+[f-strings](lang_string_formatting).
 
 ```roto
 fn main() {

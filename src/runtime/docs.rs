@@ -40,6 +40,7 @@ struct DocTy {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct DocFn {
+    receiver: Option<String>,
     ident: String,
     params: Vec<(String, String)>,
     ret: Option<String>,
@@ -61,8 +62,17 @@ impl Doc {
 
 impl DocFn {
     fn print_md(&self, mut f: impl io::Write) -> io::Result<()> {
-        let kind = "function";
-        let name = &self.ident;
+        let kind = if self.receiver.is_some() {
+            "method"
+        } else {
+            "function"
+        };
+
+        let name = if let Some(receiver) = &self.receiver {
+            &format!("{receiver}.{}", self.ident)
+        } else {
+            &self.ident
+        };
 
         let mut parameter_string = String::new();
         let mut first = true;
@@ -235,7 +245,7 @@ impl Rt {
     }
 
     fn build_doc(&self) -> Doc {
-        let items = self.get_items(ScopeRef::GLOBAL);
+        let items = self.get_items(ScopeRef::GLOBAL, None);
 
         Doc {
             root: DocMod {
@@ -246,7 +256,7 @@ impl Rt {
         }
     }
 
-    fn get_items(&self, scope: ScopeRef) -> Vec<DocItem> {
+    fn get_items(&self, scope: ScopeRef, ty: Option<String>) -> Vec<DocItem> {
         let mut out = Vec::new();
 
         let graph = self.type_checker.get_scope_graph();
@@ -277,7 +287,10 @@ impl Rt {
                         .type_checker
                         .get_scope_of(dec.name.scope, dec.name.ident)
                         .unwrap();
-                    let items = self.get_items(scope);
+                    let items = self.get_items(
+                        scope,
+                        Some(ty.type_name().name.ident.to_string()),
+                    );
 
                     out.push(DocItem::Ty(DocTy {
                         ident: self.print_ty(ty),
@@ -303,6 +316,7 @@ impl Rt {
                     let ret = if ret == "()" { None } else { Some(ret) };
 
                     out.push(DocItem::Fn(DocFn {
+                        receiver: ty.clone(),
                         ident: dec.name.ident.as_str().into(),
                         params,
                         ret,
@@ -314,7 +328,7 @@ impl Rt {
                         .type_checker
                         .get_scope_of(dec.name.scope, dec.name.ident)
                         .unwrap();
-                    let items = self.get_items(scope);
+                    let items = self.get_items(scope, None);
 
                     out.push(DocItem::Mod(DocMod {
                         ident: dec.name.ident.as_str().into(),

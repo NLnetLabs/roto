@@ -598,7 +598,7 @@
         "lang": "roto",
         "code": "fn main() {\n    // We can specify the type to get a specific integer type\n    let a: u8 = 2 + 1;\n    print(f\"2 + 1 = {a}\");\n\n    // If we don't specify the type we get i32\n    let b = -10 + 3;\n    print(f\"-10 + 3 = {b}\");\n\n    let c = 2 * 3;\n    print(f\"2 * 3 = {c}\");\n\n    let d = 20 / 5;\n    print(f\"20 / 5 = {d}\");\n\n    let e = 23 % 5;\n    print(f\"23 % 5 = {e}\");\n\n    // Regular order of operations applies\n    let f = 1 + 4 * 5;\n    print(f\"1 + 4 * 5 = {f}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 110,
+        "line": 111,
         "testoutput": "2 + 1 = 3\n-10 + 3 = -7\n2 * 3 = 6\n20 / 5 = 4\n23 % 5 = 3\n1 + 4 * 5 = 21\n",
         "mode": "run"
     },
@@ -607,7 +607,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let a: u8 = 5;\n    let b: u32 = 10;\n\n    let c = a + b; // error!\n}\n",
         "source": "source/writing/basics.md",
-        "line": 148,
+        "line": 149,
         "testoutput": "",
         "mode": "error"
     },
@@ -616,7 +616,7 @@
         "lang": "roto",
         "code": "fn main() {\n    // We can specify the type to get a specific integer type\n    let a: f32 = 2.0 + 1.0; // -> 3.0\n    print(f\"2.0 + 1.0 = {a}\");\n\n    // We always have to write the period for floating point numbers\n    let b: f32 = 2. + 1.; // -> 3.0\n    print(f\"2. + 1. = {b}\");\n\n    // If we don't specify the type we get f64\n    let c = -12.3 + 4.5; // -> -7.8\n    print(f\"-12.3 + 4.5 = {c}\");\n\n    let d = 2.0 * 3.5; // -> 7.0\n    print(f\"2.0 * 3.5 = {d}\");\n\n    let e = 20.0 / 5.0; // -> 4.0\n    print(f\"20.0 / 5.0 = {e}\");\n\n    // Regular order of operations applies\n    let f = 1.0 + 4.0 * 5.0; // -> 21.0\n    print(f\"1.0 + 4.0 * 5.0 = {f}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 166,
+        "line": 167,
         "testoutput": "2.0 + 1.0 = 3\n2. + 1. = 3\n-12.3 + 4.5 = -7.800000000000001\n2.0 * 3.5 = 7\n20.0 / 5.0 = 4\n1.0 + 4.0 * 5.0 = 21\n",
         "mode": "run"
     },
@@ -625,7 +625,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let a = !false;\n    print(f\"{a}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 223,
+        "line": 224,
         "testoutput": "true\n",
         "mode": "run"
     },
@@ -634,7 +634,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = 5 == 5;\n    let y = \"hello\" == \"hello\";\n    let z = true == true;\n    print(f\"{x && y && z}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 242,
+        "line": 243,
         "testoutput": "true\n",
         "mode": "run"
     },
@@ -643,7 +643,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = 5 > 3;\n    print(f\"{x}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 270,
+        "line": 271,
         "testoutput": "true\n",
         "mode": "run"
     },
@@ -652,7 +652,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x: List[i32] = [1, 2, 4];\n    let len = x.len();\n    let contains_2 = x.contains(2);\n    let contains_3 = x.contains(3);\n    print(f\"length of x: {len}\");\n    print(f\"x contains 2: {contains_2}\");\n    print(f\"x contains 3: {contains_3}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 299,
+        "line": 300,
         "testoutput": "length of x: 3\nx contains 2: true\nx contains 3: false\n",
         "mode": "run"
     },
@@ -661,7 +661,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = [1, \"hello!\"];\n}\n",
         "source": "source/writing/basics.md",
-        "line": 322,
+        "line": 323,
         "testoutput": "",
         "mode": "error"
     },
@@ -670,7 +670,7 @@
         "lang": "roto",
         "code": "fn main() {\n    let x = [1, 2, 3];\n    let y = [4, 5, 6];\n    let z = x + y;\n\n    let contains_2 = z.contains(2);\n    let contains_5 = z.contains(5);\n    print(f\"z contains 2: {contains_2}\");\n    print(f\"z contains 5: {contains_5}\");\n}\n",
         "source": "source/writing/basics.md",
-        "line": 331,
+        "line": 332,
         "testoutput": "z contains 2: true\nz contains 5: true\n",
         "mode": "run"
     },

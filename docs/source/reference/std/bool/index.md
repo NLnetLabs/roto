@@ -8,7 +8,7 @@ logical and), `||` (logical or) and `not`.
 `````
 
 
-````{roto:function} to_string(self: bool) -> String
+````{roto:method} bool.to_string(self: bool) -> String
 Convert this value into a `String`.
 ````
 

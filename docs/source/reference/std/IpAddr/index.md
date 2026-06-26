@@ -28,7 +28,7 @@ The IPv4 address pointing to localhost: `127.0.0.1`
 The IPv6 address pointing to localhost: `::1`
 `````
 
-````{roto:function} eq(self: IpAddr, other: IpAddr) -> bool
+````{roto:method} IpAddr.eq(self: IpAddr, other: IpAddr) -> bool
 Check whether two IP addresses are equal.
 
 A more convenient but equivalent method for checking equality is via the `==` operator.
@@ -47,7 +47,7 @@ let e = 192.0.0.0.eq(192.0.0.0);  // -> true
 ```
 ````
 
-````{roto:function} is_ipv4(self: IpAddr) -> bool
+````{roto:method} IpAddr.is_ipv4(self: IpAddr) -> bool
 Returns true if this address is an IPv4 address, and false otherwise.
 
 ```roto
@@ -56,7 +56,7 @@ let b = ::.is_ipv4();      // -> false
 ```
 ````
 
-````{roto:function} is_ipv6(self: IpAddr) -> bool
+````{roto:method} IpAddr.is_ipv6(self: IpAddr) -> bool
 Returns true if this address is an IPv6 address, and false otherwise.
 
 ```roto
@@ -65,11 +65,11 @@ let b = ::.is_ipv6();      // -> true
 ```
 ````
 
-````{roto:function} to_canonical(self: IpAddr) -> IpAddr
+````{roto:method} IpAddr.to_canonical(self: IpAddr) -> IpAddr
 Converts this address to an IPv4 if it is an IPv4-mapped IPv6 address; otherwise, it returns self as-is.
 ````
 
-````{roto:function} to_string(self: IpAddr) -> String
+````{roto:method} IpAddr.to_string(self: IpAddr) -> String
 Convert this value into a `String`.
 ````
 
