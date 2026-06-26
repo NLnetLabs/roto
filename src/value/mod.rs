@@ -27,6 +27,7 @@ pub use dyn_val::DynVal;
 pub(crate) use list::ErasedList;
 pub use list::boundary::List;
 pub use option::RotoOption;
+pub use result::RotoResult;
 pub use string::{RotoString, StringBytes, StringChars, StringLines};
 pub use string_buf::StringBuf;
 pub use val::Val;
@@ -36,6 +37,7 @@ pub use vtable::{CloneFn, DropFn, EqFn, VTable};
 mod dyn_val;
 pub mod list;
 mod option;
+mod result;
 mod string;
 mod string_buf;
 mod val;
@@ -49,6 +51,9 @@ pub enum TypeDescription {
 
     /// `Option<T>`
     Option(TypeId),
+
+    /// `Result<T, E>`
+    Result(TypeId, TypeId),
 
     /// `Verdict<A, R>`
     Verdict(TypeId, TypeId),
@@ -242,6 +247,38 @@ where
         let e = R::resolve().type_id;
 
         let desc = TypeDescription::Verdict(t, e);
+        TypeRegistry::store::<Self>(desc)
+    }
+}
+
+#[sealed]
+impl<T: Value, E: Value> Value for Result<T, E>
+where
+    T::Transformed: Clone,
+    E::Transformed: Clone,
+{
+    type Transformed = RotoResult<T::Transformed, E::Transformed>;
+    type AsParam = *mut Self::Transformed;
+
+    fn transform(self) -> Self::Transformed {
+        match self {
+            Self::Ok(a) => RotoResult::Ok(a.transform()),
+            Self::Err(r) => RotoResult::Err(r.transform()),
+        }
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        match transformed {
+            RotoResult::Ok(a) => Self::Ok(T::untransform(a)),
+            RotoResult::Err(r) => Self::Err(E::untransform(r)),
+        }
+    }
+
+    fn resolve() -> Ty {
+        let t = T::resolve().type_id;
+        let e = E::resolve().type_id;
+
+        let desc = TypeDescription::Result(t, e);
         TypeRegistry::store::<Self>(desc)
     }
 }

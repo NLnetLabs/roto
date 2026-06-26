@@ -2310,6 +2310,57 @@ fn construct_option_value_from_prelude() {
 }
 
 #[test]
+fn match_result_value() {
+    let s = src!(
+        "
+        fn or_fortytwo(x: Result[u32, String]) -> u32 {
+            match x {
+                Ok(x) => x,
+                Err(_) => 42,
+            }
+        }
+        "
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<fn(Result<u32, RotoString>) -> u32>("or_fortytwo")
+        .unwrap();
+
+    let res = f.call(Ok(10));
+    assert_eq!(res, 10);
+    let res = f.call(Err("Not found".into()));
+    assert_eq!(res, 42);
+}
+
+#[test]
+fn create_result_value() {
+    let s = src!(
+        r#"
+        fn main(x: u32) -> Result[u32, String] {
+            if x == 0 {
+                Err("x is not positive")
+            } else {
+                Ok(x)
+            }
+        }
+        "#
+    );
+
+    let mut p = compile(s);
+
+    let f = p
+        .get_function::<fn(u32) -> Result<u32, RotoString>>("main")
+        .unwrap();
+
+    let res = f.call(10);
+    assert_eq!(res, Ok(10));
+    let res = f.call(0);
+    assert_eq!(res, Err("x is not positive".into()));
+}
+
+#[test]
 fn filter_map_with_manual_verdict() {
     let s = src!(
         "

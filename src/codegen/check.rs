@@ -196,6 +196,28 @@ fn check_roto_type(
             check_roto_type(type_info, rust_reject, roto_reject)?;
             Ok(())
         }
+        TypeDescription::Result(rust_ok, rust_err) => {
+            let Type::Name(type_name) = &roto_type else {
+                return Err(error_message);
+            };
+
+            if type_name.name
+                != (ResolvedName {
+                    scope: ScopeRef::GLOBAL,
+                    ident: "Result".into(),
+                })
+            {
+                return Err(error_message);
+            }
+
+            let [roto_ok, roto_err] = &type_name.arguments[..] else {
+                return Err(error_message);
+            };
+
+            check_roto_type(type_info, rust_ok, roto_ok)?;
+            check_roto_type(type_info, rust_err, roto_err)?;
+            Ok(())
+        }
         TypeDescription::Option(rust_type) => {
             let Type::Name(type_name) = &roto_type else {
                 return Err(error_message);

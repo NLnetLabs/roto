@@ -443,6 +443,10 @@ impl TypeChecker {
                 Self::rust_type_to_roto_type(runtime, a)?,
                 Self::rust_type_to_roto_type(runtime, r)?,
             )),
+            TypeDescription::Result(a, r) => Ok(Type::result(
+                Self::rust_type_to_roto_type(runtime, a)?,
+                Self::rust_type_to_roto_type(runtime, r)?,
+            )),
             TypeDescription::List(t) => {
                 Ok(Type::list(Self::rust_type_to_roto_type(runtime, t)?))
             }

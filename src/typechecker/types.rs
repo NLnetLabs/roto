@@ -62,6 +62,10 @@ impl Type {
         Type::named("Prefix", Vec::new())
     }
 
+    pub fn result(a: impl Borrow<Type>, b: impl Borrow<Type>) -> Type {
+        Type::named("Result", vec![a.borrow().clone(), b.borrow().clone()])
+    }
+
     pub fn verdict(a: impl Borrow<Type>, b: impl Borrow<Type>) -> Type {
         Type::named("Verdict", vec![a.borrow().clone(), b.borrow().clone()])
     }
@@ -697,6 +701,15 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
             variants: vec![
                 ("Accept", vec![Type::ExplicitVar("A".into())]),
                 ("Reject", vec![Type::ExplicitVar("R".into())]),
+            ],
+        },
+        EnumType {
+            name: "Result",
+            doc: "A type that represents either success (`Ok`) or failure (`Err`).",
+            params: vec!["T", "E"],
+            variants: vec![
+                ("Ok", vec![Type::ExplicitVar("T".into())]),
+                ("Err", vec![Type::ExplicitVar("E".into())]),
             ],
         },
     ];
