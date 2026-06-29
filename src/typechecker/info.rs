@@ -259,6 +259,6 @@ impl TypeInfo {
                 }
             }
         };
-        self.ty_pool.intern(&ty)
+        self.ty_pool.intern(ty)
     }
 }
