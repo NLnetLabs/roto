@@ -43,6 +43,7 @@ symbol_table = { version = "0.5.0", features = ["global"] }
 rustc-literal-escaper = "0.0.7"
 libc = "0.2"
 sealed = "0.6.0"
+indexmap = "2.14.0"
 
 [dependencies.cranelift]
 version = "0.127.1"
@@ -90,6 +91,3 @@ readme = "README.md"
 
 [workspace.dependencies]
 roto-macros = { path = "macros", version = "=0.11.0" }
-proc-macro2 = "1.0.86"
-quote = "1.0.37"
-syn = { version = "2.0.77", features = ["full"] }

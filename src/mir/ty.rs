@@ -15,7 +15,7 @@
 //! [`Ty`]s in a [`Pool`], which functions as an interner, giving out
 //! [`TyRef`]s, which implement [`Copy`].
 
-use std::collections::{HashMap, hash_map::Entry};
+use indexmap::IndexSet;
 
 use crate::{
     ast::Identifier,
@@ -96,8 +96,7 @@ impl TyRef {
 /// A pool of [`Ty`]s acting as an interner.
 #[derive(Clone)]
 pub struct Pool {
-    types: Vec<Ty>,
-    map: HashMap<Ty, TyRef>,
+    types: IndexSet<Ty>,
 }
 
 impl Default for Pool {
@@ -109,8 +108,7 @@ impl Default for Pool {
 impl Pool {
     pub fn new() -> Self {
         let mut this = Self {
-            types: Vec::new(),
-            map: HashMap::new(),
+            types: IndexSet::new(),
         };
 
         // Insert all the well-known types so that they get the ID that we
@@ -119,10 +117,10 @@ impl Pool {
         // this to actually fail in practice, but it should also break most
         // of the tests if this happens.
 
-        let actual_val = this.intern(&Ty::Unit);
+        let actual_val = this.intern(Ty::Unit);
         assert_eq!(TyRef::UNIT, actual_val);
 
-        let actual_val = this.intern(&Ty::Never);
+        let actual_val = this.intern(Ty::Never);
         assert_eq!(TyRef::NEVER, actual_val);
 
         for (expected_val, primitive) in [
@@ -139,7 +137,7 @@ impl Pool {
             (TyRef::F64, Primitive::Float(FloatSize::F64)),
             (TyRef::STRING, Primitive::String),
         ] {
-            let actual_val = this.intern(&Ty::Primitive(primitive));
+            let actual_val = this.intern(Ty::Primitive(primitive));
             assert_eq!(expected_val, actual_val);
         }
         this
@@ -265,16 +263,8 @@ impl Pool {
         Some(res)
     }
 
-    pub fn intern(&mut self, ty: &Ty) -> TyRef {
-        match self.map.entry(ty.clone()) {
-            Entry::Occupied(entry) => *entry.get(),
-            Entry::Vacant(entry) => {
-                let ty = entry.key().clone();
-                let idx = self.types.len();
-                self.types.push(ty);
-                TyRef(idx)
-            }
-        }
+    pub fn intern(&mut self, ty: Ty) -> TyRef {
+        TyRef(self.types.insert_full(ty).0)
     }
 
     pub fn get(&self, ty_ref: TyRef) -> &Ty {
