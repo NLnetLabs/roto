@@ -5923,3 +5923,62 @@ fn zero_sized_registered_type_as_argument() {
 
     assert!(f.call(Val(Application)));
 }
+
+#[test]
+fn string_eq_shortcircuit_or() {
+    let s = src!(
+        r#"
+        fn main(s: String) -> bool {
+            s == "a" || s == "b"
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(RotoString) -> bool>("main").unwrap();
+
+    assert!(f.call("a".into()));
+    assert!(f.call("b".into()));
+    assert!(!f.call("c".into()));
+}
+
+#[test]
+fn string_eq_shortcircuit_and() {
+    let s = src!(
+        r#"
+        fn main(s: String) -> bool {
+            s != "a" && s != "b"
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(RotoString) -> bool>("main").unwrap();
+
+    assert!(!f.call("a".into()));
+    assert!(!f.call("b".into()));
+    assert!(f.call("c".into()));
+}
+
+#[test]
+fn return_in_or_expression() {
+    let s = src!(
+        r#"
+        fn or_executes(s: String) -> bool {
+            { if s == "a" { return true } else { s == "b" } }
+            || { if s == "c" { return true } else { s == "d" } }
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(RotoString) -> bool>("or_executes")
+        .unwrap();
+
+    assert!(f.call("a".into()));
+    assert!(f.call("b".into()));
+    assert!(f.call("c".into()));
+    assert!(f.call("d".into()));
+    assert!(!f.call("e".into()));
+}
