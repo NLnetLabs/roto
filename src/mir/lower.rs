@@ -1092,27 +1092,7 @@ impl<'r> Lowerer<'r> {
         l: &Meta<ast::Expr>,
         r: &Meta<ast::Expr>,
     ) -> Value {
-        let current_label = self.current_label();
-        let lbl_cont = self.label_store.next(current_label);
-        let lbl_other = self
-            .label_store
-            .wrap_internal(current_label, Identifier::from("and_other"));
-
-        let val = self.expr(l);
-        let tmp = self.assign_to_var(val, TyRef::BOOL);
-        self.emit_switch(tmp.clone(), vec![(1, lbl_other)], Some(lbl_cont));
-
-        self.new_block(lbl_other);
-        let val = self.expr(r);
-        self.do_assign(
-            Place::new(tmp.clone(), TyRef::BOOL),
-            TyRef::BOOL,
-            val,
-        );
-        self.emit_jump(lbl_cont);
-
-        self.new_block(lbl_cont);
-        Value::Move(tmp)
+        self.shortcircuit_binop(l, r, "and_other", 1)
     }
 
     fn binop_or(
@@ -1120,26 +1100,78 @@ impl<'r> Lowerer<'r> {
         l: &Meta<ast::Expr>,
         r: &Meta<ast::Expr>,
     ) -> Value {
+        self.shortcircuit_binop(l, r, "or_other", 0)
+    }
+
+    fn shortcircuit_binop(
+        &mut self,
+        l: &Meta<ast::Expr>,
+        r: &Meta<ast::Expr>,
+        lbl_other: &str,
+        other_if: usize,
+    ) -> Value {
         let current_label = self.current_label();
         let lbl_cont = self.label_store.next(current_label);
         let lbl_other = self
             .label_store
-            .wrap_internal(current_label, Identifier::from("or_other"));
+            .wrap_internal(current_label, Identifier::from(lbl_other));
+
+        // The variable that we store the result of this operation in.
+        // We can return before the end of this operation so this cannot
+        // be added to the stack slots yet.
+        let tmp = self.undropped_tmp();
+
+        // Create a new stack slot for the left-hand side.
+        // This is not strictly necessary, but it makes a nice symmetry with
+        // the right-hand side.
+        self.stack_slots.push(Vec::new());
 
         let val = self.expr(l);
-        let tmp = self.assign_to_var(val, TyRef::BOOL);
-        self.emit_switch(tmp.clone(), vec![(0, lbl_other)], Some(lbl_cont));
+
+        self.do_assign(
+            Place::new(tmp.clone(), TyRef::BOOL),
+            TyRef::BOOL,
+            val,
+        );
+
+        // Drop all variables for the left-hand side
+        let to_drop = self.stack_slots.pop().unwrap();
+        for (var, ty) in to_drop.into_iter().rev() {
+            self.emit_drop(Place::new(var, ty), ty);
+        }
+
+        self.emit_switch(
+            tmp.clone(),
+            vec![(other_if, lbl_other)],
+            Some(lbl_cont),
+        );
 
         self.new_block(lbl_other);
+
+        // Create a new stack slot of the right-hand side. This is necessary
+        // because the right-hand side might not be executed. Therefore, we
+        // can only drop the variables in it if it has been executed.
+        self.stack_slots.push(Vec::new());
+
         let val = self.expr(r);
         self.do_assign(
             Place::new(tmp.clone(), TyRef::BOOL),
             TyRef::BOOL,
             val,
         );
-        self.emit_jump(lbl_cont);
 
+        // Drop all variables in the right-hand side.
+        let to_drop = self.stack_slots.pop().unwrap();
+        for (var, ty) in to_drop.into_iter().rev() {
+            self.emit_drop(Place::new(var, ty), ty);
+        }
+
+        // Finally, we know that `tmp` has been initialized and can be dropped.
+        self.add_live_variable(tmp.clone(), TyRef::BOOL);
+
+        self.emit_jump(lbl_cont);
         self.new_block(lbl_cont);
+
         Value::Move(tmp)
     }
 
