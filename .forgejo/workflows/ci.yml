@@ -243,4 +243,4 @@ jobs:
     - name: Install cargo-valgrind
       run: cargo install cargo-valgrind
     - name: Run Valgrind
-      run: VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test --all-targets -- {{TEST}}
+      run: VALGRINDFLAGS="--suppressions=valgrind_suppressions.supp" cargo valgrind test --all-targets

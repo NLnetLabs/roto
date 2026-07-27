@@ -57,6 +57,7 @@ version = "0.127.1"
 
 [dev-dependencies]
 assert_cmd = { version = "2.2.0", features = ["color"] }
+criterion = "0.8.2"
 insta = { version = "1.46.0", features = ["glob"] }
 routecore = { version = "0.7", features = ["bgp", "bmp", "serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
@@ -91,3 +92,15 @@ readme = "README.md"
 
 [workspace.dependencies]
 roto-macros = { path = "macros", version = "=0.11.0" }
+
+[[bench]]
+name = "fibonacci"
+harness = false
+
+[[bench]]
+name = "insertion_sort"
+harness = false
+
+[[bench]]
+name = "primes"
+harness = false

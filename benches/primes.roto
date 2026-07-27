@@ -1,0 +1,30 @@
+fn check_prime(x: u64) -> bool {
+    let primes = [];
+
+    if x == 1 {
+        return false;
+    }
+
+    let i = 2;
+    while i < x {
+        if check_prime_list(i, primes) {
+            primes.push(i);
+        }
+        i += 1;
+    }
+
+    check_prime_list(x, primes)
+}
+
+fn check_prime_list(x: u64, primes: List[u64]) -> bool {
+    for prime in primes {
+        if x % prime == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+fn main(x: u64) -> bool {
+    check_prime(x)
+}
