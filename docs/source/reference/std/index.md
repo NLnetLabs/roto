@@ -30,6 +30,10 @@ u64 <u64/index>
 u8 <u8/index>
 ```
 ## Functions
+````{roto:function} panic(s: String)
+Exit the script immediately with a message.
+````
+
 ````{roto:function} print(s: String)
 Print a string to stdout
 ````
