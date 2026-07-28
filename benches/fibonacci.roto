@@ -1,0 +1,11 @@
+fn fibonacci(n: u64) -> u64 {
+    if n <= 1 {
+        1
+    } else {
+        fibonacci(n-1) + fibonacci(n-2)
+    }
+}
+
+fn main(n: u64) -> u64 {
+    fibonacci(n)
+}
