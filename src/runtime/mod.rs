@@ -11,6 +11,8 @@ pub mod layout;
 #[cfg(all(test, not(miri)))]
 pub mod tests;
 
+#[cfg(feature = "cli")]
+use std::process::ExitCode;
 use std::{
     any::TypeId, collections::HashMap, marker::PhantomData, path::Path, ptr,
     slice, str, sync::Arc,
@@ -303,7 +305,7 @@ impl<C: OptCtx> Runtime<C> {
 
     /// Run a CLI based on this runtime.
     #[cfg(feature = "cli")]
-    pub fn cli(&self) {
+    pub fn cli(&self) -> ExitCode {
         crate::cli(self)
     }
 

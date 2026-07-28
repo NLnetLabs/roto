@@ -1,6 +1,8 @@
+use std::process::ExitCode;
+
 use roto::Runtime;
 
-fn main() {
+fn main() -> ExitCode {
     #[cfg(feature = "logger")]
     env_logger::builder()
         .format_timestamp(None)
@@ -9,5 +11,5 @@ fn main() {
 
     let mut rt = Runtime::new();
     rt.add_io_functions();
-    rt.cli();
+    rt.cli()
 }

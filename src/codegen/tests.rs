@@ -5961,6 +5961,29 @@ fn string_eq_shortcircuit_and() {
 }
 
 #[test]
+fn return_in_one_branch_of_if() {
+    let s = src!(
+        r#"
+        fn or_executes(s: String) -> bool {
+            if s == "a" {
+                return true
+            } else {
+                false
+            }
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(RotoString) -> bool>("or_executes")
+        .unwrap();
+
+    assert!(f.call("a".into()));
+    assert!(!f.call("c".into()));
+}
+
+#[test]
 fn return_in_or_expression() {
     let s = src!(
         r#"

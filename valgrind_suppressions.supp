@@ -3,19 +3,19 @@
 	Memcheck:Leak
 	match-leak-kinds: all
 	...
-	fun:_ZN12symbol_table5Shard6intern17*
+	fun:*12symbol_tableNtB6_5Shard6intern*
 }
 {
     Global type registry allocation
 	Memcheck:Leak
 	match-leak-kinds: all
 	...
-	fun:_ZN4roto5value12TypeRegistry5store17*
+	fun:*4roto5valueNtB5_12TypeRegistry5store*
 }
 {
 	A leak the standard test runner
 	Memcheck:Leak
 	match-leak-kinds: all
 	...
-	fun:_ZN4test7console17run_tests_console*
+	fun:*test7console17run_tests_console*
 }
