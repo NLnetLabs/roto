@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 
@@ -57,14 +57,12 @@ enum Command {
 ///  - `check`: type check a script
 ///  - `test`: run tests for a script
 ///  - `run`: run a function of a script
-///
-/// This function exits the program and does not return.
-pub fn cli(rt: &Runtime<impl OptCtx>) -> ! {
+pub fn cli(rt: &Runtime<impl OptCtx>) -> ExitCode {
     match cli_inner(rt) {
-        Ok(()) => std::process::exit(0),
+        Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
             eprintln!("{err}");
-            std::process::exit(1);
+            ExitCode::FAILURE
         }
     }
 }
