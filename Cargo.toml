@@ -59,6 +59,7 @@ version = "0.127.1"
 assert_cmd = { version = "2.2.0", features = ["color"] }
 criterion = "0.8.2"
 insta = { version = "1.46.0", features = ["glob"] }
+rand = "0.10.2"
 routecore = { version = "0.7", features = ["bgp", "bmp", "serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -103,4 +104,8 @@ harness = false
 
 [[bench]]
 name = "primes"
+harness = false
+
+[[bench]]
+name = "script_bench_rs"
 harness = false
