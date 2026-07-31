@@ -103,7 +103,11 @@ impl TypeChecker {
     ) -> TypeResult<bool> {
         let mut diverged = false;
 
-        self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
+        let mut flat_paths = Vec::new();
+        for path in &block.imports {
+            Self::flatten_import_paths(&mut flat_paths, path);
+        }
+        self.imports(scope, flat_paths)?;
 
         for stmt in &block.stmts {
             // TODO: emit message for diverging statements
@@ -290,7 +294,7 @@ impl TypeChecker {
                 let ty = path_value.final_type();
                 let ctx = ctx.with_type(ty);
 
-                let op = match c.op {
+                let op = match c.op.node {
                     ast::CompoundAssignOp::Add => ast::BinOp::Add,
                     ast::CompoundAssignOp::Sub => ast::BinOp::Sub,
                     ast::CompoundAssignOp::Mul => ast::BinOp::Mul,
@@ -700,7 +704,7 @@ impl TypeChecker {
             pattern,
             guard,
             body,
-        } in arms
+        } in &arms.node
         {
             // Anything after default is unreachable
             if default_arm {
@@ -721,7 +725,7 @@ impl TypeChecker {
                         default_arm = true;
                     }
 
-                    arms_diverge &= self.block(arm_scope, ctx, body)?;
+                    arms_diverge &= self.expr(arm_scope, ctx, body)?;
                     continue;
                 }
                 Pattern::EnumVariant {
@@ -795,7 +799,7 @@ impl TypeChecker {
                         used_variants.push(variant.node);
                     }
 
-                    arms_diverge &= self.block(arm_scope, ctx, body)?;
+                    arms_diverge &= self.expr(arm_scope, ctx, body)?;
                 }
             }
         }

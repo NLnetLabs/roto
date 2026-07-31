@@ -1,0 +1,19 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    if hi {
+        print("yay");
+    } else {
+        print("no");
+    }
+
+    while 1 + 2 == 3 {
+        print("Still true");
+    }
+
+    for x in [1, 2, 3] {
+        print("Still true");
+    }
+}

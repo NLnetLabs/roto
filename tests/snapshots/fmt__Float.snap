@@ -1,0 +1,7 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    001.12312321e10
+}

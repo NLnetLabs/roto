@@ -58,7 +58,8 @@ impl Parsed {
                 ident,
             );
 
-            let ast = match Parser::parse(i, &mut spans, &file.contents) {
+            let (ast, _) = match Parser::parse(i, &mut spans, &file.contents)
+            {
                 Ok(ast) => ast,
                 Err(err) => {
                     errors.push(RotoError::Parse(*err));

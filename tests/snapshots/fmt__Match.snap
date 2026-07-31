@@ -1,0 +1,17 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    match x {
+        Foo(x) => {
+            1
+        }
+        Bar(y) => 2,
+        Baz(z) => {
+            print("one");
+            print("two");
+            print("three");
+        }
+    }
+}

@@ -1,0 +1,10 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+// hellloooo
+// whooo
+fn foo() {}
+// hellloooo
+// whooo
+fn bar() {}

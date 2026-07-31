@@ -928,7 +928,7 @@ impl<'r> Lowerer<'r> {
     }
 
     fn compound_assign(&mut self, c: &ast::CompoundAssign) -> Value {
-        let op = match c.op {
+        let op = match c.op.node {
             CompoundAssignOp::Add => ast::BinOp::Add,
             CompoundAssignOp::Sub => ast::BinOp::Sub,
             CompoundAssignOp::Mul => ast::BinOp::Mul,
@@ -941,7 +941,14 @@ impl<'r> Lowerer<'r> {
         };
         let bin_expr = Meta {
             id: c.binop_id,
-            node: Expr::BinOp(Box::new(left), op, c.expr.clone()),
+            node: Expr::BinOp(
+                Box::new(left),
+                Meta {
+                    node: op,
+                    id: c.op.id,
+                },
+                c.expr.clone(),
+            ),
         };
         self.assign(&c.path, &bin_expr)
     }
