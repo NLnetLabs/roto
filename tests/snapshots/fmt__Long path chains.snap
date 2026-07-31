@@ -1,0 +1,51 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    one
+        .two
+        .three
+        .four
+        .five
+        .six
+        .seven
+        .eight
+        .nine
+        .ten
+        .eleven
+        .twelve
+        .thirteen
+        .fourteen
+        .fifteen
+        + one
+            .two
+            .three
+            .four
+            .five
+            .six
+            .seven
+            .eight
+            .nine
+            .ten
+            .eleven
+            .twelve
+            .thirteen
+            .fourteen
+            .fifteen
+        + one
+            .two
+            .three
+            .four
+            .five
+            .six
+            .seven
+            .eight
+            .nine
+            .ten
+            .eleven
+            .twelve
+            .thirteen
+            .fourteen
+            .fifteen
+}

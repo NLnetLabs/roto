@@ -1,0 +1,340 @@
+// ===========
+// Simple func
+// ===========
+
+fn main() {
+	
+}
+
+// ===============
+// Func with param
+// ===============
+
+fn main(
+x: i32) {
+	
+}
+
+// ==================
+// Comment above func
+// ==================
+
+// Hello
+fn main(  ) {
+	
+}
+
+// ===============
+// Comment in func
+// ===============
+
+fn main(
+	// whoop!
+) {
+	// boop!
+}
+
+// ===================
+// Multiple statements
+// ===================
+
+fn main() {
+	foo.bar;
+		foo.bar;
+
+
+	baz.quux;
+		baz.quux;
+
+
+				boop
+}
+
+// ==========================
+// Comment around expressions
+// ==========================
+
+fn main() {
+	// boop!
+	foo.bar;
+	// whoop!
+	baz.quux
+	// whomp
+}
+
+// ==========================================
+// Comment around expressions with whitespace
+// ==========================================
+
+fn main() {
+
+	// boop!
+
+	foo.bar;
+
+	// whoop!
+
+	baz.quux
+
+	// whomp
+
+}
+
+// =========================
+// Comment after expressions
+// =========================
+
+fn main() {
+	foo.bar; // whoop!
+	baz.quux // whomp
+}
+
+// =========
+// Two funcs
+// =========
+
+fn foo() {} fn bar() {}
+
+// =======================
+// Two funcs with comments
+// =======================
+
+// hellloooo
+// whooo
+fn foo() {}
+// hellloooo
+// whooo
+fn bar() {}
+
+
+// =================================
+// Two funcs with comments inbetween
+// =================================
+
+fn foo() {}
+// one
+
+// two
+
+// three
+fn bar() {}
+
+// =========
+// Const var
+// =========
+
+const FOO:
+i32
+=
+foo
+;
+
+// =====================
+// Const func const func
+// =====================
+
+const A: a = a;
+fn c() {}
+const B: b = b;
+fn d() {}
+
+// =============
+// Simple record
+// =============
+
+record Foo {x: i32}
+
+// ======================
+// Record with two fields
+// ======================
+
+record Foo {x:i32,y:i32}
+
+// ============
+// Empty record
+// ============
+
+record Foo[] {}
+
+// ======================
+// Record with type param
+// ======================
+
+record Foo[T] {
+	x: T
+}
+
+// ============================
+// Record with long type params
+// ============================
+
+record Foo[BarBarBarBarBarBarBarBar,BazBazBazBazBazBazBazBaz,QuuxQuuxQuuxQuuxQuuxQuuxQuux] {
+	
+}
+
+// ==========
+// Enum maybe
+// ==========
+
+enum Maybe[T] {Just(T),Nothing}
+
+// ==============
+// Enum maybe bar
+// ==============
+
+enum MaybeBarBar {Just(BarBarBarBarBarBarBarBar,BarBarBarBarBarBarBarBar,BarBarBarBarBarBarBarBar),Nothing}
+
+// ==========================
+// Enum with long type params
+// ==========================
+
+enum Foo[BarBarBarBarBarBarBarBar,BazBazBazBazBazBazBazBaz,QuuxQuuxQuuxQuuxQuuxQuuxQuux] {
+	
+}
+
+// =============
+// Simple import
+// =============
+
+import foo.bar.     baz;
+
+// ============
+// Group import
+// ============
+
+import foo.{bar,     baz};
+
+
+// =================
+// Long group import
+// =================
+
+import foo.{BarBarBarBarBarBarBarBar,BazBazBazBazBazBazBazBaz,QuuxQuuxQuuxQuuxQuuxQuuxQuux};
+
+// =====
+// Float
+// =====
+
+fn main() {
+	001.12312321e10
+}
+
+// ===
+// Int
+// ===
+
+fn main() {
+	300_200_100
+}
+
+// ======
+// Record
+// ======
+
+fn main() {
+	{x:10,y:20}
+}
+
+// ================
+// Long path chains
+// ================
+
+fn main() {
+    one.two.three.four.five.six.seven.eight.nine.ten.eleven.twelve.thirteen.fourteen.fifteen
+    + one.two.three.four.five.six.seven.eight.nine.ten.eleven.twelve.thirteen.fourteen.fifteen
+    + one.two.three.four.five.six.seven.eight.nine.ten.eleven.twelve.thirteen.fourteen.fifteen
+}
+
+// ===========
+// Mul and add
+// ===========
+
+fn main() {
+    101010101010101010 + 1010101010101010 * 101010101010101010 + 1010101010101010
+}
+
+fn main() {
+    101010101010101010 * 1010101010101010 + 101010101010101010 * 1010101010101010
+}
+
+// =============================
+// Mul and add electric boogaloo
+// =============================
+
+fn main() {
+1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010
++ 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010
++ 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010
+}
+
+// ===========================================
+// Mul and add electric boogaloo with comments
+// ===========================================
+
+fn main() {
+1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010
+// foo
++ 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010
+// bar
++ 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010
+}
+
+fn main() {
+1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 // foo
++ 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 // bar
++ 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 * 1010101010101010 // baz
+}
+
+// ========
+// F-string
+// ========
+
+fn main() {
+	f"foo{  1    + 1   }bar"
+}
+
+// ==============
+// If, while, for
+// ==============
+
+fn main() {
+	if hi {
+		print("yay");
+	} else {
+		print("no");
+	}
+
+	while 1 + 2 == 3 {
+		print("Still true");
+	}
+
+	for x in [1, 2, 3] {
+		print("Still true");
+	}
+}
+
+// ================
+// let with if expr
+// ================
+
+fn main() {
+	let x = if hi { 1 } else { 2 };
+}
+
+// =====
+// Match
+// =====
+
+fn main() {
+	match x {
+		Foo(x) => {
+			1
+		}
+		Bar(y) => 2,
+		Baz(z) => {
+			print("one");
+			print("two");
+			print("three");
+		},
+	}
+}

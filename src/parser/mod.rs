@@ -5,10 +5,12 @@
 //! There is currently no way that the parser can recover from invalid syntax.
 //! Therefore, we can only report one parse error.
 
+use std::collections::VecDeque;
+
 use crate::{
     ast::{
         ConstantDeclaration, Declaration, FunctionDeclaration, Identifier,
-        Path, SyntaxTree, Test,
+        ImportPath, SyntaxTree, Test,
     },
     parser::error::Hint,
 };
@@ -41,6 +43,11 @@ pub struct Parser<'source, 'spans> {
     file_length: usize,
     lexer: Lexer<'source>,
     pub spans: &'spans mut Spans,
+}
+
+#[derive(Clone, Default)]
+pub struct Extras {
+    pub comments: VecDeque<Span>,
 }
 
 /// # Helper methods
@@ -167,7 +174,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<SyntaxTree> {
+    ) -> ParseResult<(SyntaxTree, Extras)> {
         Self::run_parser(Self::tree, file, spans, input)
     }
 
@@ -176,11 +183,11 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<T> {
+    ) -> ParseResult<(T, Extras)> {
         let mut p = Self {
             file,
             file_length: input.len(),
-            lexer: Lexer::new(input),
+            lexer: Lexer::new(file, input),
             spans,
         };
         let out = match parser(&mut p) {
@@ -217,7 +224,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             }
             .into());
         }
-        Ok(out)
+        Ok((out, p.lexer.extras))
     }
 
     fn tree(&mut self) -> ParseResult<SyntaxTree> {
@@ -325,7 +332,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         Ok(Test { ident, body })
     }
 
-    fn import(&mut self) -> ParseResult<Vec<Meta<Path>>> {
+    fn import(&mut self) -> ParseResult<Meta<ImportPath>> {
         self.take(Token::Keyword(Keyword::Import))?;
         let path = self.path_expr()?;
         self.take(Token::SemiColon)?;

@@ -105,7 +105,7 @@ impl Parsed {
             let res = Parser::parse(i, &mut self.spans, &file.contents);
 
             let ast = match res {
-                Ok(ast) => ast,
+                Ok((ast, _)) => ast,
                 Err(err) => {
                     errors.push(RotoError::Parse(*err));
                     continue;

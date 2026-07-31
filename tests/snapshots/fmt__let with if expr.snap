@@ -1,0 +1,11 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    let x = if hi {
+        1
+    } else {
+        2
+    };
+}

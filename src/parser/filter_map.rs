@@ -76,17 +76,18 @@ impl Parser<'_, '_> {
         Ok((field_name, ty))
     }
 
-    pub fn type_parameters(&mut self) -> ParseResult<Vec<Meta<Identifier>>> {
+    pub fn type_parameters(
+        &mut self,
+    ) -> ParseResult<Option<Meta<Vec<Meta<Identifier>>>>> {
         let params = if self.peek_is(Token::SquareLeft) {
-            self.separated(
+            Some(self.separated(
                 Token::SquareLeft,
                 Token::SquareRight,
                 Token::Comma,
                 Self::identifier,
-            )?
-            .node
+            )?)
         } else {
-            Vec::new()
+            None
         };
         Ok(params)
     }

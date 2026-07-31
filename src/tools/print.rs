@@ -20,7 +20,7 @@ mod ansi {
 ///
 /// The syntax highlighting is simple and based solely on the lexer.
 pub fn print_highlighted(s: &str) {
-    let mut lexer = Lexer::new(s);
+    let mut lexer = Lexer::new(0, s);
     let mut last_end = 0;
     for (token, range) in std::iter::from_fn(|| lexer.next()) {
         if range.start > last_end {
