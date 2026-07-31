@@ -1,0 +1,7 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    { x: 10, y: 20 }
+}

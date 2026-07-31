@@ -571,13 +571,19 @@ impl TypeChecker {
                 let (kind, ident) = match d {
                     ast::Declaration::Record(x) => (
                         DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: x.type_params.len(),
+                            num_params: x
+                                .type_params
+                                .as_ref()
+                                .map_or(0, |p| p.len()),
                         }),
                         x.ident.clone(),
                     ),
                     ast::Declaration::Enum(x) => (
                         DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: x.type_params.len(),
+                            num_params: x
+                                .type_params
+                                .as_ref()
+                                .map_or(0, |p| p.len()),
                         }),
                         x.ident.clone(),
                     ),
@@ -645,18 +651,44 @@ impl TypeChecker {
         modules: &[(ScopeRef, &Module)],
     ) -> TypeResult<()> {
         for &(scope, module) in modules {
-            let mut paths = Vec::new();
+            let mut flat_paths = Vec::new();
             for expr in &module.ast.declarations {
-                let ast::Declaration::Import(new_paths) = expr else {
+                let ast::Declaration::Import(import_path) = expr else {
                     continue;
                 };
-                for path in new_paths {
-                    paths.push(path);
-                }
+                Self::flatten_import_paths(&mut flat_paths, import_path)
             }
-            self.imports(scope, &paths)?;
+            self.imports(scope, flat_paths)?;
         }
         Ok(())
+    }
+
+    fn flatten_import_paths(
+        flat_paths: &mut Vec<ast::Path>,
+        path: &Meta<ast::ImportPath>,
+    ) {
+        fn inner(
+            flat_paths: &mut Vec<ast::Path>,
+            root: &ast::Path,
+            import_path: &ast::ImportPath,
+        ) {
+            let mut idents = root.idents.clone();
+            if let Some(path) = &import_path.path {
+                idents.extend_from_slice(&path.idents);
+            }
+            let new_root = ast::Path { idents };
+
+            if let Some(group) = &import_path.group {
+                for path in &group.node {
+                    inner(flat_paths, &new_root, path);
+                }
+            } else {
+                flat_paths.push(new_root);
+            }
+        }
+
+        let root = ast::Path { idents: Vec::new() };
+        inner(flat_paths, &root, path);
     }
 
     fn declare_types(
@@ -686,19 +718,25 @@ impl TypeChecker {
                             .scope_graph
                             .wrap(scope, ScopeType::TypeParams);
 
-                        for param in type_params {
-                            if let Err(e) =
-                                self.type_info.scope_graph.insert_declaration(
-                                    eval_scope,
-                                    param,
-                                    DeclarationKind::TypeParam(param.node),
-                                    String::new(),
-                                    |_| false,
-                                )
-                            {
-                                return Err(
-                                    self.error_declared_twice(param, e)
-                                );
+                        if let Some(type_params) = type_params {
+                            for param in &type_params.node {
+                                if let Err(e) = self
+                                    .type_info
+                                    .scope_graph
+                                    .insert_declaration(
+                                        eval_scope,
+                                        param,
+                                        DeclarationKind::TypeParam(
+                                            param.node,
+                                        ),
+                                        String::new(),
+                                        |_| false,
+                                    )
+                                {
+                                    return Err(
+                                        self.error_declared_twice(param, e)
+                                    );
+                                }
                             }
                         }
 
@@ -722,12 +760,15 @@ impl TypeChecker {
                         let type_def = TypeDefinition::Enum(
                             TypeName {
                                 name,
-                                arguments: type_params
-                                    .iter()
-                                    .map(|ident| {
-                                        Type::ExplicitVar(ident.node)
-                                    })
-                                    .collect(),
+                                arguments: match type_params {
+                                    Some(p) => p
+                                        .iter()
+                                        .map(|ident| {
+                                            Type::ExplicitVar(ident.node)
+                                        })
+                                        .collect(),
+                                    None => Vec::new(),
+                                },
                             },
                             evaluated_variants.clone(),
                         );
@@ -788,31 +829,40 @@ impl TypeChecker {
                             .scope_graph
                             .wrap(scope, ScopeType::TypeParams);
 
-                        for param in type_params {
-                            if let Err(e) =
-                                self.type_info.scope_graph.insert_declaration(
-                                    eval_scope,
-                                    param,
-                                    DeclarationKind::TypeParam(param.node),
-                                    String::new(),
-                                    |_| false,
-                                )
-                            {
-                                return Err(
-                                    self.error_declared_twice(param, e)
-                                );
+                        if let Some(type_params) = type_params {
+                            for param in &type_params.node {
+                                if let Err(e) = self
+                                    .type_info
+                                    .scope_graph
+                                    .insert_declaration(
+                                        eval_scope,
+                                        param,
+                                        DeclarationKind::TypeParam(
+                                            param.node,
+                                        ),
+                                        String::new(),
+                                        |_| false,
+                                    )
+                                {
+                                    return Err(
+                                        self.error_declared_twice(param, e)
+                                    );
+                                }
                             }
                         }
 
                         let ty = TypeDefinition::Record(
                             TypeName {
                                 name,
-                                arguments: type_params
-                                    .iter()
-                                    .map(|ident| {
-                                        Type::ExplicitVar(ident.node)
-                                    })
-                                    .collect(),
+                                arguments: match type_params {
+                                    Some(p) => p
+                                        .iter()
+                                        .map(|ident| {
+                                            Type::ExplicitVar(ident.node)
+                                        })
+                                        .collect(),
+                                    None => Vec::new(),
+                                },
                             },
                             self.evaluate_record_type(
                                 eval_scope,
@@ -1021,13 +1071,12 @@ impl TypeChecker {
     fn imports(
         &mut self,
         scope: ScopeRef,
-        paths: &[&Meta<ast::Path>],
+        mut paths: Vec<ast::Path>,
     ) -> TypeResult<()> {
         // We want imports to work in any order and sometimes there are
         // dependencies between them. This means that we process them in a loop
         // where we exit either if we have no unresolved imports anymore or when
         // we can no longer make progress, in which case we error.
-        let mut paths = paths.to_vec();
         loop {
             let last_len = paths.len();
             paths.retain(|p| self.import(scope, p).is_err());

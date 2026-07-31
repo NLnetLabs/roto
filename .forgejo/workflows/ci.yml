@@ -46,7 +46,7 @@ jobs:
     runs-on: docker
     strategy:
       matrix:
-        rust: [1.89.0, stable, beta, nightly]
+        rust: [1.93.0, stable, beta, nightly]
         args: ["--no-default-features", "", "--all-features"]
         target: [x86_64-unknown-linux-gnu]
     steps:

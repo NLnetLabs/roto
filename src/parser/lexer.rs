@@ -6,12 +6,17 @@ use std::{collections::VecDeque, ops::ControlFlow};
 use unicode_ident::{is_xid_continue, is_xid_start};
 
 use super::token::{FStringToken, Keyword, Token};
-use crate::ast::Identifier;
+use crate::{
+    ast::Identifier,
+    parser::{Extras, meta::Span},
+};
 
 pub struct Lexer<'a> {
     input: &'a str,
     original_length: usize,
     peeked: VecDeque<(Result<Token<'a>, ()>, Range<usize>)>,
+    file: usize,
+    pub extras: Extras,
     pub almost_keyword:
         Option<(Identifier, Range<usize>, Option<&'static str>)>,
 }
@@ -73,12 +78,14 @@ impl<'a> Lexer<'a> {
 }
 
 impl<'s> Lexer<'s> {
-    pub fn new(input: &'s str) -> Self {
+    pub fn new(file: usize, input: &'s str) -> Self {
         Self {
             input,
             original_length: input.len(),
             peeked: VecDeque::new(),
             almost_keyword: None,
+            file,
+            extras: Extras::default(),
         }
     }
 
@@ -134,10 +141,18 @@ impl<'s> Lexer<'s> {
         let mut tail = self.input;
         loop {
             tail.eat_whitespace();
+            if tail.len() < self.input.len() {
+                self.bump_to(tail);
+            }
+
             if tail.eat_str("//") {
                 tail.eat_until('\n');
             } else {
                 break;
+            }
+            if tail.len() < self.input.len() {
+                let (_, range) = self.bump_to(tail);
+                self.extras.comments.push_back(Span::new(self.file, range));
             }
         }
         if tail.len() < self.input.len() {

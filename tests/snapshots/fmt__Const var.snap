@@ -1,0 +1,5 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+const FOO: i32 = foo;

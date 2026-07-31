@@ -1,0 +1,7 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+import foo
+.bar
+.baz;

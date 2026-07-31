@@ -1064,7 +1064,7 @@ impl Rt {
     }
 
     fn check_name_internal(name: Identifier) -> Result<(), String> {
-        let mut lexer = Lexer::new(name.as_str());
+        let mut lexer = Lexer::new(0, name.as_str());
         let Some((Ok(tok), _)) = lexer.next() else {
             return Err(format!(
                 "Name {name:?} is not a valid Roto identifier"

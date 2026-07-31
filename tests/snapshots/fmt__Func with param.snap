@@ -1,0 +1,5 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main(x: i32) {}

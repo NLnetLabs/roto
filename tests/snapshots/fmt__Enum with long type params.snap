@@ -1,0 +1,9 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+enum Foo[
+    BarBarBarBarBarBarBarBar,
+    BazBazBazBazBazBazBazBaz,
+    QuuxQuuxQuuxQuuxQuuxQuuxQuux,
+] {}

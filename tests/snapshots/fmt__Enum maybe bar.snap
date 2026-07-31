@@ -1,0 +1,12 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+enum MaybeBarBar {
+    Just(
+        BarBarBarBarBarBarBarBar,
+        BarBarBarBarBarBarBarBar,
+        BarBarBarBarBarBarBarBar,
+    ),
+    Nothing,
+}

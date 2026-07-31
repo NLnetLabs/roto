@@ -44,6 +44,8 @@ rustc-literal-escaper = "0.0.7"
 libc = "0.2"
 sealed = "0.6.0"
 indexmap = "2.14.0"
+unicode-width = "0.2.2"
+diffy = { version = "0.5.1", features = ["color"] }
 
 [dependencies.cranelift]
 version = "0.127.1"
@@ -59,6 +61,7 @@ version = "0.127.1"
 assert_cmd = { version = "2.2.0", features = ["color"] }
 criterion = "0.8.2"
 insta = { version = "1.46.0", features = ["glob"] }
+pretty_assertions = "1.4.1"
 routecore = { version = "0.7", features = ["bgp", "bmp", "serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -81,7 +84,7 @@ version = "0.11.0"
 edition = "2024"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
-rust-version = "1.89"
+rust-version = "1.93"
 description = "a statically-typed, compiled, embedded scripting language"
 documentation = "https://docs.rs/roto/"
 repository = "https://codeberg.org/NLnetLabs/roto/"

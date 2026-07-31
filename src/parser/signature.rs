@@ -12,7 +12,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         spans: &'spans mut Spans,
         s: &'source str,
     ) -> ParseResult<Signature> {
-        Self::run_parser(Self::signature, 0, spans, s)
+        Self::run_parser(Self::signature, 0, spans, s).map(|r| r.0)
     }
 
     fn signature(&mut self) -> ParseResult<Signature> {
@@ -36,7 +36,10 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         };
 
         Ok(Signature {
-            type_params,
+            type_params: match type_params {
+                Some(p) => p.node,
+                None => Vec::new(),
+            },
             params,
             ret,
         })

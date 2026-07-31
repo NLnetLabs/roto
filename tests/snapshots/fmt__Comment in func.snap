@@ -1,0 +1,9 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main(
+    // whoop!
+) {
+    // boop!
+}

@@ -1,0 +1,13 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    foo.bar;
+    foo.bar;
+
+    baz.quux;
+    baz.quux;
+
+    boop
+}

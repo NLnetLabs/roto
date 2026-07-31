@@ -1,0 +1,8 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+enum Maybe[T] {
+    Just(T),
+    Nothing,
+}

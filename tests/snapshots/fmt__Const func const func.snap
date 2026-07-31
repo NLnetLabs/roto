@@ -1,0 +1,8 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+const A: a = a;
+fn c() {}
+const B: b = b;
+fn d() {}
