@@ -1251,6 +1251,7 @@ impl TypeChecker {
             // optionally ending with a method.
             DeclarationKind::Value(kind, root_ty) => {
                 let mut fields = Vec::new();
+                let root_ty = root_ty.as_ref().unwrap();
                 let mut ty = root_ty.clone();
 
                 if let ValueKind::Constant | ValueKind::Context(..) = kind {

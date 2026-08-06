@@ -269,14 +269,14 @@ impl Rt {
                     ValueKind::Constant => {
                         out.push(DocItem::Const(DocConst {
                             ident: dec.name.ident.as_str().into(),
-                            ty: self.print_ty(ty),
+                            ty: self.print_ty(ty.as_ref().unwrap()),
                             doc: dec.doc.clone(),
                         }));
                     }
                     ValueKind::Context(_) => {
                         out.push(DocItem::Const(DocConst {
                             ident: dec.name.ident.as_str().into(),
-                            ty: self.print_ty(ty),
+                            ty: self.print_ty(ty.as_ref().unwrap()),
                             doc: dec.doc.clone(),
                         }));
                     }

@@ -6005,3 +6005,31 @@ fn return_in_or_expression() {
     assert!(f.call("d".into()));
     assert!(!f.call("e".into()));
 }
+
+#[test]
+fn import_constant_from_module() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.MULTIPLIER;
+            fn main(x: i32) -> i32 {
+                MULTIPLIER * x
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            const MULTIPLIER: i32 = 10;
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut pkg = compile(tree);
+    let main = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
+    let res = main.call(4);
+    assert_eq!(res, 40);
+}
