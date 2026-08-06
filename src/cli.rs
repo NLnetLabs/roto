@@ -3,7 +3,9 @@ use std::{path::PathBuf, process::ExitCode};
 use clap::{Parser, Subcommand};
 
 use crate::{
-    FileTree, RotoError, RotoReport, Runtime, runtime::OptCtx,
+    RotoError, RotoReport, Runtime,
+    load::{FileTree, Load},
+    runtime::OptCtx,
     tools::print::print_highlighted,
 };
 
@@ -75,7 +77,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
             rt.rt.print_documentation(path).unwrap();
         }
         Command::Check { file } => {
-            FileTree::read(file)?.parse()?.typecheck(rt)?;
+            file.as_path().load()?.parse()?.typecheck(rt)?;
             println!("All ok!")
         }
         Command::Test { file } => {

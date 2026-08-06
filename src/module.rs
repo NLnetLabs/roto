@@ -3,8 +3,9 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    FileTree, RotoError, RotoReport,
+    RotoError, RotoReport,
     ast::{self, Identifier},
+    load::FileTree,
     parser::{
         Parser,
         meta::{Meta, Span, Spans},

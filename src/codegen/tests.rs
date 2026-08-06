@@ -8,9 +8,8 @@ use std::{
 };
 
 use crate::{
-    Context, FileTree, List, NoCtx, Runtime,
-    file_tree::FileSpec,
-    library,
+    Context, List, NoCtx, Runtime, library,
+    load::{Load, SourceSpec},
     pipeline::Package,
     runtime::OptCtx,
     source_file, src,
@@ -19,23 +18,27 @@ use crate::{
 use inetnum::{addr::Prefix, asn::Asn};
 
 #[track_caller]
-fn compile(f: FileTree) -> Package<NoCtx> {
+fn compile(spec: impl Load) -> Package<NoCtx> {
     let runtime = Runtime::new();
-    compile_with_runtime(f, runtime)
+    compile_with_runtime(spec, runtime)
 }
 
 #[track_caller]
 fn compile_with_runtime<Ctx: OptCtx>(
-    f: FileTree,
+    spec: impl Load,
     runtime: Runtime<Ctx>,
 ) -> Package<Ctx> {
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
-    let res = f.parse().and_then(|x| x.typecheck(&runtime)).map(|x| {
-        let x = x.lower_to_mir().lower_to_lir();
-        x.codegen()
-    });
+    let res = spec
+        .load()
+        .and_then(|t| t.parse())
+        .and_then(|x| x.typecheck(&runtime))
+        .map(|x| {
+            let x = x.lower_to_mir().lower_to_lir();
+            x.codegen()
+        });
 
     match res {
         Ok(x) => x,
@@ -2673,11 +2676,8 @@ fn top_level_import() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 8);
@@ -2703,11 +2703,8 @@ fn local_import() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 8);
@@ -2738,11 +2735,8 @@ fn parent_import() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 16);
@@ -2773,11 +2767,8 @@ fn package_import() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 16);
@@ -2812,11 +2803,8 @@ fn import_via_super() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo), FileSpec::File(bar)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo, bar]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 8);
@@ -2852,11 +2840,8 @@ fn import_module_first() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo), FileSpec::File(bar)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo, bar]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 8);
@@ -2892,11 +2877,8 @@ fn import_module_second() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo), FileSpec::File(bar)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo, bar]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 8);
@@ -2922,11 +2904,8 @@ fn use_type_from_module() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 4);
@@ -2953,11 +2932,8 @@ fn use_imported_type() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 4);
@@ -2986,11 +2962,8 @@ fn use_type_in_function_argument() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 4);
@@ -3020,11 +2993,8 @@ fn import_list() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(1);
     assert_eq!(res, 6);
@@ -3053,11 +3023,8 @@ fn use_type_in_function_return_type() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 4);
@@ -3086,11 +3053,8 @@ fn use_type_from_other_module_in_type() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    let mut p = compile(tree);
+    let spec = SourceSpec::new(pkg, [foo]);
+    let mut p = compile(spec);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 4);

@@ -10,13 +10,13 @@ use crate::{
         self, Module, TypedFunc,
         check::{FunctionRetrievalError, RotoFunc},
     },
-    file_tree::SourceFile,
     label::LabelStore,
     lir::{
         self,
         eval::{self, Memory},
         value::IrValue,
     },
+    load::SourceFile,
     mir,
     module::{ModuleTree, Parsed},
     parser::{
@@ -253,7 +253,12 @@ impl std::error::Error for RotoReport {}
 #[cfg(all(test, not(miri)))]
 macro_rules! src {
     ($code:expr) => {
-        $crate::FileTree::test_file(file!(), $code, line!() as usize - 1)
+        $crate::load::Source::Content {
+            path: file!().into(),
+            module_name: "pkg".into(),
+            contents: $code.into(),
+            location_offset: line!() as usize - 1,
+        }
     };
 }
 
@@ -263,12 +268,11 @@ pub(crate) use src;
 #[cfg(all(test, not(miri)))]
 macro_rules! source_file {
     ($module_name:literal, $code:literal) => {
-        $crate::SourceFile {
-            name: file!().into(),
+        $crate::load::Source::Content {
+            path: file!().into(),
             module_name: $module_name.into(),
             contents: $code.into(),
             location_offset: line!() as usize - 1,
-            children: Vec::new(),
         }
     };
 }

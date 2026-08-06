@@ -14,12 +14,13 @@ pub mod tests;
 #[cfg(feature = "cli")]
 use std::process::ExitCode;
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, path::Path, ptr,
-    slice, str, sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData, ptr, slice, str,
+    sync::Arc,
 };
 
 use crate::{
     ast,
+    load::Load,
     parser::{Parser, meta::Spans},
     typechecker::scope::{DeclarationKind, ScopeType},
     value::{
@@ -34,7 +35,6 @@ use sealed::sealed;
 use crate::{
     Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
-    file_tree::FileTree,
     parser::{lexer::Lexer, token::Token},
     runtime::items::{
         Constant, Function, Item, Module, Registerable, Type, Use,
@@ -150,9 +150,9 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
     /// directory, the directory will be scanned for modules.
     pub fn compile(
         &self,
-        path: impl AsRef<Path>,
+        path: impl Load,
     ) -> Result<Package<Ctx>, RotoReport> {
-        FileTree::read(path)?.compile(self)
+        path.load()?.compile(self)
     }
 }
 

@@ -1,19 +1,19 @@
-use crate::file_tree::{FileSpec, FileTree};
+use crate::load::{Load, SourceSpec};
 use crate::pipeline::RotoReport;
 use crate::runtime::OptCtx;
 use crate::{Context, Runtime, library, source_file, src, value::Val};
 
 #[track_caller]
-fn typecheck(loaded: FileTree) -> Result<(), RotoReport> {
-    typecheck_with_runtime(loaded, Runtime::new())
+fn typecheck(src: impl Load) -> Result<(), RotoReport> {
+    typecheck_with_runtime(src, Runtime::new())
 }
 
 #[track_caller]
 fn typecheck_with_runtime(
-    loaded: FileTree,
+    src: impl Load,
     rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
-    let res = loaded.parse();
+    let res = src.load().and_then(|t| t.parse());
 
     let res = match res {
         Ok(res) => res,
@@ -979,11 +979,8 @@ fn expected_module() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    typecheck(tree).unwrap_err();
+    let spec = SourceSpec::new(pkg, [foo]);
+    typecheck(spec).unwrap_err();
 }
 
 #[test]
@@ -1006,11 +1003,8 @@ fn silly_import_loop() {
         "
     );
 
-    let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
-    ));
-    typecheck(tree).unwrap_err();
+    let spec = SourceSpec::new(pkg, [foo]);
+    typecheck(spec).unwrap_err();
 }
 
 #[test]
