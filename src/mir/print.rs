@@ -75,7 +75,7 @@ impl Printable for Block {
     fn print(&self, printer: &IrPrinter) -> String {
         use std::fmt::Write;
         let mut s = String::new();
-        writeln!(s, "{}:", &self.label.print(printer)).unwrap();
+        writeln!(s, "{}:", self.label.print(printer)).unwrap();
         for i in &self.instructions {
             writeln!(s, "  {}", i.print(printer)).unwrap();
         }

@@ -202,7 +202,7 @@ impl RotoReport {
                     .with_config(config)
                     .with_message(format!(
                         "Type error: {}",
-                        &error.description
+                        error.description
                     ))
                     .with_labels(labels);
 
