@@ -744,6 +744,12 @@ impl TypeChecker {
                                 self.error_declared_twice(ident, e)
                             })?;
 
+                        let opt = self
+                            .type_info
+                            .types
+                            .insert(name, type_def.clone());
+                        assert!(opt.is_none());
+
                         let inner_scope =
                             self.get_scope_of(scope, **ident).unwrap();
 
