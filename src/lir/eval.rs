@@ -380,7 +380,7 @@ pub fn eval(
 
     loop {
         let instruction = &instructions[program_counter];
-        trace!("{:?}", &instruction);
+        trace!("{:?}", instruction);
         match instruction {
             Instruction::Jump(b) => {
                 program_counter = block_map[b];

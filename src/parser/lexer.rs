@@ -35,11 +35,8 @@ impl<'a> Lexer<'a> {
 
     pub fn peek_many<const N: usize>(&mut self) -> Option<[&Token<'a>; N]> {
         for _ in 0..N - self.peeked.len() {
-            if let Some(t) = self.next_inner() {
-                self.peeked.push_back(t);
-            } else {
-                return None;
-            }
+            let t = self.next_inner()?;
+            self.peeked.push_back(t);
         }
 
         // Start with some random tokens that we will override.
