@@ -62,7 +62,7 @@ pub struct Declaration {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeclarationKind {
-    Value(ValueKind, Type),
+    Value(ValueKind, Option<Type>),
     Type(TypeOrStub),
     Function(Option<FunctionDeclaration>),
     Module,
@@ -245,8 +245,10 @@ impl ScopeGraph {
             scope: ScopeRef::GLOBAL,
             ident: **v,
         };
-        let kind =
-            DeclarationKind::Value(ValueKind::Context(offset), ty.clone());
+        let kind = DeclarationKind::Value(
+            ValueKind::Context(offset),
+            Some(ty.clone()),
+        );
         let id = v.id;
 
         match self.declarations.entry(name) {
@@ -264,7 +266,7 @@ impl ScopeGraph {
         }
     }
 
-    pub fn insert_constant(
+    pub fn insert_runtime_constant(
         &mut self,
         scope: ScopeRef,
         v: &Meta<Identifier>,
@@ -272,7 +274,8 @@ impl ScopeGraph {
         doc: String,
     ) -> Result<ResolvedName, ()> {
         let name = ResolvedName { scope, ident: **v };
-        let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
+        let kind =
+            DeclarationKind::Value(ValueKind::Constant, Some(ty.clone()));
         let id = v.id;
 
         match self.declarations.entry(name) {
@@ -296,7 +299,7 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let kind = DeclarationKind::Value(ValueKind::Local, ty.clone());
+        let kind = DeclarationKind::Value(ValueKind::Local, Some(ty.clone()));
         let dec = self.insert_declaration(
             scope,
             ident,
@@ -313,13 +316,19 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         ty: &Type,
     ) -> Result<ResolvedName, MetaId> {
-        let kind = DeclarationKind::Value(ValueKind::Constant, ty.clone());
+        let kind =
+            DeclarationKind::Value(ValueKind::Constant, Some(ty.clone()));
         let dec = self.insert_declaration(
             scope,
             ident,
             kind,
             String::new(),
-            |_| false,
+            |kind| {
+                matches!(
+                    kind,
+                    DeclarationKind::Value(ValueKind::Constant, None)
+                )
+            },
         )?;
         Ok(dec.name)
     }

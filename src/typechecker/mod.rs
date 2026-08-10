@@ -475,7 +475,7 @@ impl TypeChecker {
         if self
             .type_info
             .scope_graph
-            .insert_constant(
+            .insert_runtime_constant(
                 scope,
                 &Meta {
                     id: MetaId(0),
@@ -587,7 +587,13 @@ impl TypeChecker {
                     ast::Declaration::FilterMap(x) => {
                         (DeclarationKind::Function(None), x.ident.clone())
                     }
-                    ast::Declaration::Const(_) => continue,
+                    ast::Declaration::Const(x) => (
+                        DeclarationKind::Value(
+                            scope::ValueKind::Constant,
+                            None,
+                        ),
+                        x.ident.clone(),
+                    ),
                     ast::Declaration::Import(_) => continue,
                     ast::Declaration::Test(_) => continue,
                 };

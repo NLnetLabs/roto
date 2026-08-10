@@ -1745,6 +1745,29 @@ fn registered_constant() {
 }
 
 #[test]
+fn registered_constant_overridden() {
+    let rt = Runtime::from_lib(library! {
+        const PI: f64 = std::f64::consts::PI;
+    })
+    .unwrap();
+
+    let s = src!(
+        "
+        const PI: f64 = 3.0; // oops we're breaking maths
+        fn circumference(radius: f64) -> f64 {
+            2.0 * PI * radius
+        }"
+    );
+
+    let mut p = compile_with_runtime(s, rt);
+    let f = p.get_function::<fn(f64) -> f64>("circumference").unwrap();
+    let output = f.call(2.0);
+
+    let exp = 2.0 * 3.0 * 2.0;
+    assert!(exp - 0.1 < output && output < exp + 0.1);
+}
+
+#[test]
 fn use_context() {
     #[derive(Clone, Context)]
     struct Ctx {
@@ -2746,6 +2769,69 @@ fn parent_import() {
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
     let res = main.call(4);
     assert_eq!(res, 16);
+}
+
+#[test]
+fn import_constant_from_child_module() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import foo.MULTIPLIER;
+            fn main(x: i32) -> i32 {
+                MULTIPLIER * x
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            const MULTIPLIER: i32 = 10;
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo)],
+    ));
+    let mut pkg = compile(tree);
+    let main = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
+    let res = main.call(4);
+    assert_eq!(res, 40);
+}
+
+#[test]
+fn import_constant_from_sibling_module() {
+    let pkg = source_file!(
+        "pkg",
+        "
+            import bar.BAR;
+            fn main() -> i32 {
+                BAR
+            }
+        "
+    );
+    let foo = source_file!(
+        "foo",
+        "
+            const FOO: i32 = 10;
+        "
+    );
+    let bar = source_file!(
+        "bar",
+        "
+            import super.foo.FOO;
+            const BAR: i32 = 2 * FOO;
+        "
+    );
+
+    let tree = FileTree::file_spec(FileSpec::Directory(
+        pkg,
+        vec![FileSpec::File(foo), FileSpec::File(bar)],
+    ));
+    let mut pkg = compile(tree);
+    let main = pkg.get_function::<fn() -> i32>("main").unwrap();
+    let res = main.call();
+    assert_eq!(res, 20);
 }
 
 #[test]

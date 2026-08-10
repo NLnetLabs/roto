@@ -264,23 +264,35 @@ impl Rt {
 
         for dec in decs {
             match &dec.kind {
-                DeclarationKind::Value(value_kind, ty) => match value_kind {
-                    ValueKind::Local => unreachable!(), // won't happen
-                    ValueKind::Constant => {
-                        out.push(DocItem::Const(DocConst {
-                            ident: dec.name.ident.as_str().into(),
-                            ty: self.print_ty(ty),
-                            doc: dec.doc.clone(),
-                        }));
+                DeclarationKind::Value(_, None) => {
+                    ice!(
+                        "There shouldn't be any stub declarations left \
+                        otherwise there would be an issue with the type \
+                        checker."
+                    )
+                }
+                DeclarationKind::Value(value_kind, Some(ty)) => {
+                    match value_kind {
+                        ValueKind::Local => ice!(
+                            "We can't generate documentation for local\
+                            variables since a Runtime shouldn't have any."
+                        ),
+                        ValueKind::Constant => {
+                            out.push(DocItem::Const(DocConst {
+                                ident: dec.name.ident.as_str().into(),
+                                ty: self.print_ty(ty),
+                                doc: dec.doc.clone(),
+                            }));
+                        }
+                        ValueKind::Context(_) => {
+                            out.push(DocItem::Const(DocConst {
+                                ident: dec.name.ident.as_str().into(),
+                                ty: self.print_ty(ty),
+                                doc: dec.doc.clone(),
+                            }));
+                        }
                     }
-                    ValueKind::Context(_) => {
-                        out.push(DocItem::Const(DocConst {
-                            ident: dec.name.ident.as_str().into(),
-                            ty: self.print_ty(ty),
-                            doc: dec.doc.clone(),
-                        }));
-                    }
-                },
+                }
                 DeclarationKind::Type(t) => {
                     let TypeOrStub::Type(ty) = t else { ice!() };
                     let scope = self
