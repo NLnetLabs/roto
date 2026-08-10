@@ -152,7 +152,9 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
         &self,
         path: impl Load,
     ) -> Result<Package<Ctx>, RotoReport> {
-        path.load()?.compile(self)
+        let checked = path.load()?.parse()?.typecheck(self)?;
+        let pkg = checked.lower_to_mir().lower_to_lir().codegen();
+        Ok(pkg)
     }
 }
 

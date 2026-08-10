@@ -243,18 +243,6 @@ pub struct FileTree {
 }
 
 impl FileTree {
-    /// Compile the files in a [`FileTree`] and return the compiled [`Package`].
-    pub fn compile<Ctx: OptCtx>(
-        self,
-        rt: &Runtime<Ctx>,
-    ) -> Result<Package<Ctx>, RotoReport> {
-        let checked = self.parse()?.typecheck(rt)?;
-        let pkg = checked.lower_to_mir().lower_to_lir().codegen();
-        Ok(pkg)
-    }
-}
-
-impl FileTree {
     /// Read a [`FileTree`] based on a path.
     ///
     /// If the path refers to a file, only that file will be read. If the path
