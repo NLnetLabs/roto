@@ -1,5 +1,5 @@
 use crate::load::{Load, SourceSpec};
-use crate::pipeline::RotoReport;
+use crate::pipeline::{RotoError, RotoReport};
 use crate::runtime::OptCtx;
 use crate::{Context, Runtime, library, source_file, src, value::Val};
 
@@ -13,19 +13,15 @@ fn typecheck_with_runtime(
     src: impl Load,
     rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
-    let res = src.load().and_then(|t| t.parse());
+    let res = rt.check(src);
 
-    let res = match res {
-        Ok(res) => res,
-        Err(err) => {
-            println!("{err}");
-            panic!("Parse Error");
+    if let Err(e) = res {
+        // We only want to test for type errors in this file.
+        for err in &e.errors {
+            if !matches!(err, RotoError::Type(..)) {
+                panic!("A non-typechecking error occurred");
+            }
         }
-    };
-
-    // Unwrap on parse because a parse error in this file is never correct.
-    // We only want to test for type errors.
-    if let Err(e) = res.typecheck(&rt) {
         println!("{e}");
         Err(e)
     } else {

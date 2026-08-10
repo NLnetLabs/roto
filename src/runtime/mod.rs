@@ -142,12 +142,21 @@ impl OptCtx for NoCtx {
     }
 }
 
-/// Compiling a script
+/// Compiling and checking scripts
 impl<Ctx: OptCtx> Runtime<Ctx> {
-    /// Compile a script from a path and return the result.
+    /// Parse and check a script for errors.
     ///
-    /// If the path is a file, then that file will be loaded. If the path is a
-    /// directory, the directory will be scanned for modules.
+    /// The script can be loaded from a `&Path` or a `&str` representing a
+    /// path. For more complex usage, see the [`Load`] trait.
+    pub fn check(&self, path: impl Load) -> Result<(), RotoReport> {
+        path.load()?.parse()?.typecheck(self)?;
+        Ok(())
+    }
+
+    /// Compile a script and return the result.
+    ///
+    /// The script can be loaded from a `&Path` or a `&str` representing a
+    /// path. For more complex usage, see the [`Load`] trait.
     pub fn compile(
         &self,
         path: impl Load,

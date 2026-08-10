@@ -13,7 +13,7 @@
 //!   is kept in memory and Roto will not do any filesystem operations while
 //!   compiling.
 //!
-//! Any of these can be passed to [`Runtime::compile`].
+//! Any of these can be passed to [`Runtime::compile`](crate::Runtime::compile).
 //!
 //! In many cases, you should just use a [`Path`]. However, you could, for
 //! example, reach for a [`FileTree`] if you have a server that runs Roto code
@@ -27,7 +27,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptCtx};
+use crate::{RotoError, RotoReport};
 
 fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
     RotoReport {

@@ -31,14 +31,7 @@ fn compile_with_runtime<Ctx: OptCtx>(
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
-    let res = spec
-        .load()
-        .and_then(|t| t.parse())
-        .and_then(|x| x.typecheck(&runtime))
-        .map(|x| {
-            let x = x.lower_to_mir().lower_to_lir();
-            x.codegen()
-        });
+    let res = runtime.compile(spec);
 
     match res {
         Ok(x) => x,
