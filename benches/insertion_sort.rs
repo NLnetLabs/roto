@@ -22,11 +22,11 @@ pub fn bench_insertion_sort(c: &mut Criterion) {
         // Quick check that the implementation works
         {
             let x = n.clone().into_iter().collect();
-            let y = fib.call(x);
+            let y = fib.call(x).unwrap();
             let mut prev = 0;
-            for x in y {
-                if x >= prev {
-                    prev = x;
+            for elem in y {
+                if elem >= prev {
+                    prev = elem;
                 } else {
                     panic!()
                 }

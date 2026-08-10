@@ -16,7 +16,7 @@ pub fn bench_primes(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("primes");
     for n in [2, 3, 10, 11, 20, 3203, 3204] {
-        assert_eq!(f.call(n), is_prime(n), "{n}");
+        assert_eq!(f.call(n).unwrap(), is_prime(n), "{n}");
         group.bench_with_input(
             BenchmarkId::from_parameter(n),
             &n,
