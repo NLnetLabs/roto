@@ -140,6 +140,51 @@ fn record_cycle() {
 }
 
 #[test]
+fn record_containing_enum() {
+    let s = src!(
+        "
+        enum Foo { Bar, Baz }
+        record Quux { f: Foo }
+    "
+    );
+    assert!(typecheck(s).is_ok());
+}
+
+#[test]
+fn enum_cycle() {
+    let s = src!(
+        "
+        enum Foo { Bar(Bar) }
+        enum Bar { Foo(Foo) }
+    "
+    );
+    assert!(typecheck(s).is_err());
+
+    let s = src!(
+        "
+        enum One { Two(Two) }
+        enum Two { Three(Three) }
+        enum Three { Four(Four) }
+        enum Four { One(One) }
+    "
+    );
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
+fn record_and_enum_cycle() {
+    let s = src!(
+        "
+        enum One { Two(Two) }
+        record Two { three: Three }
+        enum Three { Four(Four) }
+        record Four { one: One }
+    "
+    );
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
 fn record_diamond() {
     let s = src!(
         "

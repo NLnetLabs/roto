@@ -93,9 +93,7 @@ fn visit<'a>(
         | Type::RecordVar(_, _) => {
             Err("there should be no unresolved type variables left".into())
         }
-        Type::Never => {
-            Err("never should not appear in a type declaration".into())
-        }
+        Type::Never => Ok(()),
         Type::Unit => Ok(()),
         Type::Function(_, _) => Ok(()),
         Type::ExplicitVar(_) => Ok(()),
