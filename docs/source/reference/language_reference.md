@@ -5,6 +5,12 @@ This section describes the basic syntax of Roto scripts. This is written
 in a reference style, mostly intended to be used as a cheat sheet, not as an
 introduction to the language.
 
+## Shebang
+
+The first line of a script is allowed to be a
+[shebang](https://en.wikipedia.org/wiki/Shebang_(Unix)); if it starts with `#!`
+then it will be ignored.
+
 (lang_comments)=
 ## Comments
 
@@ -200,6 +206,13 @@ Below is a table of all available integer types.
 | {roto:ref}`i32` |   32 | Yes    |   -2147483648              |               4,294,967,295 |
 | {roto:ref}`i64` |   64 | Yes    | -9,223,372,036,854,775,808 |   9,223,372,036,854,775,807 |
 
+Literals for integers can contain underscores for grouping digits. For example,
+`1_000_000` is a valid integer that is identical to `1000000`. Any number of
+underscores at any point in the literal can be used.
+
+Additionally, integer literals can end with the type of the integer, such as
+`10u8`.
+
 (lang_floats)=
 ### Floating Point Numbers
 
@@ -210,6 +223,13 @@ length, respectively.
 | --------------- | ---: |
 | {roto:ref}`f32` |   32 |
 | {roto:ref}`f64` |   64 |
+
+Literals for floating point numbers can contain underscores for grouping digits.
+For example, `1_234.567` is a valid integer that is identical to `1234.567`. Any
+number of underscores at any point in the literal can be used.
+
+Additionally, integer literals can end with the type of the integer, such as
+`10.2f32`.
 
 (lang_char)=
 ### Characters
@@ -377,6 +397,19 @@ match x {
     None => return Option.None,
 }
 ```
+
+(lang_result)=
+### Results
+
+The `Result[T, E]` type is used for functions that might fail. It is an enum
+with two variants: `Ok(T)` and `Err(E)`. The `Ok` variant should be returned
+when the function exits successfully and the `Err` variant when it has failed.
+
+The caller can then match on this value and decide what to do.
+
+:::{note}
+More syntactic sugar for dealing with `Result` will be added in the future.
+:::
 
 ## Custom Types
 
