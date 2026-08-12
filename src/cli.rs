@@ -3,7 +3,7 @@ use std::{path::PathBuf, process::ExitCode};
 use clap::{Parser, Subcommand};
 
 use crate::{
-    FileTree, RotoError, RotoReport, Runtime, runtime::OptCtx,
+    RotoError, RotoReport, Runtime, runtime::OptCtx,
     tools::print::print_highlighted,
 };
 
@@ -75,7 +75,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
             rt.rt.print_documentation(path).unwrap();
         }
         Command::Check { file } => {
-            FileTree::read(file)?.parse()?.typecheck(rt)?;
+            rt.check(&**file)?;
             println!("All ok!")
         }
         Command::Test { file } => {
@@ -87,12 +87,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 });
             };
 
-            let mut p = FileTree::read(file)?
-                .parse()?
-                .typecheck(&rt)?
-                .lower_to_mir()
-                .lower_to_lir()
-                .codegen();
+            let mut p = rt.compile(&**file)?;
 
             if let Err(()) = p.run_tests() {
                 return Err(RotoReport {
@@ -109,13 +104,7 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 });
             };
 
-            let mut p = FileTree::read(file)?
-                .parse()?
-                .typecheck(&rt)?
-                .lower_to_mir()
-                .lower_to_lir()
-                .codegen();
-
+            let mut p = rt.compile(&**file)?;
             let f =
                 p.get_function::<fn()>(function).map_err(|e| RotoReport {
                     errors: vec![RotoError::CouldNotRetrieveFunction(e)],

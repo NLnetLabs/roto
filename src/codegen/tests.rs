@@ -32,10 +32,7 @@ fn compile_with_runtime<Ctx: OptCtx>(
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
-    let res = f.parse().and_then(|x| x.typecheck(&runtime)).map(|x| {
-        let x = x.lower_to_mir().lower_to_lir();
-        x.codegen()
-    });
+    let res = runtime.compile(f);
 
     match res {
         Ok(x) => x,
@@ -1879,7 +1876,7 @@ fn get_tests() {
     let tests: Vec<_> = p.get_tests().collect();
 
     assert!(!tests.is_empty());
-    assert_eq!(tests[0].name(), "pkg.check_output");
+    assert!(tests[0].name().contains("check_output"));
     tests[0].run(&mut NoCtx).unwrap();
 }
 
@@ -2773,25 +2770,25 @@ fn parent_import() {
 
 #[test]
 fn import_constant_from_child_module() {
-    let pkg = source_file!(
-        "pkg",
+    let foo = source_file!(
+        "foo",
         "
-            import foo.MULTIPLIER;
+            import bar.MULTIPLIER;
             fn main(x: i32) -> i32 {
                 MULTIPLIER * x
             }
         "
     );
-    let foo = source_file!(
-        "foo",
+    let bar = source_file!(
+        "bar",
         "
             const MULTIPLIER: i32 = 10;
         "
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
+        foo,
+        vec![FileSpec::File(bar)],
     ));
     let mut pkg = compile(tree);
     let main = pkg.get_function::<fn(i32) -> i32>("main").unwrap();
@@ -2801,32 +2798,32 @@ fn import_constant_from_child_module() {
 
 #[test]
 fn import_constant_from_sibling_module() {
-    let pkg = source_file!(
-        "pkg",
-        "
-            import bar.BAR;
-            fn main() -> i32 {
-                BAR
-            }
-        "
-    );
     let foo = source_file!(
         "foo",
         "
-            const FOO: i32 = 10;
+            import baz.BAZ;
+            fn main() -> i32 {
+                BAZ
+            }
         "
     );
     let bar = source_file!(
         "bar",
         "
-            import super.foo.FOO;
-            const BAR: i32 = 2 * FOO;
+            const BAR: i32 = 10;
+        "
+    );
+    let baz = source_file!(
+        "baz",
+        "
+            import super.bar.BAR;
+            const BAZ: i32 = 2 * BAR;
         "
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo), FileSpec::File(bar)],
+        foo,
+        vec![FileSpec::File(bar), FileSpec::File(baz)],
     ));
     let mut pkg = compile(tree);
     let main = pkg.get_function::<fn() -> i32>("main").unwrap();
@@ -2836,10 +2833,10 @@ fn import_constant_from_sibling_module() {
 
 #[test]
 fn package_import() {
-    let pkg = source_file!(
-        "pkg",
+    let foo = source_file!(
+        "foo",
         "
-            import foo.quadruple;
+            import bar.quadruple;
             fn main(x: i32) -> i32 {
                 quadruple(x)
             }
@@ -2849,8 +2846,8 @@ fn package_import() {
             }
         "
     );
-    let foo = source_file!(
-        "foo",
+    let bar = source_file!(
+        "bar",
         "
             import pkg.double;
             fn quadruple(x: i32) -> i32 {
@@ -2860,8 +2857,8 @@ fn package_import() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo)],
+        foo,
+        vec![FileSpec::File(bar)],
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
@@ -2871,26 +2868,26 @@ fn package_import() {
 
 #[test]
 fn import_via_super() {
-    let pkg = source_file!(
-        "pkg",
+    let foo = source_file!(
+        "foo",
         "
-            import foo.a;
+            import bar.a;
             fn main(x: i32) -> i32 {
                 a(x)
             }
         "
     );
-    let foo = source_file!(
-        "foo",
+    let bar = source_file!(
+        "bar",
         "
-            import super.bar.b;
+            import super.baz.b;
             fn a(x: i32) -> i32 {
                 b(x)
             }
         "
     );
-    let bar = source_file!(
-        "bar",
+    let baz = source_file!(
+        "baz",
         "
             fn b(x: i32) -> i32 {
                 2 * x
@@ -2899,8 +2896,8 @@ fn import_via_super() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo), FileSpec::File(bar)],
+        foo,
+        vec![FileSpec::File(bar), FileSpec::File(baz)],
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();
@@ -2910,27 +2907,27 @@ fn import_via_super() {
 
 #[test]
 fn import_module_first() {
-    let pkg = source_file!(
-        "pkg",
+    let foo = source_file!(
+        "foo",
         "
-            import foo.a;
+            import bar.a;
             fn main(x: i32) -> i32 {
                 a(x)
             }
         "
     );
-    let foo = source_file!(
-        "foo",
+    let bar = source_file!(
+        "bar",
         "
-            import super.bar;
-            import bar.b;
+            import super.baz;
+            import baz.b;
             fn a(x: i32) -> i32 {
                 b(x)
             }
         "
     );
-    let bar = source_file!(
-        "bar",
+    let baz = source_file!(
+        "baz",
         "
             fn b(x: i32) -> i32 {
                 2 * x
@@ -2939,8 +2936,8 @@ fn import_module_first() {
     );
 
     let tree = FileTree::file_spec(FileSpec::Directory(
-        pkg,
-        vec![FileSpec::File(foo), FileSpec::File(bar)],
+        foo,
+        vec![FileSpec::File(bar), FileSpec::File(baz)],
     ));
     let mut p = compile(tree);
     let main = p.get_function::<fn(i32) -> i32>("main").unwrap();

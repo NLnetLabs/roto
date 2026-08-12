@@ -146,6 +146,9 @@ unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
 pub struct Module<C: OptCtx> {
+    main: Identifier,
+    main_scope: ScopeRef,
+
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -287,6 +290,9 @@ impl Drop for RotoConstant {
 }
 
 struct ModuleBuilder {
+    main: Identifier,
+    main_scope: ScopeRef,
+
     runtime_constants: HashMap<ResolvedName, ConstantValue>,
 
     roto_constants: HashMap<ResolvedName, RotoConstant>,
@@ -363,6 +369,8 @@ const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
 
 pub fn codegen<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -430,6 +438,8 @@ pub fn codegen<Ctx: OptCtx>(
         .push(AbiParam::new(cranelift::codegen::ir::types::I32));
 
     let mut module = ModuleBuilder {
+        main,
+        main_scope,
         runtime_constants: HashMap::new(),
         roto_constants: HashMap::new(),
         functions: HashMap::new(),
@@ -767,6 +777,8 @@ impl ModuleBuilder {
     fn finalize<Ctx: OptCtx>(mut self) -> Module<Ctx> {
         self.inner.finalize_definitions().unwrap();
         Module {
+            main: self.main,
+            main_scope: self.main_scope,
             functions: self.functions,
             inner: SharedModuleData::new(
                 self.inner,
@@ -1475,10 +1487,15 @@ impl<Ctx: OptCtx> Module<Ctx> {
             });
         };
 
-        F::check_args(&mut self.type_info, &sig.parameter_types)?;
+        F::check_args(
+            &mut self.type_info,
+            self.main_scope,
+            &sig.parameter_types,
+        )?;
 
         check_roto_type_reflect::<F::Return>(
             &mut self.type_info,
+            self.main_scope,
             &sig.return_type,
         )
         .map_err(|e| {

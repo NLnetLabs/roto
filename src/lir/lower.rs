@@ -33,6 +33,7 @@ pub fn lower_to_lir(ctx: &mut LowerCtx<'_>, mir: mir::Mir) -> Lir {
 
 pub struct LowerCtx<'c> {
     pub runtime: &'c Rt,
+    pub main_scope: ScopeRef,
     pub type_info: &'c mut TypeInfo,
     pub label_store: &'c mut LabelStore,
     pub runtime_functions: &'c mut HashMap<RuntimeFunctionRef, Signature>,
@@ -399,7 +400,7 @@ impl Lowerer<'_, '_> {
         // Transform all the arguments to LIR.
         let args = args.into_iter().map(|v| self.var(v).into()).collect();
 
-        let func = self.ctx.type_info.full_name(&func);
+        let func = self.ctx.type_info.full_name(self.ctx.main_scope, &func);
 
         self.emit(Instruction::Call {
             to: to.clone(),

@@ -25,6 +25,7 @@ use crate::{
     },
     typechecker::{
         info::TypeInfo,
+        scope::ScopeRef,
         scoped_display::TypeDisplay,
         types::{FloatSize, IntKind, IntSize, Primitive},
     },
@@ -275,17 +276,19 @@ impl Pool {
 impl TypeDisplay for TyRef {
     fn fmt(
         &self,
+        relative_to: ScopeRef,
         type_info: &TypeInfo,
         f: &mut core::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
         let ty = type_info.ty_pool.get(*self);
-        ty.fmt(type_info, f)
+        ty.fmt(relative_to, type_info, f)
     }
 }
 
 impl TypeDisplay for Ty {
     fn fmt(
         &self,
+        relative_to: ScopeRef,
         type_info: &TypeInfo,
         f: &mut core::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
@@ -301,7 +304,7 @@ impl TypeDisplay for Ty {
                     }
                     f.write_str(field_name.as_str())?;
                     f.write_str(": ")?;
-                    field_ty.fmt(type_info, f)?;
+                    field_ty.fmt(relative_to, type_info, f)?;
                     first = false;
                 }
                 f.write_str("}")?;
@@ -313,14 +316,14 @@ impl TypeDisplay for Ty {
                     if !first_variant {
                         f.write_str(", ")?;
                     }
-                    identifier.fmt(type_info, f)?;
+                    identifier.fmt(relative_to, type_info, f)?;
                     f.write_str("(")?;
                     let mut first_field = true;
                     for field in ty_refs {
                         if !first_field {
                             f.write_str(", ")?;
                         }
-                        field.fmt(type_info, f)?;
+                        field.fmt(relative_to, type_info, f)?;
                         first_field = false;
                     }
                     f.write_str(")")?;
@@ -328,10 +331,12 @@ impl TypeDisplay for Ty {
                 }
                 f.write_str(" }")?;
             }
-            Ty::Primitive(primitive) => primitive.fmt(type_info, f)?,
+            Ty::Primitive(primitive) => {
+                primitive.fmt(relative_to, type_info, f)?
+            }
             Ty::List(inner) => {
                 f.write_str("List[")?;
-                inner.fmt(type_info, f)?;
+                inner.fmt(relative_to, type_info, f)?;
                 f.write_str("]")?;
             }
             Ty::Runtime(type_id) => {

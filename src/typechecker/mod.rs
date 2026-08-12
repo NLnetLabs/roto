@@ -109,6 +109,7 @@ use scope::{
     TypeOrStub,
 };
 use scoped_display::TypeDisplay;
+use std::collections::HashMap;
 use std::{any::TypeId, borrow::Borrow};
 use type_cycle::detect_type_cycles;
 use types::{
@@ -153,6 +154,11 @@ enum Obligation {
 #[derive(Clone)]
 pub struct TypeChecker {
     pub(crate) type_info: TypeInfo,
+
+    /// Represents the module that we are currently doing typechecking for.
+    ///
+    /// All paths will be printed relative to this module.
+    module_scope: ScopeRef,
     match_counter: usize,
     if_else_counter: usize,
     while_counter: usize,
@@ -172,16 +178,18 @@ pub type TypeResult<T> = Result<T, TypeError>;
 pub fn typecheck(
     runtime: &Rt,
     module_tree: &ModuleTree,
-) -> TypeResult<(TypeInfo, Vec<ResolvedName>)> {
+) -> TypeResult<(ScopeRef, TypeInfo, Vec<ResolvedName>)> {
     let mut type_checker = runtime.type_checker.clone();
     type_checker.declare_context(runtime)?;
-    let (info, order) = type_checker.check_module_tree(module_tree)?;
-    Ok((info, order))
+    let (main_scope, info, order) =
+        type_checker.check_module_tree(module_tree)?;
+    Ok((main_scope, info, order))
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
         let mut checker = TypeChecker {
+            module_scope: ScopeRef::GLOBAL,
             type_info: TypeInfo::new(),
             match_counter: 0,
             if_else_counter: 0,
@@ -203,8 +211,8 @@ impl TypeChecker {
     pub fn check_module_tree(
         mut self,
         tree: &ModuleTree,
-    ) -> Result<(TypeInfo, Vec<ResolvedName>), TypeError> {
-        let modules = self.declare_modules(tree)?;
+    ) -> Result<(ScopeRef, TypeInfo, Vec<ResolvedName>), TypeError> {
+        let (main_scope, modules) = self.declare_modules(tree)?;
         self.declare_imports(&modules)?;
         self.declare_types(&modules)?;
 
@@ -221,7 +229,7 @@ impl TypeChecker {
         self.force_filtermap_types(&modules);
 
         let order = self.find_compilation_order()?;
-        Ok((self.type_info, order))
+        Ok((main_scope, self.type_info, order))
     }
 
     pub(crate) fn get_scope_of(
@@ -531,37 +539,83 @@ impl TypeChecker {
         Ok(())
     }
 
+    /// This is a bit of a complicated setup, so here's what's going on:
+    ///
+    /// Each package has many modules. If you resolve a name, you go up the
+    /// chain of parent scopes until you find what you are looking for. This
+    /// means that a parent module is not a parent scope!
+    ///
+    /// However, there are some names that should be available everywhere in
+    /// a package: `pkg` and `dep`. The `pkg` keyword will always refer to
+    /// the _current_ package. The `dep` keyword contains references to all
+    /// the dependencies declared by this package (not _all_ dependencies).
     fn declare_modules<'a>(
         &mut self,
         tree: &'a ModuleTree,
-    ) -> TypeResult<Vec<(ScopeRef, &'a Module)>> {
+    ) -> TypeResult<(ScopeRef, Vec<(ScopeRef, &'a Module)>)> {
         let mut modules = Vec::<(ScopeRef, &'a Module)>::new();
+
+        let mut package_scopes = HashMap::new();
+        let mut deps_scopes = HashMap::new();
+
+        // Create a package scope for each package.
+        // All the scopes of the modules will be directly below this.
+        for &name in tree.pkgs.keys() {
+            let deps_scope = self
+                .type_info
+                .scope_graph
+                .wrap(ScopeRef::GLOBAL, ScopeType::Deps);
+            let scope = self.type_info.scope_graph.wrap(
+                ScopeRef::GLOBAL,
+                ScopeType::Package(scope::PackageScope {
+                    name,
+                    deps: deps_scope,
+                }),
+            );
+
+            package_scopes.insert(name, scope);
+            deps_scopes.insert(name, deps_scope);
+        }
+
         for m in &tree.modules {
             let Module {
                 ident,
                 ast,
                 children: _,
                 parent,
+                package,
             } = m;
             let parent_module = parent.map(|p| modules[p.0].0);
+            let package_scope = package_scopes[package];
             let mod_scope = ModuleScope {
                 name: ResolvedName {
-                    ident: **ident,
-                    scope: parent_module.unwrap_or(ScopeRef::GLOBAL),
+                    ident: if parent_module.is_some() {
+                        **ident
+                    } else {
+                        "pkg".into()
+                    },
+                    scope: parent_module.unwrap_or(package_scope),
                 },
                 parent_module,
             };
+
             let scope = self
                 .type_info
                 .scope_graph
-                .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
+                .wrap(package_scope, ScopeType::Module(mod_scope));
+
+            // Set the module scope so the errors will be nice.
+            self.module_scope = scope;
 
             if let Some(p) = parent_module {
                 self.insert_module(p, ident, String::new(), scope)?;
             } else {
                 self.insert_module(
-                    ScopeRef::GLOBAL,
-                    ident,
+                    package_scope,
+                    &Meta {
+                        node: "pkg".into(),
+                        id: ident.id,
+                    },
                     String::new(),
                     scope,
                 )?;
@@ -650,7 +704,28 @@ impl TypeChecker {
             }
             modules.push((scope, m))
         }
-        Ok(modules)
+
+        // Wire up all the dependencies between the packages.
+        for (pkg, deps) in &tree.deps {
+            let dep_scope = deps_scopes[pkg];
+
+            for dep in deps {
+                let dep_package_scope = package_scopes[dep];
+                self.type_info
+                    .scope_graph
+                    .insert_renamed_import(
+                        dep_scope,
+                        *dep,
+                        MetaId(0),
+                        ResolvedName {
+                            scope: dep_package_scope,
+                            ident: "pkg".into(),
+                        },
+                    )
+                    .unwrap()
+            }
+        }
+        Ok((package_scopes[&tree.main], modules))
     }
 
     fn declare_imports(
@@ -658,6 +733,7 @@ impl TypeChecker {
         modules: &[(ScopeRef, &Module)],
     ) -> TypeResult<()> {
         for &(scope, module) in modules {
+            self.module_scope = scope;
             let mut paths = Vec::new();
             for expr in &module.ast.declarations {
                 let ast::Declaration::Import(new_paths) = expr else {
@@ -677,6 +753,7 @@ impl TypeChecker {
         modules: &[(ScopeRef, &Module)],
     ) -> TypeResult<()> {
         for &(scope, module) in modules {
+            self.module_scope = scope;
             for expr in &module.ast.declarations {
                 match expr {
                     ast::Declaration::Function(_)
@@ -904,6 +981,7 @@ impl TypeChecker {
 
     fn tree(&mut self, modules: &[(ScopeRef, &Module)]) -> TypeResult<()> {
         for &(scope, module) in modules {
+            self.module_scope = scope;
             for expr in &module.ast.declarations {
                 match &expr {
                     ast::Declaration::FilterMap(f) => {
@@ -978,7 +1056,7 @@ impl TypeChecker {
                             format!(
                                 "the `{}` method of type `{}` does not have the right signature",
                                 ident,
-                                receiver_ty.display(&self.type_info),
+                                receiver_ty.display(self.module_scope, &self.type_info),
                             ),
                             format!("does not have a valid `{}` method", ident),
                             id,
@@ -1251,15 +1329,15 @@ impl TypeChecker {
             (a @ ExplicitVar(_), b) => {
                 ice!(
                     "Cannot unify explicit var: {}, {}",
-                    a.display(&self.type_info),
-                    b.display(&self.type_info),
+                    a.display(self.module_scope, &self.type_info),
+                    b.display(self.module_scope, &self.type_info),
                 )
             }
             (a, b @ ExplicitVar(_)) => {
                 ice!(
                     "Cannot unify explicit var: {}, {}",
-                    a.display(&self.type_info),
-                    b.display(&self.type_info),
+                    a.display(self.module_scope, &self.type_info),
+                    b.display(self.module_scope, &self.type_info),
                 )
             }
             // The never type is special and unifies with anything

@@ -14,12 +14,14 @@ pub mod tests;
 #[cfg(feature = "cli")]
 use std::process::ExitCode;
 use std::{
-    any::TypeId, collections::HashMap, marker::PhantomData, path::Path, ptr,
-    slice, str, sync::Arc,
+    any::TypeId, collections::HashMap, marker::PhantomData, ptr, slice, str,
+    sync::Arc,
 };
 
 use crate::{
     ast,
+    deps::{BoxDepSource, DepSource},
+    file_tree::Load,
     parser::{Parser, meta::Spans},
     typechecker::scope::{DeclarationKind, ScopeType},
     value::{
@@ -34,7 +36,6 @@ use sealed::sealed;
 use crate::{
     Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
-    file_tree::FileTree,
     parser::{lexer::Lexer, token::Token},
     runtime::items::{
         Constant, Function, Item, Module, Registerable, Type, Use,
@@ -86,6 +87,7 @@ pub(crate) struct Rt {
     types: Vec<RuntimeType>,
     functions: Vec<RuntimeFunction>,
     constants: HashMap<ResolvedName, RuntimeConstant>,
+    pub(crate) dependency_provider: Option<BoxDepSource>,
 }
 
 impl<Ctx: OptCtx> std::fmt::Debug for Runtime<Ctx> {
@@ -144,15 +146,49 @@ impl OptCtx for NoCtx {
 
 /// Compiling a script
 impl<Ctx: OptCtx> Runtime<Ctx> {
-    /// Compile a script from a path and return the result.
+    /// Check a script for syntax and typechecking errors.
+    ///
+    /// If the path is a file, then that file will be loaded. If the path is a
+    /// directory, the directory will be scanned for modules.
+    pub fn check(&self, path: impl Load) -> Result<(), RotoReport> {
+        path.load()?.resolve(self)?.parse()?.typecheck(self)?;
+        Ok(())
+    }
+
+    /// Compile a script.
     ///
     /// If the path is a file, then that file will be loaded. If the path is a
     /// directory, the directory will be scanned for modules.
     pub fn compile(
         &self,
-        path: impl AsRef<Path>,
+        path: impl Load,
     ) -> Result<Package<Ctx>, RotoReport> {
-        FileTree::read(path)?.compile(self)
+        let this = path.load()?.resolve(self)?;
+        let checked = this.parse()?.typecheck(self)?;
+        let pkg = checked.lower_to_mir().lower_to_lir().codegen();
+        Ok(pkg)
+    }
+
+    /// Compile a script.
+    ///
+    /// If the path is a file, then that file will be loaded. If the path is a
+    /// directory, the directory will be scanned for modules.
+    pub fn compile_with_deps(
+        &self,
+        path: impl Load,
+        deps: &[&str],
+    ) -> Result<Package<Ctx>, RotoReport> {
+        let mut pkg = path.load()?;
+
+        for dep in deps {
+            pkg.add_dependency(dep);
+        }
+
+        let this = pkg.resolve(self)?;
+        let parsed = this.parse()?;
+        let checked = parsed.typecheck(self)?;
+        let pkg = checked.lower_to_mir().lower_to_lir().codegen();
+        Ok(pkg)
     }
 }
 
@@ -168,6 +204,7 @@ impl Runtime<NoCtx> {
             types: Default::default(),
             functions: Default::default(),
             constants: Default::default(),
+            dependency_provider: None,
         };
         rt.add(basic::built_ins()).unwrap();
         Self {
@@ -281,6 +318,17 @@ impl<C: OptCtx> Runtime<C> {
         items: impl Registerable,
     ) -> Result<(), RegistrationError> {
         self.rt.add(items)
+    }
+
+    /// Set a dependency source for this runtime.
+    ///
+    /// Note: only one dependency source can be set. If you call this method
+    /// twice, the previous value will be overwritten.
+    pub fn set_dependency_source(
+        &mut self,
+        provider: impl DepSource + 'static,
+    ) {
+        self.rt.dependency_provider = Some(BoxDepSource::new(provider));
     }
 
     /// Get the context type, if any.

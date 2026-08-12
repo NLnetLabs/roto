@@ -27,6 +27,7 @@ use crate::{
 };
 
 pub struct Lowerer<'r> {
+    main_scope: ScopeRef,
     function_scope: ScopeRef,
     tmp_idx: usize,
     blocks: Vec<Block>,
@@ -47,12 +48,20 @@ pub struct Lowerer<'r> {
 
 pub fn lower_to_mir(
     tree: &ModuleTree,
+    main_scope: ScopeRef,
     runtime: &Rt,
     type_info: &mut TypeInfo,
     label_store: &mut LabelStore,
     order: &[ResolvedName],
 ) -> Mir {
-    let mut mir = Lowerer::tree(runtime, type_info, tree, label_store, order);
+    let mut mir = Lowerer::tree(
+        runtime,
+        main_scope,
+        type_info,
+        tree,
+        label_store,
+        order,
+    );
     mir.eliminate_dead_code();
     mir
 }
@@ -63,6 +72,7 @@ impl<'r> Lowerer<'r> {
         type_info: &'r mut TypeInfo,
         function_name: &Meta<Identifier>,
         label_store: &'r mut LabelStore,
+        main_scope: ScopeRef,
         is_constant_definition: bool,
     ) -> Self {
         let function_scope = type_info.function_scope(function_name);
@@ -80,6 +90,7 @@ impl<'r> Lowerer<'r> {
             tmp_idx: 0,
             type_info,
             runtime,
+            main_scope,
             return_type,
             function_scope,
             blocks: Vec::new(),
@@ -135,6 +146,7 @@ impl<'r> Lowerer<'r> {
     /// Lower a syntax tree
     fn tree(
         runtime: &Rt,
+        main_scope: ScopeRef,
         type_info: &mut TypeInfo,
         tree: &ModuleTree,
         label_store: &mut LabelStore,
@@ -153,6 +165,7 @@ impl<'r> Lowerer<'r> {
                                 type_info,
                                 &x.ident,
                                 label_store,
+                                main_scope,
                                 false,
                             )
                             .filter_map(x),
@@ -166,6 +179,7 @@ impl<'r> Lowerer<'r> {
                                 type_info,
                                 &x.ident,
                                 label_store,
+                                main_scope,
                                 false,
                             )
                             .function(x),
@@ -184,6 +198,7 @@ impl<'r> Lowerer<'r> {
                                     id: x.ident.id,
                                 },
                                 label_store,
+                                main_scope,
                                 false,
                             )
                             .test(x),
@@ -201,6 +216,7 @@ impl<'r> Lowerer<'r> {
                                     id: x.ident.id,
                                 },
                                 label_store,
+                                main_scope,
                                 true,
                             )
                             .constant(x),
@@ -282,7 +298,7 @@ impl<'r> Lowerer<'r> {
         self.emit_return(tmp);
 
         let resolved_name = self.type_info.resolved_name(&constant.ident);
-        let name = self.type_info.full_name(&resolved_name);
+        let name = self.type_info.full_name(self.main_scope, &resolved_name);
 
         Item {
             name,
@@ -359,7 +375,7 @@ impl<'r> Lowerer<'r> {
         self.emit_return(tmp);
 
         let name = self.type_info.resolved_name(ident);
-        let name = self.type_info.full_name(&name);
+        let name = self.type_info.full_name(self.main_scope, &name);
 
         Item {
             name,
@@ -1528,7 +1544,7 @@ impl<'r> Lowerer<'r> {
             let printer = IrPrinter {
                 type_info: self.type_info,
                 label_store: self.label_store,
-                scope: None,
+                scope: ScopeRef::GLOBAL,
             };
             let var = var.print(&printer);
             ice!("Variable wasn't live: {var:?}")

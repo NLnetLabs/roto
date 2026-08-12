@@ -29,11 +29,12 @@ fn manual_doctests() {
             continue;
         }
 
-        let source_path = path.join(format!(
+        let mut source_path = path.join(format!(
             "{}:{}",
             test.src.replace("/", "."),
             test.line
         ));
+        source_path.add_extension("roto");
 
         let mut source_file = std::fs::File::create(&source_path).unwrap();
 

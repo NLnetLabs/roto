@@ -2,6 +2,7 @@ use super::{Block, Instruction, Item, Lir, Operand, Var, VarKind};
 use crate::{
     ir_printer::{IrPrinter, Printable},
     lir::{ItemKind, ValueOrSlot},
+    typechecker::scope::ScopeRef,
     typechecker::scoped_display::TypeDisplay,
 };
 
@@ -19,7 +20,7 @@ impl Printable for Item {
         let mut s = String::new();
 
         let printer = IrPrinter {
-            scope: Some(self.scope),
+            scope: self.scope,
             type_info: printer.type_info,
             label_store: printer.label_store,
         };
@@ -30,7 +31,7 @@ impl Printable for Item {
                     &mut s,
                     "const {}: {} = {{",
                     self.name,
-                    ty.display(printer.type_info)
+                    ty.display(printer.scope, printer.type_info)
                 );
             }
             ItemKind::Function { ir_signature, .. } => {
@@ -43,7 +44,8 @@ impl Printable for Item {
                         .iter()
                         .map(|(a, t)| {
                             let a = a.print(&printer);
-                            let t = t.display(printer.type_info);
+                            let t =
+                                t.display(printer.scope, printer.type_info);
                             format!("{a}: {t}")
                         })
                         .collect::<Vec<_>>()
@@ -51,7 +53,8 @@ impl Printable for Item {
                     ir_signature
                         .return_type
                         .map(|t| {
-                            let t = t.display(printer.type_info);
+                            let t =
+                                t.display(printer.scope, printer.type_info);
                             format!("-> {t} ")
                         })
                         .unwrap_or_default(),
@@ -108,7 +111,7 @@ impl Printable for Var {
             VarKind::Return => "$return".to_string(),
             VarKind::Context => "$context".to_string(),
         };
-        if Some(self.scope) != printer.scope {
+        if self.scope != printer.scope {
             let f = self.scope.print(printer);
             format!("{}.{name}", f,)
         } else {

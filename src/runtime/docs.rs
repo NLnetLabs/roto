@@ -241,7 +241,8 @@ impl Rt {
     }
 
     fn print_ty(&self, ty: &impl TypeDisplay) -> String {
-        ty.display(&self.type_checker.type_info).to_string()
+        ty.display(ScopeRef::GLOBAL, &self.type_checker.type_info)
+            .to_string()
     }
 
     fn build_doc(&self) -> Doc {

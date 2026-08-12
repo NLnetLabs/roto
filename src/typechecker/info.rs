@@ -98,8 +98,12 @@ impl TypeInfo {
         &self.path_kinds[&x.into()]
     }
 
-    pub fn full_name(&self, name: &ResolvedName) -> Identifier {
-        let mut s = self.scope_graph.print_scope(name.scope);
+    pub fn full_name(
+        &self,
+        relative_to: ScopeRef,
+        name: &ResolvedName,
+    ) -> Identifier {
+        let mut s = self.scope_graph.print_scope(relative_to, name.scope);
         s.push('.');
         s.push_str(name.ident.as_str());
         s.into()

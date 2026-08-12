@@ -6,11 +6,12 @@ use std::{
 };
 
 use crate::{
+    ast::Identifier,
     codegen::{
         self, Module, TypedFunc,
         check::{FunctionRetrievalError, RotoFunc},
     },
-    file_tree::SourceFile,
+    file_tree::{ReadError, SourceFile},
     label::LabelStore,
     lir::{
         self,
@@ -29,7 +30,7 @@ use crate::{
     typechecker::{
         error::{Level, TypeError},
         info::TypeInfo,
-        scope::ResolvedName,
+        scope::{ResolvedName, ScopeRef},
     },
 };
 
@@ -44,7 +45,8 @@ use log::info;
 /// An error from a compilation of a Roto script.
 #[derive(Debug)]
 pub(crate) enum RotoError {
-    Read(String, std::io::Error),
+    DepsNotFound(Vec<String>),
+    Read(ReadError),
     Parse(ParseError),
     Type(TypeError),
     TestsFailed(),
@@ -67,10 +69,21 @@ pub struct RotoReport {
     pub spans: Spans,
 }
 
+impl From<ReadError> for RotoReport {
+    fn from(value: ReadError) -> Self {
+        RotoReport {
+            files: Vec::new(),
+            errors: vec![RotoError::Read(value)],
+            spans: Spans::default(),
+        }
+    }
+}
+
 /// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked<'r, Ctx: OptCtx> {
     module_tree: ModuleTree,
     type_info: TypeInfo,
+    main_scope: ScopeRef,
     order: Vec<ResolvedName>,
     runtime: &'r Runtime<Ctx>,
 }
@@ -78,6 +91,8 @@ pub struct TypeChecked<'r, Ctx: OptCtx> {
 /// Compiler stage: MIR
 pub struct LoweredToMir<'r, Ctx: OptCtx> {
     runtime: &'r Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: mir::Mir,
     label_store: LabelStore,
     type_info: TypeInfo,
@@ -86,6 +101,8 @@ pub struct LoweredToMir<'r, Ctx: OptCtx> {
 /// Compiler stage: LIR
 pub struct LoweredToLir<'r, Ctx: OptCtx> {
     runtime: &'r Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: lir::Lir,
     runtime_functions: HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -128,8 +145,13 @@ impl RotoReport {
 
         for error in &self.errors {
             match error {
-                RotoError::Read(name, io) => {
-                    write!(f, "Could not read file `{name}`: {io}")?;
+                RotoError::DepsNotFound(deps) => {
+                    for dep in deps {
+                        write!(f, "Could not find dependency: `{dep}`")?;
+                    }
+                }
+                RotoError::Read(ReadError { path, err }) => {
+                    write!(f, "Could not read file `{path}`: {err}")?;
                 }
                 RotoError::Parse(error) => {
                     let file = self.filename(error.location);
@@ -282,18 +304,18 @@ impl Parsed {
         runtime: &'r Runtime<Ctx>,
     ) -> Result<TypeChecked<'r, Ctx>, RotoReport> {
         let Parsed {
-            file_tree,
+            files,
             module_tree,
             spans,
         } = self;
 
         let result = crate::typechecker::typecheck(&runtime.rt, &module_tree);
 
-        let (type_info, order) = match result {
+        let (main_scope, type_info, order) = match result {
             Ok(type_info) => type_info,
             Err(error) => {
                 return Err(RotoReport {
-                    files: file_tree.files,
+                    files,
                     errors: vec![RotoError::Type(error)],
                     spans,
                 });
@@ -302,6 +324,7 @@ impl Parsed {
 
         Ok(TypeChecked {
             module_tree,
+            main_scope,
             type_info,
             order,
             runtime,
@@ -310,9 +333,10 @@ impl Parsed {
 }
 
 impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
-    pub fn lower_to_mir(&self) -> LoweredToMir<'r, Ctx> {
+    pub fn lower_to_mir(self) -> LoweredToMir<'r, Ctx> {
         let TypeChecked {
             module_tree,
+            main_scope,
             type_info,
             order,
             runtime,
@@ -321,11 +345,12 @@ impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
         let mut type_info = type_info.clone();
         let mut label_store = LabelStore::default();
         let ir = mir::lower_to_mir(
-            module_tree,
+            &module_tree,
+            main_scope,
             &runtime.rt,
             &mut type_info,
             &mut label_store,
-            order,
+            &order,
         );
 
         #[cfg(feature = "logger")]
@@ -342,6 +367,8 @@ impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
         }
 
         LoweredToMir {
+            main: module_tree.main,
+            main_scope,
             ir,
             runtime,
             label_store,
@@ -354,6 +381,8 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
     pub fn lower_to_lir(self) -> LoweredToLir<'r, Ctx> {
         let LoweredToMir {
             runtime,
+            main,
+            main_scope,
             ir,
             mut label_store,
             mut type_info,
@@ -361,6 +390,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
 
         let mut runtime_functions = HashMap::new();
         let mut ctx = lir::lower::LowerCtx {
+            main_scope,
             runtime: &runtime.rt,
             type_info: &mut type_info,
             label_store: &mut label_store,
@@ -385,6 +415,8 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
         }
 
         LoweredToLir {
+            main,
+            main_scope,
             runtime,
             ir,
             label_store,
@@ -414,6 +446,8 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
     pub fn codegen(self) -> Package<Ctx> {
         let module = codegen::codegen(
             self.runtime,
+            self.main,
+            self.main_scope,
             &self.ir.functions,
             &self.runtime_functions,
             self.label_store,

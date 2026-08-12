@@ -1,5 +1,5 @@
 use insta::{assert_snapshot, glob};
-use roto::{FileTree, Runtime};
+use roto::Runtime;
 
 #[test]
 #[cfg(not(miri))]
@@ -9,8 +9,7 @@ fn parse_errors() {
         let runtime = Runtime::new();
 
         let relative_path = path.strip_prefix(&root).unwrap();
-        let file_tree = FileTree::read(relative_path).unwrap();
-        let res = file_tree.compile(&runtime);
+        let res = runtime.compile(relative_path);
         let Err(e) = res else {
             panic!("{path:?} should not succeed");
         };
@@ -28,8 +27,7 @@ fn type_errors() {
         let runtime = Runtime::new();
 
         let relative_path = path.strip_prefix(&root).unwrap();
-        let file_tree = FileTree::read(relative_path).unwrap();
-        let res = file_tree.compile(&runtime);
+        let res = runtime.compile(relative_path);
         let Err(e) = res else {
             panic!("should not succeed");
         };

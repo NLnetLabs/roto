@@ -1,4 +1,4 @@
-use crate::file_tree::{FileSpec, FileTree};
+use crate::file_tree::{FileSpec, FileTree, Load};
 use crate::pipeline::RotoReport;
 use crate::runtime::OptCtx;
 use crate::{Context, Runtime, library, source_file, src, value::Val};
@@ -13,7 +13,7 @@ fn typecheck_with_runtime(
     loaded: FileTree,
     rt: Runtime<impl OptCtx>,
 ) -> Result<(), RotoReport> {
-    let res = loaded.parse();
+    let res = loaded.load().unwrap().resolve(&rt).unwrap().parse();
 
     let res = match res {
         Ok(res) => res,

@@ -1,12 +1,12 @@
 use super::{eval::Memory, value::IrValue};
 use crate::{
-    FileTree, RotoString, Runtime, library, pipeline::LoweredToLir,
+    RotoString, Runtime, file_tree::Load, library, pipeline::LoweredToLir,
     runtime::OptCtx, src,
 };
 
 #[track_caller]
 fn compile<Ctx: OptCtx>(
-    s: FileTree,
+    s: impl Load,
     rt: &Runtime<Ctx>,
 ) -> LoweredToLir<'_, Ctx> {
     // We run this multiple times and only want to init the
@@ -17,7 +17,11 @@ fn compile<Ctx: OptCtx>(
         .format_target(false)
         .try_init();
 
-    s.parse()
+    s.load()
+        .unwrap()
+        .resolve(rt)
+        .unwrap()
+        .parse()
         .unwrap()
         .typecheck(rt)
         .unwrap()
