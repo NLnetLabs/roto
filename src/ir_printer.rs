@@ -7,7 +7,7 @@ use crate::{
 pub struct IrPrinter<'a> {
     pub type_info: &'a TypeInfo,
     pub label_store: &'a LabelStore,
-    pub scope: Option<ScopeRef>,
+    pub scope: ScopeRef,
 }
 
 pub trait Printable {
@@ -22,7 +22,10 @@ impl Printable for Identifier {
 
 impl Printable for ScopeRef {
     fn print(&self, printer: &IrPrinter) -> String {
-        printer.type_info.scope_graph.print_scope(*self)
+        printer
+            .type_info
+            .scope_graph
+            .print_scope(ScopeRef::GLOBAL, *self)
     }
 }
 

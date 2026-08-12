@@ -38,10 +38,12 @@ pub struct ResolvedName {
 impl TypeDisplay for ResolvedName {
     fn fmt(
         &self,
+        relative_to: ScopeRef,
         type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
-        let scope = type_info.scope_graph.print_scope(self.scope);
+        let scope =
+            type_info.scope_graph.print_scope(relative_to, self.scope);
         if scope.is_empty() {
             write!(f, "{}", self.ident)
         } else {
@@ -98,7 +100,7 @@ pub struct ScopeGraph {
 }
 
 /// A type checking scope
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Scope {
     scope_type: ScopeType,
     parent: Option<ScopeRef>,
@@ -108,7 +110,7 @@ struct Scope {
 /// The syntactic structure that a scope represents
 ///
 /// This is used primarily for printing a roughly human-readable name.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ScopeType {
     Root,
     Then(usize),
@@ -116,6 +118,8 @@ pub enum ScopeType {
     WhileBody(usize),
     ForBody(usize),
     Module(ModuleScope),
+    Package(PackageScope),
+    Deps,
     Function(Identifier),
     MatchArm(usize, Option<usize>),
     Type(Identifier),
@@ -123,7 +127,13 @@ pub enum ScopeType {
     Block(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub struct PackageScope {
+    pub name: Identifier,
+    pub deps: ScopeRef,
+}
+
+#[derive(Clone, Debug)]
 pub struct ModuleScope {
     pub name: ResolvedName,
     pub parent_module: Option<ScopeRef>,
@@ -159,6 +169,22 @@ impl ScopeGraph {
             imports: BTreeMap::new(),
         });
         ScopeRef(idx)
+    }
+
+    pub fn find_package(
+        &self,
+        mut scope: ScopeRef,
+    ) -> (ScopeRef, &PackageScope) {
+        let mut s = &self.scopes[scope.0];
+
+        loop {
+            if let ScopeType::Package(p) = &s.scope_type {
+                return (scope, p);
+            }
+
+            scope = s.parent.unwrap();
+            s = &self.scopes[scope.0];
+        }
     }
 
     pub fn declarations_in(
@@ -227,6 +253,23 @@ impl ScopeGraph {
     ) -> Result<(), MetaId> {
         let map = &mut self.scopes[scope.0].imports;
         match map.entry(name.ident) {
+            Entry::Occupied(entry) => Err(entry.get().0),
+            Entry::Vacant(entry) => {
+                entry.insert((id, name));
+                Ok(())
+            }
+        }
+    }
+
+    pub fn insert_renamed_import(
+        &mut self,
+        scope: ScopeRef,
+        ident: Identifier,
+        id: MetaId,
+        name: ResolvedName,
+    ) -> Result<(), MetaId> {
+        let map = &mut self.scopes[scope.0].imports;
+        match map.entry(ident) {
             Entry::Occupied(entry) => Err(entry.get().0),
             Entry::Vacant(entry) => {
                 entry.insert((id, name));
@@ -500,14 +543,49 @@ impl ScopeGraph {
         idents.reverse();
         idents.join(".")
     }
-    pub fn print_scope(&self, scope: ScopeRef) -> String {
+    pub fn print_scope(
+        &self,
+        relative_to: ScopeRef,
+        scope: ScopeRef,
+    ) -> String {
         let mut idents = Vec::new();
+
+        if scope == ScopeRef::GLOBAL {
+            return String::new();
+        }
+
+        let current_pkg = if relative_to != ScopeRef::GLOBAL {
+            self.find_package(relative_to).0
+        } else {
+            ScopeRef::GLOBAL
+        };
+        let symbol_pkg = self.find_package(scope).0;
+
         let mut scope = Some(scope);
+
         while let Some(s) = scope {
+            if s == relative_to {
+                break;
+            }
             let s = &self.scopes[s.0];
             let ident = match &s.scope_type {
                 ScopeType::Root => break,
-                ScopeType::Module(m) => self.module_name(m),
+                ScopeType::Package(PackageScope { name, .. }) => {
+                    format!("dep.{name}")
+                }
+                ScopeType::Deps => "deps".into(),
+                ScopeType::Module(m) => {
+                    if m.parent_module.is_none() {
+                        if current_pkg == symbol_pkg {
+                            "pkg".into()
+                        } else {
+                            scope = s.parent;
+                            continue;
+                        }
+                    } else {
+                        self.module_name(m)
+                    }
+                }
                 ScopeType::Function(name) => name.as_str().to_string(),
                 ScopeType::Block(idx) => {
                     format!("$block_{idx}")

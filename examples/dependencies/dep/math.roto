@@ -1,0 +1,9 @@
+fn factorial(n: u64) -> u64 {
+    let i = 1;
+    let x = 1;
+    while i <= n {
+        x *= i; 
+        i += 1;
+    }
+    x
+}

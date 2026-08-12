@@ -274,13 +274,13 @@ impl TypeChecker {
             description: format!(
                 "cannot match on the type `{}`, \
                 because only matching on enums is supported.",
-                ty.display(&self.type_info)
+                ty.display(self.module_scope, &self.type_info)
             ),
             location: span,
             labels: vec![Label::error(
                 format!(
                     "cannot match on type `{}`",
-                    ty.display(&self.type_info)
+                    ty.display(self.module_scope, &self.type_info)
                 ),
                 span,
             )],
@@ -296,7 +296,7 @@ impl TypeChecker {
         TypeError {
             description: format!(
                 "pattern has fields, but the variant `{variant}` of `{}` doesn't have one",
-                ty.display(&self.type_info)
+                ty.display(self.module_scope, &self.type_info)
             ),
             location: variant.id,
             labels: vec![Label::error("unexpected data field", variant.id)],
@@ -312,7 +312,7 @@ impl TypeChecker {
         TypeError {
             description: format!(
                 "pattern has no arguments, but variant `{variant}` of `{}` does have arguments",
-                ty.display(&self.type_info)
+                ty.display(self.module_scope, &self.type_info)
             ),
             location: variant.id,
             labels: vec![Label::error("missing arguments", variant.id)],
@@ -328,13 +328,13 @@ impl TypeChecker {
         TypeError {
             description: format!(
                 "the variant `{variant}` does not exist on `{}`",
-                ty.display(&self.type_info),
+                ty.display(self.module_scope, &self.type_info),
             ),
             location: variant.id,
             labels: vec![Label::error(
                 format!(
                     "variant does not exist on `{}`",
-                    ty.display(&self.type_info),
+                    ty.display(self.module_scope, &self.type_info),
                 ),
                 variant.id,
             )],
@@ -353,8 +353,8 @@ impl TypeChecker {
         let mut labels = vec![Label::error(
             format!(
                 "expected `{}`, found `{}`",
-                expected.display(type_info),
-                got.display(type_info),
+                expected.display(self.module_scope, type_info),
+                got.display(self.module_scope, type_info),
             ),
             span,
         )];
@@ -362,7 +362,7 @@ impl TypeChecker {
             labels.push(Label::info(
                 format!(
                     "expected because this is `{}`",
-                    expected.display(type_info)
+                    expected.display(self.module_scope, type_info)
                 ),
                 span,
             ));
@@ -457,7 +457,7 @@ impl TypeChecker {
         TypeError {
             description: format!(
                 "expected a numeric value, found type `{}`",
-                ty.display(&self.type_info),
+                ty.display(self.module_scope, &self.type_info),
             ),
             location: expr.id,
             labels: vec![Label::error("not a numeric value", expr.id)],
@@ -473,7 +473,7 @@ impl TypeChecker {
         TypeError {
             description: format!(
                 "expected an integer value, found type `{}`",
-                ty.display(&self.type_info),
+                ty.display(self.module_scope, &self.type_info),
             ),
             location: expr.id,
             labels: vec![Label::error("not an integer value", expr.id)],
@@ -521,7 +521,7 @@ impl TypeChecker {
         self.error_simple(
             format!(
                 "no field `{ident}` on type `{}`",
-                ty.display(&self.type_info)
+                ty.display(self.module_scope, &self.type_info)
             ),
             format!("unknown field `{ident}`"),
             ident.id,
@@ -536,7 +536,7 @@ impl TypeChecker {
         self.error_simple(
             format!(
                 "no method `{ident}` on type `{}`",
-                ty.display(&self.type_info)
+                ty.display(self.module_scope, &self.type_info)
             ),
             format!("unknown method `{ident}`"),
             ident.id,
@@ -551,7 +551,7 @@ impl TypeChecker {
         self.error_simple(
             format!(
                 "no field or method `{ident}` on type `{}`",
-                ty.display(&self.type_info)
+                ty.display(self.module_scope, &self.type_info)
             ),
             format!("unknown field or method `{ident}`"),
             ident.id,
