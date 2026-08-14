@@ -41,6 +41,7 @@ fn main() {
 ```
 
 - Number literals can now have a suffix indicating their type.
+  ([#423](https://codeberg.org/NLnetLabs/roto/pulls/423))
 
 ```roto
 fn main() {
