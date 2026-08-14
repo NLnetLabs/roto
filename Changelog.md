@@ -1,5 +1,101 @@
 # Changelog
 
+## 0.12.0
+
+Released 2026-08-14.
+
+### Meta
+
+- Roto adopted the [NLnet Labs LLM policy](https://nlnetlabs.nl/llm-policy/).
+  ([#437](https://codeberg.org/NLnetLabs/roto/pulls/437))
+- There is now a (small) benchmark suite under the `benches` directory. More
+  ideas for benchmarks are welcome!
+  ([#444](https://codeberg.org/NLnetLabs/roto/pulls/444),
+  [#451](https://codeberg.org/NLnetLabs/roto/pulls/453))
+
+### Language
+
+#### Breaking changes
+
+#### Added
+
+- A shebang at the start of a file is now ignored, allowing Roto files be used
+  as executables. ([#427](https://codeberg.org/NLnetLabs/roto/pulls/427))
+
+```roto
+#!/usr/bin/roto run
+
+fn main() {
+    print("It works!");
+}
+```
+
+- Number literals are now allowed to contain underscores.
+  ([#423](https://codeberg.org/NLnetLabs/roto/pulls/423))
+
+```roto
+fn main() {
+    let x = 1_000_000;
+    print(f"{x}"); // prints "1000000"
+}
+```
+
+- Number literals can now have a suffix indicating their type.
+
+```roto
+fn main() {
+    let x = 1000i32;
+    print(f"{x}");
+}
+```
+
+- Added a basic `Result` type to represent functions that might fail. More
+  features around this type will be added in the future.
+  ([#431](https://codeberg.org/NLnetLabs/roto/pulls/431))
+
+#### Bug fixes
+
+- Fixed a compiler error when a zero-sized type is passed to a function.
+  ([#426](https://codeberg.org/NLnetLabs/roto/pulls/426))
+
+- Fixed variables right-hand side of `&&`/`||` being dropped even when that
+  branch is skipped.
+  ([#441](https://codeberg.org/NLnetLabs/roto/pulls/441))
+
+- Fixed miscompilation if one of the if-else branches diverge.
+  ([#446](https://codeberg.org/NLnetLabs/roto/pulls/446))
+
+- Fixed that `const` variables could not be imported.
+  ([450](https://codeberg.org/NLnetLabs/roto/pulls/450))
+
+- Fixed a bug that prevented an `enum` being used in a `record`.
+  ([#455](https://codeberg.org/NLnetLabs/roto/pulls/455))
+
+- Fixed not being able to use a method of a constant.
+  ([#458](https://codeberg.org/NLnetLabs/roto/pulls/458))
+
+- Changed the data structures that are used to represent types at the MIR
+  level. This doesn't fix any particular known bug, but would have helped with
+  some bugs in the past and therefore makes Roto more reliable in the long run.
+  ([#433](https://codeberg.org/NLnetLabs/roto/pulls/433))
+
+### Crate
+
+#### Breaking changes
+
+- The `cli` function now returns an `ExitCode`.
+  ([#446](https://codeberg.org/NLnetLabs/roto/pulls/446))
+
+#### Added
+
+- `Result<T, E>` now implements `Value` and can be passed to Roto.
+  ([#431](https://codeberg.org/NLnetLabs/roto/pulls/431))
+
+### Documentation
+
+- Methods are now rendered differently from functions.
+  ([#434](https://codeberg.org/NLnetLabs/roto/pulls/434))
+
 ## 0.11.0
 
 Released 2026-05-28.
