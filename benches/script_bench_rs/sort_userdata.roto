@@ -1,0 +1,63 @@
+// This benchmark is adapted from https://github.com/khvzak/script-bench-rs.
+//
+// Any changes to this benchmark should be upstreamed into the
+// `script-bench-rs` repository.
+
+const CHARSET: String = "012345678abcdef";
+
+fn generate_string(len: u64) -> String {
+    let result = [];
+    let i = 0;
+    while i < len {
+        result.push(CHARSET.get(rand(CHARSET.len())));
+        i = i + 1;
+    }
+
+    result.join("")
+}
+
+fn get_or_empty(arr: List[RustData], idx: u64) -> RustData {
+    match arr.get(idx) {
+        Some(s) => s,
+        None => RustData.new(""),
+    }
+}
+
+fn partition(arr: List[RustData], lo: u64, hi: u64) -> u64 {
+    let pivot_idx = (lo + hi) / 2;
+    let pivot = get_or_empty(arr, pivot_idx);
+    arr.swap(pivot_idx, hi);
+    let j = lo;
+    while lo < hi {
+        if get_or_empty(arr, lo).lt(pivot) {
+            arr.swap(lo, j);
+            j = j + 1;
+        }
+        lo = lo + 1;
+    }
+    arr.swap(j, hi);
+    return j;
+}
+
+fn quicksort(arr: List[RustData], lo: u64, hi: u64) {
+    while lo < hi {
+        let p = partition(arr, lo, hi);
+        if p > 0 {
+            quicksort(arr, lo, p - 1);
+        }
+        // Tail recursion
+        lo = p + 1;
+    }
+}
+
+fn main() -> List[RustData] {
+    let list = [];
+    let i = 0;
+    while i < 10000 {
+        list.push(RustData.new(generate_string(8 + rand(16))));
+        i = i + 1;
+    }
+    quicksort(list, 0, list.len() - 1);
+
+    list
+}
