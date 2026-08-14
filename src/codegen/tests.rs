@@ -6091,3 +6091,37 @@ fn return_in_or_expression() {
     assert!(f.call("d".into()));
     assert!(!f.call("e".into()));
 }
+
+#[test]
+fn list_get_from_local() {
+    let s = src!(
+        r#"
+        fn main() -> i32? {
+            let foo = [42];
+            foo.get(0)
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+
+    assert_eq!(f.call(), Some(42));
+}
+
+#[test]
+fn list_get_from_const() {
+    let s = src!(
+        r#"
+        const FOO: List[i32] = [42];
+        fn main() -> i32? {
+            FOO.get(0)
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+
+    assert_eq!(f.call(), Some(42));
+}
