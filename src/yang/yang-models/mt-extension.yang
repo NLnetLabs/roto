@@ -1,0 +1,611 @@
+module mt-extension {
+  yang-version 1.1;
+  namespace "urn:nlnetlabs:rotonda:mt-ext";
+  prefix mt-ext;
+
+  import ietf-yang-types {
+    prefix yang;
+    reference
+      "RFC 6991: Common YANG Data Types.";
+  }
+
+  import rotonda-roto {
+    prefix roto;
+  }
+
+  import ietf-interfaces {
+    prefix if;
+  }
+
+  import ietf-bgp {
+    prefix bgp;
+  }
+
+  import rotonda-ietf-bmp {
+      prefix bmp;
+  }
+
+  import ietf-rpki-rtr {
+    prefix rtr;
+  }
+
+  import rotonda-mrt {
+    prefix mrt;
+  }
+
+  import ietf-bgp-origin-as-validation {
+    prefix oav;
+  }
+
+  import ietf-bgp-aspa {
+    prefix aspa;
+  }
+  
+  import ietf-routing {
+    prefix rt;
+  }
+  
+  import ietf-tcp {
+    prefix tcp;
+  }
+  
+  import ietf-routing-policy {
+    prefix rt-pol;
+  }
+  
+  import iana-bgp-types {
+    prefix bt;
+  }
+  
+  import ietf-inet-types {
+    prefix inet;
+  }
+  
+  import ietf-yang-schema-mount {
+    prefix yangmnt;
+  }
+
+  revision 2022-09-15 {
+    description
+      "initial";
+    reference
+      "";
+  }
+
+  grouping route-status {
+    description
+      "The status of a route in a rib.";
+    choice status {
+      mandatory true;
+      description
+        "Status of this route";
+      case active {
+        description
+          "Active Route";
+      }
+      case inactive {
+        description
+          "Inactive Route
+
+           Routes marked as inactive will not show up in default
+           queries.";
+      }
+      case withdrawn {
+        description
+          "A route for which a withdrawal was received
+
+           Route marked as withdrawn will not show up in default
+           queries.";
+      }
+    }
+  }
+
+  deviation "/rt:routing-state" {
+    description
+      "Not supporting obsolete routing state";
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:ribs" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/rt:static-routes" {
+    deviate not-supported;
+  }
+
+  deviation "/tcp:tcp" {
+    deviate not-supported;
+  }
+
+  /*deviation "/if:interfaces-state" {
+      deviate not-supported;
+  }*/
+  // peer groups
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:transport" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-labeled-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-labeled-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv4-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv6-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv4-multicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv6-multicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:l2vpn-vpls" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups/bgp:peer-group/bgp:afi-safis/bgp:afi-safi/bgp:l2vpn-evpn" {
+    deviate not-supported;
+  }
+
+  // peer-type deals with peer-groups and confederations. Not doing that.
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:peer-type" {
+    deviate not-supported;
+  }
+  
+  // policy
+
+  /*deviation "/rt-pol:routing-policy/rt-pol:policy-definitions/rt-pol:policy-definition/rt-pol:statements/rt-pol:statement/rt-pol:conditions/rt-pol:match-interface" {
+    deviate not-supported;
+  }*/
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:apply-policy" {
+    deviate not-supported;
+  }
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:apply-policy" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:apply-policy" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:apply-policy" {
+    deviate not-supported;
+  }
+  deviation "/rt-pol:routing-policy" {
+    deviate not-supported;
+  }
+
+  // global
+
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:distance" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:confederation" {
+    deviate not-supported;
+  }
+  
+  // we don't support peer groups at all
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:peer-groups" {
+    deviate not-supported;
+  }
+
+  // we don't support a rib per protocol type (bgp/bmp)
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:rib" {
+    deviate not-supported;
+  }
+
+  // we don't support global configuration overrides per afi-safi
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-unicast/oav:origin-as-validation/oav:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-unicast/aspa:aspa-verification/aspa:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-unicast/oav:origin-as-validation/oav:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-unicast/aspa:aspa-verification/aspa:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-labeled-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-labeled-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv4-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv6-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv4-multicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv6-multicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:l2vpn-vpls" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:l2vpn-evpn" {
+    deviate not-supported;
+  }
+
+  // neighbors
+
+  // we don't support configuration for the transport
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:transport" {
+    deviate not-supported;
+  }
+
+  // no peer-groups
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:peer-group" {
+    deviate not-supported;
+  }
+
+  // no send-*
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-unicast/bgp:send-default-route" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-unicast/bgp:send-default-route" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-unicast/oav:send-origin-as-validity" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-unicast/oav:send-origin-as-validity" {
+    deviate not-supported;
+  }
+  
+  // no overrides per afi-safi per neighbor
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-labeled-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-labeled-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv4-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv6-unicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv4-multicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:l3vpn-ipv6-multicast" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:l2vpn-vpls" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:l2vpn-evpn" {
+    deviate not-supported;
+  }
+
+  // bmp peer-groups
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-groups" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-groups" {
+    deviate not-supported;
+  }
+  /*deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:local-rib/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-groups" {
+    deviate not-supported;
+  }*/
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-groups" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-groups" {
+    deviate not-supported;
+  }
+
+  // bmp peer-types
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-types" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-types" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-types" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peer-types" {
+    deviate not-supported;
+  }
+
+  // bmp bmp-peer-types
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:bmp-peer-types" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:bmp-peer-types" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:bmp-peer-types" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:bmp-peer-types" {
+    deviate not-supported;
+  }
+
+  // bmp filters
+
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peers/bmp:peer/bmp:filters" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-in-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peers/bmp:peer/bmp:filters" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:local-rib/bmp:address-families/bmp:address-family/bmp:filters" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-pre/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peers/bmp:peer/bmp:filters" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bmp:bmp/bmp:bmp-data/bmp:bmp-route-monitoring/bmp:network-instance-configuration/bmp:network-instance/bmp:adj-rib-out-post/bmp:address-families/bmp:address-family/bmp:peers-configurations/bmp:peers/bmp:peer/bmp:filters" {
+    deviate not-supported;
+  }
+
+  // origin-as-validation
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:route-selection-options/aspa:aspa/aspa:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:global/bgp:afi-safis/bgp:afi-safi/bgp:route-selection-options/oav:origin-as/oav:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-unicast/oav:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv4-unicast/oav:export-origin-as-validation" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-unicast/oav:eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  
+  deviation "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol/bgp:bgp/bgp:neighbors/bgp:neighbor/bgp:afi-safis/bgp:afi-safi/bgp:ipv6-unicast/oav:export-origin-as-validation" {
+    deviate not-supported;
+  }
+
+  deviation "/rt:routing/ribs/rib/afi-safis/afi-safi/ipv4-unicast/routes/route/origin-as/eligible-prefix-policy" {
+    deviate not-supported;
+  }
+  deviation "/rt:routing/ribs/rib/afi-safis/afi-safi/ipv6-unicast/routes/route/origin-as/eligible-prefix-policy" {
+    deviate not-supported;
+  }
+
+  // interface
+
+  deviation "/rt:routing/rt:interfaces" {
+    deviate not-supported;
+  }
+
+  deviation "/if:interfaces-state" {
+    deviate not-supported;
+  }
+
+  deviation "/if:interfaces/if:interface/if:statistics" {
+    deviate not-supported;
+  }
+
+  typedef rib-type {
+      type enumeration {
+          enum "adj-rib-in-pre";
+          enum "adj-rib-in-post";
+          enum "loc-rib";
+          enum "adj-rib-out-pre";
+          enum "adj-rib-out-post";
+      }
+  }
+
+  grouping route {
+    leaf peer-id {
+      type leafref {
+        path "/rt:routing/"
+           + "rt:control-plane-protocols/"
+           + "rt:control-plane-protocol/bgp:bgp/"
+           + "bgp:neighbors/bgp:neighbor/"
+           + "bgp:remote-address";
+      }
+    }
+    leaf rib-type {
+        type rib-type;
+    }
+    uses bgp:bgp-loc-rib-common-keys;
+    uses bgp:attr-set-attributes;
+    uses bgp:bgp-unknown-attr-top;
+    uses bgp:rib-ext-route-annotations;
+    uses oav:origin-as-selection-option;
+    leaf aspa-verifications-state {
+      type aspa:aspa-verification-state;
+      description
+        "ASPA verification of BGP Unicast prefix.";
+    }
+    uses route-status;
+  }
+
+  typedef rotonda-custom-type {
+    type enumeration {
+      enum "rpki-vrp";
+      enum "rpki-aspa";
+      enum "roto-record";
+    }
+  }
+
+  // Roto
+
+  grouping roto-function {
+    leaf roto-function {
+      type leafref {
+        path "/rt:routing/roto:roto/roto:deployments/roto:functions/roto:function/roto:locations/roto:location/roto:path"; } 
+    }
+  }
+
+  augment "/rt:routing" {
+
+    container ribs {
+      config false;
+      list rib {
+        key "rib-id";
+        leaf rib-id {
+          type uint64;
+          mandatory true;
+        }
+        container afi-safis {
+          config false;
+          list afi-safi {
+            key "name";
+            leaf name {
+              type identityref {
+                base bt:afi-safi-type;
+              }
+            }
+            container ipv4-unicast {
+              when "derived-from-or-self(../name, 'bt:ipv4-unicast')" {
+                description
+                  "Include this container for IPv4 unicast RIB.";
+              }
+              description
+                "Routing tables for IPv4 unicast -- active when the
+                 afi-safi name is ipv4-unicast.";
+              uses roto-function;
+              container routes {
+                list route {
+                  key "prefix peer-id rib-type path-id";
+                  leaf prefix {
+                    type inet:ipv4-prefix;
+                  }
+                  uses route;
+                }
+              }
+            }
+            container ipv6-unicast {
+              when "derived-from-or-self(../name, 'bt:ipv6-unicast')" {
+                description
+                  "Include this container for IPv6 unicast RIB.";
+              }
+              description
+                "Routing tables for IPv6 unicast -- active when the
+                 afi-safi name is ipv4-unicast.";
+              uses roto-function;
+              container routes {
+                list route {
+                  key "prefix peer-id rib-type path-id";
+                  leaf prefix {
+                    type inet:ipv6-prefix;
+                  }
+                  uses route;
+                }
+              }
+            }
+          }
+        }
+        container custom-unicast-ribs {
+          config false;
+          list custom-unicast-rib {
+            key "name";
+            leaf name {
+              type string;
+            }
+          }
+          leaf value-type {
+            type rotonda-custom-type;
+            mandatory true;
+          }
+          container ipv4-unicast {
+            list entry {
+              key "prefix";
+              leaf prefix {
+                type inet:ipv4-prefix;
+              }
+              leaf value {
+                type leafref { path "../../../value-type"; }
+                mandatory true;
+              }
+              uses route-status;
+            }
+          }
+          container ipv6-unicast {
+            list entry {
+              key "prefix";
+              leaf prefix {
+                type inet:ipv6-prefix;
+              }
+              leaf value {
+                type leafref { path "../../../value-type"; }
+                mandatory true;
+              }
+              uses route-status;
+            }
+          }
+          uses roto-function;
+        }
+      }
+    }
+  }
+
+  /* augment "/rt:routing/rt:control-plane-protocols/"
+    + "rt:control-plane-protocol/bgp:bgp/bgp:global" {
+      when "derived-from-or-self(rt:type, 'bgp')" {}
+      uses roto-function;
+  } */
+
+  /* augment "/rt:routing/rt:control-plane-protocols/"
+    + "rt:control-plane-protocol/bmp:bmp" {
+      when "derived-from-or-self(rt:type, 'bmp')" {}
+      uses roto-function;
+  } */
+
+  /* augment "/rt:routing/rt:control-plane-protocols/"
+    + "rt:control-plane-protocol/rtr:rpki-rtr" {
+      when "derived-from-or-self(rt:type, 'rpki-rtr')" {}
+      uses roto-function;
+  } */
+}

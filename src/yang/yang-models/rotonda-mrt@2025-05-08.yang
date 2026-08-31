@@ -1,0 +1,48 @@
+module rotonda-mrt {
+  yang-version 1.1;
+  namespace "urn:nlnetlabs:rotonda:mrt";
+  prefix mrt;
+
+  import ietf-routing {
+	prefix rt;
+  }
+  import ietf-yang-types {
+	prefix yang;
+  }
+
+  revision 2025-05-08 {
+    description
+	  "Initial Version";
+	reference
+	  "Rotonda MRT model for BGP";
+  }
+
+  identity mrt {
+	base rt:routing-protocol;
+	description
+	  "MRT protocol.";	
+  }
+
+  augment "/rt:routing/rt:control-plane-protocols/rt:control-plane-protocol" {
+    when "derived-from-or-self(rt:type, 'mrt')" {
+	  description
+	    "This augmentation is valid for a routing protocol instance of MRT.";
+	}
+    container mrt {
+	  container file-paths {
+	    list file-path {
+		    key "path";
+			leaf path {
+				type string;
+			}
+		}
+	  }
+      leaf update-path {
+	    type string;
+	  }
+	  leaf last-updated {
+		type yang:date-and-time;
+	}
+    }
+  }
+}

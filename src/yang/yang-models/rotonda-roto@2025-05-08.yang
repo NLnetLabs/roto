@@ -1,0 +1,163 @@
+module rotonda-roto {
+  yang-version 1.1;
+  namespace "urn:nlnetlabs:rotonda:roto";
+  prefix roto;
+
+  import ietf-yang-types {
+    prefix yang;
+  }
+
+  import ietf-routing {
+    prefix rt;
+  }
+  
+  revision 2025-05-08 {
+    description
+	  "Initial Version";
+	reference
+	  "The model for the Roto programming language.";
+  }
+
+  grouping roto-errors {
+    choice roto-error {
+      case "read" {
+        leaf read-error {
+          type string;
+        }
+      }
+      case "parse" {
+        leaf parse-error {
+          type string;
+        }
+      }
+      case "type" {
+        leaf type-error {
+          type string;
+        }
+      }
+    }
+  }
+  
+  augment "/rt:routing" {
+    container roto {
+      action load {
+        description
+          "(Re)load the current roto file tree.";
+        output finish {
+          choice result {
+            leaf success {
+              type empty;
+            }
+            container errors {
+              list error {
+                uses roto-errors;
+              }
+            }
+          }
+        }
+      }
+      action compile {
+        description
+          "(Re)compile the current roto file tree.";
+        output finish {
+          choice result {
+            leaf success {
+              type empty;
+            }
+            container errors {
+              list error {
+                uses roto-errors;
+              }
+            }
+          }
+        }
+      }
+      action deploy {
+        output finish {
+          choice result {
+            leaf success {
+              type empty;
+            }
+            container errors {
+              leaf-list error {
+                type string;
+              }
+            }
+          }
+        }
+      }
+      container loaded {
+        config false;
+        leaf loaded-serial {
+          type yang:zero-based-counter32;
+        }
+        list source-file {
+          key "name";
+          leaf name {
+            type string;
+          }
+          leaf module-name {
+            type string;
+            mandatory true;
+          }
+          leaf contents {
+            description
+              "The source code in this file.";
+            type string;
+          }
+          container children {
+            list child {
+              key "name";
+              leaf name {
+                type leafref { path "../../../name"; }
+              }
+            }
+          }
+        }
+      }
+      container compiled {
+        config false;
+        leaf compiled-serial {
+          type yang:zero-based-counter32;
+        }
+        leaf last-compiled {
+          config false;
+          type yang:date-and-time;
+        }
+        container functions {
+          list function {
+            key "name";
+            leaf name {
+              type string;
+            }
+            leaf-list params {
+              type string;
+            }
+          }
+        }
+      }
+      container deployments {
+        leaf deployed-serial {
+          type yang:zero-based-counter32;
+          config false;
+        }
+        container functions {
+          list function {
+            key "name";
+            leaf name {
+              type string;
+            }
+            container locations {
+              list location {
+                key "path";
+                leaf path {
+                  type string;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
