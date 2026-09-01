@@ -1,11 +1,11 @@
-module rotonda-main {
-    yang-version 1.1;
-    namespace "urn:nlnetlabs:rotonda:main";
-    prefix "rotonda";
+module rotonda-conf {
+  yang-version 1.1;
+  namespace "urn:nlnetlabs:rotonda:conf";
+  prefix "rotonda";
 
-    import ietf-yang-schema-mount {
-        prefix yangmnt;
-    }
+  import ietf-yang-schema-mount {
+    prefix yangmnt;
+  }
 
   container "rotonda-root" {
     leaf rotonda-id {
@@ -13,10 +13,24 @@ module rotonda-main {
       mandatory true;
       config false;
     }
-    
     yangmnt:mount-point "rotonda-root" {
       description
-        "    Root \t \n    \"for\" \\logical network element\\" + " and some more shit";
+      "    Root \t \n    \"for\" \\logical network element\\" + " and some
+       more shit";
+    }
+  }
+}
+
+module rotonda-running-state {
+  yang-version 1.1;
+  namespace "urn:nlnetlabs:rotonda:state";
+  prefix "rotonda-running-state";
+
+  container "rotonda-state-root" {
+    leaf rotonda-id {
+      type uint8;
+      mandatory true;
+      config true;
     }
   }
 }

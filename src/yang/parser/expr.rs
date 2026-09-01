@@ -2,9 +2,9 @@ use std::{collections::HashMap, net::IpAddr};
 
 use inetnum::asn::Asn;
 
-use crate::{parser::{ParseError, ParseErrorKind, meta::{Meta, Span}}, yang::parser::{
+use crate::{ast::Identifier, parser::{ParseError, ParseErrorKind, meta::{Meta, Span}}, yang::parser::{
     Keyword, ParseResult, YangParser, ast::{
-        AxisName, BinOp, Block, Expr, Identifier, Literal, Match, MatchArm,
+        AxisName, BinOp, Block, Expr, Literal, Match, MatchArm,
         Path, Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
         WildCardIdentifier, XPath, XPathNodeTest, XPathPredicate, XPathStep,
     }, token::Token
@@ -35,7 +35,7 @@ pub enum ArgConstraints {
     YangType,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Cardinality {
     Inf,
     ExactlyOne,

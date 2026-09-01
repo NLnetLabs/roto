@@ -10,76 +10,6 @@ fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
     }
 }
 
-/// A filename with its contents
-// #[derive(Clone, Debug)]
-// pub struct SourceFile {
-//     /// The filename of the file.
-//     ///
-//     /// This should include the full path to the file, since this is used in diagnostics.
-//     pub name: String,
-
-//     /// Name of the module that this file represents.
-//     ///
-//     /// This usually matches the file name.
-//     pub module_name: String,
-
-//     /// Contents of the file.
-//     pub contents: String,
-
-//     /// The line offset that should be added to the location in error
-//     /// messages.
-//     ///
-//     /// This is used to add the offset of a string of source text in a test,
-//     /// so that Roto errors can refer to locations in Rust files accurately.
-//     pub location_offset: usize,
-
-//     /// Subfiles (only for `mod.roto` files)
-//     pub children: Vec<usize>,
-// }
-
-// impl SourceFile {
-//     /// Return the name of the file for diagnostics.
-//     pub fn name(&self) -> String {
-//         if self.location_offset > 0 {
-//             format!("{}@{}", self.name, self.location_offset)
-//         } else {
-//             self.name.clone()
-//         }
-//     }
-
-//     /// Read a [`Path`] into a [`SourceFile`].
-//     pub fn read(path: &Path) -> Result<Self, RotoReport> {
-//         Self::read_internal(path).map_err(|e| read_error(path, e))
-//     }
-
-//     fn read_internal(path: &Path) -> Result<Self, std::io::Error> {
-//         let file_name = path
-//             .file_name()
-//             .ok_or(std::io::Error::other("invalid path"))?;
-//         let module_name = if file_name == "mod.roto" {
-//             path.parent()
-//                 .ok_or(std::io::Error::other("invalid path"))?
-//                 .file_name()
-//                 .ok_or(std::io::Error::other("invalid path"))?
-//         } else {
-//             path.file_stem()
-//                 .ok_or(std::io::Error::other("invalid path"))?
-//         }
-//         .to_string_lossy()
-//         .to_string();
-
-//         let name = path.to_string_lossy().to_string();
-//         let contents = std::fs::read_to_string(path)?;
-//         Ok(Self {
-//             name,
-//             module_name,
-//             contents,
-//             location_offset: 0,
-//             children: Vec::new(),
-//         })
-//     }
-// }
-
 /// A set of files loaded and ready to be parsed
 #[derive(Debug)]
 pub struct YangFileTree {
@@ -205,8 +135,7 @@ impl YangFileTree {
 
     /// A Roto script defined by a directory
     pub fn directory(root: &Path) -> Result<YangFileTree, RotoReport> {
-        let pkg_file =
-            SourceFile::read(&root.join("ietf-ssh-client@2024-03-16.yang"))?;
+        let pkg_file = SourceFile::read(&root.join("rotonda-main.yang"))?;
         // assert_eq!(pkg_file.module_name, "rotonda");
         let mut tree = Self {
             files: vec![pkg_file],

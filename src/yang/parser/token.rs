@@ -866,7 +866,15 @@ impl Keyword {
                 (Rpc, Inf),
                 (TypeDef, Inf),
                 (Uses, Inf),
-                (YangVersion, ExactlyOne),
+                // RFC7950 is ambiguous about this. The substatements table
+                // for 'module' says 'yang-version' should appear exactly
+                // once. But in 7.1.2:
+                // '''
+                //  A module or submodule that doesn't contain the
+                // "yang-version" statement, or one that contains the value
+                // "1", is developed for YANG version 1, defined in [RFC6020].
+                // '''
+                (YangVersion, ZeroOrOne),
             ),
             Keyword::YangVersion => vec![],
             Keyword::NameSpace => vec![],

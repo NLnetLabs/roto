@@ -5,14 +5,15 @@
 //! There is currently no way that the parser can recover from invalid syntax.
 //! Therefore, we can only report one parse error.
 
+use crate::ast::Identifier;
 use crate::parser::{ParseError, ParseErrorKind};
+use crate::yang::parser::expr::Cardinality;
 pub use crate::yang::parser::token::Keyword;
 use crate::yang::parser::token::{Lexer, Token};
 use crate::{
     parser::ParseResult,
     yang::parser::ast::{
-        Argument, Declaration, Identifier, Literal, SyntaxTree, Test,
-        YangStmtSeq,
+        Argument, Declaration, Literal, SyntaxTree, Test, YangStmtSeq,
     },
 };
 use std::{fmt::Display, iter::Peekable};
@@ -186,11 +187,12 @@ pub mod token;
 
 // impl std::error::Error for YangParseError {}
 
+/// A custom parser for the yang modeling language
 pub struct YangParser<'source, 'spans> {
     file: usize,
     file_length: usize,
     lexer: Peekable<Lexer<'source>>,
-    pub spans: &'spans mut Spans,
+    spans: &'spans mut Spans,
 }
 
 type Type = ParseResult<(ParsedStmt, Span)>;
@@ -553,6 +555,52 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
 
         if self.peek_is(Token::CurlyLeft) {
             let block = self.block(stmt.node())?;
+
+            // we got all the statements in the block, but are all the
+            // mandatory one's there ('ExactlyOne')
+
+            if let Some(stmt) = stmt.node() {
+                let mut missing_stmts = vec![];
+                stmt.node
+                    .allowed_sub_stmts()
+                    .iter()
+                    .filter_map(|mand_s| {
+                        if mand_s.1 == Cardinality::ExactlyOne {
+                            Some(mand_s.0)
+                        } else {
+                            None
+                        }
+                    })
+                    .for_each(|mand_s| {
+                        if !block.stmts.iter().any(|decl_s| {
+                            decl_s
+                                .node
+                                .stmt
+                                .node()
+                                .map(|s| s.node == mand_s)
+                                .unwrap_or_else(|| {
+                                    // this is an extended statement, which is
+                                    // never mandatory
+                                    true
+                                })
+                        }) {
+                            missing_stmts.push(mand_s.as_str());
+                        }
+                    });
+
+                if !missing_stmts.is_empty() {
+                    return Err(Box::new(ParseError::custom(
+                        format!(
+                            "missing sub-statement(s): {:?} for statement `{}`",
+                            missing_stmts,
+                            stmt.node.as_str()
+                        ),
+                        "this statement",
+                        span,
+                    )));
+                }
+            };
+
             return Ok((
                 YangStmtSeq {
                     stmt,
@@ -708,7 +756,7 @@ impl YangParser<'_, '_> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParsedStmt {
     Stmt(Meta<Keyword>),
     ExtStmt((Option<Meta<Identifier>>, Option<Meta<Identifier>>)),

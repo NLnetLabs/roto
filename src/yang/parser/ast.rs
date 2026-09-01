@@ -9,6 +9,7 @@ use inetnum::asn::Asn;
 use symbol_table::GlobalSymbol;
 
 use crate::{
+    ast::Identifier,
     parser::meta::Meta,
     yang::parser::{Keyword, ParsedStmt},
 };
@@ -31,6 +32,17 @@ impl SyntaxTree {
             }
         }
         node_tests
+    }
+
+    /// Iterator over all module and submodule statements in an ast.
+    pub fn modules(&self) -> impl Iterator<Item = Meta<Identifier>> {
+        self.declarations.iter().filter_map(|d| {
+            if let Declaration::Statement(yang_stmt_seq) = d {
+                yang_stmt_seq.module_stmt()
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -127,6 +139,30 @@ pub struct YangStmtSeq {
     pub stmt: ParsedStmt,
     pub arg: Option<Meta<Argument>>,
     pub sub_stmts: Option<Meta<Block>>,
+}
+
+impl YangStmtSeq {
+    fn module_stmt(&self) -> Option<Meta<Identifier>> {
+        match &self.stmt {
+            ParsedStmt::Stmt(meta)
+                if meta.node == Keyword::Module
+                    || meta.node == Keyword::SubModule =>
+            {
+                if let Some(arg) = &self.arg {
+                    if let Argument::Ident(ident) = arg.node {
+                        return Some(Meta {
+                            node: ident,
+                            id: arg.id,
+                        });
+                    } else {
+                        return None;
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -334,38 +370,38 @@ pub enum Pattern {
 ///
 /// It is a word composed of a leading alphabetic Unicode character, followed
 /// by alphanumeric Unicode characters or underscore or hyphen.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Identifier(GlobalSymbol);
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// pub struct Identifier(GlobalSymbol);
 
-impl Display for Identifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
+// impl Display for Identifier {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         self.0.fmt(f)
+//     }
+// }
 
-impl Identifier {
-    pub fn as_str(&self) -> &'static str {
-        self.0.as_str()
-    }
-}
+// impl Identifier {
+//     pub fn as_str(&self) -> &'static str {
+//         self.0.as_str()
+//     }
+// }
 
-impl From<&str> for Identifier {
-    fn from(value: &str) -> Self {
-        Self(value.into())
-    }
-}
+// impl From<&str> for Identifier {
+//     fn from(value: &str) -> Self {
+//         Self(value.into())
+//     }
+// }
 
-impl From<&String> for Identifier {
-    fn from(value: &String) -> Self {
-        Self(value.into())
-    }
-}
+// impl From<&String> for Identifier {
+//     fn from(value: &String) -> Self {
+//         Self(value.into())
+//     }
+// }
 
-impl From<String> for Identifier {
-    fn from(value: String) -> Self {
-        Self(value.into())
-    }
-}
+// impl From<String> for Identifier {
+//     fn from(value: String) -> Self {
+//         Self(value.into())
+//     }
+// }
 
 #[derive(Clone, Debug)]
 pub struct RecordType {
