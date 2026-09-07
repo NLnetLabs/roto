@@ -32,7 +32,7 @@ use check::{FunctionRetrievalError, RotoFunc, check_roto_type_reflect};
 use cranelift::{
     codegen::{
         ir::{
-            self, AbiParam, Block, InstBuilder, MemFlags, StackSlotData,
+            self, AbiParam, Block, InstBuilder, MemFlagsData, StackSlotData,
             StackSlotKind, condcodes::IntCC, types::*,
         },
         isa::TargetIsa,
@@ -359,7 +359,7 @@ struct FuncGen<'c> {
 // We use `with_aligned` to make sure that we notice if anything is
 // unaligned. It does add additional checks, so should be disabled at some
 // point, or at least be configurable.
-const MEMFLAGS: MemFlags = MemFlags::new().with_aligned();
+const MEMFLAGS: MemFlagsData = MemFlagsData::new().with_aligned();
 
 pub fn codegen<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
@@ -796,7 +796,7 @@ impl ModuleBuilder {
 impl<'c> FuncGen<'c> {
     fn finalize(mut self) {
         self.builder.seal_all_blocks();
-        self.builder.finalize()
+        self.builder.finalize(self.module.isa.frontend_config())
     }
 
     /// Set up the entry block for the function
@@ -1022,7 +1022,7 @@ impl<'c> FuncGen<'c> {
             lir::Instruction::Not { to, val } => {
                 let (val, _) = self.operand(val);
                 let var = self.variable(to, I8);
-                let val = self.ins().icmp_imm(IntCC::Equal, val, 0);
+                let val = self.ins().icmp_imm_s(IntCC::Equal, val, 0);
                 self.def(var, val);
             }
             lir::Instruction::Negate { to, val } => {
@@ -1145,7 +1145,7 @@ impl<'c> FuncGen<'c> {
                     .module
                     .inner
                     .declare_data_in_func(data_id, self.builder.func);
-                let value = self.ins().global_value(pointer_ty, global_value);
+                let value = self.ins().symbol_value(pointer_ty, global_value);
 
                 let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
@@ -1175,7 +1175,7 @@ impl<'c> FuncGen<'c> {
             }
             lir::Instruction::Offset { to, from, offset } => {
                 let (from, _) = self.operand(from);
-                let tmp = self.ins().iadd_imm(from, *offset as i64);
+                let tmp = self.ins().iadd_imm_s(from, *offset as i64);
                 let to = self.variable(to, self.module.isa.pointer_type());
                 self.def(to, tmp)
             }
@@ -1304,7 +1304,7 @@ impl<'c> FuncGen<'c> {
                     pointer_ty,
                     *init_func as *mut u8 as usize as i64,
                 );
-                let data = self.ins().global_value(pointer_ty, global_value);
+                let data = self.ins().symbol_value(pointer_ty, global_value);
                 let len = self.ins().iconst(I32, string.len() as u64 as i64);
 
                 let (to, _) = self.operand(&Operand::Place(to.clone()));

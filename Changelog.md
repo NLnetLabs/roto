@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Crate
+
+#### Breaking changes
+
+- Upgraded Cranelift from `0.127.1` to `0.136.0-rc.1`. The minimum supported
+  Rust version is now 1.96.
+- Removed the `selinux-fix` feature flag. Cranelift now enables the underlying
+  fix unconditionally.
+
 ## 0.12.0
 
 Released 2026-08-14.

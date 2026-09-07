@@ -28,7 +28,6 @@ bench = false
 default = ["cli"]
 cli = ["clap"]
 logger = ["env_logger"]
-selinux-fix = ["cranelift-jit/selinux-fix"]
 disas = ["cranelift-codegen/disas"]
 
 [dependencies]
@@ -46,14 +45,14 @@ sealed = "0.6.0"
 indexmap = "2.14.0"
 
 [dependencies.cranelift]
-version = "0.127.1"
+version = "0.136.0-rc.1"
 features = ["frontend", "jit", "module", "native"]
 
 [dependencies.cranelift-codegen]
-version = "0.127.1"
+version = "0.136.0-rc.1"
 
 [dependencies.cranelift-jit]
-version = "0.127.1"
+version = "0.136.0-rc.1"
 
 [dev-dependencies]
 assert_cmd = { version = "2.2.0", features = ["color"] }
@@ -82,7 +81,7 @@ version = "0.12.0"
 edition = "2024"
 authors = ["NLnet Labs <routing-team@nlnetlabs.nl>"]
 license = "BSD-3-Clause"
-rust-version = "1.89"
+rust-version = "1.96"
 description = "a statically-typed, compiled, embedded scripting language"
 documentation = "https://docs.rs/roto/"
 repository = "https://codeberg.org/NLnetLabs/roto/"
