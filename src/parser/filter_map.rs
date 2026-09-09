@@ -1,6 +1,6 @@
 use crate::ast::{
-    EnumTypeDeclaration, FilterMap, FilterType, Identifier, Params,
-    RecordTypeDeclaration, TypeExpr, Variant,
+    EnumTypeDeclaration, FilterMap, FilterType, Identifier, Param, Params,
+    RecordTypeDeclaration, Variant,
 };
 
 use super::{
@@ -67,13 +67,13 @@ impl Parser<'_, '_> {
     /// ```ebnf
     /// TypeIdentField ::= Identifier ':' TypeExpr
     /// ```
-    fn type_ident_field(
-        &mut self,
-    ) -> ParseResult<(Meta<Identifier>, Meta<TypeExpr>)> {
-        let field_name = self.identifier()?;
+    fn type_ident_field(&mut self) -> ParseResult<Meta<Param>> {
+        let name = self.identifier()?;
         self.take(Token::Colon)?;
         let ty = self.type_expr()?;
-        Ok((field_name, ty))
+
+        let span = self.merge_spans(&name, &ty);
+        Ok(self.spans.add(span, Param { name, ty }))
     }
 
     pub fn type_parameters(
@@ -134,21 +134,23 @@ impl Parser<'_, '_> {
         })
     }
 
-    fn enum_variant(&mut self) -> ParseResult<Variant> {
+    fn enum_variant(&mut self) -> ParseResult<Meta<Variant>> {
         let ident = self.identifier()?;
 
+        let mut span = self.spans.get(&ident);
         let fields = if self.peek_is(Token::RoundLeft) {
-            self.separated(
+            let fields = self.separated(
                 Token::RoundLeft,
                 Token::RoundRight,
                 Token::Comma,
                 Self::type_expr,
-            )?
-            .node
+            )?;
+            span = span.merge(self.spans.get(&fields));
+            fields.node
         } else {
             Vec::new()
         };
 
-        Ok(Variant { ident, fields })
+        Ok(self.spans.add(span, Variant { ident, fields }))
     }
 }

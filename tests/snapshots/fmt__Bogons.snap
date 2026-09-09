@@ -1,0 +1,10 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+const BOGONS: List[Prefix] = [
+    // source: https://bgpfilterguide.nlnog.net/guides/bogon_prefixes/
+    // retrieved April 2026
+    0.0.0.0 / 8, //	RFC 1122 ‘this’ network
+    10.0.0.0 / 8, //	RFC 1918 private space
+];

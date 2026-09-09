@@ -999,7 +999,11 @@ impl TypeChecker {
                             scope,
                             x.ident.clone(),
                             FunctionDefinition::Roto,
-                            x.params.0.iter().map(|(i, _)| i.node).collect(),
+                            x.params
+                                .0
+                                .iter()
+                                .map(|param| param.name.node)
+                                .collect(),
                             String::new(),
                             signature,
                         )?;
@@ -1010,7 +1014,11 @@ impl TypeChecker {
                             scope,
                             x.ident.clone(),
                             FunctionDefinition::Roto,
-                            x.params.0.iter().map(|(i, _)| i.node).collect(),
+                            x.params
+                                .0
+                                .iter()
+                                .map(|param| param.name.node)
+                                .collect(),
                             String::new(),
                             signature,
                         )?;
@@ -1579,9 +1587,9 @@ impl TypeChecker {
     ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
         let mut type_fields = Vec::new();
 
-        for (ident, ty) in &expr.fields.node {
-            let field_type = self.evaluate_type_expr(scope, ty)?;
-            type_fields.push((ident, field_type))
+        for field in &expr.fields.node {
+            let field_type = self.evaluate_type_expr(scope, &field.ty)?;
+            type_fields.push((&field.name, field_type))
         }
 
         let mut unspanned_type_fields = Vec::new();

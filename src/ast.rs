@@ -39,7 +39,13 @@ pub struct Signature {
 }
 
 #[derive(Clone, Debug)]
-pub struct Params(pub Vec<(Meta<Identifier>, Meta<TypeExpr>)>);
+pub struct Param {
+    pub name: Meta<Identifier>,
+    pub ty: Meta<TypeExpr>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Params(pub Vec<Meta<Param>>);
 
 /// The value of a typed record
 #[derive(Clone, Debug)]
@@ -53,7 +59,7 @@ pub struct RecordTypeDeclaration {
 pub struct EnumTypeDeclaration {
     pub ident: Meta<Identifier>,
     pub type_params: Option<Meta<Vec<Meta<Identifier>>>>,
-    pub variants: Meta<Vec<Variant>>,
+    pub variants: Meta<Vec<Meta<Variant>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -237,14 +243,20 @@ impl ReturnKind {
 }
 
 #[derive(Clone, Debug)]
+pub struct RecordField {
+    pub name: Meta<Identifier>,
+    pub expr: Meta<Expr>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Record {
-    pub fields: Vec<(Meta<Identifier>, Meta<Expr>)>,
+    pub fields: Vec<Meta<RecordField>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Match {
     pub expr: Meta<Expr>,
-    pub arms: Meta<Vec<MatchArm>>,
+    pub arms: Meta<Vec<Meta<MatchArm>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -301,8 +313,14 @@ impl From<String> for Identifier {
 }
 
 #[derive(Clone, Debug)]
+pub struct RecordFieldType {
+    pub name: Meta<Identifier>,
+    pub ty: Meta<TypeExpr>,
+}
+
+#[derive(Clone, Debug)]
 pub struct RecordType {
-    pub fields: Meta<Vec<(Meta<Identifier>, Meta<TypeExpr>)>>,
+    pub fields: Meta<Vec<Meta<RecordFieldType>>>,
 }
 
 #[derive(Clone, Debug)]
