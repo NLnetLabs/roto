@@ -679,6 +679,18 @@ fn arithmetic() {
 }
 
 #[test]
+fn exp_right_associative() {
+    let s = src!("fn main() -> i32 { 2 ** 3 ** 2 }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn() -> i32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call();
+    assert_eq!(res, 512);
+}
+
+#[test]
 fn call_runtime_function() {
     let s = src!(
         "
@@ -1193,6 +1205,38 @@ fn float_pow() {
     assert_eq!(res, 4.0);
     let res = f.call(25.0, 0.5);
     assert_eq!(res, 5.0);
+}
+
+#[test]
+fn float_exp() {
+    let s = src!("fn main(x: f32, y: f32) -> f32 { x ** y }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn(f32, f32) -> f32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(2.0, 3.0);
+    assert_eq!(res, 8.0);
+    let res = f.call(25.0, 0.5);
+    assert_eq!(res, 5.0);
+    let res = f.call(2.0, -1.0);
+    assert_eq!(res, 0.5);
+}
+
+#[test]
+fn int_exp() {
+    let s = src!("fn main(x: i32, y: u32) -> i32 { x ** y }");
+    let mut p = compile(s);
+    let f = p
+        .get_function::<fn(i32, u32) -> i32>("main")
+        .expect("No function found (or mismatched types)");
+
+    let res = f.call(3, 4);
+    assert_eq!(res, 81);
+    let res = f.call(3, 5);
+    assert_eq!(res, 243);
+    let res = f.call(2, 10);
+    assert_eq!(res, 1024);
 }
 
 #[test]

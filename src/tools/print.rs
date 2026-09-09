@@ -59,6 +59,7 @@ pub fn print_highlighted(s: &str) {
             | Token::Slash
             | Token::SlashStar
             | Token::Star
+            | Token::StarStar
             | Token::AngleLeft
             | Token::AngleRight
             | Token::CurlyLeft

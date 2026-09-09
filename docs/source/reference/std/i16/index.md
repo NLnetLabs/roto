@@ -6,6 +6,10 @@ This type can represent integers from -32,768 up to (and including) 32,767.
 `````
 
 
+````{roto:method} i16.pow(self: i16, exp: u32) -> i16
+Raises a number to an integer power.
+````
+
 ````{roto:method} i16.to_string(self: i16) -> String
 Convert this value into a `String`.
 ````
