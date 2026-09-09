@@ -312,9 +312,10 @@ impl<'r> Lowerer<'r> {
 
         let mut parameter_types = Vec::new();
 
-        for (x, _) in &params.0 {
-            let ty = self.type_info.type_of(x);
-            parameter_types.push((self.type_info.resolved_name(x), ty));
+        for param in &params.0 {
+            let ast::Param { name, ty: _ } = &**param;
+            let ty = self.type_info.type_of(name);
+            parameter_types.push((self.type_info.resolved_name(name), ty));
         }
 
         self.stack_slots.push(Vec::new());
@@ -780,7 +781,8 @@ impl<'r> Lowerer<'r> {
 
         let to = self.tmp(ty);
 
-        for (s, expr) in &record.fields {
+        for field in &record.fields {
+            let ast::RecordField { name, expr } = &**field;
             let op = self.expr(expr);
             let field_ty = self.type_info.type_of(expr);
             let field_ty = self.type_info.convert(&field_ty);
@@ -788,7 +790,7 @@ impl<'r> Lowerer<'r> {
                 Place {
                     var: to.clone(),
                     root_ty: ty,
-                    projection: vec![Projection::Field(**s)],
+                    projection: vec![Projection::Field(**name)],
                 },
                 field_ty,
                 op,

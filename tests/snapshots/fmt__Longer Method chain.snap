@@ -1,0 +1,14 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    foo
+        .new()
+        .push(bar)
+        .push(baz)
+        .push(quux)
+        .push(boop)
+        .push(foofoofoofoo)
+        .push(barbarbarbar);
+}

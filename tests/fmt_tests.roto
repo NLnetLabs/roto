@@ -338,3 +338,58 @@ fn main() {
 		},
 	}
 }
+
+// ============
+// Method chain
+// ============
+
+fn main() {
+	foo.new().push(bar);
+}
+
+// ============
+// Longer Method chain
+// ============
+
+fn main() {
+	foo.new().push(bar).push(baz).push(quux).push(boop).push(foofoofoofoo).push(barbarbarbar);
+}
+
+// ==========================
+// Method with some long args
+// ==========================
+
+fn main() {
+    globals.insert(
+        "CONFIG_GARBAGE_LINKS_URI_SEPARATOR",
+        config.get_path_as_str("garbage.links.uri-separator")?.into_value(),
+    );
+}
+
+// ====================
+// Complex if condition
+// ====================
+
+fn main() {
+	if !config.has("trusted-paths") {}
+}
+
+// =========================
+// Filter with two arguments
+// =========================
+
+filter bgp_in(
+    bgp_msg: BgpMsg,
+    ingress_info: IngressInfo,
+) {}
+
+// ======
+// Bogons
+// ======
+
+const BOGONS: List[Prefix] = [
+    // source: https://bgpfilterguide.nlnog.net/guides/bogon_prefixes/
+    // retrieved April 2026
+    0.0.0.0 / 8, //	RFC 1122 ‘this’ network
+    10.0.0.0 / 8, //	RFC 1918 private space
+];

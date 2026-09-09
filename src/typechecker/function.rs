@@ -233,9 +233,9 @@ impl TypeChecker {
     ) -> TypeResult<Vec<(Meta<Identifier>, Type)>> {
         args.0
             .iter()
-            .map(|(field_name, ty)| {
-                let ty = self.evaluate_type_expr(scope, ty)?;
-                Ok((field_name.clone(), ty))
+            .map(|param| {
+                let ty = self.evaluate_type_expr(scope, &param.ty)?;
+                Ok((param.name.clone(), ty))
             })
             .collect()
     }

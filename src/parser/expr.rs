@@ -6,7 +6,8 @@ use crate::{
     ast::{
         BinOp, Block, CompoundAssign, CompoundAssignOp, Expr, FStringPart,
         FloatType, Identifier, ImportPath, IntType, Literal, Match, MatchArm,
-        Path, Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
+        Path, Pattern, Record, RecordField, RecordFieldType, RecordType,
+        ReturnKind, Stmt, TypeExpr,
     },
     parser::{ParseError, precedence::Associativity},
 };
@@ -746,11 +747,16 @@ impl Parser<'_, '_> {
                 expr
             };
 
-            arms.push(MatchArm {
-                pattern,
-                guard,
-                body,
-            })
+            let span = self.merge_spans(&pattern, &body);
+
+            arms.push(self.spans.add(
+                span,
+                MatchArm {
+                    pattern,
+                    guard,
+                    body,
+                },
+            ))
         }
 
         let end = self.take(Token::CurlyRight)?;
@@ -944,10 +950,11 @@ impl Parser<'_, '_> {
             Token::CurlyRight,
             Token::Comma,
             |parser| {
-                let key = parser.identifier()?;
+                let name = parser.identifier()?;
                 parser.take(Token::Colon)?;
-                let value = parser.expr()?;
-                Ok((key, value))
+                let expr = parser.expr()?;
+                let span = parser.merge_spans(&name, &expr);
+                Ok(parser.spans.add(span, RecordField { name, expr }))
             },
         )?;
 
@@ -1035,15 +1042,14 @@ impl Parser<'_, '_> {
         Ok(RecordType { fields })
     }
 
-    fn record_field(
-        &mut self,
-    ) -> ParseResult<(Meta<Identifier>, Meta<TypeExpr>)> {
-        let key = self.identifier()?;
+    fn record_field(&mut self) -> ParseResult<Meta<RecordFieldType>> {
+        let name = self.identifier()?;
         self.take(Token::Colon)?;
 
-        let field_type = self.type_expr()?;
+        let ty = self.type_expr()?;
 
-        Ok((key, field_type))
+        let span = self.merge_spans(&name, &ty);
+        Ok(self.spans.add(span, RecordFieldType { name, ty }))
     }
 
     pub(super) fn path(&mut self) -> ParseResult<Meta<Path>> {

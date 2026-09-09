@@ -1,4 +1,7 @@
+use std::path::Path;
+
 use insta::assert_snapshot;
+use pretty_assertions::assert_eq;
 use roto::fmt::fmt_str;
 
 #[test]
@@ -19,6 +22,28 @@ fn fmt_tests() {
 
         assert_snapshot!(name, formatted);
         line += content.lines().count();
+    }
+}
+
+#[test]
+fn examples_idempotent() {
+    run_on_all_roto_files(Path::new("examples"), &|path| {
+        let s = std::fs::read_to_string(path).unwrap();
+        let formatted = fmt_str(&path.to_string_lossy(), &s, 0).unwrap();
+        assert_eq!(s, formatted, "path: {}", path.display());
+    });
+    panic!();
+}
+
+fn run_on_all_roto_files(path: &Path, f: &impl Fn(&Path)) {
+    for entry in std::fs::read_dir(path).unwrap() {
+        let entry = entry.unwrap();
+        let ty = entry.file_type().unwrap();
+        if ty.is_dir() {
+            run_on_all_roto_files(&entry.path(), f);
+        } else if entry.path().extension().is_some_and(|s| s == "roto") {
+            f(&entry.path())
+        }
     }
 }
 

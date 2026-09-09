@@ -4,23 +4,36 @@ use std::{collections::HashSet, path::Path};
 
 use crate::{
     FileTree, RotoError, RotoReport,
-    ast::{self, Identifier},
+    ast::{self, Identifier, RecordFieldType},
     parser::{
         Extras,
         meta::{Meta, Span, Spans},
     },
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+struct Nodes<'a>(Vec<Node<'a>>);
+
+impl Nodes<'_> {
+    fn width(&self, wrapped: &mut HashSet<usize>) -> usize {
+        self.0.iter().map(|n| n.width(wrapped)).sum()
+    }
+
+    fn must_wrap(&self) -> bool {
+        self.0.iter().any(Node::must_wrap)
+    }
+}
+
+#[derive(Clone, Debug)]
 enum Node<'a> {
     /// A group of nodes with an id
-    Group(usize, Vec<Node<'a>>),
+    Group(usize, Nodes<'a>),
 
     /// An indented list of nodes
-    Indent(Vec<Node<'a>>),
+    Indent(Nodes<'a>),
 
     /// An indented list of nodes, where the first item is not indented
-    IndentNext(Vec<Node<'a>>),
+    IndentNext(Nodes<'a>),
 
     /// Wrap the surrounding group
     WrapParent,
@@ -45,6 +58,13 @@ enum Node<'a> {
 
     /// Decides what to render based on whether the referenced group wraps
     IfWrap(usize, Box<Node<'a>>, Box<Node<'a>>),
+
+    // A function call with an expression and arguments.
+    //
+    // We make a special node for this because we want to be a bit smarter
+    // about formatting this. If we wrap the arguments, we do not necessarily
+    // need to wrap the expressions as well.
+    Call(usize, Nodes<'a>, usize, Nodes<'a>),
 }
 
 impl<'s> Node<'s> {
@@ -62,7 +82,7 @@ impl<'s> Node<'s> {
         match self {
             Node::WrapParent => true,
             Node::Comment(_) => true,
-            Node::Indent(n) => n.iter().any(|n| n.must_wrap()),
+            Node::Indent(n) => n.must_wrap(),
             _ => false,
         }
     }
@@ -71,9 +91,8 @@ impl<'s> Node<'s> {
         match self {
             Node::Group(_, nodes)
             | Node::Indent(nodes)
-            | Node::IndentNext(nodes) => {
-                nodes.iter().map(|n| n.width(wrapped)).sum()
-            }
+            | Node::IndentNext(nodes) => nodes.width(wrapped),
+            Node::Call(_, e, _, a) => e.width(wrapped) + a.width(wrapped),
             Node::WrapParent => 0,
             Node::Comment(_) => 0,
             Node::Str(w, _) => *w,
@@ -167,9 +186,13 @@ fn fmt_parsed(
 
     state.push(Node::Line);
 
+    // dbg!(&ast);
+    // dbg!(&state.nodes);
+
     let mut renderer = Renderer {
         buf: String::new(),
         indent: 0,
+        next_indent: 0,
         column: 0,
         max: 80,
         wrapped: HashSet::new(),
@@ -236,7 +259,7 @@ impl<'a, 's> State<'a, 's> {
     fn group<'b>(&'b mut self) -> (usize, State<'b, 's>) {
         let idx = *self.idx;
         *self.idx += 1;
-        self.nodes.push(Node::Group(idx, Vec::new()));
+        self.nodes.push(Node::Group(idx, Nodes(Vec::new())));
         let Some(Node::Group(_, nodes)) = self.nodes.last_mut() else {
             unreachable!();
         };
@@ -244,7 +267,7 @@ impl<'a, 's> State<'a, 's> {
             idx,
             State {
                 idx: self.idx,
-                nodes,
+                nodes: &mut nodes.0,
                 extras: self.extras,
                 source: self.source,
                 spans: self.spans,
@@ -254,13 +277,13 @@ impl<'a, 's> State<'a, 's> {
     }
 
     fn indent<'b>(&'b mut self) -> State<'b, 's> {
-        self.nodes.push(Node::Indent(Vec::new()));
+        self.nodes.push(Node::Indent(Nodes(Vec::new())));
         let Some(Node::Indent(nodes)) = self.nodes.last_mut() else {
             unreachable!();
         };
         State {
             idx: self.idx,
-            nodes,
+            nodes: &mut nodes.0,
             extras: self.extras,
             source: self.source,
             spans: self.spans,
@@ -269,13 +292,13 @@ impl<'a, 's> State<'a, 's> {
     }
 
     fn indent_next<'b>(&'b mut self) -> State<'b, 's> {
-        self.nodes.push(Node::IndentNext(Vec::new()));
+        self.nodes.push(Node::IndentNext(Nodes(Vec::new())));
         let Some(Node::IndentNext(nodes)) = self.nodes.last_mut() else {
             unreachable!();
         };
         State {
             idx: self.idx,
-            nodes,
+            nodes: &mut nodes.0,
             extras: self.extras,
             source: self.source,
             spans: self.spans,
@@ -379,15 +402,16 @@ impl<'a, 's> State<'a, 's> {
         *self.pos = pos;
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn separated<Elem>(
         &mut self,
         start: &'static str,
         end: &'static str,
         separator: &'static str,
-        elems: &[Elem],
+        elems: &[Meta<Elem>],
         span: Span,
         style: WrapStyle,
-        mut f: impl FnMut(&mut State<'_, 's>, &Elem),
+        mut f: impl FnMut(&mut State<'_, 's>, &Meta<Elem>),
     ) {
         let (id, mut grouped) = self.group();
 
@@ -417,12 +441,18 @@ impl<'a, 's> State<'a, 's> {
 
         let mut indented = grouped.indent();
         let mut first = true;
+
         for elem in elems {
             if !first {
                 if !separator.is_empty() {
                     indented.push(Node::Ascii(separator));
                 }
+                let span = indented.spans.get(elem);
+                indented.pop_whitespace(span.start, true, true, false);
                 indented.push(Node::LineOrSpace);
+            } else {
+                let span = indented.spans.get(elem);
+                indented.pop_whitespace(span.start, true, true, false);
             }
             f(&mut indented, elem);
             first = false;
@@ -455,9 +485,10 @@ impl<'a, 's> State<'a, 's> {
                 if !first && !whitespace {
                     self.push(Node::Line);
                 }
-                self.push(Node::Ascii("filter-map "));
+                self.push(Node::Ascii("filtermap "));
                 self.push(Node::ident(*x.ident));
                 self.params(&x.params);
+                self.push(Node::Ascii(" "));
                 self.block(&x.body);
             }
             ast::Declaration::Const(x) => {
@@ -555,6 +586,7 @@ impl<'a, 's> State<'a, 's> {
                 if let Some(ret) = &x.ret {
                     self.push(Node::Ascii("-> "));
                     self.type_expr(ret);
+                    self.push(Node::Ascii(" "));
                 }
                 self.block(&x.body);
             }
@@ -623,9 +655,9 @@ impl<'a, 's> State<'a, 's> {
             span,
             WrapStyle::Tight,
             |this, param| {
-                this.push(Node::ident(*param.0));
+                this.push(Node::ident(*param.name));
                 this.push(Node::Ascii(": "));
-                this.type_expr(&param.1);
+                this.type_expr(&param.ty);
             },
         )
     }
@@ -777,6 +809,8 @@ impl<'a, 's> State<'a, 's> {
         expr: &Meta<ast::Expr>,
         outer: Precedence,
     ) {
+        // let span = self.spans.get(expr);
+        // self.pop_whitespace(span.start, true, true, true);
         let precedence = self.expr_precedence(expr);
         match &**expr {
             ast::Expr::Return(kind, expr) => {
@@ -800,11 +834,44 @@ impl<'a, 's> State<'a, 's> {
             ast::Expr::Match(x) => self.r#match(x),
             ast::Expr::FunctionCall(x, args) => {
                 if precedence > outer {
-                    let (_, mut grouped) = self.group();
-                    let mut indented = grouped.indent_next();
-                    indented.function_call(x, args);
+                    let idx_expr = *self.idx;
+                    let idx_args = *self.idx + 1;
+                    *self.idx += 2;
+
+                    let mut nodes_expr = Vec::new();
+                    let mut nodes_args = Vec::new();
+
+                    {
+                        let mut state = State {
+                            idx: self.idx,
+                            nodes: &mut nodes_expr,
+                            extras: self.extras,
+                            source: self.source,
+                            pos: self.pos,
+                            spans: self.spans,
+                        };
+                        state.expr_with_precedence(x, precedence);
+                    }
+                    {
+                        let mut state = State {
+                            idx: self.idx,
+                            nodes: &mut nodes_args,
+                            extras: self.extras,
+                            source: self.source,
+                            pos: self.pos,
+                            spans: self.spans,
+                        };
+                        state.function_args(args);
+                    }
+                    self.nodes.push(Node::Call(
+                        idx_expr,
+                        Nodes(nodes_expr),
+                        idx_args,
+                        Nodes(nodes_args),
+                    ));
                 } else {
-                    self.function_call(x, args);
+                    self.expr_with_precedence(x, precedence);
+                    self.function_args(args);
                 }
             }
             ast::Expr::Access(x, field) => {
@@ -815,7 +882,6 @@ impl<'a, 's> State<'a, 's> {
                 } else {
                     self.access(x, field);
                 }
-                self.access(x, field);
             }
             ast::Expr::Path(x) => {
                 self.path(x, precedence > outer);
@@ -838,7 +904,8 @@ impl<'a, 's> State<'a, 's> {
                     span,
                     WrapStyle::Tight,
                     |this, v| {
-                        this.expr(v);
+                        let (_, mut group) = this.group();
+                        group.expr(v);
                     },
                 );
             }
@@ -870,7 +937,13 @@ impl<'a, 's> State<'a, 's> {
             }
             ast::Expr::IfElse(c, t, e) => {
                 self.push(Node::Ascii("if "));
-                self.expr(c);
+
+                {
+                    let (_, mut grouped) = self.group();
+                    let mut indented = grouped.indent();
+                    indented.expr(c);
+                }
+
                 self.push(Node::Ascii(" "));
                 self.block(t);
                 if let Some(e) = e {
@@ -880,7 +953,11 @@ impl<'a, 's> State<'a, 's> {
             }
             ast::Expr::While(c, b) => {
                 self.push(Node::Ascii("while "));
-                self.expr(c);
+                {
+                    let (_, mut grouped) = self.group();
+                    let mut indented = grouped.indent();
+                    indented.expr(c);
+                }
                 self.push(Node::Ascii(" "));
                 self.block(b);
             }
@@ -888,12 +965,19 @@ impl<'a, 's> State<'a, 's> {
                 self.push(Node::Ascii("for "));
                 self.push(Node::ident(**x));
                 self.push(Node::Ascii(" in "));
-                self.expr(e);
+                {
+                    let (_, mut grouped) = self.group();
+                    let mut indented = grouped.indent();
+                    indented.expr(e);
+                }
                 self.push(Node::Ascii(" "));
                 self.block(b);
             }
             ast::Expr::QuestionMark(e) => {
-                self.expr_with_precedence(e, precedence);
+                // Question mark has no effect on grouping therefore just propagate
+                // the outer precedence. This helps treat `foo().bar` and
+                // `foo()?.bar` the same with grouping.
+                self.expr_with_precedence(e, outer);
                 self.push(Node::Ascii("?"));
             }
             ast::Expr::FString(parts) => {
@@ -920,12 +1004,7 @@ impl<'a, 's> State<'a, 's> {
         self.pop_trailing_comment();
     }
 
-    fn function_call(
-        &mut self,
-        x: &Meta<ast::Expr>,
-        args: &Meta<Vec<Meta<ast::Expr>>>,
-    ) {
-        self.expr_with_precedence(x, Precedence::Chain);
+    fn function_args(&mut self, args: &Meta<Vec<Meta<ast::Expr>>>) {
         let span = self.spans.get(args);
         self.separated(
             "(",
@@ -1041,9 +1120,9 @@ impl<'a, 's> State<'a, 's> {
             span,
             WrapStyle::Spaced,
             |this, field| {
-                this.push(Node::ident(*field.0));
+                this.push(Node::ident(*field.name));
                 this.push(Node::Ascii(": "));
-                this.expr(&field.1)
+                this.expr(&field.expr)
             },
         );
     }
@@ -1136,7 +1215,7 @@ impl<'a, 's> State<'a, 's> {
             span,
             style,
             |this, field| {
-                let (name, ty) = field;
+                let RecordFieldType { name, ty } = &**field;
                 this.push(Node::ident(**name));
                 this.push(Node::Ascii(": "));
                 this.type_expr(ty);
@@ -1181,6 +1260,7 @@ const INDENT: &str = "    ";
 struct Renderer {
     buf: String,
     indent: usize,
+    next_indent: usize,
     column: usize,
     max: usize,
     wrapped: HashSet<usize>,
@@ -1190,9 +1270,8 @@ impl Renderer {
     fn render_node(&mut self, node: &Node, wrap: bool) {
         match node {
             Node::Group(id, nodes) => {
-                let must_wrap = nodes.iter().any(|n| n.must_wrap());
-                let width: usize =
-                    nodes.iter().map(|n| n.width(&mut self.wrapped)).sum();
+                let must_wrap = nodes.must_wrap();
+                let width = nodes.width(&mut self.wrapped);
 
                 // If the column = 0 then we still have to write the indent
                 // so we should check whether this group can fit after we write
@@ -1210,7 +1289,7 @@ impl Renderer {
                     false
                 };
 
-                for node in nodes {
+                for node in &nodes.0 {
                     self.render_node(node, wrap);
                 }
             }
@@ -1219,7 +1298,7 @@ impl Renderer {
                     self.indent += 1;
                 }
 
-                for node in nodes {
+                for node in &nodes.0 {
                     self.render_node(node, wrap);
                 }
 
@@ -1229,15 +1308,19 @@ impl Renderer {
             }
             Node::IndentNext(nodes) => {
                 if wrap {
-                    self.indent += 1;
+                    self.next_indent += 1;
                 }
 
-                for node in nodes {
+                for node in &nodes.0 {
                     self.render_node(node, wrap);
                 }
 
                 if wrap {
-                    self.indent -= 1;
+                    if self.next_indent > 0 {
+                        self.next_indent -= 1;
+                    } else {
+                        self.indent -= 1;
+                    }
                 }
             }
             Node::WrapParent => {}
@@ -1269,10 +1352,56 @@ impl Renderer {
                     self.render_node(b, wrap);
                 }
             }
+            Node::Call(idx_e, e, idx_a, a) => {
+                let must_wrap = e.must_wrap() || a.must_wrap();
+
+                let e_width = e.width(&mut self.wrapped);
+                let a_width = a.width(&mut self.wrapped);
+
+                // If the column = 0 then we still have to write the indent
+                // so we should check whether this group can fit after we write
+                // the indent.
+                let virtual_column = if self.column > 0 {
+                    self.column
+                } else {
+                    4 * self.indent
+                };
+
+                // This is the special case for trailing function calls,
+                // because we want to allow the following:
+                //
+                // ```
+                // foo.bar.baz(
+                //     "blablablabla",
+                //     "blablablabla",
+                // );
+                // ```
+                //
+                // This doesn't fit into the model where we always wrap the
+                // outer construct first. Therefore, we special case it here.
+                //
+                // Otherwise, we treat it as `[foo.bar[(baz, quux)]]` where the
+                // `[]` represents the groups.
+                if !must_wrap
+                    && virtual_column + e_width + a_width > self.max
+                    && virtual_column + e_width + 1 < self.max
+                {
+                    self.render_node(&Node::Group(*idx_e, e.clone()), false);
+                    self.render_node(&Node::Group(*idx_a, a.clone()), true);
+                } else {
+                    let mut nodes = e.0.clone();
+                    nodes.push(Node::Group(*idx_a, a.clone()));
+                    let indent_next = Node::IndentNext(Nodes(nodes));
+                    let node = Node::Group(*idx_e, Nodes(vec![indent_next]));
+                    self.render_node(&node, wrap);
+                }
+            }
         }
     }
 
     fn new_line(&mut self) {
+        self.indent += self.next_indent;
+        self.next_indent = 0;
         if self.column > 0 {
             self.buf.push('\n');
             self.column = 0;

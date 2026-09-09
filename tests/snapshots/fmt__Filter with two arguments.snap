@@ -1,0 +1,5 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+filtermap bgp_in(bgp_msg: BgpMsg, ingress_info: IngressInfo) {}

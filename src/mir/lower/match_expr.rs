@@ -278,7 +278,7 @@ impl Lowerer<'_> {
         examinee_ty: TyRef,
         variant: Option<&(Identifier, Vec<TyRef>)>,
         lbl: LabelRef,
-        branches: &[&(Option<usize>, &ast::MatchArm, usize)],
+        branches: &[&(Option<usize>, &Meta<ast::MatchArm>, usize)],
         arm_labels: &HashMap<usize, LabelRef>,
     ) {
         self.new_block(lbl);

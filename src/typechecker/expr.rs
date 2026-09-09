@@ -361,7 +361,7 @@ impl TypeChecker {
                 let field_types: Vec<_> = record
                     .fields
                     .iter()
-                    .map(|(s, _)| (s.clone(), self.fresh_var()))
+                    .map(|field| (field.name.clone(), self.fresh_var()))
                     .collect();
                 let rec = self.fresh_record(field_types.clone());
                 self.unify(&ctx.expected_type, &rec, id, None)?;
@@ -700,12 +700,12 @@ impl TypeChecker {
         let match_id = self.match_counter;
         self.match_counter += 1;
 
-        for ast::MatchArm {
-            pattern,
-            guard,
-            body,
-        } in &arms.node
-        {
+        for arm in &arms.node {
+            let ast::MatchArm {
+                pattern,
+                guard,
+                body,
+            } = &**arm;
             // Anything after default is unreachable
             if default_arm {
                 return Err(self.error_unreachable_expression(body));
@@ -1098,7 +1098,8 @@ impl TypeChecker {
         let mut invalid_fields = Vec::new();
         let mut duplicate_fields = Vec::new();
 
-        for (ident, _) in &record.fields {
+        for field in &record.fields {
+            let ident = &field.name;
             if used_fields.contains(&ident.node) {
                 duplicate_fields.push(ident);
             } else if let Some(idx) =
@@ -1124,15 +1125,15 @@ impl TypeChecker {
         }
 
         let mut diverges = false;
-        for (ident, expr) in &record.fields {
+        for field in &record.fields {
             let expected_type = field_types
                 .iter()
-                .find_map(|(s, t)| (s.node == ident.node).then_some(t))
+                .find_map(|(s, t)| (s.node == field.name.node).then_some(t))
                 .unwrap()
                 .clone();
 
             diverges |=
-                self.expr(scope, &ctx.with_type(expected_type), expr)?;
+                self.expr(scope, &ctx.with_type(expected_type), &field.expr)?;
         }
         Ok(diverges)
     }
