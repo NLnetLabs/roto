@@ -5,4 +5,3 @@ fn bar(x: i32) -> i32 {
     let c = double(b);
     c
 }
-

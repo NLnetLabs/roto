@@ -625,7 +625,7 @@ impl<'a, 's> State<'a, 's> {
 
     fn import_path(&mut self, path: &Meta<ast::ImportPath>) {
         if let Some(path) = &path.path {
-            self.path(path, false);
+            self.path(path, true, false);
         }
 
         if path.path.is_some() && path.group.is_some() {
@@ -736,6 +736,11 @@ impl<'a, 's> State<'a, 's> {
 
     fn stmt(&mut self, stmt: &Meta<ast::Stmt>) {
         match &**stmt {
+            ast::Stmt::Import(x) => {
+                self.push(Node::Ascii("import "));
+                self.import_path(x);
+                self.push(Node::Ascii(";"));
+            }
             ast::Stmt::Let(ident, ty, expr) => {
                 self.push(Node::Ascii("let "));
                 self.push(Node::ident(**ident));
@@ -893,13 +898,13 @@ impl<'a, 's> State<'a, 's> {
                 }
             }
             ast::Expr::Path(x) => {
-                self.path(x, precedence > outer);
+                self.path(x, precedence > outer, true);
             }
             ast::Expr::Record(x) => {
                 self.record(x);
             }
             ast::Expr::TypedRecord(name, record) => {
-                self.path(name, true);
+                self.path(name, true, true);
                 self.push(Node::Ascii(" "));
                 self.record(record);
             }
@@ -923,12 +928,12 @@ impl<'a, 's> State<'a, 's> {
                 self.expr_with_precedence(x, precedence);
             }
             ast::Expr::Assign(x, e) => {
-                self.path(x, true);
+                self.path(x, true, true);
                 self.push(Node::Ascii(" = "));
                 self.expr(e);
             }
             ast::Expr::CompoundAssign(x) => {
-                self.path(&x.path, true);
+                self.path(&x.path, true, true);
                 let op = match *x.op {
                     ast::CompoundAssignOp::Add => " += ",
                     ast::CompoundAssignOp::Sub => " -= ",
@@ -1198,7 +1203,7 @@ impl<'a, 's> State<'a, 's> {
                 self.push(Node::Ascii("?"));
             }
             ast::TypeExpr::Path(p, args) => {
-                self.path(p, true);
+                self.path(p, true, true);
                 if let Some(args) = args {
                     let span = self.spans.get(args);
                     self.separated(
@@ -1240,7 +1245,12 @@ impl<'a, 's> State<'a, 's> {
         );
     }
 
-    fn path(&mut self, p: &Meta<ast::Path>, group: bool) {
+    fn path(
+        &mut self,
+        p: &Meta<ast::Path>,
+        group: bool,
+        allow_line_breaks: bool,
+    ) {
         if group {
             let (_, mut grouped) = self.group();
 
@@ -1250,7 +1260,9 @@ impl<'a, 's> State<'a, 's> {
             let mut indented = grouped.indent();
 
             for ident in &p.idents[1..] {
-                indented.push(Node::Line);
+                if allow_line_breaks {
+                    indented.push(Node::Line);
+                }
                 let pos = indented.spans.get(ident).end;
                 indented.pop_whitespace(pos, false, false, false);
                 indented.push(Node::Ascii("."));
@@ -1261,7 +1273,9 @@ impl<'a, 's> State<'a, 's> {
             self.push(Node::ident(**ident));
 
             for ident in &p.idents[1..] {
-                self.push(Node::Line);
+                if allow_line_breaks {
+                    self.push(Node::Line);
+                }
                 let pos = self.spans.get(ident).end;
                 self.pop_whitespace(pos, false, false, false);
                 self.push(Node::Ascii("."));
