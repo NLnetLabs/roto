@@ -209,6 +209,9 @@ pub enum Expr {
 
     /// f-string
     FString(Vec<Meta<FStringPart>>),
+
+    /// Parentheses
+    Parentheses(Box<Meta<Expr>>),
 }
 
 #[derive(Clone, Debug)]
