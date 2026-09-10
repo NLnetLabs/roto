@@ -178,6 +178,11 @@ fn fmt_parsed(
         pos: &mut pos,
     };
 
+    if let Some(shebang) = &ast.shebang {
+        state.push(Node::str(shebang.trim_end()));
+        state.push(Node::EmptyLine);
+    }
+
     let mut first = true;
     for dec in &ast.declarations {
         state.declaration(dec, first);

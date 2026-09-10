@@ -12,6 +12,7 @@ use crate::parser::meta::{Meta, MetaId};
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
+    pub shebang: Option<String>,
     pub declarations: Vec<Declaration>,
 }
 
