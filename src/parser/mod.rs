@@ -230,13 +230,16 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     fn tree(&mut self) -> ParseResult<SyntaxTree> {
         let mut declarations = Vec::new();
 
-        self.lexer.skip_shebang();
+        let shebang = self.lexer.get_shebang();
 
         while self.peek().is_some() {
             declarations.push(self.root()?);
         }
 
-        Ok(SyntaxTree { declarations })
+        Ok(SyntaxTree {
+            shebang,
+            declarations,
+        })
     }
 
     /// Parse a root expression

@@ -124,13 +124,16 @@ impl<'s> Lexer<'s> {
         ControlFlow::Continue(())
     }
 
-    pub fn skip_shebang(&mut self) {
+    pub fn get_shebang(&mut self) -> Option<String> {
         let mut tail = self.input;
         if tail.eat_str("#!")
             && tail.starts_with(|c: char| !c.is_whitespace())
         {
             tail.eat_until('\n');
-            self.bump_to(tail);
+            let (s, _) = self.bump_to(tail);
+            Some(s.into())
+        } else {
+            None
         }
     }
 
