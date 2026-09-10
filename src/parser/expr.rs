@@ -42,25 +42,20 @@ impl Parser<'_, '_> {
     pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 
-        let mut imports = Vec::new();
         let mut stmts = Vec::new();
 
         loop {
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
-                return Ok(self.spans.add(
-                    start.merge(end),
-                    Block {
-                        imports,
-                        stmts,
-                        last: None,
-                    },
-                ));
+                return Ok(self
+                    .spans
+                    .add(start.merge(end), Block { stmts, last: None }));
             }
 
             if self.peek_is(Token::Keyword(Keyword::Import)) {
                 let paths = self.import()?;
-                imports.push(paths);
+                let span = self.get_span(&paths);
+                stmts.push(self.spans.add(span, Stmt::Import(paths)));
             } else if self.peek_is(Token::Keyword(Keyword::Let)) {
                 let start = self.take(Token::Keyword(Keyword::Let))?;
                 let identifier = self.identifier()?;
@@ -92,7 +87,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -115,7 +109,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -137,7 +130,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -159,7 +151,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -187,7 +178,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -638,7 +628,6 @@ impl Parser<'_, '_> {
                 Meta {
                     id: expr.id,
                     node: Block {
-                        imports: Vec::new(),
                         stmts: Vec::new(),
                         last: Some(Box::new(expr)),
                     },

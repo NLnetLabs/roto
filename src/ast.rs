@@ -108,7 +108,6 @@ pub struct Test {
 /// A block of multiple statements
 #[derive(Clone, Debug)]
 pub struct Block {
-    pub imports: Vec<Meta<ImportPath>>,
     pub stmts: Vec<Meta<Stmt>>,
     pub last: Option<Box<Meta<Expr>>>,
 }
@@ -117,6 +116,7 @@ pub struct Block {
 #[derive(Clone, Debug)]
 pub enum Stmt {
     Let(Meta<Identifier>, Option<Meta<TypeExpr>>, Meta<Expr>),
+    Import(Meta<ImportPath>),
     Expr(Meta<Expr>),
 }
 

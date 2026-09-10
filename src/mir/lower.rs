@@ -429,6 +429,9 @@ impl<'r> Lowerer<'r> {
 
     fn stmt(&mut self, stmt: &Meta<ast::Stmt>) {
         match &**stmt {
+            ast::Stmt::Import(_) => {
+                // do nothing: already processed
+            }
             ast::Stmt::Let(ident, _, expr) => {
                 let val = self.expr(expr);
                 let name = self.type_info.resolved_name(ident);

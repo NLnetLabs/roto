@@ -1,0 +1,19 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    import foo.bar;
+
+    import foo.{bar, baz};
+
+    import foofoofoofoofoo.barbarbarbarbar.bazbazbazbazbaz.quxquxquxquxqux.blablablablabla;
+
+    import foofoofoofoofoo.{
+        barbarbarbarbar,
+        bazbazbazbazbaz,
+        quxquxquxquxqux,
+        blablablablabla,
+    };
+    bar(1);
+}

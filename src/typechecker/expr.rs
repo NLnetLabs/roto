@@ -104,8 +104,10 @@ impl TypeChecker {
         let mut diverged = false;
 
         let mut flat_paths = Vec::new();
-        for path in &block.imports {
-            Self::flatten_import_paths(&mut flat_paths, path);
+        for stmt in &block.stmts {
+            if let ast::Stmt::Import(path) = &**stmt {
+                Self::flatten_import_paths(&mut flat_paths, path);
+            }
         }
         self.imports(scope, flat_paths)?;
 
@@ -146,6 +148,10 @@ impl TypeChecker {
         stmt: &Meta<ast::Stmt>,
     ) -> TypeResult<bool> {
         match &stmt.node {
+            ast::Stmt::Import(_) => {
+                // do nothing: already resolved
+                Ok(false)
+            }
             ast::Stmt::Let(ident, ty, expr) => {
                 let ty = if let Some(ty) = ty {
                     self.evaluate_type_expr(scope, ty)?

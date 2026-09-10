@@ -32,7 +32,6 @@ fn examples_idempotent() {
         let formatted = fmt_str(&path.to_string_lossy(), &s, 0).unwrap();
         assert_eq!(s, formatted, "path: {}", path.display());
     });
-    panic!();
 }
 
 fn run_on_all_roto_files(path: &Path, f: &impl Fn(&Path)) {
