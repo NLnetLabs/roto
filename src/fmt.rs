@@ -789,6 +789,7 @@ impl<'a, 's> State<'a, 's> {
             ast::Expr::For(_, _, _) => Precedence::Unit,
             ast::Expr::QuestionMark(_) => Precedence::Chain,
             ast::Expr::FString(_) => Precedence::Unit,
+            ast::Expr::Parentheses(_) => Precedence::Unit,
         }
     }
 
@@ -1004,6 +1005,13 @@ impl<'a, 's> State<'a, 's> {
                     }
                 }
                 self.push(Node::Ascii("\""));
+            }
+            ast::Expr::Parentheses(inner) => {
+                let span = self.spans.get(expr);
+                self.pop_whitespace(span.start, true, true, false);
+                self.push(Node::Ascii("("));
+                self.expr(inner);
+                self.push(Node::Ascii(")"));
             }
         }
         self.pop_trailing_comment();

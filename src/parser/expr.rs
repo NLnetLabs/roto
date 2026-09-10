@@ -483,8 +483,12 @@ impl Parser<'_, '_> {
             }
 
             let expr = self.expr()?;
-            self.take(Token::RoundRight)?;
-            return Ok(expr);
+            let span_right = self.take(Token::RoundRight)?;
+
+            let paren_expr = Expr::Parentheses(Box::new(expr));
+            return Ok(self
+                .spans
+                .add(span_left.merge(span_right), paren_expr));
         }
 
         if self.peek_is(Token::SquareLeft) {

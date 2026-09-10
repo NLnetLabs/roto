@@ -220,6 +220,7 @@ impl TypeChecker {
 
                 Ok(true)
             }
+            Parentheses(inner) => self.expr(scope, ctx, inner),
             Literal(l) => self.literal(ctx, l),
             Block(b) => {
                 let idx = self.block_counter;

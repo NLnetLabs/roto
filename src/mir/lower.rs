@@ -459,6 +459,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Return(return_kind, expr) => {
                 self.r#return(return_kind, expr)
             }
+            ast::Expr::Parentheses(inner) => self.expr(inner),
             ast::Expr::Literal(literal) => self.literal(literal),
             ast::Expr::Block(block) => self.block_expr(block),
             ast::Expr::Match(r#match) => self.r#match(id, r#match),
