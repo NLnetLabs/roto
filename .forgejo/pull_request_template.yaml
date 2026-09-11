@@ -24,5 +24,6 @@ body:
           required: true
           visible: [form]
   - type: textarea
-    label: description
-    description: Please describe your change.
+    attributes:
+      label: description
+      description: Please describe your change.
