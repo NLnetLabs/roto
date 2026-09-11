@@ -1,29 +1,24 @@
 name: Pull Request
 about: Submit a Pull Request
 body:
-  - type: markdown
-    attributes:
-      value: |
-          Thank you for contributing to Roto! If this PR closes an issue,
-          please mention it like so: `Closes #XXXX`.
-    visible: [form]
   - type: checkboxes
     id: terms
+    visible: [form]
     attributes:
-      label: Code of Conduct
+      label: Code of Conduct & LLM Policy
       description: |
-        To submit a PR you must agree to the following terms.
+        Thank you for contributing to Roto! To submit a PR you must agree to the following terms.
       options:
         - label: I agree to follow the [NLnet Labs Code of Conduct](https://www.nlnetlabs.nl/conduct/).
           required: true
-          visible: [form]
         - label: This PR follows the [NLnet Labs LLM Policy].
           required: true
-          visible: [form]
         - label: I have read Roto's [CONTRIBUTING.MD](https://codeberg.org/NLnetLabs/roto/src/branch/main/CONTRIBUTING.md).
           required: true
-          visible: [form]
   - type: textarea
     attributes:
-      label: description
+      label: Description
       description: Please describe your change.
+      value: |
+
+        Closes #XXX
