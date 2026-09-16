@@ -251,6 +251,23 @@ pub mod boundary {
             Some(T::untransform(transformed.clone()))
         }
 
+        /// Replace the element at index `idx` with `elem`.
+        ///
+        /// Returns `false` if `idx` is out of bounds, in which case the list
+        /// is not modified and `elem` is dropped.
+        pub fn set(&self, idx: usize, elem: T) -> bool {
+            let elem = T::transform(elem);
+
+            // Don't drop the element because we move it into the list
+            let mut elem = ManuallyDrop::new(elem);
+
+            let elem_ptr = NonNull::from_mut(&mut elem).cast::<()>();
+
+            // SAFETY: We have a valid value behind the pointer and forget
+            // the value to ensure that we give ownership.
+            unsafe { self.inner.set(idx, elem_ptr) }
+        }
+
         /// Check whether this list contains a certain value.
         pub fn contains(&self, item: &T) -> bool {
             let item_ptr = NonNull::from_ref(item).cast::<()>();
@@ -531,6 +548,21 @@ impl ErasedList {
 
     pub fn get(&self, idx: usize) -> Option<NonNull<T>> {
         self.0.lock().unwrap().get(idx)
+    }
+
+    /// Replace the element at index `idx` with the value behind `elem_ptr`.
+    ///
+    /// Returns `false` if `idx` is out of bounds, in which case the list is
+    /// not modified and the value is dropped.
+    ///
+    /// # Safety
+    ///
+    ///  - `elem_ptr` must be a pointer to the element type `T` that the list
+    ///    contains and must be valid for writes.
+    ///  - `elem_ptr` must not point into the list's allocation.
+    pub unsafe fn set(&self, idx: usize, elem_ptr: NonNull<T>) -> bool {
+        // SAFETY: We pass on the requirements of this function.
+        unsafe { self.0.lock().unwrap().set(idx, elem_ptr) }
     }
 
     /// Check whether a list contains a value.
@@ -964,6 +996,49 @@ impl RawList {
         Some(ptr)
     }
 
+    /// Replace the element at index `idx` with the value behind `elem_ptr`.
+    ///
+    /// Returns `false` if `idx` is out of bounds, in which case the list is
+    /// not modified and the value is dropped.
+    ///
+    /// # Safety
+    ///
+    ///  - `elem_ptr` must point to a valid value of the element type `T` and
+    ///    must be valid for writes.
+    ///  - This function takes ownership of the element, even if `idx` is out
+    ///    of bounds.
+    unsafe fn set(&mut self, idx: usize, elem_ptr: NonNull<T>) -> bool {
+        let Some(dst) = self.get(idx) else {
+            if let Some(drop_fn) = self.vtable.drop_fn {
+                // SAFETY: We own the value behind `elem_ptr` and require it to
+                // be a valid value of the element type.
+                unsafe { drop_fn(elem_ptr.as_ptr()) };
+            }
+            return false;
+        };
+
+        // SAFETY:
+        //  - `dst` is valid for reads and writes of `size` bytes since we got
+        //    it from `get`
+        //  - `elem_ptr` is valid for reads and writes of `size` bytes
+        //  - `elem_ptr` does not point into the list
+        unsafe {
+            std::ptr::swap_nonoverlapping(
+                elem_ptr.cast::<u8>().as_ptr(),
+                dst.cast::<u8>().as_ptr(),
+                self.vtable.size(),
+            )
+        };
+
+        if let Some(drop_fn) = self.vtable.drop_fn {
+            // SAFETY: `elem_ptr` now holds the old element, which is no longer
+            // part of the list
+            unsafe { drop_fn(elem_ptr.as_ptr()) };
+        }
+
+        true
+    }
+
     /// Check whether the list contains a value.
     ///
     /// # Safety
@@ -1220,6 +1295,27 @@ mod tests {
         assert_eq!(Some(20), l.get(1));
         assert_eq!(Some(30), l.get(2));
         assert_eq!(None, l.get(3));
+    }
+
+    #[test]
+    fn set() {
+        let l = List::<u64>::from([10, 20, 30]);
+
+        assert!(l.set(1, 99));
+        assert!(!l.set(3, 40));
+
+        assert_eq!(l.to_vec(), vec![10, 99, 30]);
+    }
+
+    #[test]
+    fn set_strings() {
+        let l = List::<RotoString>::from(["hello".into(), "world".into()]);
+
+        assert!(l.set(0, "goodbye".into()));
+        assert!(!l.set(2, "bad".into()));
+        assert!(!l.set(usize::MAX, "badder".into()));
+
+        assert_eq!(l.to_vec(), vec!["goodbye".into(), "world".into()]);
     }
 
     #[test]
