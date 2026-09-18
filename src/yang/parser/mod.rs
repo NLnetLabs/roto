@@ -5,20 +5,22 @@
 //! There is currently no way that the parser can recover from invalid syntax.
 //! Therefore, we can only report one parse error.
 
-use crate::ast::Identifier;
+use crate::ast::{
+    Identifier, Literal, Stmt, SyntaxTree, YangModuleDeclaration,
+};
+use crate::parser::Declaration;
 use crate::parser::{ParseError, ParseErrorKind};
 use crate::yang::parser::expr::Cardinality;
 pub use crate::yang::parser::token::Keyword;
 use crate::yang::parser::token::{Lexer, Token};
+use crate::yang::types::{YangArgType, YangNodeType};
 use crate::{
     parser::ParseResult,
-    yang::parser::ast::{
-        Argument, Declaration, Literal, SyntaxTree, Test, YangStmtSeq,
-    },
+    yang::parser::ast::{Argument, Test, YangStmtSeq},
 };
-use std::{fmt::Display, iter::Peekable};
+use std::iter::Peekable;
 
-use crate::parser::meta::{Meta, Span, Spans};
+use crate::parser::meta::{Meta, MetaId, Span, Spans};
 
 pub mod ast;
 mod expr;
@@ -195,7 +197,7 @@ pub struct YangParser<'source, 'spans> {
     spans: &'spans mut Spans,
 }
 
-type Type = ParseResult<(ParsedStmt, Span)>;
+type Type = ParseResult<(YangStmt, Span)>;
 
 /// # Helper methods
 impl<'source> YangParser<'source, '_> {
@@ -283,7 +285,7 @@ impl<'source> YangParser<'source, '_> {
                             .split(':')
                             .map(|s| self.add_span(span, Identifier::from(s)))
                             .collect::<Vec<_>>();
-                        let stmt = ParsedStmt::ExtStmt((
+                        let stmt = YangStmt::ExtStmt((
                             Some(split[0].clone()),
                             Some(split[1].clone()),
                         ));
@@ -302,7 +304,7 @@ impl<'source> YangParser<'source, '_> {
                     // No parent keyword, we're at the root of something: all
                     // keywords allowed.
                     None => {
-                        Ok((ParsedStmt::Stmt(self.add_span(span, kw)), span))
+                        Ok((YangStmt::Stmt(self.add_span(span, kw)), span))
                     }
                     Some(parent_kw) => match parent_kw
                         .allowed_sub_stmts()
@@ -311,7 +313,7 @@ impl<'source> YangParser<'source, '_> {
                     {
                         // Yes, it is completely correct
                         Some((checked_kw, _cardi)) => Ok((
-                            ParsedStmt::Stmt(self.add_span(span, checked_kw)),
+                            YangStmt::Stmt(self.add_span(span, checked_kw)),
                             span,
                         )),
                         // It is a builtin keyword but not allowed for this
@@ -324,12 +326,75 @@ impl<'source> YangParser<'source, '_> {
                     },
                 }
             }
+            Token::Keyword(Keyword::Module) => {
+                if let Some(parent) = parent_kw {
+                    return Err(Box::new(ParseError::invalid_location(
+                        "Module can only appear at top level. Maybe you \
+                         meant to use 'submodule'?",
+                        parent.as_str(),
+                        span,
+                    )));
+                }
+                match self.next() {
+                    Ok((Token::Ident(ident), span)) => Ok((
+                        YangStmt::Module(
+                            self.add_span(span, Identifier::from(ident)),
+                            false,
+                        ),
+                        span,
+                    )),
+                    Ok((t, span)) => Err(Box::new(ParseError::expected(
+                        "a module or submodule",
+                        t,
+                        span,
+                    ))),
+                    Err(e) => Err(e),
+                }
+            }
+            Token::Keyword(Keyword::SubModule) => {
+                if let Some(parent) = parent_kw {
+                    return Err(Box::new(ParseError::invalid_location(
+                        "Submodule can only appear at top level. It's parent \
+                         can be defined with the `belongs-to` statement.",
+                        parent.as_str(),
+                        span,
+                    )));
+                }
+                let module_name = self.next()?;
+                // let (belongs_to_name, btn_span) = self.next()?;
+                // let Token::Ident(btn) = belongs_to_name else {
+                //     return Err(Box::new(ParseError::expected(
+                //         "belongs-to",
+                //         belongs_to_name,
+                //         span,
+                //     )));
+                // };
+                match module_name {
+                    (Token::Ident(ident), span) => {
+                        Ok((
+                            YangStmt::Module(
+                                self.add_span(span, Identifier::from(ident)),
+                                true, // Some(self.add_span(
+                                      //     btn_span,
+                                      //     Identifier::from(btn),
+                                      // )),
+                            ),
+                            span,
+                        ))
+                    }
+                    (t, span) => Err(Box::new(ParseError::expected(
+                        "a module or submodule",
+                        t,
+                        span,
+                    ))),
+                }
+            }
             Token::Keyword(kw) => {
                 match parent_kw {
                     // No parent keyword, we're at the root of something: all
                     // keywords allowed.
                     None => {
-                        Ok((ParsedStmt::Stmt(self.add_span(span, kw)), span))
+                        Ok((YangStmt::Stmt(self.add_span(span, kw)), span))
                     }
                     Some(parent_kw) => match parent_kw
                         .allowed_sub_stmts()
@@ -338,7 +403,7 @@ impl<'source> YangParser<'source, '_> {
                     {
                         // Yes, it is completely correct
                         Some((checked_kw, _cardi)) => Ok((
-                            ParsedStmt::Stmt(self.add_span(span, checked_kw)),
+                            YangStmt::Stmt(self.add_span(span, checked_kw)),
                             span,
                         )),
                         // It is a builtin keyword but not allowed for this
@@ -386,7 +451,7 @@ impl<'source> YangParser<'source, '_> {
                     .map(|s| self.add_span(span, Identifier::from(s)))
                     .collect::<Vec<_>>();
                 Ok((
-                    ParsedStmt::ExtStmt((
+                    YangStmt::ExtStmt((
                         Some(split[0].clone()),
                         Some(split[1].clone()),
                     )),
@@ -511,17 +576,33 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
             hints: Vec::new(),
         };
         let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Keyword(_) => {
-                Declaration::Statement(self.yang_stmt_seq(None)?.0)
+            Token::Keyword(Keyword::Module)
+            | Token::Keyword(Keyword::SubModule) => {
+                let (module, span) = self.yang_stmt_seq(None)?;
+                let module = module.is_module().ok_or_else(|| {
+                    ParseError::expected(
+                        "a yang (xub)module",
+                        module.node.stmt.clone(),
+                        span,
+                    )
+                })?;
+
+                Declaration::YangModule(
+                    // Stmt::YangStmtSeq(self.yang_stmt_seq(None)?.0.node),
+                    YangModuleDeclaration {
+                        ident: module.0.clone(),
+                        body: module.1.clone(),
+                    },
+                )
             }
-            Token::Test => Declaration::Test(self.test()?),
-            Token::Slash | Token::DoubleSlash => {
-                Declaration::XPath(self.xpath()?)
-            }
+            // Token::Test => Declaration::Test(self.test()?),
+            // Token::Slash | Token::DoubleSlash => {
+            //     Declaration::XPath(self.xpath()?)
+            // }
             _t => {
                 let (token, span) = self.next()?;
                 return Err(Box::new(ParseError::expected(
-                    "a yang statement",
+                    "a yang (zub)module",
                     token,
                     span,
                 )));
@@ -533,7 +614,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
     fn yang_stmt_seq(
         &mut self,
         parent_kw: Option<Meta<Keyword>>,
-    ) -> ParseResult<(YangStmtSeq, Span)> {
+    ) -> ParseResult<(Meta<YangStmtSeq>, Span)> {
         // A YANG module contains a sequence of statements. Each statement
         // starts with a keyword, followed by zero or one argument, followed
         // by either a semicolon (";") or a block of substatements enclosed
@@ -547,21 +628,36 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
         // was imported.  If an extension is used in the module where it is
         // defined, the extension's keyword MUST be qualified with the prefix
         // of this module.
-        let (stmt, span) = self.next_is_keyword(parent_kw)?;
+        let (stmt, start_span) = self.next_is_keyword(parent_kw)?;
 
         // next up, the argument, it may not be there, but it cannot be last
         // token, so we still could error out here.
         let arg = self.argument()?;
 
         if self.peek_is(Token::CurlyLeft) {
+            // we have a block
             let block = self.block(stmt.node())?;
 
-            // we got all the statements in the block, but are all the
-            // mandatory one's there ('ExactlyOne')
+            if let Some(st) = stmt.node() {
+                // we got an argument, but does our keyword even take one?
+                if let Some((arg, span)) = &arg
+                    && st.arg_type() == YangArgType::None
+                {
+                    return Err(Box::new(ParseError::custom(
+                        format!(
+                            "statement `{stmt}` does not take an argument, \
+                             but we got `{}`",
+                            arg
+                        ),
+                        "this statement",
+                        *span,
+                    )));
+                }
 
-            if let Some(stmt) = stmt.node() {
+                // we got all the statements in the block, but are all the
+                // mandatory one's there ('ExactlyOne')
                 let mut missing_stmts = vec![];
-                stmt.node
+                st.node
                     .allowed_sub_stmts()
                     .iter()
                     .filter_map(|mand_s| {
@@ -573,16 +669,18 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                     })
                     .for_each(|mand_s| {
                         if !block.stmts.iter().any(|decl_s| {
-                            decl_s
-                                .node
-                                .stmt
-                                .node()
-                                .map(|s| s.node == mand_s)
-                                .unwrap_or_else(|| {
-                                    // this is an extended statement, which is
-                                    // never mandatory
-                                    true
-                                })
+                            if let Stmt::YangStmtSeq(node) = &decl_s.node {
+                                node.stmt
+                                    .node()
+                                    .map(|s| s.node == mand_s)
+                                    .unwrap_or_else(|| {
+                                        // this is an extended statement,
+                                        // which is never mandatory
+                                        true
+                                    })
+                            } else {
+                                false
+                            }
                         }) {
                             missing_stmts.push(mand_s.as_str());
                         }
@@ -591,25 +689,49 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                 if !missing_stmts.is_empty() {
                     return Err(Box::new(ParseError::custom(
                         format!(
-                            "missing sub-statement(s): {:?} for statement `{}`",
+                            "missing sub-statement(s): {:?} for statement \
+                            `{}`",
                             missing_stmts,
-                            stmt.node.as_str()
+                            st.node.as_str()
                         ),
-                        "this statement",
-                        span,
+                        "this argument",
+                        start_span,
                     )));
                 }
             };
 
             return Ok((
-                YangStmtSeq {
-                    stmt,
-                    arg,
-                    sub_stmts: Some(block),
-                },
-                span,
+                self.add_span(
+                    start_span,
+                    YangStmtSeq {
+                        stmt,
+                        arg: arg.map(|a| a.0),
+                        sub_stmts: Meta {
+                            id: block.id,
+                            node: crate::ast::Expr::Block(block),
+                        },
+                    },
+                ),
+                start_span,
             ));
         }
+
+        // no block in this sequence, there must be either an argument,
+        // or it is an attribute that is implicitly a bool set to true
+        // (this comes from Cisco-style router configurations, e.g.
+        // 'nacm:default-deny-all').
+        let arg = if let Some((arg, _span)) = arg {
+            // Meta {
+            //     id: arg.id,
+            //     node: Literal::String(arg.node.to_string()),
+            // }
+            arg
+        } else {
+            Meta {
+                id: MetaId(start_span.start),
+                node: Argument::Ident(Identifier::from("true")),
+            }
+        };
 
         let (next, span) = self.next()?;
         if let Token::SemiColon = next {
@@ -622,21 +744,27 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
         };
 
         Ok((
-            YangStmtSeq {
-                stmt,
-                arg,
-                sub_stmts: None,
-            },
+            self.add_span(
+                span,
+                YangStmtSeq {
+                    stmt,
+                    arg: None,
+                    sub_stmts: Meta {
+                        id: arg.id,
+                        node: crate::ast::Expr::Argument(arg),
+                    },
+                },
+            ),
             span,
         ))
     }
 
     fn test(&mut self) -> ParseResult<Test> {
         self.take(Token::Test)?;
-        let ident = self.yang_stmt_seq(None)?;
-        let body = self.block(ident.0.stmt.node())?;
+        let ident = self.yang_stmt_seq(None)?.0;
+        let body = self.block(ident.node.stmt.node())?;
         Ok(Test {
-            ident: ident.0.stmt.node().unwrap(),
+            ident: ident.stmt.node().unwrap(),
             body,
         })
     }
@@ -693,7 +821,7 @@ impl YangParser<'_, '_> {
     /// it can be a QuotedString (easy), an unquoted string, or an Identifier.
     /// An identifier is always a valid unquoted string (the reverse is not
     /// true).
-    fn argument(&mut self) -> ParseResult<Option<Meta<Argument>>> {
+    fn argument(&mut self) -> ParseResult<Option<(Meta<Argument>, Span)>> {
         if self.peek_is(Token::CurlyLeft) || self.peek_is(Token::SemiColon) {
             return Ok(None);
         }
@@ -707,38 +835,78 @@ impl YangParser<'_, '_> {
             // double quoted string, this actually matters, since yang only
             // has special characters in double quoted strings.
             Token::QuotedString(s) if s.starts_with('"') => {
-                if s.ends_with('"') {
-                    let res_string = special_chars(&s[1..s.len() - 1]);
-                    self.concatenate_plussed_strings(res_string.as_str())?
+                // could still be an identifier
+                let noq = s.strip_circumfix('"', '"').unwrap();
+                if noq
+                    .find(|c: char| {
+                        !(c.is_alphanumeric()
+                            || c == '_'
+                            || c == '-'
+                            || c == '.')
+                    })
+                    .is_none()
+                    && noq.starts_with(|c: char| {
+                        c.is_ascii_uppercase()
+                            || c.is_ascii_lowercase()
+                            || c == '_'
+                    })
+                {
+                    Argument::Ident(Identifier::from(noq))
                 } else {
-                    let (_, span) = self.next()?;
-                    return Err(Box::new(ParseError::expected(
-                        "a quoted string as argument",
-                        s,
-                        span,
-                    )));
+                    if s.ends_with('"') {
+                        let res_string = special_chars(&s[1..s.len() - 1]);
+                        self.concatenate_plussed_strings(res_string.as_str())?
+                    } else {
+                        let (_, span) = self.next()?;
+                        return Err(Box::new(ParseError::expected(
+                            "a quoted string as argument",
+                            s,
+                            span,
+                        )));
+                    }
                 }
             }
             Token::QuotedString(s) if s.starts_with("'") => {
-                if s.ends_with("'") {
-                    self.concatenate_plussed_strings(s)?
+                // could still be an identifier
+                let noq = s.strip_circumfix("'", "'").unwrap();
+                if noq
+                    .find(|c: char| {
+                        !(c.is_alphanumeric()
+                            || c == '_'
+                            || c == '-'
+                            || c == '.')
+                    })
+                    .is_none()
+                    && noq.starts_with(|c: char| {
+                        c.is_ascii_uppercase()
+                            || c.is_ascii_lowercase()
+                            || c == '_'
+                    })
+                {
+                    Argument::Ident(Identifier::from(noq))
                 } else {
-                    let (_, span) = self.next()?;
-                    return Err(Box::new(ParseError::expected(
-                        "a quoted string as argument",
-                        s,
-                        span,
-                    )));
+                    if s.ends_with("'") {
+                        self.concatenate_plussed_strings(s)?
+                    } else {
+                        let (_, span) = self.next()?;
+                        return Err(Box::new(ParseError::expected(
+                            "a quoted string as argument",
+                            s,
+                            span,
+                        )));
+                    }
                 }
             }
             Token::UnquotedString(s) => {
                 let l = Literal::String(s.to_string());
                 Argument::UnquotedString(l)
             }
+            // It ain't great, but keywords in yang are not actual keywords
+            //  apparently: they can appear as identifiers, so here goes.
             s => Argument::Ident(Identifier::from(s.to_string())),
         };
 
-        Ok(Some(self.add_span(span, arg)))
+        Ok(Some((self.add_span(span, arg), span)))
     }
 }
 
@@ -757,16 +925,55 @@ impl YangParser<'_, '_> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ParsedStmt {
+pub enum YangStmt {
+    // module name, is a submodule
+    Module(Meta<Identifier>, bool),
     Stmt(Meta<Keyword>),
     ExtStmt((Option<Meta<Identifier>>, Option<Meta<Identifier>>)),
 }
 
-impl ParsedStmt {
-    fn node(&self) -> Option<Meta<Keyword>> {
+impl YangStmt {
+    pub fn node(&self) -> Option<Meta<Keyword>> {
         match self {
-            ParsedStmt::Stmt(meta) => Some(meta.clone()),
-            ParsedStmt::ExtStmt(_) => None,
+            YangStmt::Stmt(meta) => Some(meta.clone()),
+            YangStmt::ExtStmt(_) => None,
+            YangStmt::Module(meta, belongs_to) => match belongs_to {
+                false => Some(Meta {
+                    id: meta.id,
+                    node: Keyword::Module,
+                }),
+                true => Some(Meta {
+                    id: meta.id,
+                    node: Keyword::SubModule,
+                }),
+            },
+        }
+    }
+
+    pub fn is_keyword(&self, kw: Keyword) -> bool {
+        match self {
+            YangStmt::Module(_meta, _) => false,
+            YangStmt::Stmt(meta) => meta.node == kw,
+            YangStmt::ExtStmt((_p, _meta)) => false,
+        }
+    }
+}
+
+impl std::fmt::Display for YangStmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            YangStmt::Module(meta, btn) => match btn {
+                false => write!(f, "{}", meta.as_str()),
+                true => write!(f, "{} (submodule)", meta.as_str()),
+            },
+            YangStmt::Stmt(meta) => write!(f, "{}", meta.as_str()),
+            YangStmt::ExtStmt(meta) => {
+                let p =
+                    meta.0.clone().map(|p| p.as_str()).unwrap_or("<unknown>");
+                let i =
+                    meta.1.clone().map(|i| i.as_str()).unwrap_or("<unknown>");
+                write!(f, "{}:{}", p, i)
+            }
         }
     }
 }

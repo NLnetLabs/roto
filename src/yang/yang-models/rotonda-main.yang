@@ -7,6 +7,14 @@ module rotonda-conf {
     prefix yangmnt;
   }
 
+  typedef "ip-address-origin" {
+    type uint32;
+  }
+
+  typedef 'ip-address-origin' {
+    type uint8;
+  }
+
   container "rotonda-root" {
     leaf rotonda-id {
       type uint8;

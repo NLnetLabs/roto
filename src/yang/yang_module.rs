@@ -4,14 +4,15 @@ use std::collections::BTreeMap;
 
 use ariadne::IndexType;
 
-use crate::yang::parser::ast::{Argument, Declaration, SyntaxTree};
+use crate::ast::{Declaration, Stmt, SyntaxTree, YangModuleDeclaration};
+use crate::yang::parser::ast::Argument;
 use crate::yang::yang_file_tree::YangFileTree;
-use crate::RotoError;
+use crate::{FileTree, RotoError};
 use crate::{
+    RotoReport,
     ast::Identifier,
     parser::meta::{Meta, Span, Spans},
     yang::YangParser,
-    RotoReport,
 };
 
 pub struct Parsed {
@@ -35,18 +36,18 @@ pub struct Module {
     pub parent: Option<ModuleRef>,
 }
 
-impl YangFileTree {
-    /// Parse the files in the [`FileTree`] returning the AST.
-    pub fn parse(self) -> Result<Parsed, RotoReport> {
-        Parsed::from_files(self)
-    }
+// impl FileTree {
+/// Parse the files in the [`FileTree`] returning the AST.
+// pub fn parse(self) -> Result<Parsed, RotoReport> {
+//     Parsed::from_files(self)
+// }
 
-    /// Parse the files in the [`FileTree`] with modules defined in them.
-    /// Returns the AST.
-    pub fn parse_with_modules(self) -> Result<Parsed, RotoReport> {
-        Parsed::from_declared_modules(self)
-    }
-}
+/// Parse the files in the [`FileTree`] with modules defined in them.
+/// Returns the AST.
+//     pub fn parse_with_modules(self) -> Result<Parsed, RotoReport> {
+//         Parsed::from_declared_modules(self)
+//     }
+// }
 
 impl Parsed {
     fn from_declared_modules(
@@ -65,23 +66,25 @@ impl Parsed {
                 }
             };
 
-            for (mi, module) in ast.modules().enumerate() {
-                let ident = Identifier::from(module.node.as_str());
-                let ident = spans.add(
-                    Span {
-                        file: i,
-                        start: module.id.0,
-                        end: module.id.0 + 1,
-                    },
-                    ident,
-                );
+            for (mi, YangModuleDeclaration { ident, body }) in
+                ast.yang_modules().enumerate()
+            {
+                // let ident = module.node;
+                // let ident = spans.add(
+                //     Span {
+                //         file: i,
+                //         start: module.0.id.0,
+                //         end: module.0.id.0 + 1,
+                //     },
+                //     ident,
+                // );
 
                 let module_ast = SyntaxTree {
                     declarations: [ast.declarations[mi].clone()].to_vec(),
                 };
 
                 modules.push(Module {
-                    ident,
+                    ident: ident.clone(),
                     children: BTreeMap::new(),
                     parent: None,
                     ast: module_ast,
@@ -142,29 +145,20 @@ impl Parsed {
                 }
             };
 
-            ident = if let Declaration::Statement(first_stmt) =
-                &ast.declarations[0]
+            if let Declaration::YangModule(YangModuleDeclaration {
+                ident,
+                ..
+            }) = &ast.declarations[0]
             {
-                match &first_stmt.arg {
-                    Some(m) => {
-                        if let Argument::Ident(ident) = m.node {
-                            spans.add(
-                                Span {
-                                    file: i,
-                                    start: 0,
-                                    end: 1,
-                                },
-                                ident,
-                            )
-                        } else {
-                            ident
-                        }
-                    }
-                    _ => ident,
-                }
-            } else {
-                ident
-            };
+                spans.add(
+                    Span {
+                        file: i,
+                        start: 0,
+                        end: 1,
+                    },
+                    ident,
+                );
+            }
 
             file_to_mod.insert(i, modules.len());
 

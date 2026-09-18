@@ -2,16 +2,23 @@ use std::{collections::HashMap, net::IpAddr};
 
 use inetnum::asn::Asn;
 
-use crate::{ast::Identifier, parser::{ParseError, ParseErrorKind, meta::{Meta, Span}}, yang::parser::{
-    Keyword, ParseResult, YangParser, ast::{
-        AxisName, BinOp, Block, Expr, Literal, Match, MatchArm,
-        Path, Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
-        WildCardIdentifier, XPath, XPathNodeTest, XPathPredicate, XPathStep,
-    }, token::Token
-}};
+use crate::{
+    ast::{BinOp, Block, Expr, Identifier, Literal, Record},
+    parser::{
+        ParseError, ParseErrorKind,
+        meta::{Meta, Span},
+    },
+    yang::parser::{
+        Keyword, ParseResult, YangParser,
+        ast::{
+            AxisName, Path, RecordType, TypeExpr, XPath, XPathPredicate,
+            XPathStep,
+        },
+        token::Token,
+    },
+};
 // use crate::yang::parser::meta::Meta;
 // use crate::yang::parser::meta::Span;
-
 
 // use super::{
 //     meta::{Meta, Span},
@@ -25,14 +32,6 @@ use crate::{ast::Identifier, parser::{ParseError, ParseErrorKind, meta::{Meta, S
 #[derive(Clone, Copy)]
 struct Restrictions {
     forbid_records: bool,
-}
-
-#[derive(Copy, Clone)]
-pub enum ArgConstraints {
-    AllIdent,
-    KeywordOnly,
-    NoKeyword,
-    YangType,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -96,12 +95,21 @@ impl YangParser<'_, '_> {
             // Is this the end?
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
-                return Ok(self.spans.add(start.merge(end), Block { stmts }));
+                return Ok(self.spans.add(
+                    start.merge(end),
+                    Block {
+                        stmts,
+                        imports: vec![],
+                        last: None,
+                    },
+                ));
             }
 
             let (stmt_seq, span) = self.yang_stmt_seq(parent_kw.clone())?;
 
-            if let Some(node) = stmt_seq.stmt.node() && let Some(parent_kw) = parent_kw.clone() {
+            if let Some(node) = stmt_seq.stmt.node()
+                && let Some(parent_kw) = parent_kw.clone()
+            {
                 let cdi = parent_kw
                     .node
                     .allowed_sub_stmts()
@@ -115,17 +123,27 @@ impl YangParser<'_, '_> {
                         .and_modify(|c| *c += 1)
                         .or_insert(1);
                     if !cdi.validate(*count) {
-
                         let faux_span = start.merge(span);
                         return Err(Box::new(ParseError::custom(
-
-                            format!("wrong number of sub-statements '{}' in \
-                                 this block. Saw {}, allowed is {}", node.node.as_str(), count, cdi),"in this block, this sub-statement", faux_span)));
+                            format!(
+                                "wrong number of sub-statements '{}' in \
+                                 this block. Saw {}, allowed is {}",
+                                node.node.as_str(),
+                                count,
+                                cdi
+                            ),
+                            "in this block, this sub-statement",
+                            faux_span,
+                        )));
                     }
                 }
             }
+
             let stmt_seq = self.spans.add(start, stmt_seq);
-            stmts.push(stmt_seq);
+            stmts.push(Meta {
+                id: stmt_seq.id,
+                node: crate::ast::Stmt::YangStmtSeq(stmt_seq.node.node),
+            });
         }
     }
 
@@ -155,13 +173,9 @@ impl YangParser<'_, '_> {
         self.logical_expr(r)
     }
 
-    /// Parse a logical expression
-    ///
-    /// To avoid confusion, we don't allow `&&` and `||` to be chained together.
-    ///
-    /// ```ebnf
-    /// LogicalExpr ::= Comparison ( ('&&' Comparison )* | ('||' Comparsion)* )
-    /// ```
+    /// Parse a logical expression   To avoid confusion, we don't allow
+    ///`&&` and `||` to be chained   together.   ```ebnf  LogicalExpr ::=
+    ///Comparison ( ('&&' Comparison )* | ('||' Comparsion)*  )  ```
     fn logical_expr(&mut self, r: Restrictions) -> ParseResult<Meta<Expr>> {
         let expr = self.comparison(r)?;
 
@@ -240,10 +254,10 @@ impl YangParser<'_, '_> {
 
     /// Optionally parse a compare operator
     ///
-    /// This method returns [`Option`], because we are never sure that there is
-    /// going to be a comparison operator. A span is included with the operator
-    /// to allow error messages to be attached to the parsed operator.
-    ///
+    /// This method returns [`Option`], because we are never sure that
+    /// there is  going to be a comparison operator. A span is included with
+    /// the operator  to allow error messages to be attached to the parsed
+    /// operator.
     /// ```ebnf
     /// CompareOp ::= '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not'? 'in'
     /// ```
@@ -646,7 +660,7 @@ impl YangParser<'_, '_> {
                     "an IP address",
                     token,
                     span,
-                )))
+                )));
             }
         };
         Ok(self.spans.add(span, addr))
@@ -662,16 +676,18 @@ impl YangParser<'_, '_> {
                 let trimmed = &s[1..s.len() - 1];
                 Literal::String(trimmed.into())
             }
-            Token::Integer(s) => {
-                Literal::Integer(s.parse::<i64>().map_err(|e| {
+            Token::Integer(s) => Literal::Integer(
+                s.parse::<i64>().map_err(|e| {
                     ParseError::invalid_literal("integer", token, e, span)
-                })?)
-            }
-            Token::Float(s) => {
-                Literal::Float(s.parse::<f64>().map_err(|e| {
+                })?,
+                None,
+            ),
+            Token::Float(s) => Literal::Float(
+                s.parse::<f64>().map_err(|e| {
                     ParseError::invalid_literal("float", token, e, span)
-                })?)
-            }
+                })?,
+                None,
+            ),
             Token::Hex(s) => Literal::Integer(
                 i64::from_str_radix(&s[2..], 16).map_err(|e| {
                     Box::new(ParseError::invalid_literal(
@@ -681,6 +697,7 @@ impl YangParser<'_, '_> {
                         span,
                     ))
                 })?,
+                None,
             ),
             Token::Asn(s) => match s[2..].parse::<u32>() {
                 Ok(x) => Literal::Asn(Asn::from_u32(x)),
@@ -690,11 +707,17 @@ impl YangParser<'_, '_> {
                         token,
                         e,
                         span,
-                    )))
+                    )));
                 }
             },
             Token::Bool(b) => Literal::Bool(b),
-            t => return Err(Box::new(ParseError::expected("a literal", t, span))),
+            t => {
+                return Err(Box::new(ParseError::expected(
+                    "a literal",
+                    t,
+                    span,
+                )));
+            }
         };
         Ok(self.spans.add(span, literal))
     }
@@ -872,7 +895,7 @@ impl YangParser<'_, '_> {
                     "identifier, `super`, `pkg` or `dep`",
                     tok,
                     span,
-                )))
+                )));
             }
         };
         Ok(self.spans.add(span, ident))

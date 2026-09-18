@@ -43,7 +43,7 @@ module rotonda-roto {
       action load {
         description
           "(Re)load the current roto file tree.";
-        output finish {
+        output {
           choice result {
             leaf success {
               type empty;
@@ -59,7 +59,7 @@ module rotonda-roto {
       action compile {
         description
           "(Re)compile the current roto file tree.";
-        output finish {
+        output {
           choice result {
             leaf success {
               type empty;
@@ -73,7 +73,7 @@ module rotonda-roto {
         }
       }
       action deploy {
-        output finish {
+        output {
           choice result {
             leaf success {
               type empty;

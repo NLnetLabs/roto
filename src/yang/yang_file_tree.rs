@@ -162,7 +162,7 @@ impl YangFileTree {
                 continue;
             }
 
-            if path.extension().is_none_or(|ext| ext != "yang") {
+            if path.extension().is_none_or(|ext| ext != "y") {
                 continue;
             }
 

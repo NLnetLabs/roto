@@ -7,8 +7,18 @@ use icu::properties::sets::CodePointSetDataBorrowed;
 
 use crate::{
     allowed_subs2,
-    yang::parser::ast::AxisName,
-    yang::parser::expr::{ArgConstraints, Cardinality},
+    ast::{Expr, Identifier},
+    typechecker::{
+        scope::{DeclarationKind, ValueKind},
+        types::{Primitive, Type, TypeDefinition},
+    },
+    yang::{
+        parser::{
+            ast::{Argument, AxisName},
+            expr::Cardinality,
+        },
+        types::{YangArgType, YangNodeType},
+    },
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -765,73 +775,198 @@ impl Keyword {
         }
     }
 
-    pub(crate) fn argument_constraints(&self) -> (ArgConstraints, bool) {
+    pub(crate) fn test_arg_type(
+        &self,
+        arg: &Argument,
+    ) -> Option<TypeDefinition> {
+        match arg {
+            Argument::Ident(ident) => match self.arg_type() {
+                YangArgType::Ident => match ident.as_str() {
+                    "enumeration" => {
+                        panic!("an enumeration");
+                    }
+                    _ => Some(TypeDefinition::Primitive(Primitive::String)),
+                },
+                YangArgType::String => todo!(),
+                YangArgType::RegexString => todo!(),
+                // YangArgType::Path => todo!(),
+                // YangArgType::XPath => todo!(),
+                YangArgType::Bool => {
+                    Some(TypeDefinition::Primitive(Primitive::Bool))
+                }
+                // YangArgType::Int => todo!(),
+                // YangArgType::PosInt => todo!(),
+                // YangArgType::UnboundedPosInt => todo!(),
+                // YangArgType::SpaceSeparatedIdents => todo!(),
+                // YangArgType::Decimal64 => todo!(),
+                // YangArgType::LengthExpr => todo!(),
+                // YangArgType::RangeExpr => todo!(),
+                // YangArgType::None => todo!(),
+                _ => None,
+            },
+            Argument::UnquotedString(literal) => todo!(),
+            Argument::QuotedString(literal) => todo!(),
+        }
+    }
+
+    pub(crate) fn arg_type(&self) -> YangArgType {
         match self {
-            Keyword::Module => (ArgConstraints::NoKeyword, true),
-            Keyword::Import => (ArgConstraints::NoKeyword, true),
-            Keyword::Include => (ArgConstraints::NoKeyword, true),
-            Keyword::Organization => todo!(),
-            Keyword::Contact => todo!(),
-            Keyword::Revision => todo!(),
-            Keyword::SubModule => todo!(),
-            Keyword::BelongsTo => todo!(),
-            Keyword::Units => todo!(),
-            Keyword::TypeDef => todo!(),
-            Keyword::Type => todo!(),
-            Keyword::Bit => todo!(),
-            Keyword::Position => todo!(),
-            Keyword::Enum => todo!(),
-            Keyword::FractionDigits => todo!(),
-            Keyword::Length => todo!(),
-            Keyword::Path => todo!(),
-            Keyword::Pattern => todo!(),
-            Keyword::Range => todo!(),
-            Keyword::RequireInstance => todo!(),
-            Keyword::Container => todo!(),
-            Keyword::Must => todo!(),
-            Keyword::Presence => todo!(),
-            Keyword::ErrorMessage => todo!(),
-            Keyword::ErrorAppTag => todo!(),
-            Keyword::Leaf => todo!(),
-            Keyword::Mandatory => todo!(),
-            Keyword::LeafList => todo!(),
-            Keyword::MinElements => todo!(),
-            Keyword::MaxElements => todo!(),
-            Keyword::OrderedBy => todo!(),
-            Keyword::List => todo!(),
-            Keyword::Unique => todo!(),
-            Keyword::Key => todo!(),
-            Keyword::Choice => todo!(),
-            Keyword::Case => todo!(),
-            Keyword::AnyData => todo!(),
-            Keyword::AnyXml => todo!(),
-            Keyword::Grouping => todo!(),
-            Keyword::Uses => todo!(),
-            Keyword::Refine => todo!(),
-            Keyword::Rpc => todo!(),
-            Keyword::Input => todo!(),
-            Keyword::Output => todo!(),
-            Keyword::Action => todo!(),
-            Keyword::Notification => todo!(),
-            Keyword::Augment => todo!(),
-            Keyword::Feature => todo!(),
-            Keyword::Identity => todo!(),
-            Keyword::Base => todo!(),
-            Keyword::Extension => todo!(),
-            Keyword::Argument => todo!(),
-            Keyword::YinElement => todo!(),
-            Keyword::IfFeature => todo!(),
-            Keyword::Deviation => todo!(),
-            Keyword::Deviate => todo!(),
-            Keyword::Config => todo!(),
-            Keyword::Status => todo!(),
-            Keyword::Description => todo!(),
-            Keyword::Default => todo!(),
-            Keyword::Reference => todo!(),
-            Keyword::When => todo!(),
-            Keyword::Value => todo!(),
-            // by default we assume a string without sub statements
-            _ => (ArgConstraints::NoKeyword, false),
+            Keyword::Module => YangArgType::Ident,
+            Keyword::YangVersion => YangArgType::String,
+            Keyword::NameSpace => YangArgType::String,
+            Keyword::Prefix => YangArgType::Ident,
+            Keyword::Import => YangArgType::Ident,
+            Keyword::RevisionDate => YangArgType::String,
+            Keyword::Include => YangArgType::Ident,
+            Keyword::Organization => YangArgType::String,
+            Keyword::Contact => YangArgType::String,
+            Keyword::Revision => YangArgType::String,
+            Keyword::SubModule => YangArgType::Ident,
+            Keyword::BelongsTo => YangArgType::Ident,
+            Keyword::Units => YangArgType::String,
+            Keyword::TypeDef => YangArgType::Ident,
+            Keyword::Type => YangArgType::Path,
+            Keyword::Bit => YangArgType::String,
+            Keyword::Position => YangArgType::PosInt,
+            // RFC7950 says: It takes as an argument a string that is the
+            // assigned name. The string MUST NOT be zero-length and MUST NOT
+            // have any leading or trailing whitespace characters (any Unicode
+            // character with the "White_Space" property).  The use of Unicode
+            // control codes SHOULD be avoided.
+            //
+            // We're violating this, and constrain it to an identifier
+            Keyword::Enum => YangArgType::Ident,
+            Keyword::FractionDigits => YangArgType::Decimal64,
+            // RFC7950 9.4.4
+            Keyword::Length => YangArgType::LengthExpr,
+            Keyword::Path => YangArgType::Path,
+            Keyword::Pattern => YangArgType::RegexString,
+            // can only be "invert-match"
+            Keyword::Modifier => YangArgType::String,
+            Keyword::Range => YangArgType::RangeExpr,
+            Keyword::RequireInstance => YangArgType::Bool,
+            Keyword::Container => YangArgType::Ident,
+            Keyword::Must => YangArgType::XPath,
+            Keyword::Presence => YangArgType::String,
+            Keyword::ErrorMessage => YangArgType::String,
+            Keyword::ErrorAppTag => YangArgType::String,
+            Keyword::Leaf => YangArgType::Ident,
+            Keyword::Mandatory => YangArgType::Bool,
+            Keyword::LeafList => YangArgType::Ident,
+            Keyword::MinElements => YangArgType::PosInt,
+            Keyword::MaxElements => YangArgType::UnboundedPosInt,
+            Keyword::OrderedBy => YangArgType::String,
+            Keyword::List => YangArgType::Ident,
+            Keyword::Unique => YangArgType::Ident,
+            Keyword::Key => YangArgType::SpaceSeparatedIdents,
+            Keyword::Choice => YangArgType::Ident,
+            Keyword::Case => YangArgType::Ident,
+            Keyword::AnyData => YangArgType::Ident,
+            Keyword::AnyXml => YangArgType::Ident,
+            Keyword::Grouping => YangArgType::Ident,
+            Keyword::Uses => YangArgType::Ident,
+            Keyword::Refine => YangArgType::Ident,
+            Keyword::Rpc => YangArgType::Ident,
+            Keyword::Input => YangArgType::None,
+            Keyword::Output => YangArgType::None,
+            Keyword::Action => YangArgType::Ident,
+            Keyword::Notification => YangArgType::Ident,
+            Keyword::Augment => YangArgType::Path,
+            Keyword::Feature => YangArgType::Ident,
+            Keyword::Identity => YangArgType::Ident,
+            Keyword::Base => YangArgType::Path,
+            Keyword::Extension => YangArgType::Ident,
+            Keyword::Argument => YangArgType::String,
+            Keyword::YinElement => YangArgType::Bool,
+            Keyword::IfFeature => YangArgType::String,
+            Keyword::Deviation => YangArgType::Path,
+            // "not-supported", "add", "replace", or "delete"
+            Keyword::Deviate => YangArgType::String,
+            Keyword::Config => YangArgType::Bool,
+            // "current", "deprecated", or "obsolete"
+            Keyword::Status => YangArgType::String,
+            Keyword::Description => YangArgType::String,
+            Keyword::Default => YangArgType::String,
+            Keyword::Reference => YangArgType::String,
+            Keyword::When => YangArgType::XPath,
+            Keyword::Value => YangArgType::Int,
+        }
+    }
+
+    pub(crate) fn yang_expr_type(&self) -> YangNodeType {
+        match self {
+            Keyword::Module => YangNodeType::Tree,
+            Keyword::Import => YangNodeType::Tree,
+            Keyword::Include => YangNodeType::Tree,
+            Keyword::Organization => YangNodeType::Attr(YangArgType::String),
+            Keyword::YangVersion => YangNodeType::Attr(YangArgType::String),
+            Keyword::Contact => YangNodeType::Attr(YangArgType::String),
+            Keyword::Revision => YangNodeType::Tree,
+            Keyword::SubModule => YangNodeType::Tree,
+            Keyword::BelongsTo => YangNodeType::Tree,
+            Keyword::Units => YangNodeType::Attr(YangArgType::String),
+            Keyword::TypeDef => YangNodeType::Tree,
+            Keyword::Type => YangNodeType::Tree,
+            Keyword::Bit => YangNodeType::Tree,
+            Keyword::Position => YangNodeType::Attr(YangArgType::String),
+            Keyword::Enum => YangNodeType::Tree,
+            Keyword::FractionDigits => {
+                YangNodeType::Attr(YangArgType::String)
+            }
+            Keyword::Length => YangNodeType::Tree,
+            Keyword::Path => YangNodeType::Attr(YangArgType::Path),
+            Keyword::Pattern => YangNodeType::Tree,
+            Keyword::Range => YangNodeType::Attr(YangArgType::RangeExpr),
+            Keyword::RequireInstance => {
+                YangNodeType::Attr(YangArgType::String)
+            }
+            Keyword::Container => YangNodeType::Tree,
+            Keyword::Must => YangNodeType::Tree,
+            Keyword::Presence => YangNodeType::Attr(YangArgType::Bool),
+            Keyword::ErrorMessage => YangNodeType::Attr(YangArgType::String),
+            Keyword::ErrorAppTag => YangNodeType::Attr(YangArgType::String),
+            Keyword::Leaf => YangNodeType::Tree,
+            Keyword::Mandatory => YangNodeType::Attr(YangArgType::String),
+            Keyword::LeafList => YangNodeType::Tree,
+            Keyword::MinElements => YangNodeType::Attr(YangArgType::String),
+            Keyword::MaxElements => YangNodeType::Attr(YangArgType::String),
+            Keyword::OrderedBy => YangNodeType::Attr(YangArgType::String),
+            Keyword::List => YangNodeType::Tree,
+            Keyword::Unique => YangNodeType::Attr(YangArgType::String),
+            Keyword::Key => YangNodeType::Attr(YangArgType::String),
+            Keyword::Choice => YangNodeType::Tree,
+            Keyword::Case => YangNodeType::Tree,
+            Keyword::AnyData => YangNodeType::Tree,
+            Keyword::AnyXml => YangNodeType::Tree,
+            Keyword::Grouping => YangNodeType::Tree,
+            Keyword::Uses => YangNodeType::Tree,
+            Keyword::Refine => YangNodeType::Tree,
+            Keyword::Rpc => YangNodeType::Tree,
+            Keyword::Input => YangNodeType::Tree,
+            Keyword::Output => YangNodeType::Tree,
+            Keyword::Action => YangNodeType::Tree,
+            Keyword::Notification => YangNodeType::Tree,
+            Keyword::Augment => YangNodeType::Tree,
+            Keyword::Feature => YangNodeType::Tree,
+            Keyword::Identity => YangNodeType::Tree,
+            Keyword::Base => YangNodeType::Attr(YangArgType::Ident),
+            Keyword::Extension => YangNodeType::Tree,
+            Keyword::Argument => YangNodeType::Attr(YangArgType::String),
+            Keyword::YinElement => YangNodeType::Attr(YangArgType::String),
+            Keyword::IfFeature => YangNodeType::Attr(YangArgType::String),
+            Keyword::Deviation => YangNodeType::Tree,
+            Keyword::Deviate => YangNodeType::Attr(YangArgType::String),
+            Keyword::Config => YangNodeType::Attr(YangArgType::Bool),
+            Keyword::Status => YangNodeType::Attr(YangArgType::String),
+            Keyword::Description => YangNodeType::Attr(YangArgType::String),
+            Keyword::Default => YangNodeType::Attr(YangArgType::String),
+            Keyword::Reference => YangNodeType::Attr(YangArgType::String),
+            Keyword::When => YangNodeType::Tree,
+            Keyword::Value => YangNodeType::Attr(YangArgType::Int),
+            Keyword::NameSpace => YangNodeType::Attr(YangArgType::String),
+            Keyword::Prefix => YangNodeType::Attr(YangArgType::String),
+            Keyword::RevisionDate => YangNodeType::Attr(YangArgType::String),
+            Keyword::Modifier => YangNodeType::Attr(YangArgType::String),
         }
     }
 
@@ -874,6 +1009,8 @@ impl Keyword {
                 // "yang-version" statement, or one that contains the value
                 // "1", is developed for YANG version 1, defined in [RFC6020].
                 // '''
+                // In the wild we are seeing yang-versions missing, so we're
+                // allowing it.
                 (YangVersion, ZeroOrOne),
             ),
             Keyword::YangVersion => vec![],
@@ -1276,7 +1413,7 @@ impl Keyword {
             Keyword::Default => vec![],
             Keyword::Reference => vec![],
             // RFC7950 doesn't mention sub-statements for 'when', but it does
-            // appear in RFCs, e.g. RFC8022, so whatever
+            // appear in RFCs, e.g. RFC8022, so we're allowing it.
             Keyword::When => allowed_subs2!((Description, ZeroOrOne),),
             Keyword::Enum => allowed_subs2!(
                 (Description, ZeroOrOne),
