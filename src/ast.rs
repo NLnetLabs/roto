@@ -8,7 +8,14 @@ use std::fmt::Display;
 use inetnum::asn::Asn;
 use symbol_table::GlobalSymbol;
 
-use crate::parser::meta::{Meta, MetaId};
+use crate::{
+    parser::meta::{Meta, MetaId},
+    typechecker::types::TypeDefinition,
+    yang::parser::{
+        Keyword,
+        ast::{Argument, YangStmtSeq},
+    },
+};
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
@@ -17,6 +24,7 @@ pub struct SyntaxTree {
 
 #[derive(Clone, Debug)]
 pub enum Declaration {
+    YangModule(YangModuleDeclaration),
     FilterMap(Box<FilterMap>),
     Const(ConstantDeclaration),
     Record(RecordTypeDeclaration),
@@ -24,6 +32,35 @@ pub enum Declaration {
     Function(FunctionDeclaration),
     Test(Test),
     Import(Vec<Meta<Path>>),
+}
+
+impl SyntaxTree {
+    // pub fn walk_node_tests(&self) -> Vec<Meta<Identifier>> {
+    //     let mut node_tests = vec![];
+    //     for decl in &self.declarations {
+    //         if let Declaration::XPath(xpath) = decl {
+    //             for xpsn in &xpath.idents {
+    //                 if let XPathStep::NodeTest(nt) = &xpsn.node {
+    //                     node_tests.push(nt.clone());
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     node_tests
+    // }
+
+    /// Iterator over all module and submodule statements in an ast.
+    pub fn yang_modules(
+        &self,
+    ) -> impl Iterator<Item = &YangModuleDeclaration> {
+        self.declarations.iter().filter_map(|d| {
+            if let Declaration::YangModule(y) = d {
+                Some(y)
+            } else {
+                None
+            }
+        })
+    }
 }
 
 pub struct Signature {
@@ -87,6 +124,12 @@ pub struct FunctionDeclaration {
 }
 
 #[derive(Clone, Debug)]
+pub struct YangModuleDeclaration {
+    pub ident: Meta<Identifier>,
+    pub body: Meta<Expr>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Test {
     pub ident: Meta<Identifier>,
     pub body: Meta<Block>,
@@ -105,6 +148,82 @@ pub struct Block {
 pub enum Stmt {
     Let(Meta<Identifier>, Option<Meta<TypeExpr>>, Meta<Expr>),
     Expr(Meta<Expr>),
+    YangStmtSeq(YangStmtSeq),
+}
+
+impl Stmt {
+    pub fn argument_string(&self) -> Option<String> {
+        if let Stmt::YangStmtSeq(YangStmtSeq { arg, .. }) = self {
+            arg.as_ref().map(|a| a.node.to_string())
+        } else {
+            None
+        }
+    }
+
+    pub fn as_ident(&self) -> Option<Identifier> {
+        if let Stmt::YangStmtSeq(YangStmtSeq { arg, .. }) = self {
+            arg.as_ref().and_then(|a| a.node.as_ident())
+        } else {
+            None
+        }
+    }
+
+    pub fn is_keyword(&self, kw: Keyword) -> bool {
+        if let Stmt::YangStmtSeq(YangStmtSeq { stmt, .. }) = self {
+            stmt.node().is_some_and(|mk| mk.node == kw)
+        } else {
+            false
+        }
+    }
+
+    pub fn description(&self) -> Option<String> {
+        let Stmt::YangStmtSeq(yang_s) = &self else {
+            return None;
+        };
+
+        yang_s.description()
+    }
+
+    pub fn argument_type_definition(&self) -> Option<TypeDefinition> {
+        let Stmt::YangStmtSeq(yang_s) = &self else {
+            return None;
+        };
+
+        yang_s.argument_type_definition()
+    }
+
+    pub fn get_argument(&self) -> Option<&Meta<Argument>> {
+        let Stmt::YangStmtSeq(yang_s) = &self else {
+            return None;
+        };
+
+        if yang_s.arg.is_some() {
+            return yang_s.arg.as_ref();
+        }
+
+        println!("[get_argument] {:?}", yang_s);
+        let derive_type = yang_s.sub_stmts.iter_stmt().find(|stmt| {
+            stmt.is_keyword(crate::yang::parser::Keyword::Type)
+        })?;
+
+        let Stmt::YangStmtSeq(YangStmtSeq { sub_stmts, .. }) =
+            &derive_type.node
+        else {
+            return None;
+        };
+
+        let Expr::Argument(arg) = &sub_stmts.node else {
+            return None;
+        };
+
+        Some(arg)
+    }
+}
+
+impl From<YangStmtSeq> for Stmt {
+    fn from(value: YangStmtSeq) -> Self {
+        Stmt::YangStmtSeq(value)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -134,6 +253,9 @@ pub enum Expr {
 
     /// A block expression
     Block(Meta<Block>),
+
+    /// A yang argument from a yang sequence
+    Argument(Meta<Argument>),
 
     /// A match expression,
     Match(Box<Meta<Match>>),
@@ -196,6 +318,18 @@ pub enum Expr {
 
     /// f-string
     FString(Vec<Meta<FStringPart>>),
+}
+
+impl Expr {
+    pub fn iter_stmt(&self) -> impl Iterator<Item = &Meta<Stmt>> {
+        if let Expr::Block(block) = self {
+            Some(block.stmts.iter())
+        } else {
+            None
+        }
+        .into_iter()
+        .flatten()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -309,6 +443,21 @@ pub enum Literal {
     Float(f64, Option<FloatType>),
     Bool(bool),
     Unit,
+}
+
+impl std::fmt::Display for Literal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::String(s) => write!(f, "{}", s),
+            Literal::Char(c) => write!(f, "{}", c.to_string()),
+            Literal::Asn(asn) => write!(f, "{}", asn),
+            Literal::IpAddress(ip_addr) => write!(f, "{}", ip_addr),
+            Literal::Integer(i, int_type) => write!(f, "{}", i),
+            Literal::Float(fl, float_type) => write!(f, "{}", fl),
+            Literal::Bool(b) => write!(f, "{}", b),
+            Literal::Unit => write!(f, "()"),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

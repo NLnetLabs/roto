@@ -128,7 +128,25 @@ impl FileTree {
             .file_type()
             .is_dir()
         {
-            Self::directory(path)
+            Self::directory(path, "pkg.roto")
+        } else {
+            Self::single_file(path)
+        }
+    }
+
+    /// Read a yang [`FileTree`] based on a path.
+    ///
+    /// If the path refers to a file, only that file will be read. If the path
+    /// instead refers to a directory, that directory will be read recursively.
+    pub fn read_yang(path: impl AsRef<Path>) -> Result<Self, RotoReport> {
+        let path = path.as_ref();
+        if path
+            .metadata()
+            .map_err(|e| read_error(path, e))?
+            .file_type()
+            .is_dir()
+        {
+            Self::directory(path, "rotonda-main.yang")
         } else {
             Self::single_file(path)
         }
@@ -203,13 +221,16 @@ impl FileTree {
     }
 
     /// A Roto script defined by a directory
-    pub fn directory(root: &Path) -> Result<FileTree, RotoReport> {
-        let pkg_file = SourceFile::read(&root.join("pkg.roto"))?;
-        assert_eq!(pkg_file.module_name, "pkg");
+    pub fn directory(
+        root: &Path,
+        f_name: &str,
+    ) -> Result<FileTree, RotoReport> {
+        let pkg_file = SourceFile::read(&root.join(f_name))?;
+        // assert_eq!(pkg_file.module_name, "pkg");
         let mut tree = Self {
             files: vec![pkg_file],
         };
-        tree.find_files(0, root)?;
+        tree.find_files(0, root, "yang", Some(f_name))?;
         Ok(tree)
     }
 
@@ -217,6 +238,8 @@ impl FileTree {
         &mut self,
         parent_id: usize,
         path: &Path,
+        default_ext: &str,
+        exclude_entry: Option<&str>,
     ) -> Result<(), RotoReport> {
         for entry in
             std::fs::read_dir(path).map_err(|e| read_error(path, e))?
@@ -227,11 +250,16 @@ impl FileTree {
                 entry.file_type().map_err(|e| read_error(&path, e))?;
 
             if file_type.is_dir() {
-                self.process_subdir(parent_id, &path)?;
+                self.process_subdir(parent_id, &path, default_ext)?;
                 continue;
             }
 
-            if path.extension().is_none_or(|ext| ext != "roto") {
+            if path.extension().is_none_or(|ext| ext != default_ext) {
+                continue;
+            }
+
+            if path.file_name().map(|n| n.to_str()).flatten() == exclude_entry
+            {
                 continue;
             }
 
@@ -268,6 +296,7 @@ impl FileTree {
         &mut self,
         parent_id: usize,
         path: &Path,
+        default_ext: &str,
     ) -> Result<(), RotoReport> {
         let file_path = path.join("mod.roto");
 
@@ -281,6 +310,6 @@ impl FileTree {
         self.files.push(file);
         self.files[parent_id].children.push(idx);
 
-        self.find_files(idx, path)
+        self.find_files(idx, path, default_ext, None)
     }
 }

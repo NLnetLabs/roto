@@ -24,6 +24,8 @@ pub mod tools;
 mod typechecker;
 mod value;
 
+pub mod yang;
+
 #[cfg(feature = "cli")]
 pub use cli::cli;
 

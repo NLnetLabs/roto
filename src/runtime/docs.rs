@@ -354,6 +354,9 @@ impl Rt {
                 DeclarationKind::TypeParam(_) => {
                     // Probably skipped forever
                 }
+                DeclarationKind::YangModule(yang_module_declaration) => {
+                    todo!()
+                }
             }
         }
 

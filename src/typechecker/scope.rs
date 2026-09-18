@@ -19,7 +19,7 @@ use super::{
 
 /// A reference to a [`Scope`] in a [`ScopeGraph`]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ScopeRef(usize);
+pub struct ScopeRef(pub usize);
 
 impl ScopeRef {
     /// The scope at the root of a [`ScopeGraph`]
@@ -66,6 +66,7 @@ pub enum DeclarationKind {
     Type(TypeOrStub),
     Function(Option<FunctionDeclaration>),
     Module,
+    YangModule(YangModuleDeclaration),
     Method(Option<FunctionDeclaration>),
     Enum(Option<(TypeDefinition, EnumVariant)>),
     TypeParam(Identifier),
@@ -77,6 +78,14 @@ pub struct FunctionDeclaration {
     pub parameter_names: Vec<Identifier>,
     pub signature: Signature,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YangModuleDeclaration {
+    pub definition: YangModuleDefinition,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YangModuleDefinition {}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeOrStub {
@@ -91,14 +100,14 @@ pub enum ValueKind {
     Context(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ScopeGraph {
     pub declarations: BTreeMap<ResolvedName, Declaration>,
     scopes: Vec<Scope>,
 }
 
 /// A type checking scope
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Scope {
     scope_type: ScopeType,
     parent: Option<ScopeRef>,
@@ -108,7 +117,7 @@ struct Scope {
 /// The syntactic structure that a scope represents
 ///
 /// This is used primarily for printing a roughly human-readable name.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ScopeType {
     Root,
     Then(usize),
@@ -123,7 +132,7 @@ pub enum ScopeType {
     Block(usize),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModuleScope {
     pub name: ResolvedName,
     pub parent_module: Option<ScopeRef>,

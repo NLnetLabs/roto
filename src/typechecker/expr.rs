@@ -159,6 +159,11 @@ impl TypeChecker {
                 let ctx = ctx.with_type(&var);
                 self.expr(scope, &ctx, expr)
             }
+            ast::Stmt::YangStmtSeq(yang_stmt_seq) => {
+                let var = self.fresh_var();
+                let ctx = ctx.with_type(&var);
+                self.expr(scope, &ctx, &yang_stmt_seq.sub_stmts)
+            }
         }
     }
 
@@ -605,6 +610,7 @@ impl TypeChecker {
 
                 Ok(diverges)
             }
+            Argument(_arg) => Ok(false),
         }
     }
 
@@ -1213,20 +1219,15 @@ impl TypeChecker {
             self.resolve_module_part_of_path(scope, &mut idents)?;
 
         match &dec.kind {
-            // We have reached the end of the iterator, but are still a module even though we
-            // should be an expression. Time to error!
             DeclarationKind::Module => {
                 Err(self.error_expected_value(ident, &dec))
             }
-            // We ended on a type which is not a valid expression, so we yield an error.
             DeclarationKind::Type(_) => {
                 Err(self.error_expected_value(ident, &dec))
             }
-            // A type param is not a valid value
             DeclarationKind::TypeParam(_) => {
                 Err(self.error_expected_value(ident, &dec))
             }
-            // We ended on a function, which means there can be no identifiers left
             DeclarationKind::Function(Some(func_dec))
             | DeclarationKind::Method(Some(func_dec)) => {
                 if let Some(field) = idents.next() {
@@ -1247,8 +1248,6 @@ impl TypeChecker {
                     signature,
                 })
             }
-            // We have a value, so the rest of the idents should be field accesses
-            // optionally ending with a method.
             DeclarationKind::Value(kind, root_ty) => {
                 let mut fields = Vec::new();
                 let root_ty = root_ty.as_ref().unwrap();
@@ -1311,6 +1310,7 @@ impl TypeChecker {
             | DeclarationKind::Method(None) => {
                 ice!("These should be declared at this point")
             }
+            DeclarationKind::YangModule(yang_module_declaration) => todo!(),
         }
     }
 
@@ -1374,6 +1374,7 @@ impl TypeChecker {
                     arguments: params,
                 }))
             }
+            DeclarationKind::YangModule(yang_module_declaration) => todo!(),
         }
     }
 

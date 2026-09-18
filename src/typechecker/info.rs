@@ -34,7 +34,7 @@ pub struct TypeInfo {
     pub scope_graph: ScopeGraph,
 
     /// Map from type names to types
-    pub(super) types: HashMap<ResolvedName, TypeDefinition>,
+    pub types: HashMap<ResolvedName, TypeDefinition>,
 
     /// The types we inferred for each Expr
     ///
@@ -42,7 +42,7 @@ pub struct TypeInfo {
     pub(super) expr_types: HashMap<MetaId, Type>,
 
     /// The fully qualified (and hence unique) name for each identifier.
-    pub(super) resolved_names: HashMap<MetaId, ResolvedName>,
+    pub resolved_names: HashMap<MetaId, ResolvedName>,
 
     /// Scopes of functions
     pub(super) function_scopes: HashMap<MetaId, ScopeRef>,

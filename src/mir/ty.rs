@@ -246,7 +246,11 @@ impl Pool {
             Ty::Record(_) => true,
             Ty::Enum(_) => true,
             Ty::Primitive(
-                Primitive::String | Primitive::IpAddr | Primitive::Prefix,
+                Primitive::String
+                | Primitive::IpAddr
+                | Primitive::Prefix
+                | Primitive::LengthExpr
+                | Primitive::RangeExpr,
             ) => true,
             Ty::List(_) => true,
             Ty::Runtime(_) => true,

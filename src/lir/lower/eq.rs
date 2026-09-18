@@ -250,6 +250,8 @@ impl Lowerer<'_, '_> {
                 Primitive::String => {
                     self.generate_eq_runtime(left_ptr, right_ptr, ty)
                 }
+                Primitive::RangeExpr => todo!(),
+                Primitive::LengthExpr => todo!(),
             },
             Ty::List(_) => self.generate_eq_runtime(left_ptr, right_ptr, ty),
         }

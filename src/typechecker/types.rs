@@ -11,6 +11,7 @@ use std::{
     any::TypeId,
     borrow::Borrow,
     fmt::{Debug, Display, Write},
+    ops::Range,
 };
 
 use super::{
@@ -146,6 +147,8 @@ pub enum Primitive {
     Asn,
     IpAddr,
     Prefix,
+    RangeExpr,
+    LengthExpr,
 }
 
 /// Size of an integer type
@@ -327,6 +330,8 @@ impl Display for Primitive {
                 Primitive::Asn => "Asn".into(),
                 Primitive::IpAddr => "IpAddr".into(),
                 Primitive::Prefix => "Prefix".into(),
+                Primitive::LengthExpr => "Length".into(),
+                Primitive::RangeExpr => "Range".into(),
             }
         )
     }
@@ -588,6 +593,10 @@ impl Primitive {
             String => Layout::of::<crate::RotoString>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
             Prefix => Layout::of::<inetnum::addr::Prefix>(),
+            // This is not entirely correct, a yang length can have multiple
+            // half-open ranges separated by |
+            LengthExpr => Layout::of::<Range<u32>>(),
+            RangeExpr => Layout::of::<Range<u32>>(),
         }
     }
 }
@@ -634,6 +643,73 @@ impl Function {
     }
 }
 
+// RFC7950 4.2.4
+//
+// +---------------------+-------------------------------------+
+// | Name                | Description                         |
+// +---------------------+-------------------------------------+
+// | binary              | Any binary data                     |
+// | bits                | A set of bits or flags              |
+// | boolean             | "true" or "false"                   |
+// | decimal64           | 64-bit signed decimal number        |
+// | empty               | A leaf that does not have any value |
+// | enumeration         | One of an enumerated set of strings |
+// | identityref         | A reference to an abstract identity |
+// | instance-identifier | A reference to a data tree node     |
+// | int8                | 8-bit signed integer                |
+// | int16               | 16-bit signed integer               |
+// | int32               | 32-bit signed integer               |
+// | int64               | 64-bit signed integer               |
+// | leafref             | A reference to a leaf instance      |
+// | string              | A character string                  |
+// | uint8               | 8-bit unsigned integer              |
+// | uint16              | 16-bit unsigned integer             |
+// | uint32              | 32-bit unsigned integer             |
+// | uint64              | 64-bit unsigned integer             |
+// | union               | Choice of member types              |
+// +---------------------+-------------------------------------+
+
+pub fn yang_default_types() -> Vec<(Identifier, String, TypeDefinition)> {
+    use Primitive::*;
+    let primitives = vec![
+        ("binary", String),
+        ("bits", String),
+        ("boolean", Bool),
+        ("decimal64", Float(FloatSize::F64)),
+        ("empty", String),
+        // enumeration is a compound type
+        ("identityref", String),
+        ("instance-identifier", String),
+        ("int8", Int(IntKind::Signed, IntSize::I8)),
+        ("int16", Int(IntKind::Signed, IntSize::I16)),
+        ("int32", Int(IntKind::Signed, IntSize::I32)),
+        ("int64", Int(IntKind::Signed, IntSize::I64)),
+        ("leafref", String),
+        // string is a roto built-in already
+        ("uint8", Int(IntKind::Unsigned, IntSize::I8)),
+        ("uint16", Int(IntKind::Unsigned, IntSize::I16)),
+        ("uint32", Int(IntKind::Unsigned, IntSize::I32)),
+        ("uint64", Int(IntKind::Unsigned, IntSize::I64)),
+        // union is a compound type
+    ];
+
+    let mut types = Vec::new();
+
+    for (n, p) in primitives {
+        let name = Identifier::from(n);
+        types.push((name, "".into(), TypeDefinition::Primitive(p)))
+    }
+
+    // Add the list type to the typechecker
+    // let Type::Name(list_type) = Type::list(Type::ExplicitVar("T".into()))
+    // else {
+    //     panic!()
+    // };
+    // types.push(("List".into(), "".into(), TypeDefinition::List(list_type)));
+
+    types
+}
+
 /// The list of built-in Roto types
 pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     use Primitive::*;
@@ -652,12 +728,12 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         ("bool", Bool),
         ("char", Char),
         ("String", String),
-        ("Asn", Asn),
-        ("IpAddr", IpAddr),
-        ("Prefix", Prefix),
+        // ("Asn", Asn),
+        // ("IpAddr", IpAddr),
+        // ("Prefix", Prefix),
     ];
 
-    let mut types = Vec::new();
+    let mut types = vec![];
 
     for (n, p) in primitives {
         let name = Identifier::from(n);
@@ -712,6 +788,20 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
                 ("Err", vec![Type::ExplicitVar("E".into())]),
             ],
         },
+        EnumType {
+            name: "enumeration",
+            doc: "The enumeration built-in type represents values from a set \
+             of assigned names.",
+            params: vec!["V"],
+            variants: vec![("enum", vec![Type::ExplicitVar("V".into())])],
+        },
+        EnumType {
+            name: "union",
+            doc: "he union built-in type represents a value that corresponds \
+             to one of its member types.",
+            params: vec!["V"],
+            variants: vec![("enum", vec![Type::ExplicitVar("V".into())])],
+        },
     ];
 
     for EnumType {
@@ -759,6 +849,8 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         panic!()
     };
     types.push(("List".into(), "".into(), TypeDefinition::List(list_type)));
+
+    types.extend(yang_default_types());
 
     types
 }

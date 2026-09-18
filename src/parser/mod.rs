@@ -5,14 +5,14 @@
 //! There is currently no way that the parser can recover from invalid syntax.
 //! Therefore, we can only report one parse error.
 
-use crate::{
+pub use crate::{
     ast::{
         ConstantDeclaration, Declaration, FunctionDeclaration, Identifier,
         Path, SyntaxTree, Test,
     },
     parser::error::Hint,
 };
-use error::ParseErrorKind;
+pub use error::ParseErrorKind;
 use lexer::Lexer;
 use token::{Keyword, Token};
 

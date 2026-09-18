@@ -1,9 +1,9 @@
-use super::{Parser, meta::Spans};
+use super::{meta::Spans, Parser};
 use crate::{
     ast::Signature,
     parser::{
-        ParseResult,
         token::{Keyword, Token},
+        ParseResult,
     },
 };
 

@@ -20,7 +20,7 @@ use std::{
 
 use crate::{
     ast,
-    parser::{Parser, meta::Spans},
+    parser::{meta::Spans, Parser},
     typechecker::scope::{DeclarationKind, ScopeType},
     value::{
         CloneFn, DropFn, DynVal, EqFn, Ty, TypeDescription, TypeRegistry,
@@ -32,7 +32,6 @@ use layout::Layout;
 use sealed::sealed;
 
 use crate::{
-    Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
     file_tree::FileTree,
     parser::{lexer::Lexer, token::Token},
@@ -40,10 +39,10 @@ use crate::{
         Constant, Function, Item, Module, Registerable, Type, Use,
     },
     typechecker::{
-        TypeChecker,
         scope::{ResolvedName, ScopeRef},
-        types,
+        types, TypeChecker,
     },
+    Context, Impl, Location, Package, RotoReport,
 };
 
 /// Provides the types and functions that Roto can access via FFI

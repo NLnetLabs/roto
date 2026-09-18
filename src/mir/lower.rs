@@ -449,6 +449,7 @@ impl<'r> Lowerer<'r> {
                 let value = self.assign_to_var(value, ty);
                 self.drop_var(value);
             }
+            ast::Stmt::YangStmtSeq(yang_stmt_seq) => todo!(),
         }
     }
 
@@ -484,6 +485,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::For(name, expr, body) => self.r#for(name, expr, body),
             ast::Expr::QuestionMark(expr) => self.question_mark(expr),
             ast::Expr::FString(parts) => self.f_string(parts),
+            ast::Expr::Argument(_) => unimplemented!(),
         }
     }
 

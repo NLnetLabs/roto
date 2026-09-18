@@ -8,14 +8,14 @@ use crate::{
         FloatType, Identifier, IntType, Literal, Match, MatchArm, Path,
         Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
     },
-    parser::{ParseError, precedence::Associativity},
+    parser::{precedence::Associativity, ParseError, Parser},
 };
 
 use super::{
-    ParseResult, Parser,
     error::ParseErrorKind,
     meta::{Meta, Span},
     token::{FStringToken, Keyword, Token},
+    ParseResult,
 };
 
 /// Contextual restrictions on the expression parsing
@@ -1106,15 +1106,17 @@ impl Parser<'_, '_> {
             Token::Keyword(Keyword::Dep) => "dep".into(),
             Token::Keyword(Keyword::Super) => "super".into(),
             Token::Ident(s) => s.into(),
-            _ => return Err(ParseError::expected(
-                "an identifier, `super`, `pkg` or `dep`",
-                &tok,
-                span,
-            )
-            .with_note(format!(
+            _ => {
+                return Err(ParseError::expected(
+                    "an identifier, `super`, `pkg` or `dep`",
+                    &tok,
+                    span,
+                )
+                .with_note(format!(
                 "`{tok}` is a keyword and cannot be used as an identifier."
             ))
-            .into()),
+                .into())
+            }
         };
         Ok(self.spans.add(span, ident))
     }

@@ -18,12 +18,12 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 
 use std::{
-    alloc::{Layout, handle_alloc_error},
+    alloc::{handle_alloc_error, Layout},
     ptr::NonNull,
     sync::{Arc, Mutex},
 };
 
-use crate::value::{VTable, vtable::DropFn};
+use crate::value::{vtable::DropFn, VTable};
 
 /// The functions for list operations that we call from Roto
 pub mod ffi {
@@ -118,12 +118,12 @@ pub mod boundary {
     };
 
     use crate::{
-        Value,
         runtime::{extern_clone, extern_drop, extern_eq},
         value::{
-            EqFn, VTable,
             vtable::{CloneFn, DropFn},
+            EqFn, VTable,
         },
+        Value,
     };
 
     use super::ErasedList;

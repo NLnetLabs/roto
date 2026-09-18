@@ -31,7 +31,7 @@ pub struct Label {
 
 impl Label {
     /// Create an error label
-    fn error(msg: impl Display, id: MetaId) -> Self {
+    pub fn error(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Error,
             id,
@@ -586,6 +586,7 @@ fn describe_declaration(d: &Declaration) -> &str {
         DeclarationKind::Method(..) => "method",
         DeclarationKind::Enum(..) => "enum",
         DeclarationKind::TypeParam(..) => "type parameter",
+        DeclarationKind::YangModule(yang_module_declaration) => "yang module",
     }
 }
 

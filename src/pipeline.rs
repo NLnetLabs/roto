@@ -69,8 +69,8 @@ pub struct RotoReport {
 
 /// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked<'r, Ctx: OptCtx> {
-    module_tree: ModuleTree,
-    type_info: TypeInfo,
+    pub module_tree: ModuleTree,
+    pub type_info: TypeInfo,
     order: Vec<ResolvedName>,
     runtime: &'r Runtime<Ctx>,
 }

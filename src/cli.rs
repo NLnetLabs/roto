@@ -3,8 +3,8 @@ use std::{path::PathBuf, process::ExitCode};
 use clap::{Parser, Subcommand};
 
 use crate::{
-    FileTree, RotoError, RotoReport, Runtime, runtime::OptCtx,
-    tools::print::print_highlighted,
+    runtime::OptCtx, tools::print::print_highlighted, FileTree, RotoError,
+    RotoReport, Runtime,
 };
 
 #[derive(Parser)]
@@ -87,12 +87,10 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 });
             };
 
-            let mut p = FileTree::read(file)?
-                .parse()?
-                .typecheck(&rt)?
-                .lower_to_mir()
-                .lower_to_lir()
-                .codegen();
+            let mut pi = FileTree::read(file)?.parse()?;
+            println!("syntax tree {:#?}", pi.module_tree.modules[0].ast);
+            let mut p =
+                pi.typecheck(&rt)?.lower_to_mir().lower_to_lir().codegen();
 
             if let Err(()) = p.run_tests() {
                 return Err(RotoReport {
@@ -109,12 +107,21 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 });
             };
 
-            let mut p = FileTree::read(file)?
-                .parse()?
-                .typecheck(&rt)?
-                .lower_to_mir()
-                .lower_to_lir()
-                .codegen();
+            // let mut p = FileTree::read(file)?
+            //     .parse()?
+            //     .typecheck(&rt)?
+            //     .lower_to_mir()
+            //     .lower_to_lir()
+            //     .codegen();
+            let mut pi = FileTree::read(file)?.parse()?;
+            println!(
+                "module {:#?}",
+                pi.module_tree.modules // .iter()
+                                       // .map(|m| &m)
+                                       // .collect::<Vec<_>>()
+            );
+            let mut p =
+                pi.typecheck(&rt)?.lower_to_mir().lower_to_lir().codegen();
 
             let f =
                 p.get_function::<fn()>(function).map_err(|e| RotoReport {

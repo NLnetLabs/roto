@@ -19,7 +19,7 @@ pub struct Hint {
 }
 
 impl ParseError {
-    pub(super) fn expected(
+    pub fn expected(
         expected: impl Display,
         got: impl Display,
         span: Span,
@@ -35,7 +35,7 @@ impl ParseError {
         }
     }
 
-    pub(super) fn invalid_literal(
+    pub fn invalid_literal(
         description: impl Display,
         token: impl Display,
         inner: impl Display,
@@ -66,7 +66,23 @@ impl ParseError {
         }
     }
 
-    pub(super) fn custom(
+    pub fn invalid_location(
+        got: impl Display,
+        parent: impl Display,
+        span: Span,
+    ) -> Self {
+        Self {
+            kind: ParseErrorKind::InvalidLocation {
+                got: got.to_string(),
+                parent: parent.to_string(),
+            },
+            location: span,
+            note: None,
+            hints: Vec::new(),
+        }
+    }
+
+    pub fn custom(
         description: impl Display,
         label: impl Display,
         span: Span,
@@ -170,6 +186,10 @@ pub enum ParseErrorKind {
         token: String,
         inner_error: String,
     },
+    InvalidLocation {
+        got: String,
+        parent: String,
+    },
     Custom {
         description: String,
         label: String,
@@ -187,6 +207,9 @@ impl ParseErrorKind {
             }
             Self::InvalidLiteral { description, .. } => {
                 format!("invalid {description}")
+            }
+            Self::InvalidLocation { got, .. } => {
+                format!("the statement {got} cannot be placed here")
             }
             Self::Custom { label, .. } => label.clone(),
         }
@@ -228,6 +251,13 @@ impl std::fmt::Display for ParseErrorKind {
                 write!(
                     f,
                     "found an invalid {description} literal '{token}': {inner_error}"
+                )
+            }
+            Self::InvalidLocation { got, parent } => {
+                write!(
+                    f,
+                    "the statement '{got}' cannot be a sub-statement of \
+                     '{parent}'"
                 )
             }
             Self::Custom { description, .. } => {

@@ -94,8 +94,19 @@
 //!
 //! [`Declaration`]: scope::Declaration
 
+use crate::ast::Stmt;
+use crate::parser::ParseError;
+use crate::parser::token::Keyword;
+use crate::typechecker::error::Label;
+use crate::typechecker::expr::Context;
+use crate::typechecker::scope::{
+    YangModuleDeclaration, YangModuleDefinition,
+};
+use crate::typechecker::types::{Primitive, yang_default_types};
 use crate::typechecker::value_cycle::RefGraph;
 use crate::value::{TypeDescription, TypeRegistry};
+use crate::yang::parser::YangStmt;
+use crate::yang::parser::ast::YangStmtSeq;
 use crate::{
     ast::{self, Identifier},
     ice,
@@ -535,7 +546,12 @@ impl TypeChecker {
         &mut self,
         tree: &'a ModuleTree,
     ) -> TypeResult<Vec<(ScopeRef, &'a Module)>> {
+        println!("[declare_modules] start");
         let mut modules = Vec::<(ScopeRef, &'a Module)>::new();
+        println!(
+            "[declare_modules] module tree {:#?}",
+            tree.modules.iter().map(|mt| &mt.ident).collect::<Vec<_>>()
+        );
         for m in &tree.modules {
             let Module {
                 ident,
@@ -596,6 +612,12 @@ impl TypeChecker {
                     ),
                     ast::Declaration::Import(_) => continue,
                     ast::Declaration::Test(_) => continue,
+                    ast::Declaration::YangModule(y) => (
+                        DeclarationKind::YangModule(YangModuleDeclaration {
+                            definition: YangModuleDefinition {},
+                        }),
+                        y.ident.clone(),
+                    ),
                 };
 
                 let new_scope = if let DeclarationKind::Type(_) = kind {
@@ -619,6 +641,10 @@ impl TypeChecker {
                 let dec = match res {
                     Ok(dec) => dec,
                     Err(e) => {
+                        println!(
+                            "[declare_modules] error {:?} {} {:?}",
+                            scope, ident, kind
+                        );
                         return Err(self.error_declared_twice(&ident, e));
                     }
                 };
@@ -647,9 +673,104 @@ impl TypeChecker {
                         };
                     }
                 }
+
+                if let ast::Declaration::YangModule(module) = d {
+                    println!(
+                        "[declare_modules] yang module '{}'",
+                        module.ident
+                    );
+
+                    let ctx = Context {
+                        expected_type: Type::Unit,
+                        function_return_type: None,
+                        item: ResolvedName {
+                            scope,
+                            ident: ident.node,
+                        },
+                    };
+
+                    let t = self.expr(scope, &ctx, &module.body)?;
+
+                    // Check type declarations inside modules
+                    for st in module.body.node.iter_stmt() {
+                        if let Stmt::YangStmtSeq(YangStmtSeq {
+                            stmt: YangStmt::Stmt(meta),
+                            arg,
+                            ..
+                        }) = st.node.clone()
+                            && meta.node
+                                == crate::yang::parser::Keyword::TypeDef
+                        {
+                            // let type_def =
+                            //     sub_stmts.node.iter_stmt().find(|stmt| {
+                            //         stmt.node.is_keyword(
+                            //             crate::yang::parser::Keyword::Type,
+                            //         )
+                            //     });
+                            let type_arg = st.node.get_argument();
+
+                            let ty_arg =
+                                type_arg.unwrap().as_ident().unwrap();
+                            println!(
+                                "[declare_modules] declare type \
+                                {:?}",
+                                ty_arg.as_str()
+                            );
+
+                            // println!(
+                            //     "[declare_modules] builtins {:#?}",
+                            //     self.type_info
+                            //         .scope_graph
+                            //         .declarations
+                            //         .get(&name)
+                            // );
+
+                            let eval_scope = self
+                                .type_info
+                                .scope_graph
+                                .wrap(scope, ScopeType::TypeParams);
+                            let name = ResolvedName {
+                                scope: eval_scope,
+                                ident: ty_arg,
+                            };
+
+                            let res = self.type_info.scope_graph.insert_type(
+                                eval_scope,
+                                &Meta {
+                                    id: meta.id,
+                                    node: ty_arg,
+                                },
+                                st.node
+                                    .description()
+                                    .map(|d| d.to_string())
+                                    .unwrap_or(String::new()),
+                                st.node.argument_type_definition().unwrap_or(
+                                    TypeDefinition::Primitive(
+                                        Primitive::String,
+                                    ),
+                                ),
+                            );
+
+                            let _opt = self.type_info.resolve_type_name(name);
+
+                            if let Err(e) = res {
+                                return Err(TypeError {
+                                    description: format!("{:?}", st.node),
+                                    location: st.id,
+                                    labels: vec![Label::error(
+                                        "does some stupid shit",
+                                        st.id,
+                                    )],
+                                    notes: Vec::new(),
+                                });
+                            }
+                        }
+                    }
+                }
+                modules.push((scope, m));
             }
-            modules.push((scope, m))
         }
+        println!("[declare_modules] done");
         Ok(modules)
     }
 
@@ -683,7 +804,8 @@ impl TypeChecker {
                     | ast::Declaration::FilterMap(_)
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Const(_)
-                    | ast::Declaration::Import(_) => continue,
+                    | ast::Declaration::Import(_)
+                    | ast::Declaration::YangModule(_) => continue,
                     ast::Declaration::Enum(ast::EnumTypeDeclaration {
                         ident,
                         type_params,
@@ -892,6 +1014,7 @@ impl TypeChecker {
                         let ty = self.evaluate_type_expr(scope, &x.ty)?;
                         self.insert_const(scope, x.ident.clone(), ty)?;
                     }
+                    ast::Declaration::YangModule(_) => continue,
                     ast::Declaration::Test(_) => continue,
                     ast::Declaration::Record(_) => continue,
                     ast::Declaration::Enum(_) => continue,
@@ -918,6 +1041,9 @@ impl TypeChecker {
                     ast::Declaration::Test(x) => {
                         self.test(scope, x)?;
                     }
+                    // ast::Declaration::YangStatement(y) => {
+                    //     self.constant(scope, y)?;
+                    // }
                     _ => {}
                 }
             }
