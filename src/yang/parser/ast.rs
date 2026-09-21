@@ -144,9 +144,9 @@ pub struct YangStmtSeq {
 
 impl YangStmtSeq {
     /// Return the yang module if it is one, otherwise none.
-    pub fn is_module(&self) -> Option<(&Meta<Identifier>, &Meta<Expr>)> {
+    pub fn is_module(&self) -> Option<(&Self, bool)> {
         match &self.stmt {
-            YangStmt::Module(meta, _) => Some((meta, &self.sub_stmts)),
+            YangStmt::Module(meta, is_sub) => Some((self, *is_sub)),
             _ => None,
         }
     }
@@ -155,16 +155,32 @@ impl YangStmtSeq {
     ///
     /// Returns None if the sub-statement does not exist.
     pub fn description(&self) -> Option<String> {
-        let Expr::Block(sub_stmts) = &self.sub_stmts.node else {
-            return None;
-        };
-
-        sub_stmts
+        self.sub_stmts
             .node
-            .stmts
-            .iter()
-            .find(|stmt| stmt.node.is_keyword(Keyword::Description))
-            .and_then(|stmt| stmt.node.argument_string())
+            .find_attr("description")
+            .map(|d| d.to_string())
+    }
+
+    /// docs
+    pub fn iter_block_stmts(&self) -> impl Iterator<Item = &Meta<Stmt>> {
+        self.sub_stmts.iter_stmt()
+    }
+
+    /// docs
+    pub fn find_attr(&self, name: &str) -> Option<&Meta<Argument>> {
+        self.iter_block_stmts()
+            .find(|stmt| {
+                stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false)
+            })
+            .and_then(|stmt| {
+                stmt.argument()
+                // stmt.argument().and_then(|a| {
+                //     Some(Meta {
+                //         id: a.id,
+                //         node: a.as_str(),
+                //     })
+                // })
+            })
     }
 
     /// Returns the argument type definition of this [`YangStmtSeq`].
@@ -179,32 +195,42 @@ impl YangStmtSeq {
         }
     }
 
-    pub fn get_argument(&self) -> Option<&Meta<Argument>> {
+    /// docs
+    pub fn argument(&self) -> Option<&Meta<Argument>> {
         // let Stmt::YangStmtSeq(yang_s) = &self else {
         //     return None;
         // };
-        let yang_s = self;
+        // let yang_s = self;
 
-        if yang_s.arg.is_some() {
-            return yang_s.arg.as_ref();
+        // if yang_s.arg.is_some() {
+        //     return yang_s.arg.as_ref();
+        // }
+
+        if let Expr::Argument(arg) = &self.sub_stmts.node {
+            Some(arg)
+        } else {
+            self.arg.as_ref()
         }
 
-        println!("[get_argument] {:?}", yang_s);
-        let derive_type = yang_s.sub_stmts.iter_stmt().find(|stmt| {
-            stmt.is_keyword(crate::yang::parser::Keyword::Type)
-        })?;
+        // Some(Meta {
+        //     id: arg.id,
+        //     node: arg_ident,
+        // })
+        // let derive_type = yang_s.sub_stmts.iter_stmt().find(|stmt| {
+        //     stmt.is_keyword(crate::yang::parser::Keyword::Type)
+        // })?;
 
-        let Stmt::YangStmtSeq(YangStmtSeq { sub_stmts, .. }) =
-            &derive_type.node
-        else {
-            return None;
-        };
+        // let Stmt::YangStmtSeq(YangStmtSeq { sub_stmts, .. }) =
+        //     &derive_type.node
+        // else {
+        //     return None;
+        // };
 
-        let Expr::Argument(arg) = &sub_stmts.node else {
-            return None;
-        };
+        // let Expr::Argument(arg) = &sub_stmts.node else {
+        //     return None;
+        // };
 
-        Some(arg)
+        // Some(arg)
     }
 }
 
@@ -225,6 +251,14 @@ impl Argument {
             Argument::UnquotedString(_literal) => None,
             Argument::QuotedString(_literal) => None,
             Argument::Ident(identifier) => Some(*identifier),
+        }
+    }
+
+    pub fn as_str(&self) -> String {
+        match self {
+            Argument::UnquotedString(literal) => literal.to_string(),
+            Argument::QuotedString(literal) => literal.to_string(),
+            Argument::Ident(identifier) => identifier.to_string(),
         }
     }
 }

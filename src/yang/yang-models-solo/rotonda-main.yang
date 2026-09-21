@@ -32,11 +32,10 @@ module rotonda-conf {
   }
 }
 
-submodule rotonda-running-state {
+module rotonda-running-state {
   yang-version 1.1;
-  // namespace "urn:nlnetlabs:rotonda:state";
-  // prefix "rotonda-running-state";
-  belongs-to "ietf-bgp";
+  namespace "urn:nlnetlabs:rotonda:state";
+  prefix "rotonda-running-state";
 
   container "rotonda-state-root" {
     leaf rotonda-id {

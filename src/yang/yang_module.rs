@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 
 use ariadne::IndexType;
 
-use crate::ast::{Declaration, Stmt, SyntaxTree, YangModuleDeclaration};
+use crate::ast::{
+    Declaration, Path, Stmt, SyntaxTree, YangModuleDeclaration,
+};
+use crate::parser::ParseError;
 use crate::yang::parser::ast::Argument;
 use crate::yang::yang_file_tree::YangFileTree;
 use crate::{FileTree, RotoError};
@@ -31,6 +34,8 @@ pub struct ModuleRef(pub usize);
 
 pub struct Module {
     pub ident: Meta<Identifier>,
+    pub prefix: Meta<Identifier>,
+    pub namespace: Meta<String>,
     pub ast: SyntaxTree,
     pub children: BTreeMap<Identifier, ModuleRef>,
     pub parent: Option<ModuleRef>,
@@ -66,8 +71,16 @@ impl Parsed {
                 }
             };
 
-            for (mi, YangModuleDeclaration { ident, body }) in
-                ast.yang_modules().enumerate()
+            for (
+                mi,
+                YangModuleDeclaration {
+                    ident,
+                    prefix,
+                    namespace,
+                    parent,
+                    ..
+                },
+            ) in ast.yang_modules().enumerate()
             {
                 // let ident = module.node;
                 // let ident = spans.add(
@@ -83,10 +96,39 @@ impl Parsed {
                     declarations: [ast.declarations[mi].clone()].to_vec(),
                 };
 
+                let (prefix, namespace, parent) = match parent {
+                    // no parent means it has to be a module
+                    None => (
+                        prefix.clone().unwrap(),
+                        namespace.clone().unwrap(),
+                        None,
+                    ),
+                    Some(p) => {
+                        let Some((parent_id, pm_dec)) = ast
+                            .yang_modules()
+                            .enumerate()
+                            .find(|(_, ym)| ym.ident.node == p.node)
+                        else {
+                            errors.push(RotoError::Custom(
+                                "something with sub-module".to_string(),
+                            ));
+                            continue;
+                        };
+
+                        (
+                            pm_dec.prefix.clone().unwrap(),
+                            pm_dec.namespace.clone().unwrap(),
+                            Some(ModuleRef(parent_id)),
+                        )
+                    }
+                };
+
                 modules.push(Module {
                     ident: ident.clone(),
+                    prefix,
+                    namespace: namespace.clone(),
                     children: BTreeMap::new(),
-                    parent: None,
+                    parent,
                     ast: module_ast,
                 });
             }
@@ -128,14 +170,14 @@ impl Parsed {
         // First add all modules to the tree
         for (i, file) in file_tree.files.iter().enumerate() {
             let ident: Identifier = (&file.module_name).into();
-            let mut ident = spans.add(
-                Span {
-                    file: i,
-                    start: 0,
-                    end: 1,
-                },
-                ident,
-            );
+            // let mut ident = spans.add(
+            //     Span {
+            //         file: i,
+            //         start: 0,
+            //         end: 1,
+            //     },
+            //     ident,
+            // );
 
             let ast = match YangParser::parse(i, &mut spans, &file.contents) {
                 Ok(ast) => ast,
@@ -147,6 +189,8 @@ impl Parsed {
 
             if let Declaration::YangModule(YangModuleDeclaration {
                 ident,
+                prefix,
+                namespace,
                 ..
             }) = &ast.declarations[0]
             {
@@ -158,16 +202,18 @@ impl Parsed {
                     },
                     ident,
                 );
+
+                file_to_mod.insert(i, modules.len());
+
+                modules.push(Module {
+                    ident: ident.clone(),
+                    prefix: prefix.clone().unwrap(),
+                    namespace: namespace.clone().unwrap(),
+                    children: BTreeMap::new(),
+                    parent: None,
+                    ast,
+                })
             }
-
-            file_to_mod.insert(i, modules.len());
-
-            modules.push(Module {
-                ident,
-                children: BTreeMap::new(),
-                parent: None,
-                ast,
-            })
         }
 
         if !errors.is_empty() {

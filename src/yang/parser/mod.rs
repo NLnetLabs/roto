@@ -575,40 +575,108 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
             note: None,
             hints: Vec::new(),
         };
-        let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Keyword(Keyword::Module)
-            | Token::Keyword(Keyword::SubModule) => {
-                let (module, span) = self.yang_stmt_seq(None)?;
-                let module = module.is_module().ok_or_else(|| {
-                    ParseError::expected(
-                        "a yang (xub)module",
-                        module.node.stmt.clone(),
-                        span,
-                    )
-                })?;
 
-                Declaration::YangModule(
-                    // Stmt::YangStmtSeq(self.yang_stmt_seq(None)?.0.node),
-                    YangModuleDeclaration {
-                        ident: module.0.clone(),
-                        body: module.1.clone(),
+        let (module_tree, span) = self.yang_stmt_seq(None)?;
+        let expr = match module_tree.is_module() {
+            Some((module, is_sub)) if !is_sub => {
+                let Some(prefix) = module.find_attr("prefix") else {
+                    return Err(Box::new(ParseError::expected(
+                        "a prefix statement",
+                        "nothing",
+                        span,
+                    )));
+                };
+                let Some(namespace) = module.find_attr("namespace") else {
+                    return Err(Box::new(ParseError::expected(
+                        "a namespace statement",
+                        "nothing",
+                        span,
+                    )));
+                };
+                Ok(Declaration::YangModule(YangModuleDeclaration {
+                    ident: Meta {
+                        id: module_tree.id,
+                        node: module.stmt.as_ident(),
                     },
-                )
+                    prefix: Some(Meta {
+                        id: prefix.id,
+                        node: prefix.as_ident().unwrap(),
+                    }),
+                    namespace: Some(Meta {
+                        id: namespace.id,
+                        node: namespace.as_str(),
+                    }),
+                    parent: None,
+                    body: module.sub_stmts.clone(),
+                }))
             }
-            // Token::Test => Declaration::Test(self.test()?),
-            // Token::Slash | Token::DoubleSlash => {
-            //     Declaration::XPath(self.xpath()?)
-            // }
-            _t => {
+            Some((module, _)) => {
+                let Some(parent) = module.find_attr("belongs-to") else {
+                    return Err(Box::new(ParseError::expected(
+                        "belongs-to",
+                        "nothing",
+                        span,
+                    )));
+                };
+                Ok(Declaration::YangModule(YangModuleDeclaration {
+                    ident: Meta {
+                        id: module_tree.id,
+                        node: module.stmt.as_ident(),
+                    },
+                    parent: Some(Meta {
+                        id: parent.id,
+                        node: parent.as_ident().unwrap(),
+                    }),
+                    body: module.sub_stmts.clone(),
+                    prefix: None,
+                    namespace: None,
+                }))
+            }
+            None => {
                 let (token, span) = self.next()?;
-                return Err(Box::new(ParseError::expected(
+                Err(Box::new(ParseError::expected(
                     "a yang (zub)module",
                     token,
                     span,
-                )));
+                )))
             }
         };
-        Ok(expr)
+
+        // let expr = match self.peek().ok_or(end_of_input)? {
+        //     Token::Keyword(Keyword::Module)
+        //     | Token::Keyword(Keyword::SubModule) => {
+        //         let (module, span) = self.yang_stmt_seq(None)?;
+        //         let module = module.is_module().ok_or_else(|| {
+        //             ParseError::expected(
+        //                 "a yang (xub)module",
+        //                 module.node.stmt.clone(),
+        //                 span,
+        //             )
+        //         })?;
+
+        //         Declaration::YangModule(
+        //             // Stmt::YangStmtSeq(self.yang_stmt_seq(None)?.0.node),
+        //             YangModuleDeclaration {
+        //                 ident: module.0.clone(),
+        //                 prefix: module.0
+        //                 body: module.1.clone(),
+        //             },
+        //         )
+        //     }
+        //     // Token::Test => Declaration::Test(self.test()?),
+        //     // Token::Slash | Token::DoubleSlash => {
+        //     //     Declaration::XPath(self.xpath()?)
+        //     // }
+        //     _t => {
+        //         let (token, span) = self.next()?;
+        //         return Err(Box::new(ParseError::expected(
+        //             "a yang (zub)module",
+        //             token,
+        //             span,
+        //         )));
+        //     }
+        // };
+        expr
     }
 
     fn yang_stmt_seq(
@@ -955,6 +1023,21 @@ impl YangStmt {
             YangStmt::Module(_meta, _) => false,
             YangStmt::Stmt(meta) => meta.node == kw,
             YangStmt::ExtStmt((_p, _meta)) => false,
+        }
+    }
+
+    pub fn as_ident(&self) -> Identifier {
+        match self {
+            YangStmt::Module(meta, _) => Identifier::from(meta.node.as_str()),
+            YangStmt::Stmt(meta) => Identifier::from(meta.node.as_str()),
+            YangStmt::ExtStmt((p, meta)) => Identifier::from(
+                format!(
+                    "{}:{}",
+                    p.clone().map(|p| p.as_str()).unwrap_or(""),
+                    meta.clone().map(|m| m.as_str()).unwrap_or("")
+                )
+                .as_str(),
+            ),
         }
     }
 }
