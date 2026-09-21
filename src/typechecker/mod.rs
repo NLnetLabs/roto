@@ -558,6 +558,7 @@ impl TypeChecker {
                 ast,
                 children: _,
                 parent,
+                ..
             } = m;
             let parent_module = parent.map(|p| modules[p.0].0);
             let mod_scope = ModuleScope {
@@ -707,38 +708,33 @@ impl TypeChecker {
                             //             crate::yang::parser::Keyword::Type,
                             //         )
                             //     });
-                            let type_arg = st.node.get_argument();
+                            println!("{:?}", st.node);
+                            let Some(type_name) = st.node.argument() else {
+                                ice!("cannot find type name")
+                            };
 
-                            let ty_arg =
-                                type_arg.unwrap().as_ident().unwrap();
+                            let Some(type_name) = type_name.as_ident() else {
+                                ice!("type name {type_name} is invalid");
+                            };
+
+                            // let ty_arg =
+                            //     type_name.unwrap().as_ident().unwrap();
                             println!(
                                 "[declare_modules] declare type \
                                 {:?}",
-                                ty_arg.as_str()
+                                type_name.to_string()
                             );
 
-                            // println!(
-                            //     "[declare_modules] builtins {:#?}",
-                            //     self.type_info
-                            //         .scope_graph
-                            //         .declarations
-                            //         .get(&name)
-                            // );
-
-                            let eval_scope = self
-                                .type_info
-                                .scope_graph
-                                .wrap(scope, ScopeType::TypeParams);
                             let name = ResolvedName {
-                                scope: eval_scope,
-                                ident: ty_arg,
+                                scope,
+                                ident: type_name,
                             };
 
                             let res = self.type_info.scope_graph.insert_type(
-                                eval_scope,
+                                scope,
                                 &Meta {
                                     id: meta.id,
-                                    node: ty_arg,
+                                    node: type_name,
                                 },
                                 st.node
                                     .description()
@@ -756,11 +752,21 @@ impl TypeChecker {
                             if let Err(e) = res {
                                 return Err(TypeError {
                                     description: format!("{:?}", st.node),
-                                    location: st.id,
-                                    labels: vec![Label::error(
-                                        "does some stupid shit",
-                                        st.id,
-                                    )],
+                                    location: meta.id,
+                                    labels: vec![
+                                        Label::error(
+                                            format!(
+                                                "`{type_name}` redefined here"
+                                            ),
+                                            meta.id,
+                                        ),
+                                        Label::info(
+                                            format!(
+                                                "`{type_name}` previously declared here"
+                                            ),
+                                            e,
+                                        ),
+                                    ],
                                     notes: Vec::new(),
                                 });
                             }

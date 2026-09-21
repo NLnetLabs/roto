@@ -17,10 +17,17 @@ exclude = [
   "/tooling",
 ]
 
+
 [[bin]]
 name = "roto"
 path = "src/main.rs"
 required-features = ["cli"]
+test = false
+bench = false
+
+[[bin]]
+name = "validate_yang_models"
+path = "bin/validate_yang_models.rs"
 test = false
 bench = false
 
@@ -44,6 +51,8 @@ rustc-literal-escaper = "0.0.7"
 libc = "0.2"
 sealed = "0.6.0"
 indexmap = "2.14.0"
+icu = { version = "1.5", features = ["compiled_data"] }
+serde = { version = "1.0.228", features = ["derive"] }
 
 [dependencies.cranelift]
 version = "0.127.1"

@@ -40,7 +40,7 @@ impl Label {
     }
 
     /// Create an info label
-    fn info(msg: impl Display, id: MetaId) -> Self {
+    pub fn info(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Info,
             id,

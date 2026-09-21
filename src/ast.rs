@@ -9,7 +9,10 @@ use inetnum::asn::Asn;
 use symbol_table::GlobalSymbol;
 
 use crate::{
-    parser::meta::{Meta, MetaId},
+    parser::{
+        ParseError,
+        meta::{Meta, MetaId},
+    },
     typechecker::types::TypeDefinition,
     yang::parser::{
         Keyword,
@@ -53,12 +56,9 @@ impl SyntaxTree {
     pub fn yang_modules(
         &self,
     ) -> impl Iterator<Item = &YangModuleDeclaration> {
-        self.declarations.iter().filter_map(|d| {
-            if let Declaration::YangModule(y) = d {
-                Some(y)
-            } else {
-                None
-            }
+        self.declarations.iter().filter_map(|d| match d {
+            Declaration::YangModule(y) => Some(y),
+            _ => None,
         })
     }
 }
@@ -123,9 +123,15 @@ pub struct FunctionDeclaration {
     pub body: Meta<Block>,
 }
 
+/// A yang module declaration which both covers `module` and `submodule`
+/// keywords. `prefix` and `namepspace` are mandatory for `module`, but do not
+/// appear in `submodule`.
 #[derive(Clone, Debug)]
 pub struct YangModuleDeclaration {
     pub ident: Meta<Identifier>,
+    pub prefix: Option<Meta<Identifier>>,
+    pub namespace: Option<Meta<String>>,
+    pub parent: Option<Meta<Identifier>>,
     pub body: Meta<Expr>,
 }
 
@@ -152,17 +158,38 @@ pub enum Stmt {
 }
 
 impl Stmt {
-    pub fn argument_string(&self) -> Option<String> {
+    pub fn argument(&self) -> Option<&Meta<Argument>> {
+        if let Stmt::YangStmtSeq(seq) = self {
+            seq.argument()
+        } else {
+            None
+        }
+
+        // if let Stmt::YangStmtSeq(YangStmtSeq { arg, .. }) = self {
+        //     dbg!(arg);
+        //     dbg!(self);
+        //     arg.as_ref().and_then(|a| {
+        //         dbg!(a.node.as_ident().map(|arg| Meta {
+        //             id: a.id,
+        //             node: arg,
+        //         }))
+        //     })
+        // } else {
+        //     None
+        // }
+    }
+
+    pub fn arg_as_ident(&self) -> Option<Identifier> {
         if let Stmt::YangStmtSeq(YangStmtSeq { arg, .. }) = self {
-            arg.as_ref().map(|a| a.node.to_string())
+            arg.as_ref().and_then(|a| a.node.as_ident())
         } else {
             None
         }
     }
 
     pub fn as_ident(&self) -> Option<Identifier> {
-        if let Stmt::YangStmtSeq(YangStmtSeq { arg, .. }) = self {
-            arg.as_ref().and_then(|a| a.node.as_ident())
+        if let Stmt::YangStmtSeq(YangStmtSeq { stmt, .. }) = self {
+            Some(stmt.as_ident())
         } else {
             None
         }
@@ -190,33 +217,6 @@ impl Stmt {
         };
 
         yang_s.argument_type_definition()
-    }
-
-    pub fn get_argument(&self) -> Option<&Meta<Argument>> {
-        let Stmt::YangStmtSeq(yang_s) = &self else {
-            return None;
-        };
-
-        if yang_s.arg.is_some() {
-            return yang_s.arg.as_ref();
-        }
-
-        println!("[get_argument] {:?}", yang_s);
-        let derive_type = yang_s.sub_stmts.iter_stmt().find(|stmt| {
-            stmt.is_keyword(crate::yang::parser::Keyword::Type)
-        })?;
-
-        let Stmt::YangStmtSeq(YangStmtSeq { sub_stmts, .. }) =
-            &derive_type.node
-        else {
-            return None;
-        };
-
-        let Expr::Argument(arg) = &sub_stmts.node else {
-            return None;
-        };
-
-        Some(arg)
     }
 }
 
@@ -329,6 +329,20 @@ impl Expr {
         }
         .into_iter()
         .flatten()
+    }
+
+    pub fn find_attr(&self, name: &str) -> Option<&Meta<Argument>> {
+        self.iter_stmt()
+            .find(|stmt| {
+                dbg!(stmt.as_ident());
+                dbg!(name);
+                dbg!(
+                    stmt.as_ident()
+                        .map(|i| i.as_str() == name)
+                        .unwrap_or(false)
+                )
+            })
+            .and_then(|stmt| stmt.argument())
     }
 }
 
