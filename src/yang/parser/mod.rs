@@ -264,7 +264,7 @@ impl<'source> YangParser<'source, '_> {
 
     /// Move the lexer forward if the token is a keyword.
     /// Keywords are either a builtin string or a string containing a colon,
-    /// but not in the first or the last position, i.e. 'namespace:keywrord'.
+    /// but not in the first or the last position, i.e. 'namespace:keyword'.
     ///
     /// Furthermore a keyword always represents a yang (sub-)statement. if
     /// it's a sub-statement it may invalid for a specific parent statement.
@@ -899,6 +899,22 @@ impl YangParser<'_, '_> {
         };
 
         let arg = match token {
+            Token::Ident(s) if s.contains(':') => {
+                let split = s.split(':').collect::<Vec<_>>();
+
+                if split.len() != 2 {
+                    return Err(Box::new(ParseError::expected(
+                        "an identifier with or without a prefix separated \
+                        by ':'",
+                        s,
+                        span,
+                    )));
+                };
+                Argument::PrefixIdent((
+                    Identifier::from(split[0]),
+                    Identifier::from(split[1]),
+                ))
+            }
             Token::Ident(s) => Argument::Ident(Identifier::from(s)),
             // double quoted string, this actually matters, since yang only
             // has special characters in double quoted strings.

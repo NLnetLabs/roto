@@ -195,42 +195,15 @@ impl YangStmtSeq {
         }
     }
 
-    /// docs
+    /// The argument of a yang statement sequence may end up sub_stmts, if
+    /// there is no block in the sequence. So we have to look in two places:
+    /// the `arg` field or the first `sub_stmts`.
     pub fn argument(&self) -> Option<&Meta<Argument>> {
-        // let Stmt::YangStmtSeq(yang_s) = &self else {
-        //     return None;
-        // };
-        // let yang_s = self;
-
-        // if yang_s.arg.is_some() {
-        //     return yang_s.arg.as_ref();
-        // }
-
         if let Expr::Argument(arg) = &self.sub_stmts.node {
             Some(arg)
         } else {
             self.arg.as_ref()
         }
-
-        // Some(Meta {
-        //     id: arg.id,
-        //     node: arg_ident,
-        // })
-        // let derive_type = yang_s.sub_stmts.iter_stmt().find(|stmt| {
-        //     stmt.is_keyword(crate::yang::parser::Keyword::Type)
-        // })?;
-
-        // let Stmt::YangStmtSeq(YangStmtSeq { sub_stmts, .. }) =
-        //     &derive_type.node
-        // else {
-        //     return None;
-        // };
-
-        // let Expr::Argument(arg) = &sub_stmts.node else {
-        //     return None;
-        // };
-
-        // Some(arg)
     }
 }
 
@@ -239,7 +212,7 @@ pub enum Argument {
     UnquotedString(Literal),
     QuotedString(Literal),
     Ident(Identifier),
-    // Empty,
+    PrefixIdent((Identifier, Identifier)),
 }
 
 impl Argument {
@@ -251,6 +224,7 @@ impl Argument {
             Argument::UnquotedString(_literal) => None,
             Argument::QuotedString(_literal) => None,
             Argument::Ident(identifier) => Some(*identifier),
+            Argument::PrefixIdent(ident) => Some(ident.1),
         }
     }
 
@@ -259,6 +233,7 @@ impl Argument {
             Argument::UnquotedString(literal) => literal.to_string(),
             Argument::QuotedString(literal) => literal.to_string(),
             Argument::Ident(identifier) => identifier.to_string(),
+            Argument::PrefixIdent((p, ident)) => format!("{p}:{ident}"),
         }
     }
 }
@@ -269,6 +244,7 @@ impl std::fmt::Display for Argument {
             Argument::UnquotedString(literal) => write!(f, "{}", literal),
             Argument::QuotedString(literal) => write!(f, "{}", literal),
             Argument::Ident(identifier) => write!(f, "{}", identifier),
+            Argument::PrefixIdent((p, ident)) => write!(f, "{}:{}", p, ident),
         }
     }
 }

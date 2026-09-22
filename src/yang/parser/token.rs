@@ -370,11 +370,12 @@ impl<'s> Lexer<'s> {
 
             // If we have `10..` or `10._hello` or `10.hello` we should treat this as an integer
             if let Some(c) = rest.chars().next() {
+                let var_name = c == '-';
                 if XID_START.contains(c)
                     || c == ':'
                     || c == '.'
                     || c == '_'
-                    || c == '-'
+                    || var_name
                 {
                     return ControlFlow::Continue(());
                 }
@@ -806,6 +807,7 @@ impl Keyword {
             },
             Argument::UnquotedString(literal) => todo!(),
             Argument::QuotedString(literal) => todo!(),
+            Argument::PrefixIdent(_) => todo!(),
         }
     }
 

@@ -7,8 +7,13 @@ module rotonda-conf {
     prefix yangmnt;
   }
 
-  typedef "ip-address-origin" {
-    type uint32;
+  import ietf-inet {
+    prefix inet;
+  }
+
+  typedef "xip-address-origin" {
+    type inet:ipv4-prefix;
+    //type uint32;
   }
 
   typedef 'ipx-address-origin' {
