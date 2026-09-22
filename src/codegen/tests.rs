@@ -46,6 +46,257 @@ fn compile_with_runtime<Ctx: OptCtx>(
     }
 }
 
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+mod far_jit_memory {
+    use std::{
+        io, ptr,
+        sync::{Arc, Mutex},
+    };
+
+    use cranelift::module::ModuleResult;
+    use cranelift_jit::{BranchProtection, JITMemoryKind, JITMemoryProvider};
+
+    #[derive(Default)]
+    pub(super) struct AllocationAddresses {
+        pub(super) executable: Vec<usize>,
+        pub(super) read_only: Vec<usize>,
+    }
+
+    struct ReservedAddressSpace {
+        base: usize,
+        len: usize,
+        page_size: usize,
+    }
+
+    impl ReservedAddressSpace {
+        fn new() -> Self {
+            let page_size =
+                usize::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) })
+                    .unwrap();
+            let len = (i32::MAX as usize)
+                .checked_add(16 * 1024 * 1024)
+                .unwrap()
+                .next_multiple_of(page_size);
+            let mapping = unsafe {
+                libc::mmap(
+                    ptr::null_mut(),
+                    len,
+                    libc::PROT_NONE,
+                    libc::MAP_PRIVATE
+                        | libc::MAP_ANONYMOUS
+                        | libc::MAP_NORESERVE,
+                    -1,
+                    0,
+                )
+            };
+            assert_ne!(mapping, libc::MAP_FAILED);
+            Self {
+                base: mapping.addr(),
+                len,
+                page_size,
+            }
+        }
+    }
+
+    impl Drop for ReservedAddressSpace {
+        fn drop(&mut self) {
+            let result = unsafe {
+                libc::munmap(self.base as *mut libc::c_void, self.len)
+            };
+            assert_eq!(result, 0);
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum FinalProtection {
+        Executable,
+        Immutable,
+        Mutable,
+    }
+
+    struct Allocation {
+        addr: usize,
+        len: usize,
+        final_protection: FinalProtection,
+    }
+
+    /// Places executable and read-only allocations at opposite ends of a
+    /// virtual address reservation so they deterministically exceed x86_64's
+    /// signed 32-bit relative addressing range.
+    pub(super) struct FarMemoryProvider {
+        space: ReservedAddressSpace,
+        low_offset: usize,
+        high_offset: usize,
+        allocations: Vec<Allocation>,
+        addresses: Arc<Mutex<AllocationAddresses>>,
+    }
+
+    impl FarMemoryProvider {
+        pub(super) fn new() -> (Self, Arc<Mutex<AllocationAddresses>>) {
+            let space = ReservedAddressSpace::new();
+            let high_offset = space.len;
+            let addresses =
+                Arc::new(Mutex::new(AllocationAddresses::default()));
+            (
+                Self {
+                    space,
+                    low_offset: 0,
+                    high_offset,
+                    allocations: Vec::new(),
+                    addresses: Arc::clone(&addresses),
+                },
+                addresses,
+            )
+        }
+
+        fn allocate_at(
+            &mut self,
+            size: usize,
+            align: u64,
+            high: bool,
+            final_protection: FinalProtection,
+        ) -> io::Result<*mut u8> {
+            assert!(usize::try_from(align).unwrap() <= self.space.page_size);
+            let len = size
+                .next_multiple_of(self.space.page_size)
+                .max(self.space.page_size);
+            let addr = if high {
+                self.high_offset -= len;
+                self.space.base + self.high_offset
+            } else {
+                let addr = self.space.base + self.low_offset;
+                self.low_offset += len;
+                addr
+            };
+            assert!(self.low_offset <= self.high_offset);
+            let result = unsafe {
+                libc::mprotect(
+                    addr as *mut libc::c_void,
+                    len,
+                    libc::PROT_READ | libc::PROT_WRITE,
+                )
+            };
+            assert_eq!(result, 0);
+            self.allocations.push(Allocation {
+                addr,
+                len,
+                final_protection,
+            });
+            Ok(addr as *mut u8)
+        }
+    }
+
+    impl JITMemoryProvider for FarMemoryProvider {
+        fn allocate(
+            &mut self,
+            size: usize,
+            align: u64,
+            kind: JITMemoryKind,
+        ) -> io::Result<*mut u8> {
+            let (high, final_protection) = match kind {
+                JITMemoryKind::Executable => {
+                    (false, FinalProtection::Executable)
+                }
+                JITMemoryKind::ReadOnly => (true, FinalProtection::Immutable),
+                JITMemoryKind::Writable => (false, FinalProtection::Mutable),
+            };
+            let ptr =
+                self.allocate_at(size, align, high, final_protection)?;
+            let mut addresses = self.addresses.lock().unwrap();
+            match kind {
+                JITMemoryKind::Executable => {
+                    addresses.executable.push(ptr.addr())
+                }
+                JITMemoryKind::ReadOnly => {
+                    addresses.read_only.push(ptr.addr())
+                }
+                JITMemoryKind::Writable => {}
+            }
+            Ok(ptr)
+        }
+
+        unsafe fn free_memory(&mut self) {
+            self.allocations.clear();
+        }
+
+        fn finalize(
+            &mut self,
+            _branch_protection: BranchProtection,
+        ) -> ModuleResult<()> {
+            for allocation in &self.allocations {
+                let protection = match allocation.final_protection {
+                    FinalProtection::Executable => {
+                        libc::PROT_READ | libc::PROT_EXEC
+                    }
+                    FinalProtection::Immutable => libc::PROT_READ,
+                    FinalProtection::Mutable => {
+                        libc::PROT_READ | libc::PROT_WRITE
+                    }
+                };
+                let result = unsafe {
+                    libc::mprotect(
+                        allocation.addr as *mut libc::c_void,
+                        allocation.len,
+                        protection,
+                    )
+                };
+                assert_eq!(result, 0);
+            }
+            Ok(())
+        }
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", target_os = "linux"))]
+#[test]
+/// Exercises the Roto compilation path that originally exposed
+/// out-of-range x86_64 symbol-address relocations in Cranelift's JIT.
+fn far_jit_data_address() {
+    let source = src!(
+        r#"
+        fn main() -> String {
+            "far away"
+        }
+    "#
+    );
+    let runtime = Runtime::new();
+    let (memory_provider, addresses) =
+        far_jit_memory::FarMemoryProvider::new();
+
+    let mut package = source
+        .parse()
+        .and_then(|parsed| parsed.typecheck(&runtime))
+        .map(|checked| {
+            checked
+                .lower_to_mir()
+                .lower_to_lir()
+                .codegen_with_memory_provider(Box::new(memory_provider))
+        })
+        .unwrap();
+
+    let addresses = addresses.lock().unwrap();
+    assert!(
+        !addresses.executable.is_empty(),
+        "the test program did not allocate executable memory"
+    );
+    assert!(
+        !addresses.read_only.is_empty(),
+        "the test program did not allocate read-only memory"
+    );
+    assert!(
+        addresses.executable.iter().any(|executable| {
+            addresses.read_only.iter().any(|read_only| {
+                executable.abs_diff(*read_only) > i32::MAX as usize
+            })
+        }),
+        "the test memory provider did not exceed the signed 32-bit relative addressing range"
+    );
+    drop(addresses);
+
+    let main = package.get_function::<fn() -> RotoString>("main").unwrap();
+    assert_eq!(main.call(), "far away".into());
+}
+
 #[test]
 fn unit() {
     let s = src!(

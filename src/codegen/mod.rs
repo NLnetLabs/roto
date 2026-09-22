@@ -42,7 +42,7 @@ use cranelift::{
         FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
         Variable,
     },
-    jit::{JITBuilder, JITModule},
+    jit::{JITBuilder, JITMemoryProvider, JITModule},
     module::{DataDescription, FuncId, Linkage, Module as _},
     prelude::{FloatCC, Signature},
 };
@@ -368,6 +368,43 @@ pub fn codegen<Ctx: OptCtx>(
     label_store: LabelStore,
     type_info: TypeInfo,
 ) -> Module<Ctx> {
+    codegen_inner(
+        runtime,
+        ir,
+        runtime_functions,
+        label_store,
+        type_info,
+        None,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
+    runtime: &Runtime<Ctx>,
+    ir: &[lir::Item],
+    runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
+    label_store: LabelStore,
+    type_info: TypeInfo,
+    memory_provider: Box<dyn JITMemoryProvider + Send>,
+) -> Module<Ctx> {
+    codegen_inner(
+        runtime,
+        ir,
+        runtime_functions,
+        label_store,
+        type_info,
+        Some(memory_provider),
+    )
+}
+
+fn codegen_inner<Ctx: OptCtx>(
+    runtime: &Runtime<Ctx>,
+    ir: &[lir::Item],
+    runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
+    label_store: LabelStore,
+    type_info: TypeInfo,
+    memory_provider: Option<Box<dyn JITMemoryProvider + Send>>,
+) -> Module<Ctx> {
     let runtime = &runtime.rt;
 
     // The ISA is the Instruction Set Architecture. We always compile for
@@ -388,6 +425,9 @@ pub fn codegen<Ctx: OptCtx>(
         isa.to_owned(),
         cranelift::module::default_libcall_names(),
     );
+    if let Some(memory_provider) = memory_provider {
+        builder.memory_provider(memory_provider);
+    }
 
     // This is a fix for cranelift not finding the memcpy libcall when it is
     // compiled with static linking (e.g. with musl).
