@@ -462,3 +462,53 @@ fn string_global() {
 
     assert_eq!(res, IrValue::Bool(true));
 }
+
+#[test]
+fn exp_int() {
+    let s = src!(
+        "
+    filtermap main() {
+        let a: u8 = 3 ** 4;
+        if a == 81 {
+            accept
+        } else {
+            reject
+        }
+    }
+    "
+    );
+
+    let mut mem = Memory::new();
+    let rt = Runtime::new();
+    let program = compile(s, &rt);
+    let pointer = mem.allocate(1);
+    let ctx = IrValue::Pointer(mem.allocate(0));
+    program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
+    let res = mem.read_array::<1>(pointer);
+    assert_eq!(0, u8::from_ne_bytes(res));
+}
+
+#[test]
+fn exp_float() {
+    let s = src!(
+        "
+    filtermap main() {
+        let a: f64 = 2.0 ** 3.0;
+        if a == 8.0 {
+            accept
+        } else {
+            reject
+        }
+    }
+    "
+    );
+
+    let mut mem = Memory::new();
+    let rt = Runtime::new();
+    let program = compile(s, &rt);
+    let pointer = mem.allocate(1);
+    let ctx = IrValue::Pointer(mem.allocate(0));
+    program.eval(&mut mem, ctx, vec![IrValue::Pointer(pointer)]);
+    let res = mem.read_array::<1>(pointer);
+    assert_eq!(0, u8::from_ne_bytes(res));
+}

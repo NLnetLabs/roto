@@ -861,6 +861,30 @@ fn runtime_function() {
 }
 
 #[test]
+fn exp_negative_exponent_rejected() {
+    let s = src!(
+        "
+        fn main() -> i32 {
+            5 ** -1
+        }
+    "
+    );
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
+fn exp_negative_exponent_rejected2() {
+    let s = src!(
+        "
+        fn main(x: i32, y: i32) -> i32 {
+            x ** -y
+        }
+    "
+    );
+    assert!(typecheck(s).is_err());
+}
+
+#[test]
 fn issue_51() {
     let s = src!(
         "

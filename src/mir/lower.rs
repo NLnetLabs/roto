@@ -21,7 +21,9 @@ use crate::{
         self, PathValue, ResolvedPath,
         info::TypeInfo,
         scope::{DeclarationKind, ResolvedName, ScopeRef, ValueKind},
-        types::{FunctionDefinition, Signature, Type},
+        types::{
+            FloatSize, FunctionDefinition, IntKind, IntSize, Signature, Type,
+        },
     },
     value::ErasedList,
 };
@@ -1005,6 +1007,10 @@ impl<'r> Lowerer<'r> {
             return self.binop_or(l, r);
         }
 
+        if *binop == ast::BinOp::Exp {
+            return self.binop_exp(l_ty, l, r);
+        }
+
         let l_ty = self.type_info.convert(&l_ty);
         let r_ty = self.type_info.convert(&r_ty);
 
@@ -1085,6 +1091,27 @@ impl<'r> Lowerer<'r> {
                 ice!("Operator {binop} is not implemented for List")
             }
         }
+    }
+
+    fn binop_exp(
+        &mut self,
+        ty: Type,
+        l: &Meta<ast::Expr>,
+        r: &Meta<ast::Expr>,
+    ) -> Value {
+        let type_id = self.numeric_type_id(&ty);
+        let exp_ty = if self.type_info.is_int_type(&ty) {
+            Type::u32()
+        } else {
+            ty.clone()
+        };
+        self.desugared_binop(
+            type_id,
+            "pow",
+            ty.clone(),
+            (l, ty.clone()),
+            (r, exp_ty),
+        )
     }
 
     fn binop_and(
@@ -1532,6 +1559,26 @@ impl<'r> Lowerer<'r> {
             };
             let var = var.print(&printer);
             ice!("Variable wasn't live: {var:?}")
+        }
+    }
+
+    fn numeric_type_id(&mut self, ty: &Type) -> TypeId {
+        if let Some((kind, size)) = self.type_info.get_int_type(ty) {
+            return match (kind, size) {
+                (IntKind::Unsigned, IntSize::I8) => TypeId::of::<u8>(),
+                (IntKind::Unsigned, IntSize::I16) => TypeId::of::<u16>(),
+                (IntKind::Unsigned, IntSize::I32) => TypeId::of::<u32>(),
+                (IntKind::Unsigned, IntSize::I64) => TypeId::of::<u64>(),
+                (IntKind::Signed, IntSize::I8) => TypeId::of::<i8>(),
+                (IntKind::Signed, IntSize::I16) => TypeId::of::<i16>(),
+                (IntKind::Signed, IntSize::I32) => TypeId::of::<i32>(),
+                (IntKind::Signed, IntSize::I64) => TypeId::of::<i64>(),
+            };
+        }
+        match self.type_info.get_float_type(ty) {
+            Some(FloatSize::F32) => TypeId::of::<f32>(),
+            Some(FloatSize::F64) => TypeId::of::<f64>(),
+            None => ice!("** on non-numeric type"),
         }
     }
 

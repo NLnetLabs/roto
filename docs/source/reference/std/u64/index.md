@@ -6,6 +6,10 @@ This type can represent integers from 0 up to (and including) 18,446,744,073,709
 `````
 
 
+````{roto:method} u64.pow(self: u64, exp: u32) -> u64
+Raises a number to an integer power.
+````
+
 ````{roto:method} u64.to_string(self: u64) -> String
 Convert this value into a `String`.
 ````

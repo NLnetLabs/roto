@@ -161,6 +161,7 @@ impl<'s> Lexer<'s> {
             [b'+', b'='] => Token::PlusEq,
             [b'-', b'='] => Token::MinusEq,
             [b'*', b'='] => Token::StarEq,
+            [b'*', b'*'] => Token::StarStar,
             [b'/', b'='] => Token::SlashEq,
             [b'%', b'='] => Token::PercentEq,
 

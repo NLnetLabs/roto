@@ -6,6 +6,10 @@ This type can represent integers from 0 up to (and including) 4,294,967,295.
 `````
 
 
+````{roto:method} u32.pow(self: u32, exp: u32) -> u32
+Raises a number to an integer power.
+````
+
 ````{roto:method} u32.to_string(self: u32) -> String
 Convert this value into a `String`.
 ````

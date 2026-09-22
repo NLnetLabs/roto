@@ -116,6 +116,19 @@ macro_rules! float_impl {
     };
 }
 
+macro_rules! int_impl {
+    ($t:ty) => {
+        library! {
+            impl $t {
+                /// Raises a number to an integer power.
+                fn pow(self, exp: u32) -> Self {
+                    self.wrapping_pow(exp)
+                }
+            }
+        }
+    };
+}
+
 fn ip_addr_methods() -> Library {
     library! {
         impl IpAddr {
@@ -617,6 +630,15 @@ pub fn built_ins() -> Library {
 
         include!(float_impl!(f32));
         include!(float_impl!(f64));
+
+        include!(int_impl!(u8));
+        include!(int_impl!(u16));
+        include!(int_impl!(u32));
+        include!(int_impl!(u64));
+        include!(int_impl!(i8));
+        include!(int_impl!(i16));
+        include!(int_impl!(i32));
+        include!(int_impl!(i64));
 
         impl Prefix {
             /// Construct a new prefix.

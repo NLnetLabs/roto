@@ -392,6 +392,8 @@ pub enum BinOp {
     Div,
     /// Modulo ('%')
     Mod,
+    /// Exponentiation ('**')
+    Exp,
 }
 
 impl std::fmt::Display for BinOp {
@@ -413,6 +415,7 @@ impl std::fmt::Display for BinOp {
                 Self::Mul => "*",
                 Self::Div => "/",
                 Self::Mod => "%",
+                Self::Exp => "**",
             }
         )
     }

@@ -23,6 +23,9 @@ pub enum Precedence {
 
     /// The precedence of multiplication and division.
     MulDiv,
+
+    /// The precedence of exponentiation.
+    Exp,
 }
 
 /// Associativity of binary operator.
@@ -54,6 +57,7 @@ impl BinOp {
             | Self::Ge => Precedence::Comparison,
             Self::Mul | Self::Div | Self::Mod => Precedence::MulDiv,
             Self::Add | Self::Sub => Precedence::AddSub,
+            Self::Exp => Precedence::Exp,
         }
     }
 
@@ -63,6 +67,7 @@ impl BinOp {
                 Associativity::Left
             }
             Precedence::Comparison => Associativity::Not,
+            Precedence::Exp => Associativity::Right,
         }
     }
 
@@ -113,5 +118,10 @@ mod tests {
         assert_eq!(f(And, And), Left);
         assert_eq!(f(Or, Or), Left);
         assert_eq!(f(Eq, Eq), Not);
+        assert_eq!(f(Exp, Exp), Right);
+        assert_eq!(f(Exp, Mul), Left);
+        assert_eq!(f(Mul, Exp), Right);
+        assert_eq!(f(Exp, Add), Left);
+        assert_eq!(f(Add, Exp), Right);
     }
 }

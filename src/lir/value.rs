@@ -100,6 +100,8 @@ impl PartialEq for IrValue {
             (I8(l), I8(r)) => l == r,
             (I16(l), I16(r)) => l == r,
             (I32(l), I32(r)) => l == r,
+            (F32(l), F32(r)) => l == r,
+            (F64(l), F64(r)) => l == r,
             (Asn(l), Asn(r)) => l == r,
             (Pointer(l), Pointer(r)) => l == r,
             _ => panic!("tried comparing different types"),

@@ -7,7 +7,7 @@ use crate::{
     ice,
     mir::{Ty, TyRef},
     parser::meta::MetaId,
-    typechecker::types::TypeName,
+    typechecker::types::{FloatSize, TypeName},
 };
 
 use super::{
@@ -131,6 +131,23 @@ impl TypeInfo {
                     type_def
                 {
                     Some((kind, size))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    pub fn get_float_type(&mut self, ty: &Type) -> Option<FloatSize> {
+        let ty = self.resolve(ty);
+        match ty {
+            Type::FloatVar(_) => Some(FloatSize::F64),
+            Type::Name(name) => {
+                if let TypeDefinition::Primitive(Primitive::Float(size)) =
+                    self.resolve_type_name(name.name)
+                {
+                    Some(size)
                 } else {
                     None
                 }

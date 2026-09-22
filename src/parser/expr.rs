@@ -381,6 +381,7 @@ impl Parser<'_, '_> {
             Token::Plus => BinOp::Add,
             Token::Hyphen => BinOp::Sub,
             Token::Star => BinOp::Mul,
+            Token::StarStar => BinOp::Exp,
             Token::Slash => BinOp::Div,
             Token::Percent => BinOp::Mod,
             _ => return None,

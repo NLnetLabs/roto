@@ -985,6 +985,27 @@ impl TypeChecker {
                     Err(self.error_expected_int_value(left, &operand_ty))
                 }
             }
+
+            Exp => {
+                let operand_ty = self.fresh_var();
+                let ctx_left = ctx.with_type(operand_ty.clone());
+
+                let mut diverges = false;
+                diverges |= self.expr(scope, &ctx_left, left)?;
+
+                if self.type_info.is_int_type(&operand_ty) {
+                    let ctx_right = ctx.with_type(Type::u32());
+                    diverges |= self.expr(scope, &ctx_right, right)?;
+                } else if self.type_info.is_numeric_type(&operand_ty) {
+                    diverges |= self.expr(scope, &ctx_left, right)?;
+                } else {
+                    return Err(
+                        self.error_expected_numeric_value(left, &operand_ty)
+                    );
+                }
+                self.unify(&ctx.expected_type, &operand_ty, span, None)?;
+                Ok(diverges)
+            }
         }
     }
 
