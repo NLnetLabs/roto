@@ -376,6 +376,11 @@ pub fn codegen<Ctx: OptCtx>(
     // not super important at the moment.
     let mut settings = settings::builder();
     settings.set("opt_level", "speed").unwrap();
+    // Match JITBuilder's default so x86_64 symbol addresses can be resolved
+    // even when code and data are outside the ±2 GiB relative addressing range.
+    if cfg!(target_arch = "x86_64") {
+        settings.set("is_pic", "true").unwrap();
+    }
     let flags = settings::Flags::new(settings);
     let isa = cranelift::native::builder().unwrap().finish(flags).unwrap();
 
