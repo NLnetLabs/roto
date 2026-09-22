@@ -788,6 +788,22 @@ pub fn built_ins() -> Library {
                 unsafe { list_get(out.ptr.cast(), self_, idx) }
             }
 
+            /// Replace the element at the given index in this list.
+            ///
+            /// Returns `false` if the index is out of bounds.
+            #[sig = "fn[T](List[T], u64, T) -> bool"]
+            fn set(self, idx: u64, elem: DynVal) -> bool {
+                // SAFETY: Roto ensures we don't get a null value
+                let ptr = unsafe { NonNull::new_unchecked(elem.0) };
+
+                // An index that doesn't fit in a usize is out of bounds. We
+                // still pass it on, because the element needs to be dropped.
+                let idx = usize::try_from(idx).unwrap_or(usize::MAX);
+
+                // SAFETY: The Roto signature ensures that the types match up.
+                unsafe { self.set(idx, ptr) }
+            }
+
             /// Swap two elements in this list at the given indices.
             ///
             /// This function does nothing if either `i` or `j` is out of bounds.

@@ -4881,6 +4881,35 @@ fn list_swap() {
 }
 
 #[test]
+fn list_set() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            let x = ["a", "b", "c"];
+            if !x.set(1, "d") {
+                return [];
+            }
+            if x.set(3, "e") {
+                return [];
+            }
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<RotoString>>("main")
+        .unwrap();
+
+    let res = f.call();
+
+    let expected: Vec<RotoString> =
+        ["a", "d", "c"].into_iter().map(Into::into).collect();
+    assert_eq!(res.to_vec(), expected);
+}
+
+#[test]
 fn list_plus_strings() {
     let s = src!(
         r#"

@@ -49,6 +49,12 @@ Create a new empty list.
 Append an element to the end of this list.
 ````
 
+````{roto:method} List.set(self: List[T], idx: u64, elem: T) -> bool
+Replace the element at the given index in this list.
+
+Returns `false` if the index is out of bounds.
+````
+
 ````{roto:method} List.swap(self: List[T], i: u64, j: u64)
 Swap two elements in this list at the given indices.
 
