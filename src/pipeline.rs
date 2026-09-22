@@ -421,6 +421,22 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
         );
         Package { module }
     }
+
+    #[cfg(test)]
+    pub(crate) fn codegen_with_memory_provider(
+        self,
+        memory_provider: Box<dyn cranelift_jit::JITMemoryProvider + Send>,
+    ) -> Package<Ctx> {
+        let module = codegen::codegen_with_memory_provider(
+            self.runtime,
+            &self.ir.functions,
+            &self.runtime_functions,
+            self.label_store,
+            self.type_info,
+            memory_provider,
+        );
+        Package { module }
+    }
 }
 
 impl<Ctx: OptCtx> Package<Ctx> {
