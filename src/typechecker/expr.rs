@@ -1311,6 +1311,7 @@ impl TypeChecker {
                 ice!("These should be declared at this point")
             }
             DeclarationKind::YangModule(yang_module_declaration) => todo!(),
+            DeclarationKind::YangSubModule(ysm) => todo!(),
         }
     }
 
@@ -1375,6 +1376,9 @@ impl TypeChecker {
                 }))
             }
             DeclarationKind::YangModule(yang_module_declaration) => todo!(),
+            DeclarationKind::YangSubModule(yang_sub_module_declaration) => {
+                todo!()
+            }
         }
     }
 

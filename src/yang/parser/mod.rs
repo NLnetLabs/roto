@@ -7,6 +7,7 @@
 
 use crate::ast::{
     Identifier, Literal, Stmt, SyntaxTree, YangModuleDeclaration,
+    YangSubModuleDeclaration,
 };
 use crate::parser::Declaration;
 use crate::parser::{ParseError, ParseErrorKind};
@@ -593,43 +594,57 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                         span,
                     )));
                 };
+                let revision = module.find_attr("revision");
                 Ok(Declaration::YangModule(YangModuleDeclaration {
                     ident: Meta {
                         id: module_tree.id,
                         node: module.stmt.as_ident(),
                     },
-                    prefix: Some(Meta {
+                    prefix: Meta {
                         id: prefix.id,
                         node: prefix.as_ident().unwrap(),
-                    }),
-                    namespace: Some(Meta {
+                    },
+                    namespace: Meta {
                         id: namespace.id,
                         node: namespace.as_str(),
-                    }),
+                    },
+                    revision: if let Some(r) = revision {
+                        Some(Meta {
+                            id: r.id,
+                            node: r.as_str(),
+                        })
+                    } else {
+                        None
+                    },
                     parent: None,
                     body: module.sub_stmts.clone(),
                 }))
             }
             Some((module, _)) => {
-                let Some(parent) = module.find_attr("belongs-to") else {
+                let Some(belongs_to) = module.find_attr("belongs-to") else {
                     return Err(Box::new(ParseError::expected(
                         "belongs-to",
                         "nothing",
                         span,
                     )));
                 };
-                Ok(Declaration::YangModule(YangModuleDeclaration {
+
+                let revision = module.find_attr("revision");
+
+                Ok(Declaration::YangSubModule(YangSubModuleDeclaration {
                     ident: Meta {
                         id: module_tree.id,
                         node: module.stmt.as_ident(),
                     },
-                    parent: Some(Meta {
-                        id: parent.id,
-                        node: parent.as_ident().unwrap(),
-                    }),
                     body: module.sub_stmts.clone(),
-                    prefix: None,
-                    namespace: None,
+                    belongs_to: Meta {
+                        id: belongs_to.id,
+                        node: belongs_to.as_ident().unwrap(),
+                    },
+                    revision: revision.map(|r| Meta {
+                        id: r.id,
+                        node: r.as_str(),
+                    }),
                 }))
             }
             None => {

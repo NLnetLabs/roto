@@ -3,11 +3,11 @@ module rotonda-conf {
   namespace "urn:nlnetlabs:rotonda:conf";
   prefix "rotonda";
 
-  import ietf-yang-schema-mount {
-    prefix yangmnt;
-  }
+  // import ietf-yang-schema-mount {
+  //  prefix yangmnt;
+  // }
 
-  import ietf-inet {
+  import ietf-inet-types {
     prefix inet;
   }
 

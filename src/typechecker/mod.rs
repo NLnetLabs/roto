@@ -50,10 +50,11 @@
 //!
 //! ## Resolving imports
 //!
-//! With the modules in place, it's possible to resolve the module-level imports
-//! in script. An important detail is that the order of imports does not impact
-//! the semantics of the script. Therefore, we keep trying to resolve each of them
-//! until we either have none left or we can't resolve further.
+//! With the modules in place, it's possible to resolve the module-level
+//! imports ! in script. An important detail is that the order of imports does
+//! not impact ! the semantics of the script. Therefore, we keep trying to
+//! resolve each of them ! until we either have none left or we can't resolve
+//! further.
 //!
 //! See [`TypeChecker::declare_imports`].
 //!
@@ -61,7 +62,8 @@
 //!
 //! The full structure for name resolution is now in place, which means we can
 //! start filling in the each [`Declaration`] we found before and add its
-//! with its actual definition. We start with the types declared in the script.
+//! with its actual definition. We start with the types declared in the
+//! script.
 //!
 //! See [`TypeChecker::declare_types`].
 //!
@@ -100,13 +102,14 @@ use crate::parser::token::Keyword;
 use crate::typechecker::error::Label;
 use crate::typechecker::expr::Context;
 use crate::typechecker::scope::{
-    YangModuleDeclaration, YangModuleDefinition,
+    YangModuleDeclaration, YangModuleDefinition, YangSubModuleDeclaration,
+    YangSubModuleDefinition,
 };
 use crate::typechecker::types::{Primitive, yang_default_types};
 use crate::typechecker::value_cycle::RefGraph;
 use crate::value::{TypeDescription, TypeRegistry};
 use crate::yang::parser::YangStmt;
-use crate::yang::parser::ast::YangStmtSeq;
+use crate::yang::parser::ast::{Argument, YangStmtSeq};
 use crate::{
     ast::{self, Identifier},
     ice,
@@ -120,6 +123,7 @@ use scope::{
     TypeOrStub,
 };
 use scoped_display::TypeDisplay;
+use std::arch::x86_64::_mm_subs_epi16;
 use std::{any::TypeId, borrow::Borrow};
 use type_cycle::detect_type_cycles;
 use types::{
@@ -254,6 +258,11 @@ impl TypeChecker {
     }
 
     fn declare_builtin_types(&mut self) -> TypeResult<()> {
+        println!("[declare_builtin_types]");
+        println!(
+            "{:#?}",
+            default_types().iter().map(|t| t.0).collect::<Vec<_>>()
+        );
         for (ident, doc, ty) in default_types() {
             let ident = Meta {
                 node: ident,
@@ -511,7 +520,7 @@ impl TypeChecker {
         if self
             .type_info
             .scope_graph
-            .insert_import(scope, MetaId(0), name)
+            .insert_import(scope, MetaId(0), name.ident, name)
             .is_err()
         {
             // TODO: Improve error message
@@ -548,10 +557,6 @@ impl TypeChecker {
     ) -> TypeResult<Vec<(ScopeRef, &'a Module)>> {
         println!("[declare_modules] start");
         let mut modules = Vec::<(ScopeRef, &'a Module)>::new();
-        println!(
-            "[declare_modules] module tree {:#?}",
-            tree.modules.iter().map(|mt| &mt.ident).collect::<Vec<_>>()
-        );
         for m in &tree.modules {
             let Module {
                 ident,
@@ -573,52 +578,55 @@ impl TypeChecker {
                 .scope_graph
                 .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
 
-            if let Some(p) = parent_module {
-                self.insert_module(p, ident, String::new(), scope)?;
-            } else {
-                self.insert_module(
-                    ScopeRef::GLOBAL,
-                    ident,
-                    String::new(),
-                    scope,
-                )?;
-            }
+            // if let Some(p) = parent_module {
+            //     self.insert_module(p, ident, String::new(), scope)?;
+            // } else {
+            //     self.insert_module(
+            //         ScopeRef::GLOBAL,
+            //         ident,
+            //         String::new(),
+            //         scope,
+            //     )?;
+            // }
 
             for d in &ast.declarations {
-                let (kind, ident) = match d {
-                    ast::Declaration::Record(x) => (
-                        DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: x.type_params.len(),
-                        }),
-                        x.ident.clone(),
-                    ),
-                    ast::Declaration::Enum(x) => (
-                        DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: x.type_params.len(),
-                        }),
-                        x.ident.clone(),
-                    ),
-                    ast::Declaration::Function(x) => {
-                        (DeclarationKind::Function(None), x.ident.clone())
-                    }
-                    ast::Declaration::FilterMap(x) => {
-                        (DeclarationKind::Function(None), x.ident.clone())
-                    }
-                    ast::Declaration::Const(x) => (
-                        DeclarationKind::Value(
-                            scope::ValueKind::Constant,
-                            None,
-                        ),
-                        x.ident.clone(),
-                    ),
-                    ast::Declaration::Import(_) => continue,
+                let (kind, ident, doc) = match d {
                     ast::Declaration::Test(_) => continue,
-                    ast::Declaration::YangModule(y) => (
+                    ast::Declaration::YangModule(ym) => (
                         DeclarationKind::YangModule(YangModuleDeclaration {
-                            definition: YangModuleDefinition {},
+                            definition: YangModuleDefinition {
+                                name: ym.ident.node,
+                                prefix: ym.prefix.node,
+                                namespace: ym.namespace.clone().node,
+                                revision: ym.revision.clone().map(|r| r.node),
+                            },
                         }),
-                        y.ident.clone(),
+                        ym.ident.clone(),
+                        ym.body
+                            .find_attr("description")
+                            .map(|d| d.as_str())
+                            .unwrap_or(String::new()),
                     ),
+                    ast::Declaration::YangSubModule(ysm) => (
+                        DeclarationKind::YangSubModule(
+                            YangSubModuleDeclaration {
+                                definition: YangSubModuleDefinition {
+                                    name: ysm.ident.node,
+                                    belongs_to: ysm.belongs_to.node,
+                                    revision: ysm
+                                        .revision
+                                        .clone()
+                                        .map(|r| r.node),
+                                },
+                            },
+                        ),
+                        ysm.ident.clone(),
+                        ysm.body
+                            .find_attr("description")
+                            .map(|d| d.as_str())
+                            .unwrap_or(String::new()),
+                    ),
+                    _ => continue,
                 };
 
                 let new_scope = if let DeclarationKind::Type(_) = kind {
@@ -631,21 +639,26 @@ impl TypeChecker {
                     None
                 };
 
-                let res = self.type_info.scope_graph.insert_declaration(
+                let res = self.type_info.scope_graph.insert_module2(
                     scope,
-                    &ident,
                     kind.clone(),
-                    String::new(),
-                    |_| false,
+                    &ident,
+                    doc,
                 );
 
                 let dec = match res {
-                    Ok(dec) => dec,
+                    Ok(dec) => {
+                        println!(
+                            "[declare_modules] inserted `{ident}` as {kind:?} scope {scope:?}",
+                        );
+                        dec
+                    }
                     Err(e) => {
                         println!(
                             "[declare_modules] error {:?} {} {:?}",
                             scope, ident, kind
                         );
+
                         return Err(self.error_declared_twice(&ident, e));
                     }
                 };
@@ -676,108 +689,349 @@ impl TypeChecker {
                 }
 
                 if let ast::Declaration::YangModule(module) = d {
-                    println!(
-                        "[declare_modules] yang module '{}'",
-                        module.ident
-                    );
-
                     let ctx = Context {
                         expected_type: Type::Unit,
                         function_return_type: None,
                         item: ResolvedName {
                             scope,
-                            ident: ident.node,
+                            ident: module.ident.node,
                         },
                     };
 
-                    let t = self.expr(scope, &ctx, &module.body)?;
-
-                    // Check type declarations inside modules
-                    for st in module.body.node.iter_stmt() {
-                        if let Stmt::YangStmtSeq(YangStmtSeq {
-                            stmt: YangStmt::Stmt(meta),
-                            arg,
-                            ..
-                        }) = st.node.clone()
-                            && meta.node
-                                == crate::yang::parser::Keyword::TypeDef
-                        {
-                            // let type_def =
-                            //     sub_stmts.node.iter_stmt().find(|stmt| {
-                            //         stmt.node.is_keyword(
-                            //             crate::yang::parser::Keyword::Type,
-                            //         )
-                            //     });
-                            println!("{:?}", st.node);
-                            let Some(type_name) = st.node.argument() else {
-                                ice!("cannot find type name")
-                            };
-
-                            let Some(type_name) = type_name.as_ident() else {
-                                ice!("type name {type_name} is invalid");
-                            };
-
-                            // let ty_arg =
-                            //     type_name.unwrap().as_ident().unwrap();
-                            println!(
-                                "[declare_modules] declare type \
-                                {:?}",
-                                type_name.to_string()
-                            );
-
-                            let name = ResolvedName {
-                                scope,
-                                ident: type_name,
-                            };
-
-                            let res = self.type_info.scope_graph.insert_type(
-                                scope,
-                                &Meta {
-                                    id: meta.id,
-                                    node: type_name,
-                                },
-                                st.node
-                                    .description()
-                                    .map(|d| d.to_string())
-                                    .unwrap_or(String::new()),
-                                st.node.argument_type_definition().unwrap_or(
-                                    TypeDefinition::Primitive(
-                                        Primitive::String,
-                                    ),
-                                ),
-                            );
-
-                            let _opt = self.type_info.resolve_type_name(name);
-
-                            if let Err(e) = res {
-                                return Err(TypeError {
-                                    description: format!("{:?}", st.node),
-                                    location: meta.id,
-                                    labels: vec![
-                                        Label::error(
-                                            format!(
-                                                "`{type_name}` redefined here"
-                                            ),
-                                            meta.id,
-                                        ),
-                                        Label::info(
-                                            format!(
-                                                "`{type_name}` previously declared here"
-                                            ),
-                                            e,
-                                        ),
-                                    ],
-                                    notes: Vec::new(),
-                                });
-                            }
-                        }
-                    }
+                    let _t = self.expr(scope, &ctx, &module.body)?;
                 }
+
                 modules.push((scope, m));
             }
         }
-        println!("[declare_modules] done");
+
+        for (scope, module) in &modules {
+            // let mod_scope = ModuleScope {
+            //     name: ResolvedName {
+            //         ident: *module.ident,
+            //         scope: ScopeRef::GLOBAL,
+            //     },
+            //     parent_module: None,
+            // };
+            // let scope = self
+            //     .type_info
+            //     .scope_graph
+            //     .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
+            println!("module {} scope {:?}", module.ident, scope);
+
+            for d in &module.ast.declarations {
+                if let ast::Declaration::YangModule(ymd) = d {
+                    self.declare_imports_in_module(scope, ymd)?;
+                    self.declare_types_in_module(scope, ymd)?;
+                }
+            }
+        }
+
         Ok(modules)
+    }
+
+    fn declare_types_in_module(
+        &mut self,
+        scope: &ScopeRef,
+        module: &ast::YangModuleDeclaration,
+    ) -> TypeResult<()> {
+        {
+            println!("[declare_types_in_module] '{}'", module.ident);
+
+            // Insert all the type declarations ('typedef') that
+            // we find inside a module. Types that are directly
+            // derived from a base type can be inserted with their
+            // Type Definition. Others will be inserted with a stub
+            // declaration.
+            for stmt in module.body.node.iter_stmt() {
+                if let Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt: YangStmt::Stmt(meta),
+                    sub_stmts,
+                    ..
+                }) = stmt.node.clone()
+                    && meta.node == crate::yang::parser::Keyword::TypeDef
+                {
+                    // the name of the defined type
+                    let Some(ty) = stmt.node.argument() else {
+                        ice!(
+                            "missing type name in module {:?}",
+                            stmt.node.as_ident()
+                        )
+                    };
+
+                    let Some(ty_ident) = ty.as_ident() else {
+                        ice!("type name {ty} is invalid");
+                    };
+
+                    // println!("seq {:#?}", st);
+                    println!("[declare_types] declare type `{}`", ty.node);
+
+                    let derived_ty = match sub_stmts.find_attr("type") {
+                        Some(Meta {
+                            id,
+                            node: Argument::Ident(derived_ty),
+                        }) => Meta {
+                            id: *id,
+                            node: *derived_ty,
+                        },
+                        Some(Meta {
+                            id,
+                            node: Argument::PrefixIdent((p, derived_ty)),
+                        }) => {
+                            // the prefix should already exist as an imported
+                            // module here
+                            println!(
+                                "[declare_types] type {} w/ module prefix \
+                                `{}`",
+                                derived_ty, p
+                            );
+                            // panic!(
+                            //     "scope graph {:#?}",
+                            //     self.type_info.scope_graph
+                            // );
+                            self.type_info
+                                .scope_graph
+                                .resolve_name(
+                                    *scope,
+                                    &Meta { id: *id, node: *p },
+                                    true,
+                                )
+                                .ok_or(TypeError {
+                                    description: format!(
+                                        "Cannot find module with prefix \
+                                        `{p}` in type declaration for \
+                                        `{ty_ident}`"
+                                    ),
+                                    location: meta.id,
+                                    labels: vec![
+                                        Label::error(
+                                            "in this type declaration..",
+                                            ty.id,
+                                        ),
+                                        Label::info(
+                                            "module prefix and type \
+                                            name cannot be found",
+                                            *id,
+                                        ),
+                                    ],
+                                    notes: Vec::new(),
+                                })?;
+                            Meta {
+                                id: *id,
+                                node: *derived_ty,
+                            }
+                        }
+                        _ => {
+                            ice!("type name {ty} is not an identifier");
+                        }
+                    };
+
+                    // let Some(derived_ty) =
+                    //     sub_stmts.find_attr("type").map(|t| Meta {
+                    //         id: t.id,
+                    //         node: t.as_ident().unwrap(),
+                    //     })
+                    // else {};
+
+                    println!("derived-from-type `{}`", derived_ty.node);
+
+                    let kind = if let Some(builtin_ty) = self
+                        .type_info
+                        .scope_graph
+                        .resolve_name(ScopeRef::GLOBAL, &derived_ty, true)
+                    {
+                        builtin_ty.kind
+                    } else {
+                        println!(
+                            "[declare_modules] found non-builtin \
+                                    type `{}`",
+                            derived_ty.as_str()
+                        );
+                        DeclarationKind::Type(TypeOrStub::Stub {
+                            num_params: 0,
+                        })
+                    };
+
+                    // let name = ResolvedName {
+                    //     scope,
+                    //     ident: ty_ident,
+                    // };
+
+                    let res = self.type_info.scope_graph.insert_declaration(
+                        *scope,
+                        &Meta {
+                            id: meta.id,
+                            node: ty_ident,
+                        },
+                        kind,
+                        stmt.node
+                            .description()
+                            .map(|d| d.to_string())
+                            .unwrap_or(String::new()),
+                        |_| false,
+                    );
+
+                    if let Err(e) = res {
+                        return Err(TypeError {
+                            description: format!("{:?}", stmt.node),
+                            location: meta.id,
+                            labels: vec![
+                                Label::error(
+                                    format!("`{ty_ident}` redefined here"),
+                                    meta.id,
+                                ),
+                                Label::info(
+                                    format!(
+                                        "`{ty_ident}` previously \
+                                                 declared here"
+                                    ),
+                                    e,
+                                ),
+                            ],
+                            notes: Vec::new(),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn declare_imports_in_module(
+        &mut self,
+        mod_scope: &ScopeRef,
+        module: &ast::YangModuleDeclaration,
+    ) -> TypeResult<()> {
+        println!(
+            "[declare_imports] in module '{}' ({:?})",
+            module.ident, mod_scope
+        );
+
+        // Insert all the imports ('import') that we find inside a module
+        for stmt in module.body.node.iter_stmt() {
+            if let Stmt::YangStmtSeq(YangStmtSeq {
+                stmt: YangStmt::Stmt(meta),
+                sub_stmts,
+                arg,
+                ..
+            }) = stmt.node.clone()
+                && meta.node == crate::yang::parser::Keyword::Import
+            {
+                // the name of an import can only be an identifier, that
+                // should already have been checked in the parser.
+                let Some(Meta {
+                    id: import_id,
+                    node: Argument::Ident(import_name),
+                }) = stmt.node.argument()
+                else {
+                    ice!(
+                        "missing module name in import statement in {:?}",
+                        stmt.node.as_ident()
+                    )
+                };
+
+                // a module prefix is mandatory in the body of an import
+                // statement, again, this already have been checked by the
+                // parser.
+                let Some(import_pfx) =
+                    sub_stmts.find_attr("prefix").map(|t| Meta {
+                        id: t.id,
+                        node: t.as_ident().unwrap(),
+                    })
+                else {
+                    ice!(
+                        "import of module `{}` does not have a specified \
+                         prefix",
+                        import_name
+                    );
+                };
+
+                let Some(target_module) =
+                    self.type_info.scope_graph.resolve_name(
+                        *mod_scope,
+                        &Meta {
+                            node: *import_name,
+                            id: *import_id,
+                        },
+                        true,
+                    )
+                else {
+                    return Err(TypeError {
+                        description: format!(
+                            "Module with name `{}` cannot be found",
+                            *import_name
+                        ),
+                        location: meta.id,
+                        labels: vec![
+                            Label::error(
+                                "in this module".to_string(),
+                                module.ident.id,
+                            ),
+                            Label::error(
+                                format!("`{import_name}` is imported here"),
+                                arg.unwrap().id,
+                            ),
+                        ],
+                        notes: vec![],
+                    });
+                };
+
+                println!("found module decla {:?}", target_module);
+                let name = ResolvedName {
+                    scope: target_module.name.scope,
+                    ident: *import_name,
+                };
+
+                // let res = self.type_info.scope_graph.insert_declaration(
+                //     scope,
+                //     &Meta {
+                //         id: meta.id,
+                //         node: *prefix,
+                //     },
+                //     DeclarationKind::Module,
+                //     stmt.node
+                //         .description()
+                //         .map(|d| d.to_string())
+                //         .unwrap_or(String::new()),
+                //     |_| false,
+                // );
+                let res = self.type_info.scope_graph.insert_import(
+                    *mod_scope,
+                    import_pfx.id,
+                    *import_pfx,
+                    name,
+                );
+
+                println!(
+                    "[declare_imports] imported `{}` as `{}` (scope {:?})",
+                    import_name,
+                    import_pfx.as_str(),
+                    mod_scope
+                );
+
+                if let Err(e) = res {
+                    return Err(TypeError {
+                        description: format!("{:?}", stmt.node),
+                        location: meta.id,
+                        labels: vec![
+                            Label::error(
+                                format!("`{import_name}` imported here"),
+                                meta.id,
+                            ),
+                            Label::info(
+                                format!(
+                                    "`{import_name}` previously imported \
+                                    here"
+                                ),
+                                e,
+                            ),
+                        ],
+                        notes: Vec::new(),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn declare_imports(
@@ -811,7 +1065,14 @@ impl TypeChecker {
                     | ast::Declaration::Test(_)
                     | ast::Declaration::Const(_)
                     | ast::Declaration::Import(_)
-                    | ast::Declaration::YangModule(_) => continue,
+                    | ast::Declaration::YangSubModule(_) => {}
+                    ast::Declaration::YangModule(ym) => {
+                        // println!(
+                        //     "{:#?}",
+                        //     self.type_info.scope_graph.declarations
+                        // );
+                        // ice!("cannot type check modules yet");
+                    }
                     ast::Declaration::Enum(ast::EnumTypeDeclaration {
                         ident,
                         type_params,
@@ -1025,6 +1286,7 @@ impl TypeChecker {
                     ast::Declaration::Record(_) => continue,
                     ast::Declaration::Enum(_) => continue,
                     ast::Declaration::Import(_) => continue,
+                    ast::Declaration::YangSubModule(ysm) => todo!(),
                 }
             }
         }
@@ -1213,7 +1475,12 @@ impl TypeChecker {
 
         self.type_info
             .scope_graph
-            .insert_import(scope, ident.id, declaration.name)
+            .insert_import(
+                scope,
+                ident.id,
+                declaration.name.ident,
+                declaration.name,
+            )
             .map_err(|old| self.error_declared_twice(ident, old))
     }
 

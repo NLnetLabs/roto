@@ -357,6 +357,9 @@ impl Rt {
                 DeclarationKind::YangModule(yang_module_declaration) => {
                     todo!()
                 }
+                DeclarationKind::YangSubModule(ysm) => {
+                    todo!()
+                }
             }
         }
 

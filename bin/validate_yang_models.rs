@@ -14,7 +14,16 @@ pub fn main() {
     // let modules = &parsed.module_tree.modules;
     let rt = Runtime::new();
     let t_checked = parsed.typecheck(&rt).unwrap();
-    println!("type_info {:?}", t_checked.type_info.types);
+    println!(
+        "[declarations] {:#?}",
+        t_checked
+            .type_info
+            .scope_graph
+            .declarations
+            .iter()
+            .map(|dec| (dec.0.ident, &dec.1.kind, &dec.1.doc))
+            .collect::<Vec<_>>()
+    );
     // t_checked.lower_to_mir();
 
     let modules = &t_checked.module_tree.modules;

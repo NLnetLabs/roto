@@ -9,6 +9,7 @@ use inetnum::asn::Asn;
 use symbol_table::GlobalSymbol;
 
 use crate::{
+    ice,
     parser::{
         ParseError,
         meta::{Meta, MetaId},
@@ -28,6 +29,7 @@ pub struct SyntaxTree {
 #[derive(Clone, Debug)]
 pub enum Declaration {
     YangModule(YangModuleDeclaration),
+    YangSubModule(YangSubModuleDeclaration),
     FilterMap(Box<FilterMap>),
     Const(ConstantDeclaration),
     Record(RecordTypeDeclaration),
@@ -129,9 +131,20 @@ pub struct FunctionDeclaration {
 #[derive(Clone, Debug)]
 pub struct YangModuleDeclaration {
     pub ident: Meta<Identifier>,
-    pub prefix: Option<Meta<Identifier>>,
-    pub namespace: Option<Meta<String>>,
+    pub prefix: Meta<Identifier>,
+    pub namespace: Meta<String>,
+    pub revision: Option<Meta<String>>,
     pub parent: Option<Meta<Identifier>>,
+    pub body: Meta<Expr>,
+}
+
+/// A yang submodule declaration. `prefix` and `namepspace` are mandatory for
+/// `module`, instead a submodule has a mandatory `belongs-to` attribute
+#[derive(Clone, Debug)]
+pub struct YangSubModuleDeclaration {
+    pub ident: Meta<Identifier>,
+    pub belongs_to: Meta<Identifier>,
+    pub revision: Option<Meta<String>>,
     pub body: Meta<Expr>,
 }
 
@@ -334,13 +347,7 @@ impl Expr {
     pub fn find_attr(&self, name: &str) -> Option<&Meta<Argument>> {
         self.iter_stmt()
             .find(|stmt| {
-                dbg!(stmt.as_ident());
-                dbg!(name);
-                dbg!(
-                    stmt.as_ident()
-                        .map(|i| i.as_str() == name)
-                        .unwrap_or(false)
-                )
+                stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false)
             })
             .and_then(|stmt| stmt.argument())
     }

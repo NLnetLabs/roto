@@ -7,6 +7,7 @@ use crate::{
     ast::Identifier,
     ice,
     parser::meta::{Meta, MetaId},
+    runtime::extern_eq,
     typechecker::types::Signature,
 };
 
@@ -60,6 +61,22 @@ pub struct Declaration {
     pub doc: String,
 }
 
+impl Declaration {
+    pub(crate) fn recent_revision(&self, other: &str) -> Option<bool> {
+        let Some(rev) = (match &self.kind {
+            DeclarationKind::YangModule(decl) => &decl.definition.revision,
+            DeclarationKind::YangSubModule(decl) => &decl.definition.revision,
+            _ => {
+                ice!("no module found");
+            }
+        }) else {
+            return None;
+        };
+
+        Some(rev.as_str() > other)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DeclarationKind {
     Value(ValueKind, Option<Type>),
@@ -67,6 +84,7 @@ pub enum DeclarationKind {
     Function(Option<FunctionDeclaration>),
     Module,
     YangModule(YangModuleDeclaration),
+    YangSubModule(YangSubModuleDeclaration),
     Method(Option<FunctionDeclaration>),
     Enum(Option<(TypeDefinition, EnumVariant)>),
     TypeParam(Identifier),
@@ -85,7 +103,24 @@ pub struct YangModuleDeclaration {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct YangModuleDefinition {}
+pub struct YangSubModuleDeclaration {
+    pub definition: YangSubModuleDefinition,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YangModuleDefinition {
+    pub name: Identifier,
+    pub prefix: Identifier,
+    pub namespace: String,
+    pub revision: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct YangSubModuleDefinition {
+    pub name: Identifier,
+    pub revision: Option<String>,
+    pub belongs_to: Identifier,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeOrStub {
@@ -190,6 +225,7 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         recurse: bool,
     ) -> Option<Declaration> {
+        println!("ident resolve {ident} scope {:?}", scope);
         loop {
             let name = ResolvedName {
                 scope,
@@ -204,8 +240,22 @@ impl ScopeGraph {
             }
 
             if let Some(x) = self.scopes[scope.0].imports.get(ident) {
+                println!("{ident}");
+                println!("resolve x {:?}", x.1);
+                println!("scope {:?}", scope);
+                println!("imports {:?}", self.scopes[scope.0].imports);
+                println!(
+                    "decla {:?}",
+                    self.declarations
+                        .iter()
+                        .find(|(a, b)| a.ident == x.1.ident)
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                );
                 return Some(self.declarations.get(&x.1).unwrap().clone());
             }
+
+            println!("[resolve_name] {scope:?}");
 
             scope = self.parent(scope)?;
         }
@@ -232,10 +282,11 @@ impl ScopeGraph {
         &mut self,
         scope: ScopeRef,
         id: MetaId,
+        key: Identifier,
         name: ResolvedName,
     ) -> Result<(), MetaId> {
         let map = &mut self.scopes[scope.0].imports;
-        match map.entry(name.ident) {
+        match map.entry(key) {
             Entry::Occupied(entry) => Err(entry.get().0),
             Entry::Vacant(entry) => {
                 entry.insert((id, name));
@@ -381,6 +432,75 @@ impl ScopeGraph {
             self.insert_declaration(scope, ident, kind, doc, |_| false)?;
         dec.scope = Some(mod_scope);
         Ok(())
+    }
+
+    pub fn insert_module2(
+        &mut self,
+        scope: ScopeRef,
+        kind: DeclarationKind,
+        ident: &Meta<Identifier>,
+        doc: String,
+        // mod_scope: ScopeRef,
+    ) -> Result<&mut Declaration, MetaId> {
+        // let kind = DeclarationKind::YangModule(decl);
+        // let ident = declaration.ident();
+
+        let name = ResolvedName {
+            scope: ScopeRef::GLOBAL,
+            ident: **ident,
+        };
+
+        let decl = match self.declarations.entry(name) {
+            Entry::Vacant(entry) => {
+                let new = Declaration {
+                    name,
+                    kind: kind.clone(),
+                    id: ident.id,
+                    scope: None,
+                    doc: doc.clone(),
+                };
+                Ok(entry.insert(new))
+            }
+            Entry::Occupied(entry) => Err(entry.into_mut()),
+        };
+
+        match decl {
+            Ok(decl) => Ok(decl),
+            Err(exist_decl) => {
+                if let DeclarationKind::YangModule(YangModuleDeclaration {
+                    definition: md,
+                }) = &exist_decl.kind
+                {
+                    let Some(new_rev) = &md.revision else {
+                        return Err(exist_decl.id);
+                    };
+                    let out_string = new_rev.clone();
+
+                    let Some(more_recent) =
+                        exist_decl.recent_revision(new_rev)
+                    else {
+                        return Err(exist_decl.id);
+                    };
+
+                    if more_recent {
+                        *exist_decl = Declaration {
+                            name,
+                            kind,
+                            id: ident.id,
+                            scope: None,
+                            doc,
+                        };
+                    }
+                    println!(
+                        "duplicate module {}: picking revision {}",
+                        name.ident, out_string
+                    );
+                    return Ok(exist_decl);
+                };
+
+                Err(exist_decl.id)
+            }
+        }
     }
 
     pub fn insert_function(

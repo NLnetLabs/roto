@@ -96,8 +96,8 @@ impl Parsed {
 
                 modules.push(Module {
                     ident: ident.clone(),
-                    prefix: prefix.clone().unwrap(),
-                    namespace: namespace.clone().unwrap(),
+                    prefix: prefix.clone(),
+                    namespace: namespace.clone(),
                     children: BTreeMap::new(),
                     parent: None,
                     ast,
@@ -142,7 +142,7 @@ impl Parsed {
 
         // we're doing two runs over the files, one to get all modules, and
         // the second run to get all submodules, so that we can immediately
-        // check in the second run if the `belongs-to` attributes on the
+        // check on the second run if the `belongs-to` attributes on the
         // submodule actually exists.
         while mod_iter <= 1 {
             for (i, file) in file_tree.files.iter().enumerate() {
@@ -183,8 +183,8 @@ impl Parsed {
                         // no parent means it has to be a module
                         None if mod_iter == 0 => {
                             modules.push(Module {
-                                prefix: prefix.clone().unwrap(),
-                                namespace: namespace.clone().unwrap(),
+                                prefix: prefix.clone(),
+                                namespace: namespace.clone(),
                                 parent: None,
                                 ident: ident.clone(),
                                 ast: module_ast,

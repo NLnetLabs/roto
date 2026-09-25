@@ -344,10 +344,11 @@ impl TypeDisplay for Type {
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         // The return type must be specified explicitly because the question
-        // marks use Into and Rust must therefore know what the type to convert
-        // to is. Usually, there is only one possible conversion (the identity),
-        // in which case Rust will pick that one. However, as soon as another
-        // From<std::fmt::Error> implementation appears this will start failing.
+        // marks use Into and Rust must therefore know what the type to
+        // convert to is. Usually, there is only one possible conversion (the
+        // identity), in which case Rust will pick that one. However, as soon
+        // as another From<std::fmt::Error> implementation appears this will
+        // start failing.
         //
         // This currently happens with the log crate when the kv_serde feature
         // flag is enabled somewhere in the dependency tree which we will
@@ -685,7 +686,8 @@ pub fn yang_default_types() -> Vec<(Identifier, String, TypeDefinition)> {
         ("int32", Int(IntKind::Signed, IntSize::I32)),
         ("int64", Int(IntKind::Signed, IntSize::I64)),
         ("leafref", String),
-        // string is a roto built-in already
+        // string is a roto built-in already in yang it is not capitalized.
+        ("string", String),
         ("uint8", Int(IntKind::Unsigned, IntSize::I8)),
         ("uint16", Int(IntKind::Unsigned, IntSize::I16)),
         ("uint32", Int(IntKind::Unsigned, IntSize::I32)),
@@ -697,7 +699,11 @@ pub fn yang_default_types() -> Vec<(Identifier, String, TypeDefinition)> {
 
     for (n, p) in primitives {
         let name = Identifier::from(n);
-        types.push((name, "".into(), TypeDefinition::Primitive(p)))
+        types.push((
+            name,
+            "yang built-in type".into(),
+            TypeDefinition::Primitive(p),
+        ))
     }
 
     // Add the list type to the typechecker

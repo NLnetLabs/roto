@@ -98,11 +98,7 @@ impl Parsed {
 
                 let (prefix, namespace, parent) = match parent {
                     // no parent means it has to be a module
-                    None => (
-                        prefix.clone().unwrap(),
-                        namespace.clone().unwrap(),
-                        None,
-                    ),
+                    None => (prefix.clone(), namespace.clone(), None),
                     Some(p) => {
                         let Some((parent_id, pm_dec)) = ast
                             .yang_modules()
@@ -116,8 +112,8 @@ impl Parsed {
                         };
 
                         (
-                            pm_dec.prefix.clone().unwrap(),
-                            pm_dec.namespace.clone().unwrap(),
+                            pm_dec.prefix.clone(),
+                            pm_dec.namespace.clone(),
                             Some(ModuleRef(parent_id)),
                         )
                     }
@@ -207,8 +203,8 @@ impl Parsed {
 
                 modules.push(Module {
                     ident: ident.clone(),
-                    prefix: prefix.clone().unwrap(),
-                    namespace: namespace.clone().unwrap(),
+                    prefix: prefix.clone(),
+                    namespace: namespace.clone(),
                     children: BTreeMap::new(),
                     parent: None,
                     ast,

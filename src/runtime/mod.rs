@@ -20,7 +20,7 @@ use std::{
 
 use crate::{
     ast,
-    parser::{meta::Spans, Parser},
+    parser::{Parser, meta::Spans},
     typechecker::scope::{DeclarationKind, ScopeType},
     value::{
         CloneFn, DropFn, DynVal, EqFn, Ty, TypeDescription, TypeRegistry,
@@ -32,6 +32,7 @@ use layout::Layout;
 use sealed::sealed;
 
 use crate::{
+    Context, Impl, Location, Package, RotoReport,
     ast::Identifier,
     file_tree::FileTree,
     parser::{lexer::Lexer, token::Token},
@@ -39,10 +40,10 @@ use crate::{
         Constant, Function, Item, Module, Registerable, Type, Use,
     },
     typechecker::{
+        TypeChecker,
         scope::{ResolvedName, ScopeRef},
-        types, TypeChecker,
+        types,
     },
-    Context, Impl, Location, Package, RotoReport,
 };
 
 /// Provides the types and functions that Roto can access via FFI
@@ -548,6 +549,7 @@ impl Rt {
         scope: Option<ScopeRef>,
         items: &[Item],
     ) -> Result<(), RegistrationError> {
+        println!("rt [declare_modules]");
         for item in items {
             match item {
                 Item::Function(_) => {}
@@ -555,7 +557,10 @@ impl Rt {
                 Item::Constant(_) => {}
                 Item::Impl(_) => {}
                 Item::Use(_) => {}
-                Item::Module(module) => self.declare_module(scope, module)?,
+                Item::Module(module) => {
+                    println!("rt [declare_modules] module {:#?}", module);
+                    self.declare_module(scope, module)?
+                }
             }
         }
         Ok(())
@@ -584,7 +589,9 @@ impl Rt {
         scope: ScopeRef,
         items: &[Item],
     ) -> Result<(), RegistrationError> {
+        println!("[declare_types]");
         for item in items {
+            println!("item {item:?}");
             match item {
                 Item::Module(module) => {
                     let scope = self
