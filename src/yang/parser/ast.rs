@@ -10,7 +10,7 @@ use symbol_table::GlobalSymbol;
 
 use crate::{
     ast::{BinOp, Block, Expr, Identifier, Literal, Stmt},
-    parser::meta::Meta,
+    parser::meta::{Meta, MetaId},
     typechecker::types::TypeDefinition,
     yang::parser::{Keyword, YangStmt},
 };
@@ -181,6 +181,41 @@ impl YangStmtSeq {
                 //     })
                 // })
             })
+    }
+
+    /// docs
+    pub fn find_attr_as_ident(
+        &self,
+        name: &str,
+    ) -> Option<Result<Meta<Identifier>, MetaId>> {
+        self.iter_block_stmts()
+            .find(|stmt| {
+                stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false)
+            })
+            .and_then(|stmt| stmt.argument())
+            .map(|s| {
+                s.as_ident()
+                    .map(|st| Meta { id: s.id, node: st })
+                    .ok_or(s.id)
+            })
+    }
+
+    /// docs
+    pub fn iter_attr_as_ident<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> impl Iterator<Item = Meta<Identifier>> + 'a {
+        self.iter_block_stmts().filter_map(move |stmt| {
+            if stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false) {
+                let ident = stmt.argument().and_then(|a| a.as_ident())?;
+                Some(Meta {
+                    id: stmt.id,
+                    node: ident,
+                })
+            } else {
+                None
+            }
+        })
     }
 
     /// Returns the argument type definition of this [`YangStmtSeq`].

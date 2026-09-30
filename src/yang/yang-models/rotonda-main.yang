@@ -7,6 +7,10 @@ module rotonda-conf {
   //  prefix yangmnt;
   // }
 
+  import ietf-netconf-acm {
+    prefix acm;
+  }
+
   import ietf-inet-types {
     prefix inet;
   }

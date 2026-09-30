@@ -14,7 +14,7 @@ use crate::parser::{ParseError, ParseErrorKind};
 use crate::yang::parser::expr::Cardinality;
 pub use crate::yang::parser::token::Keyword;
 use crate::yang::parser::token::{Lexer, Token};
-use crate::yang::types::{YangArgType, YangNodeType};
+use crate::yang::types::YangArgType;
 use crate::{
     parser::ParseResult,
     yang::parser::ast::{Argument, Test, YangStmtSeq},
@@ -29,170 +29,9 @@ mod filter_map;
 pub mod meta;
 pub mod token;
 
-// #[cfg(test)]
-// mod test_expressions;
-// #[cfg(test)]
-// mod test_sections;
-
-// type ParseResult<'a, T> = Result<T, YangParseError>;
-
-// #[derive(Clone, Debug)]
-// pub struct YangParseError {
-//     pub location: Span,
-//     pub kind: ParseErrorKind,
-// }
-
-// impl YangParseError {
-//     fn expected(
-//         expected: impl Display,
-//         got: impl Display,
-//         span: Span,
-//     ) -> Self {
-//         Self {
-//             kind: ParseErrorKind::Expected {
-//                 expected: expected.to_string(),
-//                 got: got.to_string(),
-//             },
-//             location: span,
-//         }
-//     }
-
-//     fn invalid_location(
-//         got: impl Display,
-//         parent: impl Display,
-//         span: Span,
-//     ) -> Self {
-//         Self {
-//             kind: ParseErrorKind::InvalidLocation {
-//                 got: got.to_string(),
-//                 parent: parent.to_string(),
-//             },
-//             location: span,
-//         }
-//     }
-
-//     fn invalid_literal(
-//         description: impl Display,
-//         token: impl Display,
-//         inner: impl Display,
-//         span: Span,
-//     ) -> Self {
-//         Self {
-//             kind: ParseErrorKind::InvalidLiteral {
-//                 description: description.to_string(),
-//                 token: token.to_string(),
-//                 inner_error: inner.to_string(),
-//             },
-//             location: span,
-//         }
-//     }
-
-//     fn custom(
-//         description: impl Display,
-//         label: impl Display,
-//         span: Span,
-//     ) -> Self {
-//         Self {
-//             kind: ParseErrorKind::Custom {
-//                 description: description.to_string(),
-//                 label: label.to_string(),
-//             },
-//             location: span,
-//         }
-//     }
-// }
-
-// #[derive(Clone, Debug)]
-// pub enum ParseErrorKind {
-//     EmptyInput,
-//     EndOfInput,
-//     FailedToParseEntireInput,
-//     InvalidToken,
-//     Expected {
-//         expected: String,
-//         got: String,
-//     },
-//     InvalidLiteral {
-//         description: String,
-//         token: String,
-//         inner_error: String,
-//     },
-//     InvalidLocation {
-//         got: String,
-//         parent: String,
-//     },
-//     Custom {
-//         description: String,
-//         label: String,
-//     },
-// }
-
-// impl ParseErrorKind {
-//     pub fn label(&self) -> String {
-//         match self {
-//             Self::EmptyInput => "input is empty".into(),
-//             Self::EndOfInput => "reached end of input".into(),
-//             Self::FailedToParseEntireInput => "parser got stuck here".into(),
-//             Self::InvalidToken => "invalid token".into(),
-//             Self::Expected { expected, .. } => {
-//                 format!("expected `{expected}`")
-//             }
-//             Self::InvalidLiteral { description, .. } => {
-//                 format!("invalid {description}")
-//             }
-//             Self::InvalidLocation { got, .. } => {
-//                 format!("the statement {got} cannot be placed here")
-//             }
-//             Self::Custom { label, .. } => label.clone(),
-//         }
-//     }
-// }
-
-// impl std::fmt::Display for ParseErrorKind {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Self::EmptyInput => write!(f, "input was empty"),
-//             Self::EndOfInput => write!(f, "unexpected end of input"),
-//             Self::FailedToParseEntireInput => {
-//                 write!(f, "failed to parse entire input")
-//             }
-//             Self::InvalidToken => write!(f, "invalid token"),
-//             Self::Expected { expected, got, .. } => {
-//                 write!(f, "expected {expected} but got '{got}'")
-//             }
-//             Self::InvalidLiteral {
-//                 description,
-//                 token,
-//                 inner_error,
-//                 ..
-//             } => {
-//                 write!(f, "found an invalid {description} literal '{token}': {inner_error}")
-//             }
-//             Self::InvalidLocation { got, parent } => {
-//                 write!(
-//                     f,
-//                     "the statement '{got}' cannot be a sub-statement of \
-//                      '{parent}'"
-//                 )
-//             }
-//             Self::Custom { description, .. } => {
-//                 write!(f, "{description}")
-//             }
-//         }
-//     }
-// }
-
-// impl std::fmt::Display for YangParseError {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.kind)
-//     }
-// }
-
-// impl std::error::Error for YangParseError {}
-
 /// A custom parser for the yang modeling language
 pub struct YangParser<'source, 'spans> {
-    file: usize,
+    file_idx: usize,
     file_length: usize,
     lexer: Peekable<Lexer<'source>>,
     spans: &'spans mut Spans,
@@ -208,7 +47,7 @@ impl<'source> YangParser<'source, '_> {
             None => Err(Box::new(ParseError {
                 kind: ParseErrorKind::EndOfInput,
                 location: Span::new(
-                    self.file,
+                    self.file_idx,
                     self.file_length..self.file_length,
                 ),
                 note: None,
@@ -216,12 +55,12 @@ impl<'source> YangParser<'source, '_> {
             })),
             Some((Err(()), span)) => Err(Box::new(ParseError {
                 kind: ParseErrorKind::InvalidToken,
-                location: Span::new(self.file, span),
+                location: Span::new(self.file_idx, span),
                 note: None,
                 hints: Vec::new(),
             })),
             Some((Ok(token), span)) => {
-                Ok((token, Span::new(self.file, span)))
+                Ok((token, Span::new(self.file_idx, span)))
             }
         }
     }
@@ -519,22 +358,24 @@ impl<'source> YangParser<'source, '_> {
 
 /// # Parsing the syntax tree
 impl<'source, 'spans> YangParser<'source, 'spans> {
+    /// parse one source (file) and return the ast that it produces.
     pub fn parse(
-        file: usize,
+        file_idx: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<SyntaxTree> {
-        Self::run_parser(Self::tree, file, spans, input)
+    ) -> ParseResult<(SyntaxTree, Vec<Meta<Identifier>>)> {
+        Self::run_parser(Self::tree, file_idx, spans, input)
     }
 
+    /// run the parser over one source (file)
     pub fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
-        file: usize,
+        file_idx: usize,
         spans: &'spans mut Spans,
         input: &'source str,
     ) -> ParseResult<T> {
         let mut p = Self {
-            file,
+            file_idx,
             file_length: input.len(),
             lexer: Lexer::new(input).peekable(),
             spans,
@@ -543,7 +384,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
         if let Some((_, s)) = p.lexer.next() {
             return Err(Box::new(ParseError {
                 kind: ParseErrorKind::FailedToParseEntireInput,
-                location: Span::new(file, s),
+                location: Span::new(file_idx, s),
                 note: None,
                 hints: Vec::new(),
             }));
@@ -551,14 +392,17 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
         Ok(out)
     }
 
-    fn tree(&mut self) -> ParseResult<SyntaxTree> {
+    fn tree(&mut self) -> ParseResult<(SyntaxTree, Vec<Meta<Identifier>>)> {
         let mut declarations = Vec::new();
+        let mut imported_modules = Vec::new();
 
         while self.peek().is_some() {
-            declarations.push(self.root()?);
+            let (decls, mods) = self.root()?;
+            declarations.push(decls);
+            imported_modules.extend(mods);
         }
 
-        Ok(SyntaxTree { declarations })
+        Ok((SyntaxTree { declarations }, imported_modules))
     }
 
     /// Parse a root expression
@@ -566,17 +410,18 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
     /// ```ebnf
     /// Root ::= FilterMap | Function | Type
     /// ```
-    fn root(&mut self) -> ParseResult<Declaration> {
+    fn root(&mut self) -> ParseResult<(Declaration, Vec<Meta<Identifier>>)> {
         let end_of_input = ParseError {
             kind: ParseErrorKind::EndOfInput,
             location: Span::new(
-                self.file,
+                self.file_idx,
                 self.file_length..self.file_length,
             ),
             note: None,
             hints: Vec::new(),
         };
 
+        let mut imported_modules = vec![];
         let (module_tree, span) = self.yang_stmt_seq(None)?;
         let expr = match module_tree.is_module() {
             Some((module, is_sub)) if !is_sub => {
@@ -595,33 +440,41 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                     )));
                 };
                 let revision = module.find_attr("revision");
-                Ok(Declaration::YangModule(YangModuleDeclaration {
-                    ident: Meta {
-                        id: module_tree.id,
-                        node: module.stmt.as_ident(),
-                    },
-                    prefix: Meta {
-                        id: prefix.id,
-                        node: prefix.as_ident().unwrap(),
-                    },
-                    namespace: Meta {
-                        id: namespace.id,
-                        node: namespace.as_str(),
-                    },
-                    revision: if let Some(r) = revision {
-                        Some(Meta {
+                let parent = module.find_attr("belongs-to");
+                imported_modules.extend(
+                    module.iter_attr_as_ident("import").collect::<Vec<_>>(),
+                );
+                Ok((
+                    Declaration::YangModule(YangModuleDeclaration {
+                        ident: Meta {
+                            id: module_tree.id,
+                            node: module.stmt.as_ident(),
+                        },
+                        prefix: Meta {
+                            id: prefix.id,
+                            node: prefix.as_ident().unwrap(),
+                        },
+                        namespace: Meta {
+                            id: namespace.id,
+                            node: namespace.as_str(),
+                        },
+                        revision: revision.map(|r| Meta {
                             id: r.id,
                             node: r.as_str(),
-                        })
-                    } else {
-                        None
-                    },
-                    parent: None,
-                    body: module.sub_stmts.clone(),
-                }))
+                        }),
+                        parent: parent.map(|p| Meta {
+                            id: p.id,
+                            node: p.node.as_ident().unwrap(),
+                        }),
+                        body: module.sub_stmts.clone(),
+                    }),
+                    imported_modules,
+                ))
             }
-            Some((module, _)) => {
-                let Some(belongs_to) = module.find_attr("belongs-to") else {
+            Some((sub_module, _)) => {
+                let Some(Ok(belongs_to)) =
+                    sub_module.find_attr_as_ident("belongs-to")
+                else {
                     return Err(Box::new(ParseError::expected(
                         "belongs-to",
                         "nothing",
@@ -629,31 +482,32 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                     )));
                 };
 
-                let revision = module.find_attr("revision");
+                let revision = sub_module.find_attr("revision");
+                imported_modules.extend(
+                    sub_module
+                        .iter_attr_as_ident("import")
+                        .collect::<Vec<_>>(),
+                );
 
-                Ok(Declaration::YangSubModule(YangSubModuleDeclaration {
-                    ident: Meta {
-                        id: module_tree.id,
-                        node: module.stmt.as_ident(),
-                    },
-                    body: module.sub_stmts.clone(),
-                    belongs_to: Meta {
-                        id: belongs_to.id,
-                        node: belongs_to.as_ident().unwrap(),
-                    },
-                    revision: revision.map(|r| Meta {
-                        id: r.id,
-                        node: r.as_str(),
+                Ok((
+                    Declaration::YangSubModule(YangSubModuleDeclaration {
+                        ident: Meta {
+                            id: module_tree.id,
+                            node: sub_module.stmt.as_ident(),
+                        },
+                        body: sub_module.sub_stmts.clone(),
+                        belongs_to,
+                        revision: revision.map(|r| Meta {
+                            id: r.id,
+                            node: r.as_str(),
+                        }),
                     }),
-                }))
+                    imported_modules,
+                ))
             }
             None => {
-                let (token, span) = self.next()?;
-                Err(Box::new(ParseError::expected(
-                    "a yang (zub)module",
-                    token,
-                    span,
-                )))
+                let (_token, _span) = self.next()?;
+                Err(Box::new(end_of_input))
             }
         };
 
