@@ -31,6 +31,12 @@ path = "bin/validate_yang_models.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "rotonda-conf"
+path = "bin/rotonda-conf.rs"
+test = false
+bench = false
+
 [features]
 default = ["cli"]
 cli = ["clap"]

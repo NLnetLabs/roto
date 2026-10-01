@@ -1,20 +1,28 @@
 //! Module tree of a Roto script
 
-use std::collections::BTreeMap;
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::{Path, PathBuf},
+};
 
 use crate::{
-    FileTree, RotoError, RotoReport,
-    ast::{self, Declaration, Identifier, SyntaxTree, YangModuleDeclaration},
+    FileSpec, FileTree, RotoError, RotoReport, SourceFile, YangFiles,
+    ast::{
+        self, Declaration, Identifier, SyntaxTree, YangModuleDeclaration,
+        YangSubModuleDeclaration,
+    },
+    file_tree::{YangModuleSpec, custom_error, read_error},
     parser::{
         ParseError,
-        meta::{Meta, Span, Spans},
+        meta::{Meta, MetaId, Span, Spans},
     },
+    typechecker::error::Label,
     yang::parser::YangParser,
 };
 
 pub struct Parsed {
     pub module_tree: ModuleTree,
-    pub file_tree: FileTree,
+    pub file_tree: YangFiles,
     pub spans: Spans,
 }
 
@@ -42,57 +50,209 @@ impl FileTree {
         Parsed::from_files(self)
     }
 
-    /// Parse the files in the [`FileTree`] with modules defined in them, as
-    /// yang presuppes, returning the AST.
-    pub fn parse_with_modules(self) -> Result<Parsed, RotoReport> {
-        Parsed::from_declared_modules(self)
-    }
+    // pub fn parse_with_modules(self) -> Result<Parsed, RotoReport> {
+    //     Parsed::from_module_files(self)
+    // }
 }
 
 impl Parsed {
-    fn from_files(file_tree: FileTree) -> Result<Self, RotoReport> {
-        let mut file_to_mod = BTreeMap::new();
+    /// docs here
+    pub fn from_entry_point(
+        entry_point_file: &Path,
+        lib_path: &Path,
+    ) -> Result<Self, RotoReport> {
+        let mut errors: Vec<RotoError> = Vec::new();
         let mut modules = Vec::new();
         let mut spans = Spans::default();
-        let mut errors: Vec<RotoError> = Vec::new();
+        let mut files = HashMap::new();
 
-        // First add all modules to the tree
-        for (i, file) in file_tree.files.iter().enumerate() {
-            let ident: Identifier = (&file.module_name).into();
-            // let mut ident = spans.add(
-            //     Span {
-            //         file: i,
-            //         start: 0,
-            //         end: 1,
-            //     },
-            //     ident,
-            // );
+        let entry_point_str =
+            entry_point_file.file_name().unwrap().to_str().unwrap();
+        // create a collection of file names that potentially havee modules
+        // in them
+        let mut lib =
+            YangFiles::create_yang_lib(lib_path, entry_point_str, "yang")?;
 
-            let ast = match YangParser::parse(i, &mut spans, &file.contents) {
-                Ok(ast) => ast,
-                Err(err) => {
-                    errors.push(RotoError::Parse(*err));
-                    continue;
+        // load & parse the entry point file
+        let (entry_point, entry_point_idx) = lib
+            .try_get_or_load(&YangFiles::as_ident(entry_point_str).unwrap())
+            .map_err(|e| read_error(entry_point_file.to_path_buf(), e))?;
+
+        files.insert(entry_point_idx, entry_point.clone());
+        println!(
+            "[from_entry_point] inserted entry point module with idx {}",
+            entry_point_idx
+        );
+
+        let (ast, mut imported_modules) = match YangParser::parse(
+            entry_point_idx,
+            &mut spans,
+            &entry_point.contents,
+        ) {
+            Ok((ast, i_mods)) => (ast, vec![(entry_point_idx, i_mods)]),
+            Err(err) => {
+                errors.push(RotoError::Parse(*err));
+                return Err(RotoReport {
+                    files,
+                    errors,
+                    spans,
+                });
+            }
+        };
+
+        // add entry point module to the parsed modules
+        spans =
+            Parsed::add_modules(&ast, spans, entry_point_idx, &mut modules)?;
+
+        // now, go over the imported modules in the entry point module, and
+        // descendd into those if we find more imported modules in them
+        // loop {
+        println!(
+            "[from_entry_point] found imported modules {:?}",
+            imported_modules
+        );
+        // go over all module imports found in the previous imported
+        // module
+        loop {
+            let mut new_imported_modules = vec![];
+            for (parent_file, i_mods) in imported_modules.clone() {
+                println!(
+                    "mod meta {:?}",
+                    i_mods
+                        .clone()
+                        .iter()
+                        .map(|m| spans.get(m.id))
+                        .collect::<Vec<_>>()
+                );
+                for module_path in i_mods {
+                    // look the module up in the library
+                    let (search_mod, file_idx) = lib
+                        .try_get_or_load(&module_path.node)
+                        .map_err(|e| RotoReport {
+                            errors: vec![RotoError::Parse(
+                                ParseError::custom(
+                                    format!(
+                                        "{} in module `{}`",
+                                        e,
+                                        files
+                                            .get(&parent_file)
+                                            .map(|sf| &sf.name)
+                                            .unwrap_or(
+                                                &"<NO MODULE NAME>"
+                                                    .to_string()
+                                            )
+                                    ),
+                                    "this import",
+                                    spans.get(module_path.id),
+                                ),
+                            )],
+                            files: files.clone(),
+                            ..Default::default()
+                        })?;
+
+                    println!("go parse file {}", file_idx);
+                    println!("files {files:?}");
+                    // files.insert(file_idx, search_mod.clone());
+                    match YangParser::parse(
+                        file_idx,
+                        &mut spans,
+                        &search_mod.contents,
+                    ) {
+                        Ok((ast, mods)) => {
+                            if let std::collections::hash_map::Entry::Vacant(
+                                entry,
+                            ) = files.entry(file_idx)
+                            {
+                                new_imported_modules.push((file_idx, mods));
+                                entry.insert(search_mod.clone());
+
+                                spans = Self::add_modules(
+                                    &ast,
+                                    spans,
+                                    file_idx,
+                                    &mut modules,
+                                )?;
+                                // files.insert(file_idx, search_mod.clone());
+                                println!(
+                                    "[from_entry_point] inserted imported \
+                                    module with idx {file_idx} name {} for \
+                                    parent {:?}",
+                                    search_mod.name,
+                                    files
+                                        .get(&parent_file)
+                                        .map(|sf| &sf.name)
+                                );
+                            }
+                            // }
+                        }
+                        Err(err) => {
+                            if let std::collections::hash_map::Entry::Vacant(
+                                entry,
+                            ) = files.entry(file_idx)
+                            {
+                                entry.insert(search_mod.clone());
+                            }
+                            errors.push(RotoError::Parse(*err));
+                            return Err(RotoReport {
+                                files,
+                                errors,
+                                spans,
+                            });
+                        }
+                    };
                 }
-            };
+            }
+            if new_imported_modules.is_empty() {
+                break;
+            }
+            imported_modules.extend(new_imported_modules.clone());
+        }
 
+        println!("[from_entry_point] done parsing");
+        // println!("lib parsed {:#?}", HashMap::from(lib.clone()));
+        println!(
+            "lib {:#?}",
+            lib.lib
+                .iter()
+                .enumerate()
+                .map(|(i, m)| (i, m.0))
+                .collect::<Vec<_>>()
+        );
+        println!(
+            "modules {:?}",
+            modules.iter().map(|m| &m.ident).collect::<Vec<_>>()
+        );
+        modules.reverse();
+        Ok(Self {
+            module_tree: ModuleTree { modules },
+            file_tree: lib,
+            spans,
+        })
+    }
+
+    fn add_modules(
+        ast: &SyntaxTree,
+        mut spans: Spans,
+        file: usize,
+        modules: &mut Vec<Module>,
+    ) -> Result<Spans, RotoReport> {
+        let mut errors: Vec<RotoError> = Vec::new();
+        for module_decl in &ast.declarations {
             if let Declaration::YangModule(YangModuleDeclaration {
                 ident,
                 prefix,
                 namespace,
                 ..
-            }) = &ast.declarations[0]
+            }) = module_decl
             {
                 spans.add(
                     Span {
-                        file: i,
+                        file,
                         start: 0,
                         end: 1,
                     },
-                    ident,
+                    ident.clone(),
                 );
-
-                file_to_mod.insert(i, modules.len());
 
                 modules.push(Module {
                     ident: ident.clone(),
@@ -100,41 +260,155 @@ impl Parsed {
                     namespace: namespace.clone(),
                     children: BTreeMap::new(),
                     parent: None,
-                    ast,
-                })
+                    ast: SyntaxTree {
+                        declarations: vec![module_decl.clone()],
+                    },
+                });
             }
         }
 
-        if !errors.is_empty() {
-            return Err(RotoReport {
-                files: file_tree.files,
-                errors,
-                spans,
-            });
-        }
+        for (child, sub_module_decl) in ast.declarations.iter().enumerate() {
+            if let Declaration::YangSubModule(YangSubModuleDeclaration {
+                ident,
+                belongs_to,
+                ..
+            }) = sub_module_decl
+            {
+                spans.add(
+                    Span {
+                        file,
+                        start: 0,
+                        end: 1,
+                    },
+                    ident.clone(),
+                );
 
-        // Then wire up all the relations between the modules
-        for (parent, file) in file_tree.files.iter().enumerate() {
-            for child in &file.children {
-                let child_module = &mut modules[*child];
-                child_module.parent = Some(ModuleRef(parent));
-                let child_ident = *child_module.ident;
-                modules[parent]
-                    .children
-                    .insert(child_ident, ModuleRef(*child));
+                let mut parent_id = None;
+                for (i, m) in modules.iter_mut().enumerate() {
+                    if &m.ident == belongs_to {
+                        m.children.insert(ident.node, ModuleRef(child));
+                        parent_id = Some(i);
+                    }
+                }
+
+                match parent_id {
+                    None => {
+                        errors.push(RotoError::Parse(ParseError::custom(
+                            format!(
+                                "Parent module `{belongs_to}` cannot be found"
+                            ),
+                            "in this module",
+                            Span {
+                                file,
+                                start: 0,
+                                end: 1,
+                            },
+                        )));
+                        continue;
+                    }
+                    Some(parent_id) => {
+                        modules.push(Module {
+                            ident: ident.clone(),
+                            prefix: modules[parent_id].prefix.clone(),
+                            namespace: modules[parent_id].namespace.clone(),
+                            children: BTreeMap::new(),
+                            parent: Some(ModuleRef(parent_id)),
+                            ast: SyntaxTree {
+                                declarations: vec![sub_module_decl.clone()],
+                            },
+                        });
+                    }
+                };
             }
         }
 
-        Ok(Self {
-            module_tree: ModuleTree { modules },
-            file_tree,
-            spans,
-        })
+        Ok(spans)
     }
 
-    fn from_declared_modules(
-        file_tree: FileTree,
-    ) -> Result<Parsed, RotoReport> {
+    fn from_files(file_tree: FileTree) -> Result<Self, RotoReport> {
+        todo!()
+        // let mut file_to_mod = BTreeMap::new();
+        // let mut modules = Vec::new();
+        // let mut spans = Spans::default();
+        // let mut errors: Vec<RotoError> = Vec::new();
+
+        // // First add all modules to the tree
+        // for (i, file) in file_tree.files.iter().enumerate() {
+        //     let ident: Identifier = (&file.module_name).into();
+        //     // let mut ident = spans.add(
+        //     //     Span {
+        //     //         file: i,
+        //     //         start: 0,
+        //     //         end: 1,
+        //     //     },
+        //     //     ident,
+        //     // );
+
+        //     let ast = match YangParser::parse(i, &mut spans, &file.contents) {
+        //         Ok(ast) => ast,
+        //         Err(err) => {
+        //             errors.push(RotoError::Parse(*err));
+        //             continue;
+        //         }
+        //     };
+
+        //     if let Declaration::YangModule(YangModuleDeclaration {
+        //         ident,
+        //         prefix,
+        //         namespace,
+        //         ..
+        //     }) = &ast.declarations[0]
+        //     {
+        //         spans.add(
+        //             Span {
+        //                 file: i,
+        //                 start: 0,
+        //                 end: 1,
+        //             },
+        //             ident,
+        //         );
+
+        //         file_to_mod.insert(i, modules.len());
+
+        //         modules.push(Module {
+        //             ident: ident.clone(),
+        //             prefix: prefix.clone(),
+        //             namespace: namespace.clone(),
+        //             children: BTreeMap::new(),
+        //             parent: None,
+        //             ast,
+        //         })
+        //     }
+        // }
+
+        // if !errors.is_empty() {
+        //     return Err(RotoReport {
+        //         files: file_tree.files,
+        //         errors,
+        //         spans,
+        //     });
+        // }
+
+        // // Then wire up all the relations between the modules
+        // for (parent, file) in file_tree.files.iter().enumerate() {
+        //     for child in &file.children {
+        //         let child_module = &mut modules[*child];
+        //         child_module.parent = Some(ModuleRef(parent));
+        //         let child_ident = *child_module.ident;
+        //         modules[parent]
+        //             .children
+        //             .insert(child_ident, ModuleRef(*child));
+        //     }
+        // }
+
+        // Ok(Self {
+        //     module_tree: ModuleTree { modules },
+        //     file_tree,
+        //     spans,
+        // })
+    }
+
+    fn from_module_files(file_tree: YangFiles) -> Result<Parsed, RotoReport> {
         let mut modules = Vec::new();
         let mut spans = Spans::default();
         let mut errors: Vec<RotoError> = Vec::new();
@@ -145,7 +419,7 @@ impl Parsed {
         // check on the second run if the `belongs-to` attributes on the
         // submodule actually exists.
         while mod_iter <= 1 {
-            for (i, file) in file_tree.files.iter().enumerate() {
+            for (i, file) in file_tree.iter_parsed().enumerate() {
                 let ident: Identifier = (&file.module_name).into();
                 let start = spans.add(
                     Span {
@@ -155,7 +429,7 @@ impl Parsed {
                     },
                     ident,
                 );
-                let ast =
+                let (ast, imported_modules) =
                     match YangParser::parse(i, &mut spans, &file.contents) {
                         Ok(ast) => ast,
                         Err(err) => {
@@ -225,7 +499,7 @@ impl Parsed {
 
             if !errors.is_empty() {
                 return Err(RotoReport {
-                    files: file_tree.files,
+                    files: file_tree.into(),
                     errors,
                     spans,
                 });

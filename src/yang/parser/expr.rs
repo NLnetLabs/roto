@@ -106,6 +106,7 @@ impl YangParser<'_, '_> {
             }
 
             let (stmt_seq, span) = self.yang_stmt_seq(parent_kw.clone())?;
+            self.spans.add(start.merge(span), stmt_seq.node.clone());
 
             if let Some(node) = stmt_seq.stmt.node()
                 && let Some(parent_kw) = parent_kw.clone()
@@ -139,10 +140,10 @@ impl YangParser<'_, '_> {
                 }
             }
 
-            let stmt_seq = self.spans.add(start, stmt_seq);
+            // let stmt_seq = self.spans.add(span, stmt_seq);
             stmts.push(Meta {
                 id: stmt_seq.id,
-                node: crate::ast::Stmt::YangStmtSeq(stmt_seq.node.node),
+                node: crate::ast::Stmt::YangStmtSeq(stmt_seq.node),
             });
         }
     }

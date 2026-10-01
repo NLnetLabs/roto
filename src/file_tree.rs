@@ -1,10 +1,33 @@
-use std::path::Path;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
-use crate::{Package, RotoError, RotoReport, Runtime, runtime::OptCtx};
+use indexmap::IndexMap;
+use libc::CN_DST_IDX;
+use unicode_ident::is_xid_start;
 
-fn read_error(p: &Path, e: std::io::Error) -> RotoReport {
+use crate::{
+    Package, RotoError, RotoReport, Runtime,
+    ast::Identifier,
+    ice,
+    module::Module,
+    parser::{ParseError, meta::Span},
+    runtime::OptCtx,
+    typechecker::scope::YangModuleDefinition,
+    yang::types::YangNameSpace,
+};
+
+pub(crate) fn read_error(p: PathBuf, e: std::io::Error) -> RotoReport {
     RotoReport {
         errors: vec![RotoError::Read(p.to_string_lossy().into(), e)],
+        ..Default::default()
+    }
+}
+
+pub(crate) fn custom_error(span: Span, e: std::io::Error) -> RotoReport {
+    RotoReport {
+        errors: vec![RotoError::Parse(ParseError::custom(e, "label", span))],
         ..Default::default()
     }
 }
@@ -48,7 +71,8 @@ impl SourceFile {
 
     /// Read a [`Path`] into a [`SourceFile`].
     pub fn read(path: &Path) -> Result<Self, RotoReport> {
-        Self::read_internal(path).map_err(|e| read_error(path, e))
+        Self::read_internal(path)
+            .map_err(|e| read_error(path.to_path_buf(), e))
     }
 
     fn read_internal(path: &Path) -> Result<Self, std::io::Error> {
@@ -100,6 +124,301 @@ impl FileTree {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum YangModuleSpec {
+    Parsed(SourceFile),
+    // pathbuf, revision
+    Candidate((PathBuf, Option<String>)),
+}
+
+impl YangModuleSpec {
+    fn source_file(&self) -> Option<&SourceFile> {
+        if let YangModuleSpec::Parsed(f) = self {
+            return Some(f);
+        }
+        None
+    }
+
+    fn path_buf(&self) -> Option<&PathBuf> {
+        if let YangModuleSpec::Candidate(pb) = self {
+            return Some(&pb.0);
+        }
+        None
+    }
+}
+
+impl std::fmt::Display for YangModuleSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            YangModuleSpec::Parsed(source_file) => {
+                write!(f, "{} (parsed)", source_file.module_name)
+            }
+            YangModuleSpec::Candidate(c) => {
+                write!(
+                    f,
+                    "{}@{} (indexed)",
+                    c.0.display(),
+                    c.1.clone().unwrap_or("<NO_REVISION>".to_string())
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct YangFiles {
+    // pub(crate) entry_point: SourceFile,
+    pub(crate) lib: IndexMap<Identifier, YangModuleSpec>,
+}
+
+impl YangFiles {
+    /// Read all yang files in a directory, while recursing into subdirs.
+    pub fn create_yang_lib(
+        lib_path: &Path,
+        entry_file_name: &str,
+        default_ext: &str,
+    ) -> Result<Self, RotoReport> {
+        println!("[yang_module_files] in {}", lib_path.display());
+        println!("[yang_module_files] {}", entry_file_name);
+
+        let mut lib = IndexMap::<Identifier, YangModuleSpec>::new();
+        let root_dir = std::fs::read_dir(lib_path)
+            .map_err(|e| read_error(lib_path.to_path_buf(), e))?;
+
+        for (i, f) in root_dir.enumerate() {
+            let f = f.map_err(|e| read_error(lib_path.to_path_buf(), e))?;
+            if f.path()
+                .extension()
+                .map(|ext| ext == default_ext)
+                .unwrap_or(false)
+            {
+                let Some((name, rev)) = f
+                    .file_name()
+                    .to_str()
+                    .map(|n| n.split('@'))
+                    .and_then(|mut n| {
+                        n.next().and_then(|name| {
+                            Self::as_ident(name).map(|name| {
+                                n.next()
+                                    .map(|rev| (name, Self::extract_rev(rev)))
+                                    .or(Some((name, Ok(None))))
+                            })
+                        })
+                    })
+                    .flatten()
+                else {
+                    return Err(read_error(
+                        lib_path.to_path_buf(),
+                        std::io::Error::other(format!(
+                            "File `{}` cannot be turned into a valid \
+                                 module name",
+                            f.path().display()
+                        )),
+                    ));
+                };
+
+                let Ok(rev) = rev else {
+                    return Err(read_error(
+                        lib_path.to_path_buf(),
+                        std::io::Error::other(rev.unwrap_err()),
+                    ));
+                };
+
+                lib.insert(name, YangModuleSpec::Candidate((f.path(), rev)));
+            }
+        }
+
+        Ok(YangFiles { lib })
+    }
+
+    pub(crate) fn as_ident(name: &str) -> Option<Identifier> {
+        if name
+            .find(|c: char| {
+                !(c.is_alphanumeric() || c == '_' || c == '-' || c == '.')
+            })
+            .is_none()
+            && name.starts_with(|c: char| {
+                c.is_ascii_uppercase() || c.is_ascii_lowercase() || c == '_'
+            })
+        {
+            return Some(Identifier::from(name));
+        }
+
+        None
+    }
+
+    // We're expecting the remainder from stripping the module name and the
+    // '@' sign here, e.g. '2018-03-10.yang'
+    fn extract_rev(file_name: &str) -> Result<Option<String>, String> {
+        let Some(rev) = file_name.split(".yang").next() else {
+            return Err(format!(
+                "file name part `{}` cannot be split into name and revision",
+                file_name
+            ));
+        };
+
+        if rev.split("-").fold(0, |acc, x| {
+            if x.chars().all(|c| c.is_alphanumeric()) {
+                acc + 1
+            } else {
+                acc
+            }
+        }) != 3
+        {
+            return Err(format!(
+                "file name part `{}` is not a valid revision date",
+                file_name
+            ));
+        };
+
+        Ok(Some(rev.to_string()))
+    }
+
+    /// try stuff
+    pub fn try_get_or_load(
+        &mut self,
+        name: &Identifier,
+    ) -> Result<(&SourceFile, usize), std::io::Error> {
+        let err = std::io::Error::other(format!(
+            "cannot find module with name `{name}`"
+        ));
+
+        match self.lib.get_full_mut(name) {
+            Some((idx, _, YangModuleSpec::Parsed(parsed))) => {
+                Ok((&*parsed, idx))
+            }
+            Some((idx, _, candidate)) => {
+                let module_file =
+                    SourceFile::read(candidate.path_buf().unwrap_or_else(
+                        || ice!("cannot create path buf for file"),
+                    ))
+                    .map_err(|e| {
+                        std::io::Error::other(format!(
+                            "Cannot read file for module {:?}",
+                            candidate
+                        ))
+                    })?;
+                *candidate = YangModuleSpec::Parsed(module_file);
+                candidate.source_file().ok_or(err).map(|c| (c, idx))
+            }
+            None => Err(err),
+        }
+    }
+
+    fn find_file_names(
+        // &mut self,
+        // parent_id: usize,
+        path: PathBuf,
+        default_ext: &str,
+        exclude_entry: Option<&str>,
+    ) -> Result<Vec<PathBuf>, RotoReport> {
+        let mut file_names = vec![];
+
+        let dir_entries = std::fs::read_dir(&path)
+            .map_err(|e| read_error(path.clone(), e))?;
+
+        for entry in dir_entries {
+            let entry = entry.map_err(|e| read_error(path.clone(), e))?;
+            let file_type =
+                entry.file_type().map_err(|e| read_error(entry.path(), e))?;
+
+            if file_type.is_dir() {
+                file_names.extend(Self::find_file_names(
+                    path.clone(),
+                    default_ext,
+                    exclude_entry,
+                )?);
+                continue;
+            }
+
+            if entry
+                .path()
+                .extension()
+                .is_none_or(|ext| ext != default_ext)
+            {
+                continue;
+            }
+
+            if entry.path().file_name().and_then(|n| n.to_str())
+                == exclude_entry
+            {
+                continue;
+            }
+
+            let _ident = entry.path().file_stem().ok_or_else(|| {
+                read_error(
+                    entry.path(),
+                    std::io::Error::other("invalid path"),
+                )
+            })?;
+            file_names.push(entry.path());
+        }
+
+        Ok(file_names)
+    }
+
+    fn process_subdir_names(
+        &mut self,
+        path: PathBuf,
+        default_ext: &str,
+    ) -> Result<Vec<PathBuf>, RotoReport> {
+        Self::find_file_names(path, default_ext, None)
+    }
+
+    /// Iterator over all files that are loaded
+    pub fn iter_parsed(&self) -> impl Iterator<Item = &SourceFile> {
+        self.lib.values().filter_map(|m| {
+            let YangModuleSpec::Parsed(f) = m else {
+                return None;
+            };
+            Some(f)
+        })
+    }
+}
+
+impl From<YangFiles> for HashMap<usize, SourceFile> {
+    fn from(value: YangFiles) -> Self {
+        value
+            .lib
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (_, sf))| {
+                let YangModuleSpec::Parsed(f) = sf else {
+                    return None;
+                };
+                Some((i, f.clone()))
+            })
+            .collect::<HashMap<usize, SourceFile>>()
+    }
+}
+
+// pub struct YangFileIter<'a> {
+//     files: &'a YangFiles,
+//     count: usize,
+// }
+
+// impl<'a> Iterator for YangFileIter<'a> {
+//     type Item = &'a SourceFile;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         if self.count == 0 {
+//             self.count += 1;
+//             return Some(&self.files.entry_point);
+//         }
+
+//         while self.count < self.files.lib.len() {
+//             if let Some(YangModuleSpec::Parsed(source_file)) =
+//                 self.files.lib.get(self.count - 1)
+//             {
+//                 self.count += 1;
+//                 return Some(source_file);
+//             }
+//         }
+
+//         None
+//     }
+// }
+
 /// Directory structure that makes up a Roto script
 ///
 /// This allows for a lot of control about the files loaded and how they
@@ -124,29 +443,11 @@ impl FileTree {
         let path = path.as_ref();
         if path
             .metadata()
-            .map_err(|e| read_error(path, e))?
+            .map_err(|e| read_error(path.to_path_buf(), e))?
             .file_type()
             .is_dir()
         {
             Self::directory(path, "pkg.roto")
-        } else {
-            Self::single_file(path)
-        }
-    }
-
-    /// Read a yang [`FileTree`] based on a path.
-    ///
-    /// If the path refers to a file, only that file will be read. If the path
-    /// instead refers to a directory, that directory will be read recursively.
-    pub fn read_yang(path: impl AsRef<Path>) -> Result<Self, RotoReport> {
-        let path = path.as_ref();
-        if path
-            .metadata()
-            .map_err(|e| read_error(path, e))?
-            .file_type()
-            .is_dir()
-        {
-            Self::directory(path, "rotonda-main.yang")
         } else {
             Self::single_file(path)
         }
@@ -241,13 +542,15 @@ impl FileTree {
         default_ext: &str,
         exclude_entry: Option<&str>,
     ) -> Result<(), RotoReport> {
-        for entry in
-            std::fs::read_dir(path).map_err(|e| read_error(path, e))?
+        for entry in std::fs::read_dir(path)
+            .map_err(|e| read_error(path.to_path_buf(), e))?
         {
-            let entry = entry.map_err(|e| read_error(path, e))?;
+            let entry =
+                entry.map_err(|e| read_error(path.to_path_buf(), e))?;
             let path = entry.path();
-            let file_type =
-                entry.file_type().map_err(|e| read_error(&path, e))?;
+            let file_type = entry
+                .file_type()
+                .map_err(|e| read_error(path.to_path_buf(), e))?;
 
             if file_type.is_dir() {
                 self.process_subdir(parent_id, &path, default_ext)?;
@@ -258,20 +561,22 @@ impl FileTree {
                 continue;
             }
 
-            if path.file_name().map(|n| n.to_str()).flatten() == exclude_entry
-            {
+            if path.file_name().and_then(|n| n.to_str()) == exclude_entry {
                 continue;
             }
 
             let ident = path
                 .file_stem()
                 .ok_or_else(|| {
-                    read_error(&path, std::io::Error::other("invalid path"))
+                    read_error(
+                        path.to_path_buf(),
+                        std::io::Error::other("invalid path"),
+                    )
                 })?
                 .to_str()
                 .ok_or_else(|| {
                     read_error(
-                        &path,
+                        path.to_path_buf(),
                         std::io::Error::other(
                             "file name is not a valid Roto identifier",
                         ),

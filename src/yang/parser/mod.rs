@@ -565,11 +565,15 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
         // was imported.  If an extension is used in the module where it is
         // defined, the extension's keyword MUST be qualified with the prefix
         // of this module.
-        let (stmt, start_span) = self.next_is_keyword(parent_kw)?;
+        let (stmt, mut start_span) = self.next_is_keyword(parent_kw)?;
 
         // next up, the argument, it may not be there, but it cannot be last
         // token, so we still could error out here.
-        let arg = self.argument()?;
+        let arg_and_span = self.argument()?;
+
+        if let Some((_, span)) = arg_and_span {
+            start_span = start_span.merge(span);
+        }
 
         if self.peek_is(Token::CurlyLeft) {
             // we have a block
@@ -577,7 +581,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
 
             if let Some(st) = stmt.node() {
                 // we got an argument, but does our keyword even take one?
-                if let Some((arg, span)) = &arg
+                if let Some((arg, span)) = &arg_and_span
                     && st.arg_type() == YangArgType::None
                 {
                     return Err(Box::new(ParseError::custom(
@@ -631,7 +635,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                             missing_stmts,
                             st.node.as_str()
                         ),
-                        "this argument",
+                        "this statement",
                         start_span,
                     )));
                 }
@@ -642,7 +646,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                     start_span,
                     YangStmtSeq {
                         stmt,
-                        arg: arg.map(|a| a.0),
+                        arg: arg_and_span.map(|a| a.0),
                         sub_stmts: Meta {
                             id: block.id,
                             node: crate::ast::Expr::Block(block),
@@ -657,7 +661,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
         // or it is an attribute that is implicitly a bool set to true
         // (this comes from Cisco-style router configurations, e.g.
         // 'nacm:default-deny-all').
-        let arg = if let Some((arg, _span)) = arg {
+        let arg = if let Some((arg, _span)) = arg_and_span {
             // Meta {
             //     id: arg.id,
             //     node: Literal::String(arg.node.to_string()),

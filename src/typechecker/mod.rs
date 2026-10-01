@@ -556,6 +556,10 @@ impl TypeChecker {
         tree: &'a ModuleTree,
     ) -> TypeResult<Vec<(ScopeRef, &'a Module)>> {
         println!("[declare_modules] start");
+        println!(
+            "[declare_modules] {:?}",
+            tree.modules.iter().map(|m| &m.ident).collect::<Vec<_>>()
+        );
         let mut modules = Vec::<(ScopeRef, &'a Module)>::new();
         for m in &tree.modules {
             let Module {
@@ -946,6 +950,10 @@ impl TypeChecker {
                     );
                 };
 
+                println!(
+                    "[declare_imports] try declare module `{import_name}` as \
+                    `{import_pfx}`"
+                );
                 let Some(target_module) =
                     self.type_info.scope_graph.resolve_name(
                         *mod_scope,

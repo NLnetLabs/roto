@@ -43,7 +43,7 @@ use log::info;
 
 /// An error from a compilation of a Roto script.
 #[derive(Debug)]
-pub(crate) enum RotoError {
+pub enum RotoError {
     Read(String, std::io::Error),
     Parse(ParseError),
     Type(TypeError),
@@ -60,7 +60,7 @@ pub struct RotoReport {
     /// Files that were used during compilation.
     ///
     /// These are used to print diagnostics.
-    pub files: Vec<SourceFile>,
+    pub files: HashMap<usize, SourceFile>,
     pub(crate) errors: Vec<RotoError>,
 
     /// Spans of AST nodes.
@@ -106,7 +106,7 @@ impl RotoReport {
 
         let sources = self
             .files
-            .iter()
+            .values()
             .map(|s| {
                 (
                     s.name(),
@@ -244,7 +244,9 @@ impl std::fmt::Debug for RotoReport {
 
 impl RotoReport {
     fn filename(&self, s: Span) -> String {
-        self.files[s.file].name()
+        println!("s.file {} len {}", s.file, self.files.len());
+        println!("{:?}", self.files.keys());
+        self.files.get(&s.file).unwrap().name()
     }
 }
 
@@ -293,7 +295,7 @@ impl Parsed {
             Ok(type_info) => type_info,
             Err(error) => {
                 return Err(RotoReport {
-                    files: file_tree.files,
+                    files: file_tree.into(),
                     errors: vec![RotoError::Type(error)],
                     spans,
                 });
