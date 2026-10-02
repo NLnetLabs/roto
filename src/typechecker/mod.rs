@@ -98,15 +98,12 @@
 //! [`Declaration`]: scope::Declaration
 
 use crate::ast::Stmt;
-use crate::parser::ParseError;
-use crate::parser::token::Keyword;
 use crate::typechecker::error::Label;
 use crate::typechecker::expr::Context;
 use crate::typechecker::scope::{
     YangModuleDeclaration, YangModuleDefinition, YangSubModuleDeclaration,
     YangSubModuleDefinition,
 };
-use crate::typechecker::types::{Primitive, yang_default_types};
 use crate::typechecker::value_cycle::RefGraph;
 use crate::value::{TypeDescription, TypeRegistry};
 use crate::yang::parser::YangStmt;
@@ -124,7 +121,6 @@ use scope::{
     TypeOrStub,
 };
 use scoped_display::TypeDisplay;
-use std::arch::x86_64::_mm_subs_epi16;
 use std::{any::TypeId, borrow::Borrow};
 use type_cycle::detect_type_cycles;
 use types::{
@@ -757,6 +753,15 @@ impl TypeChecker {
                         sub_stmts,
                         ..
                     }) => self.type_def(*scope, stmt, stmt_kw, sub_stmts),
+                    Stmt::YangStmtSeq(YangStmtSeq {
+                        stmt:
+                            YangStmt::Stmt(Meta {
+                                node: crate::yang::parser::Keyword::Type,
+                                ..
+                            }),
+                        sub_stmts,
+                        ..
+                    }) => self.type_def(*scope, stmt, stmt_kw, sub_stmts),
                     _ => Ok(()),
                 }?;
             }
@@ -924,7 +929,7 @@ impl TypeChecker {
                     | ast::Declaration::Const(_)
                     | ast::Declaration::Import(_)
                     | ast::Declaration::YangSubModule(_) => {}
-                    ast::Declaration::YangModule(ym) => {
+                    ast::Declaration::YangModule(_ym) => {
                         // println!(
                         //     "{:#?}",
                         //     self.type_info.scope_graph.declarations
@@ -1144,7 +1149,7 @@ impl TypeChecker {
                     ast::Declaration::Record(_) => continue,
                     ast::Declaration::Enum(_) => continue,
                     ast::Declaration::Import(_) => continue,
-                    ast::Declaration::YangSubModule(ysm) => todo!(),
+                    ast::Declaration::YangSubModule(_ysm) => todo!(),
                 }
             }
         }
@@ -1458,22 +1463,22 @@ impl TypeChecker {
     }
 
     /// Insert a variable into the given scope
-    fn insert_module(
-        &mut self,
-        scope: ScopeRef,
-        k: &Meta<Identifier>,
-        doc: String,
-        mod_scope: ScopeRef,
-    ) -> TypeResult<()> {
-        match self
-            .type_info
-            .scope_graph
-            .insert_module(scope, k, doc, mod_scope)
-        {
-            Ok(()) => Ok(()),
-            Err(old) => Err(self.error_declared_twice(k, old)),
-        }
-    }
+    // fn insert_module(
+    //     &mut self,
+    //     scope: ScopeRef,
+    //     k: &Meta<Identifier>,
+    //     doc: String,
+    //     mod_scope: ScopeRef,
+    // ) -> TypeResult<()> {
+    //     match self
+    //         .type_info
+    //         .scope_graph
+    //         .insert_module(scope, k, doc, mod_scope)
+    //     {
+    //         Ok(()) => Ok(()),
+    //         Err(old) => Err(self.error_declared_twice(k, old)),
+    //     }
+    // }
 
     /// Unify two types
     ///

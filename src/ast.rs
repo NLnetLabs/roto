@@ -177,19 +177,6 @@ impl Stmt {
         } else {
             None
         }
-
-        // if let Stmt::YangStmtSeq(YangStmtSeq { arg, .. }) = self {
-        //     dbg!(arg);
-        //     dbg!(self);
-        //     arg.as_ref().and_then(|a| {
-        //         dbg!(a.node.as_ident().map(|arg| Meta {
-        //             id: a.id,
-        //             node: arg,
-        //         }))
-        //     })
-        // } else {
-        //     None
-        // }
     }
 
     pub fn arg_as_ident(&self) -> Option<Identifier> {

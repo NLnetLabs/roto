@@ -718,33 +718,33 @@ pub fn yang_default_types() -> Vec<(Identifier, String, TypeDefinition)> {
 
 /// The list of built-in Roto types
 pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
-    use Primitive::*;
+    // use Primitive::*;
 
-    let primitives = vec![
-        ("u8", Int(IntKind::Unsigned, IntSize::I8)),
-        ("u16", Int(IntKind::Unsigned, IntSize::I16)),
-        ("u32", Int(IntKind::Unsigned, IntSize::I32)),
-        ("u64", Int(IntKind::Unsigned, IntSize::I64)),
-        ("i8", Int(IntKind::Signed, IntSize::I8)),
-        ("i16", Int(IntKind::Signed, IntSize::I16)),
-        ("i32", Int(IntKind::Signed, IntSize::I32)),
-        ("i64", Int(IntKind::Signed, IntSize::I64)),
-        ("f32", Float(FloatSize::F32)),
-        ("f64", Float(FloatSize::F64)),
-        ("bool", Bool),
-        ("char", Char),
-        ("String", String),
-        // ("Asn", Asn),
-        // ("IpAddr", IpAddr),
-        // ("Prefix", Prefix),
-    ];
+    // let primitives = vec![
+    // ("u8", Int(IntKind::Unsigned, IntSize::I8)),
+    // ("u16", Int(IntKind::Unsigned, IntSize::I16)),
+    // ("u32", Int(IntKind::Unsigned, IntSize::I32)),
+    // ("u64", Int(IntKind::Unsigned, IntSize::I64)),
+    // ("i8", Int(IntKind::Signed, IntSize::I8)),
+    // ("i16", Int(IntKind::Signed, IntSize::I16)),
+    // ("i32", Int(IntKind::Signed, IntSize::I32)),
+    // ("i64", Int(IntKind::Signed, IntSize::I64)),
+    // ("f32", Float(FloatSize::F32)),
+    // ("f64", Float(FloatSize::F64)),
+    // ("bool", Bool),
+    // ("char", Char),
+    // ("String", String),
+    // ("Asn", Asn),
+    // ("IpAddr", IpAddr),
+    // ("Prefix", Prefix),
+    // ];
 
     let mut types = vec![];
 
-    for (n, p) in primitives {
-        let name = Identifier::from(n);
-        types.push((name, "".into(), TypeDefinition::Primitive(p)))
-    }
+    // for (n, p) in primitives {
+    //     let name = Identifier::from(n);
+    //     types.push((name, "".into(), TypeDefinition::Primitive(p)))
+    // }
 
     struct EnumType {
         name: &'static str,
@@ -771,20 +771,20 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
                 ("None", vec![]),
             ],
         },
-        EnumType {
-            name: "Verdict",
-            doc: "The verdict that a filter reaches about a value, that is, \
-            whether to accept or reject it.\n\
-            \n\
-            There are special keywords `accept` and `reject` to construct a \
-            `Verdict`. For more information, see \
-            [the language reference](#lang_filtermap).",
-            params: vec!["A", "R"],
-            variants: vec![
-                ("Accept", vec![Type::ExplicitVar("A".into())]),
-                ("Reject", vec![Type::ExplicitVar("R".into())]),
-            ],
-        },
+        // EnumType {
+        //     name: "Verdict",
+        //     doc: "The verdict that a filter reaches about a value, that is, \
+        //     whether to accept or reject it.\n\
+        //     \n\
+        //     There are special keywords `accept` and `reject` to construct a \
+        //     `Verdict`. For more information, see \
+        //     [the language reference](#lang_filtermap).",
+        //     params: vec!["A", "R"],
+        //     variants: vec![
+        //         ("Accept", vec![Type::ExplicitVar("A".into())]),
+        //         ("Reject", vec![Type::ExplicitVar("R".into())]),
+        //     ],
+        // },
         EnumType {
             name: "Result",
             doc: "A type that represents either success (`Ok`) or failure (`Err`).",

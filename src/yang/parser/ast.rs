@@ -172,15 +172,7 @@ impl YangStmtSeq {
             .find(|stmt| {
                 stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false)
             })
-            .and_then(|stmt| {
-                stmt.argument()
-                // stmt.argument().and_then(|a| {
-                //     Some(Meta {
-                //         id: a.id,
-                //         node: a.as_str(),
-                //     })
-                // })
-            })
+            .and_then(|stmt| stmt.argument())
     }
 
     /// docs
