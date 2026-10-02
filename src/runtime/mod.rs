@@ -589,9 +589,7 @@ impl Rt {
         scope: ScopeRef,
         items: &[Item],
     ) -> Result<(), RegistrationError> {
-        println!("[declare_types]");
         for item in items {
-            println!("item {item:?}");
             match item {
                 Item::Module(module) => {
                     let scope = self

@@ -225,7 +225,7 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         recurse: bool,
     ) -> Option<Declaration> {
-        println!("ident resolve {ident} scope {:?}", scope);
+        // println!("ident resolve {ident} scope {:?}", scope);
         loop {
             let name = ResolvedName {
                 scope,
@@ -240,18 +240,18 @@ impl ScopeGraph {
             }
 
             if let Some(x) = self.scopes[scope.0].imports.get(ident) {
-                println!("{ident}");
-                println!("resolve x {:?}", x.1);
-                println!("scope {:?}", scope);
-                println!("imports {:?}", self.scopes[scope.0].imports);
-                println!(
-                    "decla {:?}",
-                    self.declarations
-                        .iter()
-                        .find(|(a, b)| a.ident == x.1.ident)
-                        .into_iter()
-                        .collect::<Vec<_>>()
-                );
+                // println!("{ident}");
+                // println!("resolve x {:?}", x.1);
+                // println!("scope {:?}", scope);
+                // println!("imports {:?}", self.scopes[scope.0].imports);
+                // println!(
+                //     "decla {:?}",
+                //     self.declarations
+                //         .iter()
+                //         .find(|(a, b)| a.ident == x.1.ident)
+                //         .into_iter()
+                //         .collect::<Vec<_>>()
+                // );
                 return Some(self.declarations.get(&x.1).unwrap().clone());
             }
 

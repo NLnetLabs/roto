@@ -15,6 +15,10 @@ module rotonda-conf {
     prefix inet;
   }
 
+  import ietf-rpki-rtr {
+    prefix rtr;
+  }
+
   typedef "xip-address-origin" {
     type inet:ipv4-prefix;
     //type uint32;

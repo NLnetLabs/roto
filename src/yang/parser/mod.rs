@@ -423,7 +423,8 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
 
         let mut imported_modules = vec![];
         let (module_tree, span) = self.yang_stmt_seq(None)?;
-        let expr = match module_tree.is_module() {
+
+        match module_tree.is_module() {
             Some((module, is_sub)) if !is_sub => {
                 let Some(prefix) = module.find_attr("prefix") else {
                     return Err(Box::new(ParseError::expected(
@@ -509,43 +510,7 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                 let (_token, _span) = self.next()?;
                 Err(Box::new(end_of_input))
             }
-        };
-
-        // let expr = match self.peek().ok_or(end_of_input)? {
-        //     Token::Keyword(Keyword::Module)
-        //     | Token::Keyword(Keyword::SubModule) => {
-        //         let (module, span) = self.yang_stmt_seq(None)?;
-        //         let module = module.is_module().ok_or_else(|| {
-        //             ParseError::expected(
-        //                 "a yang (xub)module",
-        //                 module.node.stmt.clone(),
-        //                 span,
-        //             )
-        //         })?;
-
-        //         Declaration::YangModule(
-        //             // Stmt::YangStmtSeq(self.yang_stmt_seq(None)?.0.node),
-        //             YangModuleDeclaration {
-        //                 ident: module.0.clone(),
-        //                 prefix: module.0
-        //                 body: module.1.clone(),
-        //             },
-        //         )
-        //     }
-        //     // Token::Test => Declaration::Test(self.test()?),
-        //     // Token::Slash | Token::DoubleSlash => {
-        //     //     Declaration::XPath(self.xpath()?)
-        //     // }
-        //     _t => {
-        //         let (token, span) = self.next()?;
-        //         return Err(Box::new(ParseError::expected(
-        //             "a yang (zub)module",
-        //             token,
-        //             span,
-        //         )));
-        //     }
-        // };
-        expr
+        }
     }
 
     fn yang_stmt_seq(

@@ -12,7 +12,8 @@
 //! earlier in the type inference, so that errors appear more often where
 //! they are caused.
 //!
-//! See also <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>.
+//! See <https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_system>
+//! for more.
 //!
 //! # Type checking steps
 //!
@@ -360,8 +361,8 @@ impl TypeChecker {
             id: MetaId(0),
         };
 
-        // Small edge case: the primitives are already in the typechecker, so we
-        // skip them, but we should override the documentation.
+        // Small edge case: the primitives are already in the typechecker, so
+        // we skip them, but we should override the documentation.
         if let Some(other) =
             self.type_info.scope_graph.resolve_name(scope, &ident, true)
             && let DeclarationKind::Type(TypeOrStub::Type(
@@ -582,17 +583,6 @@ impl TypeChecker {
                 .scope_graph
                 .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
 
-            // if let Some(p) = parent_module {
-            //     self.insert_module(p, ident, String::new(), scope)?;
-            // } else {
-            //     self.insert_module(
-            //         ScopeRef::GLOBAL,
-            //         ident,
-            //         String::new(),
-            //         scope,
-            //     )?;
-            // }
-
             for d in &ast.declarations {
                 let (kind, ident, doc) = match d {
                     ast::Declaration::Test(_) => continue,
@@ -653,7 +643,8 @@ impl TypeChecker {
                 let dec = match res {
                     Ok(dec) => {
                         println!(
-                            "[declare_modules] inserted `{ident}` as {kind:?} scope {scope:?}",
+                            "[declare_modules] inserted `{ident}` as \
+                            {kind:?} scope {scope:?}",
                         );
                         dec
                     }
@@ -748,154 +739,26 @@ impl TypeChecker {
             // Type Definition. Others will be inserted with a stub
             // declaration.
             for stmt in module.body.node.iter_stmt() {
-                if let Stmt::YangStmtSeq(YangStmtSeq {
-                    stmt: YangStmt::Stmt(meta),
-                    sub_stmts,
+                let Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt: YangStmt::Stmt(stmt_kw),
                     ..
-                }) = stmt.node.clone()
-                    && meta.node == crate::yang::parser::Keyword::TypeDef
-                {
-                    // the name of the defined type
-                    let Some(ty) = stmt.node.argument() else {
-                        ice!(
-                            "missing type name in module {:?}",
-                            stmt.node.as_ident()
-                        )
-                    };
+                }) = &stmt.node
+                else {
+                    return Ok(());
+                };
 
-                    let Some(ty_ident) = ty.as_ident() else {
-                        ice!("type name {ty} is invalid");
-                    };
-
-                    // println!("seq {:#?}", st);
-                    println!("[declare_types] declare type `{}`", ty.node);
-
-                    let derived_ty = match sub_stmts.find_attr("type") {
-                        Some(Meta {
-                            id,
-                            node: Argument::Ident(derived_ty),
-                        }) => Meta {
-                            id: *id,
-                            node: *derived_ty,
-                        },
-                        Some(Meta {
-                            id,
-                            node: Argument::PrefixIdent((p, derived_ty)),
-                        }) => {
-                            // the prefix should already exist as an imported
-                            // module here
-                            println!(
-                                "[declare_types] type {} w/ module prefix \
-                                `{}`",
-                                derived_ty, p
-                            );
-                            // panic!(
-                            //     "scope graph {:#?}",
-                            //     self.type_info.scope_graph
-                            // );
-                            self.type_info
-                                .scope_graph
-                                .resolve_name(
-                                    *scope,
-                                    &Meta { id: *id, node: *p },
-                                    true,
-                                )
-                                .ok_or(TypeError {
-                                    description: format!(
-                                        "Cannot find module with prefix \
-                                        `{p}` in type declaration for \
-                                        `{ty_ident}`"
-                                    ),
-                                    location: meta.id,
-                                    labels: vec![
-                                        Label::error(
-                                            "in this type declaration..",
-                                            ty.id,
-                                        ),
-                                        Label::info(
-                                            "module prefix and type \
-                                            name cannot be found",
-                                            *id,
-                                        ),
-                                    ],
-                                    notes: Vec::new(),
-                                })?;
-                            Meta {
-                                id: *id,
-                                node: *derived_ty,
-                            }
-                        }
-                        _ => {
-                            ice!("type name {ty} is not an identifier");
-                        }
-                    };
-
-                    // let Some(derived_ty) =
-                    //     sub_stmts.find_attr("type").map(|t| Meta {
-                    //         id: t.id,
-                    //         node: t.as_ident().unwrap(),
-                    //     })
-                    // else {};
-
-                    println!("derived-from-type `{}`", derived_ty.node);
-
-                    let kind = if let Some(builtin_ty) = self
-                        .type_info
-                        .scope_graph
-                        .resolve_name(ScopeRef::GLOBAL, &derived_ty, true)
-                    {
-                        builtin_ty.kind
-                    } else {
-                        println!(
-                            "[declare_modules] found non-builtin \
-                                    type `{}`",
-                            derived_ty.as_str()
-                        );
-                        DeclarationKind::Type(TypeOrStub::Stub {
-                            num_params: 0,
-                        })
-                    };
-
-                    // let name = ResolvedName {
-                    //     scope,
-                    //     ident: ty_ident,
-                    // };
-
-                    let res = self.type_info.scope_graph.insert_declaration(
-                        *scope,
-                        &Meta {
-                            id: meta.id,
-                            node: ty_ident,
-                        },
-                        kind,
-                        stmt.node
-                            .description()
-                            .map(|d| d.to_string())
-                            .unwrap_or(String::new()),
-                        |_| false,
-                    );
-
-                    if let Err(e) = res {
-                        return Err(TypeError {
-                            description: format!("{:?}", stmt.node),
-                            location: meta.id,
-                            labels: vec![
-                                Label::error(
-                                    format!("`{ty_ident}` redefined here"),
-                                    meta.id,
-                                ),
-                                Label::info(
-                                    format!(
-                                        "`{ty_ident}` previously \
-                                                 declared here"
-                                    ),
-                                    e,
-                                ),
-                            ],
-                            notes: Vec::new(),
-                        });
-                    }
-                }
+                match &stmt.node {
+                    Stmt::YangStmtSeq(YangStmtSeq {
+                        stmt:
+                            YangStmt::Stmt(Meta {
+                                node: crate::yang::parser::Keyword::TypeDef,
+                                ..
+                            }),
+                        sub_stmts,
+                        ..
+                    }) => self.type_def(*scope, stmt, stmt_kw, sub_stmts),
+                    _ => Ok(()),
+                }?;
             }
         }
         Ok(())
@@ -990,19 +853,6 @@ impl TypeChecker {
                     ident: *import_name,
                 };
 
-                // let res = self.type_info.scope_graph.insert_declaration(
-                //     scope,
-                //     &Meta {
-                //         id: meta.id,
-                //         node: *prefix,
-                //     },
-                //     DeclarationKind::Module,
-                //     stmt.node
-                //         .description()
-                //         .map(|d| d.to_string())
-                //         .unwrap_or(String::new()),
-                //     |_| false,
-                // );
                 let res = self.type_info.scope_graph.insert_import(
                     *mod_scope,
                     import_pfx.id,
@@ -1378,11 +1228,15 @@ impl TypeChecker {
                     if !correct {
                         return Err(self.error_simple(
                             format!(
-                                "the `{}` method of type `{}` does not have the right signature",
+                                "the `{}` method of type `{}` does not have \
+                                 the right signature",
                                 ident,
                                 receiver_ty.display(&self.type_info),
                             ),
-                            format!("does not have a valid `{}` method", ident),
+                            format!(
+                                "does not have a valid `{}` method",
+                                ident
+                            ),
                             id,
                         ));
                     }
@@ -1407,12 +1261,14 @@ impl TypeChecker {
                         &return_type
                     else {
                         ice!(
-                            "return type of a filtermap should always be a verdict"
+                            "return type of a filtermap should always be a \
+                             verdict"
                         )
                     };
                     let [a, r] = &arguments[..] else {
                         ice!(
-                            "return type of a filtermap should always be a verdict"
+                            "return type of a filtermap should always be a \
+                             verdict"
                         )
                     };
 
@@ -1754,8 +1610,8 @@ impl TypeChecker {
                 }
                 Name(b)
             }
-            // Function types can be unified if their parameters and return types
-            // can be unified
+            // Function types can be unified if their parameters and return
+            // types can be unified
             (
                 Function(a_params, a_ret),
                 ref b @ Function(ref b_params, ref b_ret),

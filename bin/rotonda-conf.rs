@@ -111,13 +111,13 @@ fn cli_inner() -> Result<(), RotoReport> {
             let rt = Runtime::new();
             let t_checked = parsed.typecheck(&rt).unwrap();
             println!(
-                "[declarations] {:#?}",
+                "[rotonda-conf] {:#?}",
                 t_checked
                     .type_info
                     .scope_graph
                     .declarations
                     .iter()
-                    .map(|dec| (dec.0.ident, &dec.1.kind, &dec.1.doc))
+                    .map(|dec| (dec.0.ident.as_str(), dec.1))
                     .collect::<Vec<_>>()
             );
             // t_checked.lower_to_mir();

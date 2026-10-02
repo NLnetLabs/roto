@@ -116,14 +116,6 @@ impl Parsed {
         loop {
             let mut new_imported_modules = vec![];
             for (parent_file, i_mods) in imported_modules.clone() {
-                println!(
-                    "mod meta {:?}",
-                    i_mods
-                        .clone()
-                        .iter()
-                        .map(|m| spans.get(m.id))
-                        .collect::<Vec<_>>()
-                );
                 for module_path in i_mods {
                     // look the module up in the library
                     let (search_mod, file_idx) = lib
@@ -150,9 +142,6 @@ impl Parsed {
                             ..Default::default()
                         })?;
 
-                    println!("go parse file {}", file_idx);
-                    println!("files {files:?}");
-                    // files.insert(file_idx, search_mod.clone());
                     match YangParser::parse(
                         file_idx,
                         &mut spans,
@@ -183,7 +172,6 @@ impl Parsed {
                                         .map(|sf| &sf.name)
                                 );
                             }
-                            // }
                         }
                         Err(err) => {
                             if let std::collections::hash_map::Entry::Vacant(
@@ -209,7 +197,6 @@ impl Parsed {
         }
 
         println!("[from_entry_point] done parsing");
-        // println!("lib parsed {:#?}", HashMap::from(lib.clone()));
         println!(
             "lib {:#?}",
             lib.lib

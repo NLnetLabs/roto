@@ -146,7 +146,7 @@ impl YangStmtSeq {
     /// Return the yang module if it is one, otherwise none.
     pub fn is_module(&self) -> Option<(&Self, bool)> {
         match &self.stmt {
-            YangStmt::Module(meta, is_sub) => Some((self, *is_sub)),
+            YangStmt::Module(_meta, is_sub) => Some((self, *is_sub)),
             _ => None,
         }
     }
