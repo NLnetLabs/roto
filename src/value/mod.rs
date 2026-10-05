@@ -18,10 +18,10 @@ use std::{
 use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
-use crate::{
-    lir::{IrValue, Memory},
-    runtime::layout::Layout,
-};
+use crate::runtime::layout::Layout;
+
+#[cfg(test)]
+use crate::lir::{IrValue, Memory};
 
 pub use dyn_val::DynVal;
 pub(crate) use list::ErasedList;
@@ -168,6 +168,7 @@ pub trait Value: Sized + 'static {
     }
 
     /// Attempt to convert an IR value into `Self`
+    #[cfg(test)]
     fn from_ir_value(
         mem: &mut Memory,
         value: IrValue,
@@ -186,6 +187,7 @@ pub trait Value: Sized + 'static {
     }
 }
 
+#[cfg(test)]
 pub struct IrValueDoesNotMatchType;
 
 pub trait Param<T>: Sized {
@@ -193,6 +195,7 @@ pub trait Param<T>: Sized {
 
     fn to_value(self) -> T;
 
+    #[cfg(test)]
     fn from_ir_value(
         mem: &mut Memory,
         value: IrValue,
@@ -208,6 +211,7 @@ impl<T> Param<T> for *mut T {
         unsafe { std::ptr::read(self) }
     }
 
+    #[cfg(test)]
     fn from_ir_value(
         mem: &mut Memory,
         value: IrValue,
@@ -319,6 +323,7 @@ impl<T> Param<Val<T>> for *mut T {
         Val(unsafe { std::ptr::read(self) })
     }
 
+    #[cfg(test)]
     fn from_ir_value(
         mem: &mut Memory,
         value: IrValue,
@@ -530,6 +535,7 @@ impl Param<DynVal> for DynVal {
         self
     }
 
+    #[cfg(test)]
     fn from_ir_value(
         _mem: &mut Memory,
         _value: IrValue,
@@ -557,6 +563,7 @@ impl Value for DynVal {
     }
 }
 
+#[cfg(test)]
 impl TryFrom<&IrValue> for () {
     type Error = ();
 
@@ -570,6 +577,7 @@ impl Param<()> for () {
 
     fn to_value(self) {}
 
+    #[cfg(test)]
     fn from_ir_value(
         _mem: &mut Memory,
         _value: IrValue,
@@ -598,12 +606,14 @@ impl Value for () {
 
 macro_rules! simple_value {
     ($t:ty, $ir:ident) => {
+        #[cfg(test)]
         impl From<$t> for IrValue {
             fn from(value: $t) -> Self {
                 IrValue::$ir(value)
             }
         }
 
+        #[cfg(test)]
         impl TryFrom<&IrValue> for $t {
             type Error = ();
 
@@ -624,6 +634,7 @@ macro_rules! simple_value {
                 self
             }
 
+            #[cfg(test)]
             fn from_ir_value(
                 _: &mut Memory,
                 value: IrValue,

@@ -36,7 +36,7 @@ impl Parser<'_, '_> {
         let body = self.block()?;
 
         Ok(FilterMap {
-            filter_type,
+            _filter_type: filter_type,
             ident,
             params,
             body,

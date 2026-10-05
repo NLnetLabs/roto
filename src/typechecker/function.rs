@@ -21,7 +21,7 @@ impl TypeChecker {
         filter_map: &ast::FilterMap,
     ) -> TypeResult<()> {
         let ast::FilterMap {
-            filter_type: _,
+            _filter_type: _,
             ident,
             params,
             body,

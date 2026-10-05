@@ -13,12 +13,7 @@ use crate::{
     },
     file_tree::{ReadError, SourceFile},
     label::LabelStore,
-    lir::{
-        self,
-        eval::{self, Memory},
-        value::IrValue,
-    },
-    mir,
+    lir, mir,
     module::{ModuleTree, Parsed},
     parser::{
         ParseError,
@@ -32,6 +27,12 @@ use crate::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
     },
+};
+
+#[cfg(test)]
+use crate::lir::{
+    IrValue,
+    eval::{self, Memory},
 };
 
 use ariadne::Cache;
@@ -359,7 +360,7 @@ impl<'r, Ctx: OptCtx> TypeChecked<'r, Ctx> {
                 let printer = IrPrinter {
                     type_info: &type_info,
                     label_store: &label_store,
-                    scope: None,
+                    scope: ScopeRef::GLOBAL,
                 };
                 let s = ir.print(&printer);
                 info!("\n{s}");
@@ -407,7 +408,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
                 let printer = IrPrinter {
                     type_info: &type_info,
                     label_store: &label_store,
-                    scope: None,
+                    scope: ScopeRef::GLOBAL,
                 };
                 let s = ir.print(&printer);
                 info!("\n{s}");
@@ -427,6 +428,7 @@ impl<'r, Ctx: OptCtx> LoweredToMir<'r, Ctx> {
 }
 
 impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
+    #[cfg(test)]
     pub fn eval(
         &self,
         mem: &mut Memory,

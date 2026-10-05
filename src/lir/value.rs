@@ -1,6 +1,8 @@
 //! Values and types for the IR
 
+#[cfg(test)]
 use std::any::Any;
+
 use std::fmt::{Debug, Display};
 
 use inetnum::asn::Asn;
@@ -43,11 +45,10 @@ pub enum IrType {
     I64,
     F32,
     F64,
-    Char,
-    Asn,
     Pointer,
 }
 
+#[cfg(test)]
 impl IrType {
     /// The size of the type in bytes
     pub fn bytes(&self) -> usize {
@@ -55,7 +56,7 @@ impl IrType {
         match self {
             Bool | U8 | I8 => 1,
             U16 | I16 => 2,
-            U32 | I32 | F32 | Asn | Char => 4,
+            U32 | I32 | F32 => 4,
             U64 | I64 | F64 => 8,
             Pointer => (usize::BITS / 8) as usize,
         }
@@ -81,8 +82,6 @@ impl Display for IrType {
             I64 => "i64",
             F32 => "f32",
             F64 => "f64",
-            Char => "char",
-            Asn => "Asn",
             Pointer => "Pointer",
         };
         write!(f, "{s}")
@@ -109,6 +108,7 @@ impl PartialEq for IrValue {
 
 impl Eq for IrValue {}
 
+#[cfg(test)]
 impl IrValue {
     pub fn get_type(&self) -> IrType {
         use IrValue::*;
@@ -124,8 +124,8 @@ impl IrValue {
             I64(_) => IrType::I64,
             F32(_) => IrType::F32,
             F64(_) => IrType::F64,
-            Asn(_) => IrType::Asn,
-            Char(_) => IrType::Char,
+            Asn(_) => IrType::U32,
+            Char(_) => IrType::U32,
             Pointer(_) => IrType::Pointer,
         }
     }
@@ -245,14 +245,6 @@ impl IrValue {
             IrType::F64 => {
                 let val: &[u8; 8] = val.try_into().unwrap();
                 Self::F64(f64::from_ne_bytes(*val))
-            }
-            IrType::Char => {
-                let val: &[u8; 4] = val.try_into().unwrap();
-                Self::Char(char::from_u32(u32::from_ne_bytes(*val)).unwrap())
-            }
-            IrType::Asn => {
-                let val: &[u8; 4] = val.try_into().unwrap();
-                Self::Asn(Asn::from_u32(u32::from_ne_bytes(*val)))
             }
             IrType::Pointer => {
                 const SIZE: usize = (usize::BITS / 8) as usize;

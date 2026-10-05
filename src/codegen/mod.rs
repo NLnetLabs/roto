@@ -146,7 +146,7 @@ unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
 pub struct Module<C: OptCtx> {
-    main: Identifier,
+    _main: Identifier,
     main_scope: ScopeRef,
 
     /// The set of public functions and their signatures.
@@ -777,7 +777,7 @@ impl ModuleBuilder {
     fn finalize<Ctx: OptCtx>(mut self) -> Module<Ctx> {
         self.inner.finalize_definitions().unwrap();
         Module {
-            main: self.main,
+            _main: self.main,
             main_scope: self.main_scope,
             functions: self.functions,
             inner: SharedModuleData::new(
@@ -796,7 +796,7 @@ impl ModuleBuilder {
         match ty {
             IrType::Bool | IrType::U8 | IrType::I8 => I8,
             IrType::U16 | IrType::I16 => I16,
-            IrType::U32 | IrType::I32 | IrType::Asn | IrType::Char => I32,
+            IrType::U32 | IrType::I32 => I32,
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
