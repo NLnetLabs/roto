@@ -163,7 +163,7 @@ impl Lowerer<'_, '_> {
                 signature: None,
                 ir_signature,
             },
-            entry_block,
+            _entry_block: entry_block,
             variables: lowerer.variables,
             blocks: lowerer.blocks,
             public: true,

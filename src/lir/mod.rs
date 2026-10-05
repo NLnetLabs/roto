@@ -39,6 +39,7 @@ use crate::{
     },
     value::{CloneFn, DropFn, EqFn},
 };
+#[cfg(test)]
 pub use eval::Memory;
 pub use lower::lower_to_lir;
 use std::fmt::Display;
@@ -322,7 +323,7 @@ pub struct Item {
     pub kind: ItemKind,
 
     /// Entry block of the function
-    pub entry_block: LabelRef,
+    pub _entry_block: LabelRef,
 
     /// Variables used by this function
     pub variables: Vec<(Var, ValueOrSlot)>,

@@ -41,9 +41,7 @@ impl Lowerer<'_, '_> {
             | IrType::I8
             | IrType::I16
             | IrType::I32
-            | IrType::I64
-            | IrType::Char
-            | IrType::Asn => {
+            | IrType::I64 => {
                 let to = self.new_tmp(IrType::Bool);
                 self.emit(Instruction::IntCmp {
                     to: to.clone(),
@@ -191,7 +189,7 @@ impl Lowerer<'_, '_> {
                 signature: None,
                 ir_signature,
             },
-            entry_block,
+            _entry_block: entry_block,
             variables: lowerer.variables,
             blocks: lowerer.blocks,
             public: false,

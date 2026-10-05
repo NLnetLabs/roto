@@ -223,7 +223,7 @@ impl Lowerer<'_, '_> {
             variables: lowerer.variables,
             kind,
             scope: item.scope,
-            entry_block,
+            _entry_block: entry_block,
             public: true,
         })
     }

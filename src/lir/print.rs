@@ -2,7 +2,6 @@ use super::{Block, Instruction, Item, Lir, Operand, Var, VarKind};
 use crate::{
     ir_printer::{IrPrinter, Printable},
     lir::{ItemKind, ValueOrSlot},
-    typechecker::scope::ScopeRef,
     typechecker::scoped_display::TypeDisplay,
 };
 

@@ -1,9 +1,9 @@
 use std::any::{Any, TypeId};
-use std::mem::MaybeUninit;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::Value;
+
+#[cfg(test)]
 use crate::lir::{IrValue, Memory};
 
 /// A type that indicates that a parameter is an out ptr.
@@ -21,6 +21,7 @@ pub struct FunctionDescription {
     return_type: TypeId,
     pointer: Arc<Box<dyn Any>>,
     trampoline: *const u8,
+    #[cfg(test)]
     ir_function: RustIrFunction,
 }
 
@@ -56,6 +57,7 @@ pub trait RegisterableFn<A, R, MaybeOutPtr>: Send + 'static {
     fn return_type() -> TypeId;
 
     /// The IR function that wraps this function that will be called by the LIR evaluator.
+    #[cfg(test)]
     fn ir_function(&self) -> RustIrFunction;
 }
 
@@ -65,7 +67,10 @@ impl FunctionDescription {
         let return_type = F::return_type();
         let trampoline_ptr = &F::TRAMPOLINE as *const _ as *const *const u8;
         let trampoline = unsafe { *trampoline_ptr };
+
+        #[cfg(test)]
         let ir_function = func.ir_function();
+
         let pointer = func.ptr();
 
         Self {
@@ -73,6 +78,7 @@ impl FunctionDescription {
             return_type,
             pointer,
             trampoline,
+            #[cfg(test)]
             ir_function,
         }
     }
@@ -89,6 +95,7 @@ impl FunctionDescription {
         self.pointer.clone()
     }
 
+    #[cfg(test)]
     pub fn ir_function(&self) -> RustIrFunction {
         self.ir_function.clone()
     }
@@ -120,10 +127,12 @@ impl std::fmt::Debug for FunctionDescription {
 }
 
 #[allow(clippy::type_complexity)]
+#[cfg(test)]
 #[derive(Clone)]
 pub struct RustIrFunction(Arc<dyn Fn(&mut Memory, Vec<IrValue>)>);
 
-impl Deref for RustIrFunction {
+#[cfg(test)]
+impl std::ops::Deref for RustIrFunction {
     type Target = Arc<dyn Fn(&mut Memory, Vec<IrValue>)>;
 
     fn deref(&self) -> &Self::Target {
@@ -169,6 +178,7 @@ macro_rules! registerable_fn {
                 $r::resolve().type_id
             }
 
+            #[cfg(test)]
             fn ir_function(&self) -> RustIrFunction {
                 let f = self as *const _;
                 // We reuse the type names as variable names, so they are
@@ -189,7 +199,7 @@ macro_rules! registerable_fn {
                             panic!("Type of argument is not correct: {}", $a)
                         };
                     )*
-                    let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
+                    let mut uninit_ret = std::mem::MaybeUninit::<<$r as Value>::Transformed>::uninit();
                     Self::TRAMPOLINE(
                         f,
                         $r as *mut <$r as Value>::Transformed,
@@ -247,6 +257,7 @@ macro_rules! registerable_fn_out_ptr {
                 $r::resolve().type_id
             }
 
+            #[cfg(test)]
             fn ir_function(&self) -> RustIrFunction {
                 let f = self as *const _;
                 // We reuse the type names as variable names, so they are
@@ -267,7 +278,7 @@ macro_rules! registerable_fn_out_ptr {
                             panic!("Type of argument is not correct: {}", $a)
                         };
                     )*
-                    let mut uninit_ret = MaybeUninit::<<$r as Value>::Transformed>::uninit();
+                    let mut uninit_ret = std::mem::MaybeUninit::<<$r as Value>::Transformed>::uninit();
                     Self::TRAMPOLINE(
                         f,
                         $r as *mut <$r as Value>::Transformed,
