@@ -250,8 +250,11 @@ impl TypeChecker {
     }
 }
 
-// These are YANG statements that can take `type` as sub-statement, meaning \
-// that these statements have
+// These are YANG statements that can take `type` as sub-statement, or that
+// take sub-statements that can take them ('container' basically), meaning
+// that they can represent types themselves.
+//
+// Module and submodule do not appear here, since they can only live at the root of an AST: yang does not allow nested modules.
 impl TypeChecker {
     pub(crate) fn body<'a>(
         &'a mut self,
@@ -273,6 +276,8 @@ impl TypeChecker {
             };
 
             match &stmt.node {
+                // an actual type definition, it will have to have a type
+                // sub-statement, that defines its base type
                 Stmt::YangStmtSeq(YangStmtSeq {
                     stmt:
                         YangStmt::Stmt(Meta {
@@ -282,15 +287,10 @@ impl TypeChecker {
                     sub_stmts,
                     ..
                 }) => self.type_def(scope, stmt, stmt_kw, sub_stmts),
-                Stmt::YangStmtSeq(YangStmtSeq {
-                    stmt:
-                        YangStmt::Stmt(Meta {
-                            node: crate::yang::parser::Keyword::Container,
-                            ..
-                        }),
-                    sub_stmts,
-                    ..
-                }) => self.body(scope, sub_stmts.iter_stmt()),
+                // a type statement will have a type sub-statement if it
+                // does not refer to a builtin type, it then refers to a base
+                // type (which doesn't have to be a builtin itself, so it
+                // can recurse)
                 Stmt::YangStmtSeq(YangStmtSeq {
                     stmt:
                         YangStmt::Stmt(Meta {
@@ -300,6 +300,8 @@ impl TypeChecker {
                     sub_stmts,
                     ..
                 }) => self.base_type(scope, stmt, stmt_kw, sub_stmts),
+                // a leaf has to have a type statement, that represents the
+                // type of the value the leaf holds.
                 Stmt::YangStmtSeq(YangStmtSeq {
                     stmt:
                         YangStmt::Stmt(Meta {
@@ -309,6 +311,16 @@ impl TypeChecker {
                     sub_stmts,
                     ..
                 }) => self.leaf(scope, stmt, sub_stmts),
+                // recurse into a container's body
+                Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt:
+                        YangStmt::Stmt(Meta {
+                            node: crate::yang::parser::Keyword::Container,
+                            ..
+                        }),
+                    sub_stmts,
+                    ..
+                }) => self.body(scope, sub_stmts.iter_stmt()),
                 _ => Ok(()),
             }?;
         }
