@@ -15,9 +15,13 @@ module rotonda-conf {
     prefix inet;
   }
 
-  import ietf-rpki-rtr {
-    prefix rtr;
+  import ietf-yang-types {
+    prefix yang;
   }
+
+  // import ietf-rpki-rtr {
+  //   prefix rtr;
+  // }
 
   typedef "xip-address-origin" {
     type inet:ipv4-prefix;
@@ -28,9 +32,13 @@ module rotonda-conf {
     type uint8;
   }
 
+  leaf blaffer {
+    type yang:date-and-time;
+  }
+
   container "rotonda-root" {
     typedef 'ip-address-origin' {
-      type uint64;
+      type ipx-address-origin;
     }
     leaf rotonda-id {
       type uint8;

@@ -6,11 +6,11 @@ use crate::{
     parser::meta::Meta,
     typechecker::{
         error::{Label, TypeError},
-        scope::{DeclarationKind, TypeOrStub},
+        scope::{DeclarationKind, ModuleScope, TypeOrStub},
         types::Signature,
     },
     yang::parser::{
-        Keyword,
+        Keyword, YangStmt,
         ast::{Argument, YangStmtSeq},
     },
 };
@@ -253,27 +253,149 @@ impl TypeChecker {
 // These are YANG statements that can take `type` as sub-statement, meaning \
 // that these statements have
 impl TypeChecker {
-    fn leaf(&mut self, scope: ScopeRef, dec: &YangStmtSeq) -> TypeResult<()> {
-        todo!()
+    pub(crate) fn body<'a>(
+        &'a mut self,
+        scope: ScopeRef,
+        iter: impl Iterator<Item = &'a Meta<Stmt>>,
+    ) -> TypeResult<()> {
+        for stmt in iter {
+            println!(
+                "[declare_types_in_module] in body: {:?} ({:?})",
+                stmt.as_ident(),
+                scope
+            );
+            let Stmt::YangStmtSeq(YangStmtSeq {
+                stmt: YangStmt::Stmt(stmt_kw),
+                ..
+            }) = &stmt.node
+            else {
+                return Ok(());
+            };
+
+            match &stmt.node {
+                Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt:
+                        YangStmt::Stmt(Meta {
+                            node: crate::yang::parser::Keyword::TypeDef,
+                            ..
+                        }),
+                    sub_stmts,
+                    ..
+                }) => self.type_def(scope, stmt, stmt_kw, sub_stmts),
+                Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt:
+                        YangStmt::Stmt(Meta {
+                            node: crate::yang::parser::Keyword::Container,
+                            ..
+                        }),
+                    sub_stmts,
+                    ..
+                }) => self.body(scope, sub_stmts.iter_stmt()),
+                Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt:
+                        YangStmt::Stmt(Meta {
+                            node: crate::yang::parser::Keyword::Type,
+                            ..
+                        }),
+                    sub_stmts,
+                    ..
+                }) => self.base_type(scope, stmt, stmt_kw, sub_stmts),
+                Stmt::YangStmtSeq(YangStmtSeq {
+                    stmt:
+                        YangStmt::Stmt(Meta {
+                            node: crate::yang::parser::Keyword::Leaf,
+                            ..
+                        }),
+                    sub_stmts,
+                    ..
+                }) => self.leaf(scope, stmt, sub_stmts),
+                _ => Ok(()),
+            }?;
+        }
+
+        Ok(())
     }
 
-    fn leaf_list(
+    // check the type statement in a leaf
+    pub(crate) fn leaf(
         &mut self,
         scope: ScopeRef,
-        dec: &YangStmtSeq,
+        stmt: &Meta<Stmt>,
+        sub_stmts: &Meta<Expr>,
+    ) -> TypeResult<()> {
+        match sub_stmts.find_attr("type") {
+            Some(Meta {
+                id,
+                node: Argument::Ident(b_ty),
+            }) => {
+                println!("[leaf] type {} in scope {:?}", b_ty, scope);
+                self.type_info
+                    .scope_graph
+                    .resolve_name(
+                        scope,
+                        &Meta {
+                            id: *id,
+                            node: *b_ty,
+                        },
+                        true,
+                    )
+                    .ok_or(TypeError {
+                        description: format!(
+                            "the type mentioned in this {} is unknown",
+                            stmt.node.as_ident().unwrap()
+                        ),
+                        location: stmt.id,
+                        labels: vec![
+                            Label::error("in this leaf", stmt.id),
+                            Label::info("this type is unknown", *id),
+                        ],
+                        notes: Vec::new(),
+                    })?;
+
+                Ok(())
+            }
+            // This is prefixed by what MUST be a module prefix
+            Some(Meta {
+                id,
+                node: Argument::PrefixIdent((p, b_ty)),
+            }) => {
+                self.type_info
+                    .scope_graph
+                    .validate_prefixed_type(scope, stmt, b_ty, p, id)?;
+
+                Ok(())
+            }
+            _ => {
+                ice!(
+                    "The statement {} is missing sub-statements. This should \
+                     have been caught earlier.",
+                    stmt.as_ident().unwrap()
+                );
+            }
+        }
+    }
+
+    pub(crate) fn leaf_list(
+        &mut self,
+        scope: ScopeRef,
+        stmt: &Meta<Stmt>,
+        kw: &Meta<Keyword>,
+        sub_stms: &Meta<Expr>,
     ) -> TypeResult<()> {
         todo!()
     }
 
-    fn base_ty(
+    pub(crate) fn base_type(
         &mut self,
         scope: ScopeRef,
-        dec: &YangStmtSeq,
+        stmt: &Meta<Stmt>,
+        kw: &Meta<Keyword>,
+        sub_stms: &Meta<Expr>,
     ) -> TypeResult<()> {
         todo!()
     }
 
-    fn deviate(
+    pub(crate) fn deviate(
         &mut self,
         scope: ScopeRef,
         dec: &YangStmtSeq,
@@ -306,47 +428,44 @@ impl TypeChecker {
                 Some(Meta {
                     id,
                     node: Argument::Ident(b_ty),
-                }) => Meta {
-                    id: *id,
-                    node: *b_ty,
-                },
-                Some(Meta {
-                    id,
-                    node: Argument::PrefixIdent((p, b_ty)),
                 }) => {
-                    // the prefix should already exist as an imported
-                    // module here
-                    println!(
-                        "[declare_types] type {} w/ module prefix `{}`",
-                        b_ty, p
-                    );
+                    println!("[leaf] type {} in scope {:?}", b_ty, scope);
                     self.type_info
                         .scope_graph
                         .resolve_name(
                             scope,
-                            &Meta { id: *id, node: *p },
+                            &Meta {
+                                id: *id,
+                                node: *b_ty,
+                            },
                             true,
                         )
                         .ok_or(TypeError {
                             description: format!(
-                                "Cannot find module with prefix \
-                                        `{p}` in type declaration for \
-                                        `{ty_ident}`"
+                                "the type mentioned in this {} is unknown",
+                                stmt.node.as_ident().unwrap()
                             ),
-                            location: kw.id,
+                            location: stmt.id,
                             labels: vec![
-                                Label::error(
-                                    "in this type declaration..",
-                                    ty.id,
-                                ),
-                                Label::info(
-                                    "module prefix and type name cannot be \
-                                     found",
-                                    *id,
-                                ),
+                                Label::error("in this leaf", stmt.id),
+                                Label::info("this type is unknown", *id),
                             ],
                             notes: Vec::new(),
                         })?;
+
+                    Meta {
+                        id: *id,
+                        node: *b_ty,
+                    }
+                }
+                Some(Meta {
+                    id,
+                    node: Argument::PrefixIdent((p, b_ty)),
+                }) => {
+                    self.type_info
+                        .scope_graph
+                        .validate_prefixed_type(scope, stmt, b_ty, p, id)?;
+
                     Meta {
                         id: *id,
                         node: *b_ty,
@@ -358,8 +477,8 @@ impl TypeChecker {
             };
 
             println!(
-                "[declare_types_in_modules] derived-from-type `{}`",
-                base_ty.node
+                "[declare_types_in_modules] {}: derived-from-type `{}`",
+                ty.node, base_ty.node
             );
 
             let kind = if let Some(builtin_ty) = self
@@ -367,16 +486,32 @@ impl TypeChecker {
                 .scope_graph
                 .resolve_name(ScopeRef::GLOBAL, &base_ty, true)
             {
+                println!(
+                    "[declare_types_in_module] {}: base type is builtin `{}`",
+                    ty_ident, base_ty.node
+                );
                 builtin_ty.kind
             } else {
                 println!(
-                    "[declare_types_in_modules] found non-builtin type `{}`",
+                    "[declare_types_in_modules] {}: base type is NOT a \
+                     builtin type `{}`",
+                    ty.node,
                     base_ty.as_str()
                 );
                 DeclarationKind::Type(TypeOrStub::Stub { num_params: 0 })
             };
 
-            let res = self.type_info.scope_graph.insert_declaration(
+            println!(
+                "[declare_types_in_modules] insert declaration {}: scope \
+                {:?}, base type `{}`",
+                ty_ident, scope, base_ty.node
+            );
+
+            // let new_scope = self
+            //     .type_info
+            //     .scope_graph
+            //     .wrap(scope, ScopeType::Type(ty_ident));
+            let dec = self.type_info.scope_graph.insert_declaration(
                 scope,
                 &Meta {
                     id: kw.id,
@@ -390,7 +525,7 @@ impl TypeChecker {
                 |_| false,
             );
 
-            if let Err(e) = res {
+            if let Err(e) = dec {
                 return Err(TypeError {
                     description: format!("{:?}", stmt.node),
                     location: kw.id,

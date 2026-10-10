@@ -329,7 +329,7 @@ impl Rt {
         let items = items.into_lib().items;
         self.declare_modules(None, &items)?;
         self.declare_types(root, &items)?;
-        self.declare_functions(root, &items)?;
+        // self.declare_functions(root, &items)?;
         self.declare_constants(root, &items)?;
         self.declare_imports(root, &items)?;
         Ok(())
@@ -649,226 +649,226 @@ impl Rt {
         Ok(())
     }
 
-    fn declare_functions(
-        &mut self,
-        scope: ScopeRef,
-        items: &[Item],
-    ) -> Result<(), RegistrationError> {
-        for item in items {
-            match item {
-                Item::Module(Module {
-                    ident, children, ..
-                }) => {
-                    let scope = self
-                        .type_checker
-                        .get_scope_of(scope, *ident)
-                        .unwrap();
-                    self.declare_functions(scope, children)?;
-                }
-                Item::Function(f) => {
-                    self.declare_function(scope, f, false)?;
-                }
-                Item::Impl(items::Impl {
-                    ty,
-                    children,
-                    location,
-                }) => {
-                    let ty = self
-                        .types
-                        .iter()
-                        .find(|t| t.type_id == *ty)
-                        .ok_or_else(|| RegistrationError {
-                            message: "Impl block with unregistered type"
-                                .into(),
-                            location: location.clone(),
-                        })?;
+    // fn declare_functions(
+    //     &mut self,
+    //     scope: ScopeRef,
+    //     items: &[Item],
+    // ) -> Result<(), RegistrationError> {
+    //     for item in items {
+    //         match item {
+    //             Item::Module(Module {
+    //                 ident, children, ..
+    //             }) => {
+    //                 let scope = self
+    //                     .type_checker
+    //                     .get_scope_of(scope, *ident)
+    //                     .unwrap();
+    //                 self.declare_functions(scope, children)?;
+    //             }
+    //             Item::Function(f) => {
+    //                 self.declare_function(scope, f, false)?;
+    //             }
+    //             Item::Impl(items::Impl {
+    //                 ty,
+    //                 children,
+    //                 location,
+    //             }) => {
+    //                 let ty = self
+    //                     .types
+    //                     .iter()
+    //                     .find(|t| t.type_id == *ty)
+    //                     .ok_or_else(|| RegistrationError {
+    //                         message: "Impl block with unregistered type"
+    //                             .into(),
+    //                         location: location.clone(),
+    //                     })?;
 
-                    let scope = ty.name.scope;
-                    let ident = ty.name.ident;
-                    let scope =
-                        self.type_checker.get_scope_of(scope, ident).unwrap();
-                    self.declare_methods(scope, children)?;
-                }
-                _ => {}
-            }
-        }
-        Ok(())
-    }
+    //                 let scope = ty.name.scope;
+    //                 let ident = ty.name.ident;
+    //                 let scope =
+    //                     self.type_checker.get_scope_of(scope, ident).unwrap();
+    //                 self.declare_methods(scope, children)?;
+    //             }
+    //             _ => {}
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
-    fn declare_methods(
-        &mut self,
-        scope: ScopeRef,
-        items: &[Item],
-    ) -> Result<(), RegistrationError> {
-        for item in items {
-            match item {
-                Item::Function(f) => {
-                    self.declare_function(scope, f, true)?;
-                }
-                Item::Impl(x) => {
-                    return Err(RegistrationError {
-                        message: "Cannot nest an impl in an impl".into(),
-                        location: x.location.clone(),
-                    });
-                }
-                Item::Type(x) => {
-                    return Err(RegistrationError {
-                        message: "Cannot nest a type in an impl".into(),
-                        location: x.location.clone(),
-                    });
-                }
-                Item::Module(x) => {
-                    return Err(RegistrationError {
-                        message: "Cannot nest a module in an impl".into(),
-                        location: x.location.clone(),
-                    });
-                }
-                Item::Use(_) => {}
-                Item::Constant(_) => {}
-            }
-        }
+    // fn declare_methods(
+    //     &mut self,
+    //     scope: ScopeRef,
+    //     items: &[Item],
+    // ) -> Result<(), RegistrationError> {
+    //     for item in items {
+    //         match item {
+    //             Item::Function(f) => {
+    //                 self.declare_function(scope, f, true)?;
+    //             }
+    //             Item::Impl(x) => {
+    //                 return Err(RegistrationError {
+    //                     message: "Cannot nest an impl in an impl".into(),
+    //                     location: x.location.clone(),
+    //                 });
+    //             }
+    //             Item::Type(x) => {
+    //                 return Err(RegistrationError {
+    //                     message: "Cannot nest a type in an impl".into(),
+    //                     location: x.location.clone(),
+    //                 });
+    //             }
+    //             Item::Module(x) => {
+    //                 return Err(RegistrationError {
+    //                     message: "Cannot nest a module in an impl".into(),
+    //                     location: x.location.clone(),
+    //                 });
+    //             }
+    //             Item::Use(_) => {}
+    //             Item::Constant(_) => {}
+    //         }
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
-    fn declare_function(
-        &mut self,
-        scope: ScopeRef,
-        f: &Function,
-        method: bool,
-    ) -> Result<(), RegistrationError> {
-        Self::check_name(&f.location, f.ident)?;
+    // fn declare_function(
+    //     &mut self,
+    //     scope: ScopeRef,
+    //     f: &Function,
+    //     method: bool,
+    // ) -> Result<(), RegistrationError> {
+    //     Self::check_name(&f.location, f.ident)?;
 
-        let signature = if let Some(sig) = &f.sig {
-            // Here, we will use the signature that is provided to us.
-            // We currently don't check that it matches the Rust signature, which is a big footgun, but oh well.
-            // This is only for internal use at the moment.
+    //     let signature = if let Some(sig) = &f.sig {
+    //         // Here, we will use the signature that is provided to us.
+    //         // We currently don't check that it matches the Rust signature, which is a big footgun, but oh well.
+    //         // This is only for internal use at the moment.
 
-            let sig = Self::parse_sig(sig);
+    //         let sig = Self::parse_sig(sig);
 
-            let types = sig
-                .type_params
-                .iter()
-                .map(|s| types::Type::ExplicitVar(**s))
-                .collect();
+    //         let types = sig
+    //             .type_params
+    //             .iter()
+    //             .map(|s| types::Type::ExplicitVar(**s))
+    //             .collect();
 
-            let scope = self
-                .type_checker
-                .type_info
-                .scope_graph
-                .wrap(scope, ScopeType::TypeParams);
+    //         let scope = self
+    //             .type_checker
+    //             .type_info
+    //             .scope_graph
+    //             .wrap(scope, ScopeType::TypeParams);
 
-            for ty in sig.type_params {
-                self.type_checker
-                    .type_info
-                    .scope_graph
-                    .insert_declaration(
-                        scope,
-                        &ty,
-                        DeclarationKind::TypeParam(ty.node),
-                        "".into(),
-                        |_| false,
-                    )
-                    .unwrap();
-            }
+    //         for ty in sig.type_params {
+    //             self.type_checker
+    //                 .type_info
+    //                 .scope_graph
+    //                 .insert_declaration(
+    //                     scope,
+    //                     &ty,
+    //                     DeclarationKind::TypeParam(ty.node),
+    //                     "".into(),
+    //                     |_| false,
+    //                 )
+    //                 .unwrap();
+    //         }
 
-            let parameter_types = sig
-                .params
-                .into_iter()
-                .map(|t| {
-                    self.type_checker.evaluate_type_expr(scope, &t).unwrap()
-                })
-                .collect();
+    //         let parameter_types = sig
+    //             .params
+    //             .into_iter()
+    //             .map(|t| {
+    //                 self.type_checker.evaluate_type_expr(scope, &t).unwrap()
+    //             })
+    //             .collect();
 
-            let return_type = match &sig.ret {
-                Some(ret) => {
-                    self.type_checker.evaluate_type_expr(scope, ret).unwrap()
-                }
-                None => types::Type::Unit,
-            };
+    //         let return_type = match &sig.ret {
+    //             Some(ret) => {
+    //                 self.type_checker.evaluate_type_expr(scope, ret).unwrap()
+    //             }
+    //             None => types::Type::Unit,
+    //         };
 
-            types::Signature {
-                types,
-                parameter_types,
-                return_type,
-            }
-        } else {
-            // We will infer the Roto types from the Rust types of the function
-            let parameter_types: Vec<_> = f
-                .func
-                .parameter_types()
-                .iter()
-                .map(|ty| self.rust_type_to_roto_type(&f.location, *ty))
-                .collect::<Result<_, _>>()?;
+    //         types::Signature {
+    //             types,
+    //             parameter_types,
+    //             return_type,
+    //         }
+    //     } else {
+    //         // We will infer the Roto types from the Rust types of the function
+    //         let parameter_types: Vec<_> = f
+    //             .func
+    //             .parameter_types()
+    //             .iter()
+    //             .map(|ty| self.rust_type_to_roto_type(&f.location, *ty))
+    //             .collect::<Result<_, _>>()?;
 
-            let return_type = self
-                .rust_type_to_roto_type(&f.location, f.func.return_type())?;
+    //         let return_type = self
+    //             .rust_type_to_roto_type(&f.location, f.func.return_type())?;
 
-            types::Signature {
-                types: Vec::new(),
-                parameter_types,
-                return_type,
-            }
-        };
+    //         types::Signature {
+    //             types: Vec::new(),
+    //             parameter_types,
+    //             return_type,
+    //         }
+    //     };
 
-        let vtables = f
-            .vtables
-            .iter()
-            .map(|v| {
-                signature
-                    .types
-                    .iter()
-                    .position(|t| {
-                        let types::Type::ExplicitVar(t) = t else {
-                            return false;
-                        };
-                        t == v
-                    })
-                    .unwrap()
-            })
-            .collect();
+    //     let vtables = f
+    //         .vtables
+    //         .iter()
+    //         .map(|v| {
+    //             signature
+    //                 .types
+    //                 .iter()
+    //                 .position(|t| {
+    //                     let types::Type::ExplicitVar(t) = t else {
+    //                         return false;
+    //                     };
+    //                     t == v
+    //                 })
+    //                 .unwrap()
+    //         })
+    //         .collect();
 
-        // If DynVal is used then we need to get a pointer to the values that we pass, so
-        // we need to keep track of which parameters are DynVals.
-        let dyn_vals = f
-            .func
-            .parameter_types()
-            .iter()
-            .map(|t| *t == TypeId::of::<DynVal>())
-            .collect();
+    //     // If DynVal is used then we need to get a pointer to the values that we pass, so
+    //     // we need to keep track of which parameters are DynVals.
+    //     let dyn_vals = f
+    //         .func
+    //         .parameter_types()
+    //         .iter()
+    //         .map(|t| *t == TypeId::of::<DynVal>())
+    //         .collect();
 
-        let id = self.functions.len();
-        let func = RuntimeFunction {
-            name: ResolvedName {
-                scope,
-                ident: f.ident,
-            },
-            id,
-            func: f.func.clone(),
-            doc: f.doc.clone(),
-            vtables,
-            dyn_vals,
-            params: f.params.clone(),
-        };
-        self.functions.push(func);
+    //     let id = self.functions.len();
+    //     let func = RuntimeFunction {
+    //         name: ResolvedName {
+    //             scope,
+    //             ident: f.ident,
+    //         },
+    //         id,
+    //         func: f.func.clone(),
+    //         doc: f.doc.clone(),
+    //         vtables,
+    //         dyn_vals,
+    //         params: f.params.clone(),
+    //     };
+    //     self.functions.push(func);
 
-        self.type_checker
-            .declare_runtime_function(
-                scope,
-                f.ident,
-                RuntimeFunctionRef(id),
-                f.params.clone(),
-                signature,
-                f.doc.clone(),
-                method,
-            )
-            .map_err(|e| RegistrationError {
-                message: e,
-                location: f.location.clone(),
-            })?;
+    //     self.type_checker
+    //         .declare_runtime_function(
+    //             scope,
+    //             f.ident,
+    //             RuntimeFunctionRef(id),
+    //             f.params.clone(),
+    //             signature,
+    //             f.doc.clone(),
+    //             method,
+    //         )
+    //         .map_err(|e| RegistrationError {
+    //             message: e,
+    //             location: f.location.clone(),
+    //         })?;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     fn parse_sig(s: &str) -> ast::Signature {
         let mut spans = Spans::default();

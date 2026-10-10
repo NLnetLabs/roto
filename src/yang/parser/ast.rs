@@ -3,13 +3,8 @@
 //! A [`SyntaxTree`] is the output of the Roto parser. It contains a
 //! representation of the Roto script as Rust types for further processing.
 
-use std::fmt::Display;
-
-use inetnum::asn::Asn;
-use symbol_table::GlobalSymbol;
-
 use crate::{
-    ast::{BinOp, Block, Expr, Identifier, Literal, Stmt},
+    ast::{Block, Expr, Identifier, Literal, Stmt},
     parser::meta::{Meta, MetaId},
     typechecker::types::TypeDefinition,
     yang::parser::{Keyword, YangStmt},
@@ -159,6 +154,10 @@ impl YangStmtSeq {
             .node
             .find_attr("description")
             .map(|d| d.to_string())
+    }
+
+    pub fn as_ident(&self) -> Identifier {
+        self.stmt.as_ident()
     }
 
     /// docs

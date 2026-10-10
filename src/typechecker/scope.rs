@@ -4,11 +4,15 @@ use core::fmt;
 use std::collections::btree_map::{BTreeMap, Entry};
 
 use crate::{
-    ast::Identifier,
+    ast::{Identifier, Stmt},
     ice,
     parser::meta::{Meta, MetaId},
     runtime::extern_eq,
-    typechecker::types::Signature,
+    typechecker::{
+        TypeResult,
+        error::{Label, TypeError},
+        types::Signature,
+    },
 };
 
 use super::{
@@ -138,21 +142,21 @@ pub enum ValueKind {
 #[derive(Clone, Debug)]
 pub struct ScopeGraph {
     pub declarations: BTreeMap<ResolvedName, Declaration>,
-    scopes: Vec<Scope>,
+    pub scopes: Vec<Scope>,
 }
 
 /// A type checking scope
 #[derive(Clone, Debug)]
-struct Scope {
-    scope_type: ScopeType,
-    parent: Option<ScopeRef>,
-    imports: BTreeMap<Identifier, (MetaId, ResolvedName)>,
+pub struct Scope {
+    pub scope_type: ScopeType,
+    pub parent: Option<ScopeRef>,
+    pub imports: BTreeMap<Identifier, (MetaId, ResolvedName)>,
 }
 
 /// The syntactic structure that a scope represents
 ///
 /// This is used primarily for printing a roughly human-readable name.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ScopeType {
     Root,
     Then(usize),
@@ -167,7 +171,7 @@ pub enum ScopeType {
     Block(usize),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModuleScope {
     pub name: ResolvedName,
     pub parent_module: Option<ScopeRef>,
@@ -225,7 +229,6 @@ impl ScopeGraph {
         ident: &Meta<Identifier>,
         recurse: bool,
     ) -> Option<Declaration> {
-        // println!("ident resolve {ident} scope {:?}", scope);
         loop {
             let name = ResolvedName {
                 scope,
@@ -240,24 +243,154 @@ impl ScopeGraph {
             }
 
             if let Some(x) = self.scopes[scope.0].imports.get(ident) {
-                // println!("{ident}");
-                // println!("resolve x {:?}", x.1);
-                // println!("scope {:?}", scope);
-                // println!("imports {:?}", self.scopes[scope.0].imports);
-                // println!(
-                //     "decla {:?}",
-                //     self.declarations
-                //         .iter()
-                //         .find(|(a, b)| a.ident == x.1.ident)
-                //         .into_iter()
-                //         .collect::<Vec<_>>()
-                // );
+                println!("[resolve_name] #0 {scope:?}");
                 return Some(self.declarations.get(&x.1).unwrap().clone());
             }
 
-            println!("[resolve_name] {scope:?}");
+            println!("[resolve_name] #1 {scope:?}");
 
             scope = self.parent(scope)?;
+        }
+    }
+
+    pub fn validate_prefixed_type(
+        &self,
+        scope: ScopeRef,
+        parent: &Meta<Stmt>,
+        base_ty: &Identifier,
+        prefix: &Identifier,
+        id: &MetaId,
+    ) -> TypeResult<()> {
+        let Some(mod_decla) = self.resolve_name(
+            scope,
+            &Meta {
+                id: *id,
+                node: *prefix,
+            },
+            true,
+        ) else {
+            return Err(TypeError {
+                description: format!(
+                    "the module with prefix `{}` is unknown",
+                    *prefix
+                ),
+                location: parent.id,
+                labels: vec![
+                    Label::error(
+                        format!(
+                            "in this {}",
+                            parent.node.as_ident().unwrap()
+                        ),
+                        parent.id,
+                    ),
+                    Label::info(
+                        format!(
+                            "module with prefix `{prefix}` cannot be found"
+                        ),
+                        *id,
+                    ),
+                ],
+                notes: Vec::new(),
+            });
+        };
+
+        // println!(
+        //     "[leaf] type `{}` w/ module prefix `{}`: {:?} in scope \
+        //             {:?}",
+        //     b_ty, p, mod_decla, scope
+        // );
+
+        // println!("[leaf] scopes {:#?}", self.scopes[213]);
+
+        let mod_decla_rname = self.get_declaration(mod_decla.name).name;
+        // println!("[leaf] module declaration {:?}", mod_decla_rname);
+
+        let Some(lt) = self
+            .declarations
+            .values()
+            .find(|v| v.name.ident == *base_ty)
+        else {
+            return Err(TypeError {
+                description: "the type mentioned is unknown".to_string(),
+                location: *id,
+                labels: vec![
+                    Label::error(
+                        format!(
+                            "in this {}",
+                            parent.node.as_ident().unwrap()
+                        ),
+                        parent.id,
+                    ),
+                    Label::info(
+                        format!(
+                            "this type cannot be found in module \
+                                    `{}`",
+                            mod_decla_rname.ident
+                        ),
+                        *id,
+                    ),
+                ],
+
+                notes: Vec::new(),
+            });
+        };
+
+        // println!("[leaf] type {:?}", lt);
+        let mod_scope = &self.scopes[lt.name.scope.0];
+        let ScopeType::Module(ModuleScope {
+            name: mod_scope, ..
+        }) = &mod_scope.scope_type
+        else {
+            return Err(TypeError {
+                description: "the type mentioned is unknown".to_string(),
+                location: *id,
+                labels: vec![
+                    Label::error(
+                        format!(
+                            "in this {}",
+                            parent.node.as_ident().unwrap()
+                        ),
+                        parent.id,
+                    ),
+                    Label::info(
+                        format!(
+                            "this type cannot be found in module \
+                                    `{}`",
+                            mod_decla_rname.ident
+                        ),
+                        *id,
+                    ),
+                ],
+
+                notes: Vec::new(),
+            });
+        };
+
+        // println!(
+        //     "[leaf] module scope name {:?}",
+        //     *mod_scope == mod_decla_rname
+        // );
+
+        if *mod_scope == mod_decla_rname {
+            Ok(())
+        } else {
+            Err(TypeError {
+                description: "the type mentioned is unknown".to_string(),
+                location: *id,
+                labels: vec![
+                    Label::error("in this leaf", *id),
+                    Label::info(
+                        format!(
+                            "this type cannot be found in module \
+                                    `{}`",
+                            mod_decla_rname.ident
+                        ),
+                        *id,
+                    ),
+                ],
+
+                notes: Vec::new(),
+            })
         }
     }
 
@@ -322,6 +455,23 @@ impl ScopeGraph {
                     scope: None,
                 });
                 Ok(name)
+            }
+        }
+    }
+
+    pub fn insert_renamed_import(
+        &mut self,
+        scope: ScopeRef,
+        ident: Identifier,
+        id: MetaId,
+        name: ResolvedName,
+    ) -> Result<(), MetaId> {
+        let map = &mut self.scopes[scope.0].imports;
+        match map.entry(ident) {
+            Entry::Occupied(entry) => Err(entry.get().0),
+            Entry::Vacant(entry) => {
+                entry.insert((id, name));
+                Ok(())
             }
         }
     }
@@ -456,7 +606,7 @@ impl ScopeGraph {
                     name,
                     kind: kind.clone(),
                     id: ident.id,
-                    scope: None,
+                    scope: Some(scope),
                     doc: doc.clone(),
                 };
                 Ok(entry.insert(new))
@@ -487,7 +637,7 @@ impl ScopeGraph {
                             name,
                             kind,
                             id: ident.id,
-                            scope: None,
+                            scope: Some(scope),
                             doc,
                         };
                     }

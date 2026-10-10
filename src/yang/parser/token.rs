@@ -813,7 +813,7 @@ impl Keyword {
 
     pub(crate) fn arg_type(&self) -> YangArgType {
         match self {
-            Keyword::Module => YangArgType::Ident,
+            Keyword::Module => YangArgType::None,
             Keyword::YangVersion => YangArgType::String,
             Keyword::NameSpace => YangArgType::String,
             Keyword::Prefix => YangArgType::Ident,
@@ -823,7 +823,7 @@ impl Keyword {
             Keyword::Organization => YangArgType::String,
             Keyword::Contact => YangArgType::String,
             Keyword::Revision => YangArgType::String,
-            Keyword::SubModule => YangArgType::Ident,
+            Keyword::SubModule => YangArgType::None,
             Keyword::BelongsTo => YangArgType::Ident,
             Keyword::Units => YangArgType::String,
             Keyword::TypeDef => YangArgType::Ident,

@@ -383,52 +383,52 @@ impl TypeChecker {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn declare_runtime_function(
-        &mut self,
-        scope: ScopeRef,
-        ident: Identifier,
-        id: RuntimeFunctionRef,
-        parameter_names: Vec<Identifier>,
-        signature: Signature,
-        doc: String,
-        method: bool,
-    ) -> Result<(), String> {
-        // TODO: Figure out some what to make nice spans for built-in types
-        let ident = Meta {
-            node: ident,
-            id: MetaId(0),
-        };
-        let def = FunctionDefinition::Runtime(id);
+    // #[allow(clippy::too_many_arguments)]
+    // pub(crate) fn declare_runtime_function(
+    //     &mut self,
+    //     scope: ScopeRef,
+    //     ident: Identifier,
+    //     id: RuntimeFunctionRef,
+    //     parameter_names: Vec<Identifier>,
+    //     signature: Signature,
+    //     doc: String,
+    //     method: bool,
+    // ) -> Result<(), String> {
+    //     // TODO: Figure out some what to make nice spans for built-in types
+    //     let ident = Meta {
+    //         node: ident,
+    //         id: MetaId(0),
+    //     };
+    //     let def = FunctionDefinition::Runtime(id);
 
-        if method {
-            self.type_info
-                .scope_graph
-                .insert_method(
-                    scope,
-                    &ident,
-                    def,
-                    parameter_names,
-                    doc,
-                    signature.clone(),
-                )
-                .map_err(|_| "name is declared twice")?
-        } else {
-            self.type_info
-                .scope_graph
-                .insert_function(
-                    scope,
-                    &ident,
-                    def,
-                    parameter_names,
-                    doc,
-                    signature.clone(),
-                )
-                .map_err(|_| "name is declared twice")?
-        };
+    //     if method {
+    //         self.type_info
+    //             .scope_graph
+    //             .insert_method(
+    //                 scope,
+    //                 &ident,
+    //                 def,
+    //                 parameter_names,
+    //                 doc,
+    //                 signature.clone(),
+    //             )
+    //             .map_err(|_| "name is declared twice")?
+    //     } else {
+    //         self.type_info
+    //             .scope_graph
+    //             .insert_function(
+    //                 scope,
+    //                 &ident,
+    //                 def,
+    //                 parameter_names,
+    //                 doc,
+    //                 signature.clone(),
+    //             )
+    //             .map_err(|_| "name is declared twice")?
+    //     };
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub(crate) fn rust_type_to_roto_type(
         runtime: &Rt,
@@ -727,44 +727,17 @@ impl TypeChecker {
         module: &ast::YangModuleDeclaration,
     ) -> TypeResult<()> {
         {
-            println!("[declare_types_in_module] '{}'", module.ident);
+            println!(
+                "[declare_types_in_module] '{}' ({:?})",
+                module.ident, scope
+            );
 
             // Insert all the type declarations ('typedef') that
             // we find inside a module. Types that are directly
             // derived from a base type can be inserted with their
             // Type Definition. Others will be inserted with a stub
             // declaration.
-            for stmt in module.body.node.iter_stmt() {
-                let Stmt::YangStmtSeq(YangStmtSeq {
-                    stmt: YangStmt::Stmt(stmt_kw),
-                    ..
-                }) = &stmt.node
-                else {
-                    return Ok(());
-                };
-
-                match &stmt.node {
-                    Stmt::YangStmtSeq(YangStmtSeq {
-                        stmt:
-                            YangStmt::Stmt(Meta {
-                                node: crate::yang::parser::Keyword::TypeDef,
-                                ..
-                            }),
-                        sub_stmts,
-                        ..
-                    }) => self.type_def(*scope, stmt, stmt_kw, sub_stmts),
-                    Stmt::YangStmtSeq(YangStmtSeq {
-                        stmt:
-                            YangStmt::Stmt(Meta {
-                                node: crate::yang::parser::Keyword::Type,
-                                ..
-                            }),
-                        sub_stmts,
-                        ..
-                    }) => self.type_def(*scope, stmt, stmt_kw, sub_stmts),
-                    _ => Ok(()),
-                }?;
-            }
+            self.body(*scope, module.body.node.iter_stmt())?;
         }
         Ok(())
     }
@@ -820,7 +793,7 @@ impl TypeChecker {
 
                 println!(
                     "[declare_imports] try declare module `{import_name}` as \
-                    `{import_pfx}`"
+                    `{import_pfx}` ({mod_scope:?})"
                 );
                 let Some(target_module) =
                     self.type_info.scope_graph.resolve_name(
@@ -858,10 +831,10 @@ impl TypeChecker {
                     ident: *import_name,
                 };
 
-                let res = self.type_info.scope_graph.insert_import(
+                let res = self.type_info.scope_graph.insert_renamed_import(
                     *mod_scope,
-                    import_pfx.id,
                     *import_pfx,
+                    import_pfx.id,
                     name,
                 );
 

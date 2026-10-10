@@ -546,19 +546,32 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
 
             if let Some(st) = stmt.node() {
                 // we got an argument, but does our keyword even take one?
-                if let Some((arg, span)) = &arg_and_span
-                    && st.arg_type() == YangArgType::None
-                {
-                    return Err(Box::new(ParseError::custom(
-                        format!(
-                            "statement `{stmt}` does not take an argument, \
-                             but we got `{}`",
-                            arg
-                        ),
-                        "this statement",
-                        *span,
-                    )));
-                }
+                match &arg_and_span {
+                    Some((arg, span))
+                        if st.arg_type() == YangArgType::None =>
+                    {
+                        return Err(Box::new(ParseError::custom(
+                            format!(
+                                "statement `{stmt}` does not take an \
+                                argument, but we got `{}`",
+                                arg
+                            ),
+                            "this statement",
+                            *span,
+                        )));
+                    }
+                    None if st.arg_type() != YangArgType::None => {
+                        return Err(Box::new(ParseError::custom(
+                            format!(
+                                "statement `{stmt}` takes a mandatory \
+                                 argument, it is missing"
+                            ),
+                            "this statement",
+                            start_span,
+                        )));
+                    }
+                    _ => {}
+                };
 
                 // we got all the statements in the block, but are all the
                 // mandatory one's there ('ExactlyOne')
@@ -824,7 +837,7 @@ impl YangParser<'_, '_> {
                 Argument::UnquotedString(l)
             }
             // It ain't great, but keywords in yang are not actual keywords
-            //  apparently: they can appear as identifiers, so here goes.
+            // apparently: they can appear as identifiers, so here goes.
             s => Argument::Ident(Identifier::from(s.to_string())),
         };
 

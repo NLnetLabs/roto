@@ -110,16 +110,16 @@ fn cli_inner() -> Result<(), RotoReport> {
                 Parsed::from_entry_point(entry_point_path, lib_path)?;
             let rt = Runtime::new();
             let t_checked = parsed.typecheck(&rt).unwrap();
-            println!(
-                "[rotonda-conf] {:#?}",
-                t_checked
-                    .type_info
-                    .scope_graph
-                    .declarations
-                    .iter()
-                    .map(|dec| (dec.0.ident.as_str(), dec.1))
-                    .collect::<Vec<_>>()
-            );
+            // println!(
+            //     "[rotonda-conf] {:#?}",
+            //     t_checked
+            //         .type_info
+            //         .scope_graph
+            //         .declarations
+            //         .iter()
+            //         .map(|dec| (dec.0.ident.as_str(), dec.1))
+            //         .collect::<Vec<_>>()
+            // );
             // t_checked.lower_to_mir();
 
             let modules = &t_checked.module_tree.modules;
