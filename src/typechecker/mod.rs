@@ -1719,4 +1719,149 @@ impl TypeChecker {
 
         Ok(unspanned_type_fields)
     }
+
+    pub fn evaluate_prefixed_type(
+        &self,
+        scope: ScopeRef,
+        parent: &Meta<Stmt>,
+        base_ty: &Identifier,
+        prefix: &Identifier,
+        id: &MetaId,
+    ) -> TypeResult<DeclarationKind> {
+        let Some(mod_decla) = self.type_info.scope_graph.resolve_name(
+            scope,
+            &Meta {
+                id: *id,
+                node: *prefix,
+            },
+            true,
+        ) else {
+            return Err(TypeError {
+                description: format!(
+                    "the module with prefix `{}` is unknown",
+                    *prefix
+                ),
+                location: parent.id,
+                labels: vec![
+                    Label::error(
+                        format!(
+                            "in this {}",
+                            parent.node.as_ident().unwrap()
+                        ),
+                        parent.id,
+                    ),
+                    Label::info(
+                        format!(
+                            "module with prefix `{prefix}` cannot be found"
+                        ),
+                        *id,
+                    ),
+                ],
+                notes: Vec::new(),
+            });
+        };
+
+        println!(
+            "[leaf] type `{}` w/ module prefix `{}`: {:?} in scope \
+                    {:?}",
+            base_ty, prefix, mod_decla, scope
+        );
+
+        let mod_decla_rname = self
+            .type_info
+            .scope_graph
+            .get_declaration(mod_decla.name)
+            .name;
+        println!("[leaf] module declaration {:?}", mod_decla_rname);
+
+        let Some(lt) = self
+            .type_info
+            .scope_graph
+            .declarations
+            .values()
+            .find(|v| v.name.ident == *base_ty)
+        else {
+            return Err(TypeError {
+                description: "the type mentioned is unknown".to_string(),
+                location: *id,
+                labels: vec![
+                    Label::error(
+                        format!(
+                            "in this {}",
+                            parent.node.as_ident().unwrap()
+                        ),
+                        parent.id,
+                    ),
+                    Label::info(
+                        format!(
+                            "this type cannot be found in module \
+                                    `{}`",
+                            mod_decla_rname.ident
+                        ),
+                        *id,
+                    ),
+                ],
+
+                notes: Vec::new(),
+            });
+        };
+
+        println!("[leaf] type {:?}", lt);
+        let mod_scope = &self.type_info.scope_graph.scopes[lt.name.scope.0];
+        let ScopeType::Module(ModuleScope {
+            name: mod_scope, ..
+        }) = &mod_scope.scope_type
+        else {
+            return Err(TypeError {
+                description: "the type mentioned is unknown".to_string(),
+                location: *id,
+                labels: vec![
+                    Label::error(
+                        format!(
+                            "in this {}",
+                            parent.node.as_ident().unwrap()
+                        ),
+                        parent.id,
+                    ),
+                    Label::info(
+                        format!(
+                            "this type cannot be found in module \
+                                    `{}`",
+                            mod_decla_rname.ident
+                        ),
+                        *id,
+                    ),
+                ],
+
+                notes: Vec::new(),
+            });
+        };
+
+        // println!(
+        //     "[leaf] module scope name {:?}",
+        //     *mod_scope == mod_decla_rname
+        // );
+
+        if *mod_scope == mod_decla_rname {
+            Ok(lt.kind.clone())
+        } else {
+            Err(TypeError {
+                description: "the type mentioned is unknown".to_string(),
+                location: *id,
+                labels: vec![
+                    Label::error("in this leaf", *id),
+                    Label::info(
+                        format!(
+                            "this type cannot be found in module \
+                                    `{}`",
+                            mod_decla_rname.ident
+                        ),
+                        *id,
+                    ),
+                ],
+
+                notes: Vec::new(),
+            })
+        }
+    }
 }

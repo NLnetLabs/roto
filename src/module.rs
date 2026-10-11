@@ -68,7 +68,7 @@ impl Parsed {
 
         let entry_point_str =
             entry_point_file.file_name().unwrap().to_str().unwrap();
-        // create a collection of file names that potentially havee modules
+        // create a collection of file names that potentially have modules
         // in them
         let mut lib =
             YangFiles::create_yang_lib(lib_path, entry_point_str, "yang")?;

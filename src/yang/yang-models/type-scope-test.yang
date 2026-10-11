@@ -1,0 +1,37 @@
+module type-scope-test {
+  yang-version 1.1;
+  namespace "urn:nlnetlabs:rotonda:conf";
+  prefix "rotonda";
+
+  import ietf-yang-types {
+     prefix yang;
+  }
+
+  import ietf-rpki-rtr {
+    prefix rtr;
+  }
+
+  typedef horror-show {
+     type yang:date-and-time;
+  }
+
+  container "rotonda-root" {
+    typedef horror-show1.9 {
+      type yang:xpath1.0;
+    }
+
+    leaf hs0 {
+      type horror-show1.9;
+    }
+  }
+
+  container "rotonda-non-root" {
+    typedef horror-show2 {
+      type uint64;
+    }
+    
+    leaf rotor {
+      type horror-show;
+    }
+  }
+}

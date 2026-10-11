@@ -19,9 +19,9 @@ module rotonda-conf {
     prefix yang;
   }
 
-  // import ietf-rpki-rtr {
-  //   prefix rtr;
-  // }
+  import ietf-rpki-rtr {
+    prefix rtr;
+  }
 
   typedef "xip-address-origin" {
     type inet:ipv4-prefix;
@@ -36,8 +36,12 @@ module rotonda-conf {
     type yang:date-and-time;
   }
 
+  typedef horror-show {
+    type string;
+  }
+
   container "rotonda-root" {
-    typedef 'ip-address-origin' {
+    typedef 'horror-show' {
       type ipx-address-origin;
     }
     leaf rotonda-id {
@@ -51,6 +55,21 @@ module rotonda-conf {
        more shit";
     }
   }
+
+  container "rotonda-non-root" {
+    typedef horror-show {
+      type uint64;
+    }
+  
+    leaf rotor {
+      type horror-show;
+    }
+  }
+}
+
+module test {
+  namespace "urn:nlnetlabs:rotonda:test";
+  prefix test;
 }
 
 submodule rotonda-running-state {

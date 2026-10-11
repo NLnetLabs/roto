@@ -3,7 +3,11 @@
 use std::{borrow::Borrow, collections::HashSet};
 
 use crate::{
-    ast::{self, Identifier, Pattern, TypeExpr},
+    ast::{
+        self, Identifier, Pattern,
+        Stmt::{self, YangStmtSeq},
+        TypeExpr,
+    },
     ice,
     parser::meta::{Meta, MetaId},
     typechecker::{
@@ -223,13 +227,13 @@ impl TypeChecker {
             }
             Literal(l) => self.literal(ctx, l),
             Block(b) => {
-                let idx = self.block_counter;
-                self.block_counter += 1;
-                let block_scope = self
-                    .type_info
-                    .scope_graph
-                    .wrap(scope, ScopeType::Block(idx));
-                self.block(block_scope, ctx, b)
+                // let idx = self.block_counter;
+                // self.block_counter += 1;
+                // let block_scope = self
+                //     .type_info
+                //     .scope_graph
+                //     .wrap(scope, ScopeType::Block(idx));
+                self.block(scope, ctx, b)
             }
             Match(m) => self.match_expr(scope, ctx, m),
             FunctionCall(e, args) => match &e.node {

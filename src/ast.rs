@@ -211,7 +211,7 @@ impl Stmt {
         yang_s.description()
     }
 
-    pub fn argument_type_definition(&self) -> Option<TypeDefinition> {
+    fn argument_type_definition(&self) -> Option<TypeDefinition> {
         let Stmt::YangStmtSeq(yang_s) = &self else {
             return None;
         };

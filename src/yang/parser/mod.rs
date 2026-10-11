@@ -570,6 +570,18 @@ impl<'source, 'spans> YangParser<'source, 'spans> {
                             start_span,
                         )));
                     }
+                    Some((arg, span))
+                        if st.arg_type() == YangArgType::Ident
+                            && arg.as_ident().is_none() =>
+                    {
+                        return Err(Box::new(ParseError::custom(
+                            format!(
+                                "statement `{stmt}` takes an identifier, this isn't one"
+                            ),
+                            "this_statement",
+                            start_span,
+                        )));
+                    }
                     _ => {}
                 };
 

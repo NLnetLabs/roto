@@ -146,6 +146,16 @@ impl YangStmtSeq {
         }
     }
 
+    pub fn is_container(&self) -> bool {
+        matches!(
+            &self.stmt,
+            YangStmt::Stmt(Meta {
+                node: Keyword::Container,
+                ..
+            })
+        )
+    }
+
     /// Return a the value of the sub-statement with key 'description'.
     ///
     /// Returns None if the sub-statement does not exist.
@@ -250,7 +260,7 @@ impl Argument {
             Argument::UnquotedString(_literal) => None,
             Argument::QuotedString(_literal) => None,
             Argument::Ident(identifier) => Some(*identifier),
-            Argument::PrefixIdent(ident) => Some(ident.1),
+            Argument::PrefixIdent(ident) => None,
         }
     }
 

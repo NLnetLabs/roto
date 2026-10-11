@@ -320,7 +320,17 @@ impl TypeChecker {
                         }),
                     sub_stmts,
                     ..
-                }) => self.body(scope, sub_stmts.iter_stmt()),
+                }) => {
+                    // containers have a scope of their own
+                    let idx = self.block_counter;
+                    self.block_counter += 1;
+                    let block_scope = self
+                        .type_info
+                        .scope_graph
+                        .wrap(scope, ScopeType::Block(idx));
+
+                    self.body(block_scope, sub_stmts.iter_stmt())
+                }
                 _ => Ok(()),
             }?;
         }
@@ -371,9 +381,7 @@ impl TypeChecker {
                 id,
                 node: Argument::PrefixIdent((p, b_ty)),
             }) => {
-                self.type_info
-                    .scope_graph
-                    .validate_prefixed_type(scope, stmt, b_ty, p, id)?;
+                self.evaluate_prefixed_type(scope, stmt, b_ty, p, id)?;
 
                 Ok(())
             }
@@ -433,16 +441,57 @@ impl TypeChecker {
             };
 
             // println!("seq {:#?}", st);
-            println!("[declare_types] declare type `{}`", ty.node);
+            println!(
+                "[declare_types] declare type `{}` in scope {:?}",
+                ty.node, scope
+            );
+
+            // shadowing type definitions is NOT allowed in yang modules, so
+            // let's check if a type with the same name was already declared
+            // in this scope, or a parent scope
+            let mut p_scope = Some(scope);
+            while p_scope.is_some() {
+                println!("[] parent {:?}", p_scope);
+                if let Some(ty_decla) =
+                    self.type_info.scope_graph.declarations.get(
+                        &ResolvedName {
+                            scope: p_scope.unwrap(),
+                            ident: ty_ident,
+                        },
+                    )
+                {
+                    return Err(TypeError {
+                        description: format!(
+                            "the type `{}` has already been \
+                         defined in this scope",
+                            ty_ident
+                        ),
+                        location: stmt.id,
+                        labels: vec![
+                            Label::error("this type", stmt.id),
+                            Label::info(
+                                "is already defined here",
+                                ty_decla.id,
+                            ),
+                        ],
+                        notes: Vec::new(),
+                    });
+                }
+                p_scope = self.type_info.scope_graph.parent(p_scope.unwrap());
+            }
 
             // what is the type the current typedef is based on?
-            let base_ty = match sub_stmts.find_attr("type") {
+            let (base_ty, kind) = match sub_stmts.find_attr("type") {
+                // this is a single identifier for a type, meaning it can be a
+                // built-in, or declared in this module, in this scope or in a
+                // parent scope.
                 Some(Meta {
                     id,
                     node: Argument::Ident(b_ty),
                 }) => {
                     println!("[leaf] type {} in scope {:?}", b_ty, scope);
-                    self.type_info
+                    let decla = self
+                        .type_info
                         .scope_graph
                         .resolve_name(
                             scope,
@@ -459,59 +508,88 @@ impl TypeChecker {
                             ),
                             location: stmt.id,
                             labels: vec![
-                                Label::error("in this leaf", stmt.id),
+                                Label::error(
+                                    format!(
+                                        "in this {}",
+                                        stmt.node.as_ident().unwrap()
+                                    ),
+                                    stmt.id,
+                                ),
                                 Label::info("this type is unknown", *id),
                             ],
                             notes: Vec::new(),
                         })?;
 
-                    Meta {
-                        id: *id,
-                        node: *b_ty,
-                    }
+                    (
+                        Meta {
+                            id: *id,
+                            node: *b_ty,
+                        },
+                        decla.kind,
+                    )
                 }
+                // This is a type that has a prefix (`module:type`), the
+                // prefix must be the prefix of an `import` statement in the
+                // module root
                 Some(Meta {
                     id,
                     node: Argument::PrefixIdent((p, b_ty)),
                 }) => {
-                    self.type_info
-                        .scope_graph
-                        .validate_prefixed_type(scope, stmt, b_ty, p, id)?;
+                    let kind = self
+                        .evaluate_prefixed_type(scope, stmt, b_ty, p, id)?;
 
-                    Meta {
-                        id: *id,
-                        node: *b_ty,
-                    }
+                    (
+                        Meta {
+                            id: *id,
+                            node: *b_ty,
+                        },
+                        kind,
+                    )
                 }
                 _ => {
                     ice!("type name {ty} is not an identifier");
                 }
             };
 
-            println!(
-                "[declare_types_in_modules] {}: derived-from-type `{}`",
-                ty.node, base_ty.node
-            );
+            // println!(
+            //     "[declare_types_in_modules] {}: derived-from-type `{}`",
+            //     ty.node, base_ty.node
+            // );
 
-            let kind = if let Some(builtin_ty) = self
-                .type_info
-                .scope_graph
-                .resolve_name(ScopeRef::GLOBAL, &base_ty, true)
-            {
-                println!(
-                    "[declare_types_in_module] {}: base type is builtin `{}`",
-                    ty_ident, base_ty.node
-                );
-                builtin_ty.kind
-            } else {
-                println!(
-                    "[declare_types_in_modules] {}: base type is NOT a \
-                     builtin type `{}`",
-                    ty.node,
-                    base_ty.as_str()
-                );
-                DeclarationKind::Type(TypeOrStub::Stub { num_params: 0 })
-            };
+            // let kind = if let Some(builtin_ty) = self
+            //     .type_info
+            //     .scope_graph
+            //     .resolve_name(ScopeRef::GLOBAL, &base_ty, true)
+            // {
+            //     println!(
+            //         "[declare_types_in_module] {}: base type is builtin `{}`",
+            //         ty_ident, base_ty.node
+            //     );
+            //     builtin_ty.kind
+            // } else {
+            //     println!(
+            //         "[declare_types_in_modules] {}: base type `{}` is NOT a \
+            //          builtin type",
+            //         ty.node,
+            //         base_ty.as_str()
+            //     );
+            //     // see if we declared it ourselves in this module
+            //     if let Some(derived_from_ty) = self
+            //         .type_info
+            //         .scope_graph
+            //         .resolve_name(scope, &base_ty, true)
+            //     {
+            //         derived_from_ty.kind
+            //     } else {
+            //         panic!(
+            //             "[declare_types_in_modules] {}: base type `{}` is NOT a \
+            //          type we know (yet)",
+            //             ty.node,
+            //             base_ty.as_str()
+            //         );
+            //         DeclarationKind::Type(TypeOrStub::Stub { num_params: 0 })
+            //     }
+            // };
 
             println!(
                 "[declare_types_in_modules] insert declaration {}: scope \
