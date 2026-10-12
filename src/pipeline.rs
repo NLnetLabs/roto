@@ -465,6 +465,8 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
     ) -> Package<Ctx> {
         let module = codegen::codegen_with_memory_provider(
             self.runtime,
+            self.main,
+            self.main_scope,
             &self.ir.functions,
             &self.runtime_functions,
             self.label_store,

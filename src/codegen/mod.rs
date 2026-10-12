@@ -378,6 +378,8 @@ pub fn codegen<Ctx: OptCtx>(
 ) -> Module<Ctx> {
     codegen_inner(
         runtime,
+        main,
+        main_scope,
         ir,
         runtime_functions,
         label_store,
@@ -389,6 +391,8 @@ pub fn codegen<Ctx: OptCtx>(
 #[cfg(test)]
 pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -397,6 +401,8 @@ pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
 ) -> Module<Ctx> {
     codegen_inner(
         runtime,
+        main,
+        main_scope,
         ir,
         runtime_functions,
         label_store,
@@ -405,8 +411,11 @@ pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn codegen_inner<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,

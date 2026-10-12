@@ -1,4 +1,3 @@
-use core::f32;
 use std::{
     net::IpAddr,
     sync::{
@@ -249,6 +248,7 @@ mod far_jit_memory {
 /// Exercises the Roto compilation path that originally exposed
 /// out-of-range x86_64 symbol-address relocations in Cranelift's JIT.
 fn far_jit_data_address() {
+    use crate::file_tree::Load;
     let source = src!(
         r#"
         fn main() -> String {
@@ -261,15 +261,17 @@ fn far_jit_data_address() {
         far_jit_memory::FarMemoryProvider::new();
 
     let mut package = source
+        .load()
+        .unwrap()
+        .resolve(&runtime)
+        .unwrap()
         .parse()
-        .and_then(|parsed| parsed.typecheck(&runtime))
-        .map(|checked| {
-            checked
-                .lower_to_mir()
-                .lower_to_lir()
-                .codegen_with_memory_provider(Box::new(memory_provider))
-        })
-        .unwrap();
+        .unwrap()
+        .typecheck(&runtime)
+        .unwrap()
+        .lower_to_mir()
+        .lower_to_lir()
+        .codegen_with_memory_provider(Box::new(memory_provider));
 
     let addresses = addresses.lock().unwrap();
     assert!(
