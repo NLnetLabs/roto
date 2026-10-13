@@ -696,6 +696,12 @@ impl TypeChecker {
             }
         }
 
+        // move the first module (the root module) to the last position, it
+        // should be delared last, because only then are all the nested types
+        // guaranteed to be declared.
+        let f = modules.remove(0);
+        modules.push(f);
+
         for (scope, module) in &modules {
             // let mod_scope = ModuleScope {
             //     name: ResolvedName {
