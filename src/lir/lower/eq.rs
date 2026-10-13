@@ -3,7 +3,6 @@ use std::{any::TypeId, collections::HashSet, net::IpAddr};
 use inetnum::addr::Prefix;
 
 use crate::{
-    RotoString,
     ast::Identifier,
     label::LabelRef,
     lir::{
@@ -16,6 +15,7 @@ use crate::{
         scope::{ScopeRef, ScopeType},
         types::Primitive,
     },
+    value::RotoString,
     value::{EqFn, ErasedList},
 };
 
@@ -41,9 +41,7 @@ impl Lowerer<'_, '_> {
             | IrType::I8
             | IrType::I16
             | IrType::I32
-            | IrType::I64
-            | IrType::Char
-            | IrType::Asn => {
+            | IrType::I64 => {
                 let to = self.new_tmp(IrType::Bool);
                 self.emit(Instruction::IntCmp {
                     to: to.clone(),
@@ -191,7 +189,7 @@ impl Lowerer<'_, '_> {
                 signature: None,
                 ir_signature,
             },
-            entry_block,
+            _entry_block: entry_block,
             variables: lowerer.variables,
             blocks: lowerer.blocks,
             public: false,

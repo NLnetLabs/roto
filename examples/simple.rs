@@ -1,6 +1,6 @@
 use std::{net::IpAddr, process::ExitCode};
 
-use roto::{Runtime, Verdict};
+use roto::{Runtime, value::Verdict};
 
 fn main() -> ExitCode {
     #[cfg(feature = "logger")]

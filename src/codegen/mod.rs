@@ -18,8 +18,8 @@ use crate::{
         value::IrType,
     },
     runtime::{
-        ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
-        RuntimeFunctionRef, context::Context,
+        ConstantValue, RuntimeConstant, RuntimeFunctionRef,
+        context::{Context, Ctx, NoCtx, OptCtx},
     },
     typechecker::{
         info::TypeInfo,
@@ -146,6 +146,9 @@ unsafe impl Sync for ModuleData {}
 
 /// A compiled, ready-to-run Roto module
 pub struct Module<C: OptCtx> {
+    _main: Identifier,
+    main_scope: ScopeRef,
+
     /// The set of public functions and their signatures.
     functions: HashMap<String, FunctionInfo>,
 
@@ -161,7 +164,7 @@ pub struct Module<C: OptCtx> {
 /// A function extracted from Roto
 ///
 /// A [`TypedFunc`] can be retrieved from a compiled script using
-/// [`Package::get_function`](crate::Package::get_function).
+/// [`Blob::get_function`](crate::Blob::get_function).
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone)]
@@ -287,6 +290,9 @@ impl Drop for RotoConstant {
 }
 
 struct ModuleBuilder {
+    main: Identifier,
+    main_scope: ScopeRef,
+
     runtime_constants: HashMap<ResolvedName, ConstantValue>,
 
     roto_constants: HashMap<ResolvedName, RotoConstant>,
@@ -363,6 +369,8 @@ const MEMFLAGS: MemFlagsData = MemFlagsData::new().with_aligned();
 
 pub fn codegen<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -370,6 +378,8 @@ pub fn codegen<Ctx: OptCtx>(
 ) -> Module<Ctx> {
     codegen_inner(
         runtime,
+        main,
+        main_scope,
         ir,
         runtime_functions,
         label_store,
@@ -379,8 +389,11 @@ pub fn codegen<Ctx: OptCtx>(
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -389,6 +402,8 @@ pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
 ) -> Module<Ctx> {
     codegen_inner(
         runtime,
+        main,
+        main_scope,
         ir,
         runtime_functions,
         label_store,
@@ -397,8 +412,11 @@ pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn codegen_inner<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
+    main: Identifier,
+    main_scope: ScopeRef,
     ir: &[lir::Item],
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
@@ -475,6 +493,8 @@ fn codegen_inner<Ctx: OptCtx>(
         .push(AbiParam::new(cranelift::codegen::ir::types::I32));
 
     let mut module = ModuleBuilder {
+        main,
+        main_scope,
         runtime_constants: HashMap::new(),
         roto_constants: HashMap::new(),
         functions: HashMap::new(),
@@ -812,6 +832,8 @@ impl ModuleBuilder {
     fn finalize<Ctx: OptCtx>(mut self) -> Module<Ctx> {
         self.inner.finalize_definitions().unwrap();
         Module {
+            _main: self.main,
+            main_scope: self.main_scope,
             functions: self.functions,
             inner: SharedModuleData::new(
                 self.inner,
@@ -829,7 +851,7 @@ impl ModuleBuilder {
         match ty {
             IrType::Bool | IrType::U8 | IrType::I8 => I8,
             IrType::U16 | IrType::I16 => I16,
-            IrType::U32 | IrType::I32 | IrType::Asn | IrType::Char => I32,
+            IrType::U32 | IrType::I32 => I32,
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
@@ -1520,10 +1542,15 @@ impl<Ctx: OptCtx> Module<Ctx> {
             });
         };
 
-        F::check_args(&mut self.type_info, &sig.parameter_types)?;
+        F::check_args(
+            &mut self.type_info,
+            self.main_scope,
+            &sig.parameter_types,
+        )?;
 
         check_roto_type_reflect::<F::Return>(
             &mut self.type_info,
+            self.main_scope,
             &sig.return_type,
         )
         .map_err(|e| {

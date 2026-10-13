@@ -2,14 +2,13 @@ use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
 use crate::{
-    RotoString,
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         scoped_display::TypeDisplay,
         types::{Type, TypeDefinition},
     },
-    value::{TypeDescription, TypeRegistry, Value},
+    value::{RotoString, TypeDescription, TypeRegistry, Value},
 };
 use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
@@ -68,15 +67,17 @@ impl std::error::Error for FunctionRetrievalError {}
 
 pub fn check_roto_type_reflect<T: Value>(
     type_info: &mut TypeInfo,
+    main_scope: ScopeRef,
     roto_type: &Type,
 ) -> Result<(), TypeMismatch> {
     let rust_type = TypeRegistry::resolve::<T>().type_id;
-    check_roto_type(type_info, rust_type, roto_type)
+    check_roto_type(type_info, main_scope, rust_type, roto_type)
 }
 
 #[allow(non_snake_case)]
 fn check_roto_type(
     type_info: &mut TypeInfo,
+    main_scope: ScopeRef,
     rust_type: TypeId,
     roto_type: &Type,
 ) -> Result<(), TypeMismatch> {
@@ -102,13 +103,13 @@ fn check_roto_type(
     let Some(rust_type) = TypeRegistry::get(rust_type) else {
         return Err(TypeMismatch {
             rust_type: "unknown".into(),
-            roto_type: roto_type.display(type_info).to_string(),
+            roto_type: roto_type.display(main_scope, type_info).to_string(),
         });
     };
 
     let error_message = TypeMismatch {
         rust_type: rust_type.rust_name.to_string(),
-        roto_type: roto_type.display(type_info).to_string(),
+        roto_type: roto_type.display(main_scope, type_info).to_string(),
     };
 
     let mut roto_type = type_info.resolve(roto_type);
@@ -192,8 +193,8 @@ fn check_roto_type(
                 return Err(error_message);
             };
 
-            check_roto_type(type_info, rust_accept, roto_accept)?;
-            check_roto_type(type_info, rust_reject, roto_reject)?;
+            check_roto_type(type_info, main_scope, rust_accept, roto_accept)?;
+            check_roto_type(type_info, main_scope, rust_reject, roto_reject)?;
             Ok(())
         }
         TypeDescription::Result(rust_ok, rust_err) => {
@@ -214,8 +215,8 @@ fn check_roto_type(
                 return Err(error_message);
             };
 
-            check_roto_type(type_info, rust_ok, roto_ok)?;
-            check_roto_type(type_info, rust_err, roto_err)?;
+            check_roto_type(type_info, main_scope, rust_ok, roto_ok)?;
+            check_roto_type(type_info, main_scope, rust_err, roto_err)?;
             Ok(())
         }
         TypeDescription::Option(rust_type) => {
@@ -235,7 +236,7 @@ fn check_roto_type(
             let [roto_type] = &type_name.arguments[..] else {
                 return Err(error_message);
             };
-            check_roto_type(type_info, rust_type, roto_type)
+            check_roto_type(type_info, main_scope, rust_type, roto_type)
         }
         TypeDescription::List(rust_type) => {
             let Type::Name(type_name) = &roto_type else {
@@ -254,12 +255,12 @@ fn check_roto_type(
             let [roto_type] = &type_name.arguments[..] else {
                 return Err(error_message);
             };
-            check_roto_type(type_info, rust_type, roto_type)
+            check_roto_type(type_info, main_scope, rust_type, roto_type)
         }
     }
 }
 
-/// Parameters of a Roto function
+/// A function that can be registered in a runtime.
 ///
 /// This trait allows for checking the types against Roto types and converting
 /// the values into values appropriate for Roto.
@@ -286,8 +287,10 @@ pub trait RotoFunc {
     type RotoWithoutReturnPointer;
 
     /// Check whether these parameters match a parameter list from Roto.
+    #[allow(private_interfaces)]
     fn check_args(
         type_info: &mut TypeInfo,
+        main_scope: ScopeRef,
         ty: &[Type],
     ) -> Result<(), FunctionRetrievalError>;
 
@@ -345,8 +348,10 @@ macro_rules! func {
             type RotoWithReturnPointer = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
             type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> $r::Transformed;
 
+            #[allow(private_interfaces)]
             fn check_args(
                 type_info: &mut TypeInfo,
+                main_scope: ScopeRef,
                 ty: &[Type]
             ) -> Result<(), FunctionRetrievalError> {
                 let [$($a),*] = ty else {
@@ -360,7 +365,7 @@ macro_rules! func {
                 let mut i = 0;
                 $(
                     i += 1;
-                    check_roto_type_reflect::<$a>(type_info, $a)
+                    check_roto_type_reflect::<$a>(type_info, main_scope, $a)
                         .map_err(|e| FunctionRetrievalError::TypeMismatch(format!("argument {i}"), e))?;
                 )*
                 Ok(())

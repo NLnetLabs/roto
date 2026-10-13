@@ -1,0 +1,6 @@
+import dep.math.factorial;
+
+fn main() {
+    let x = factorial(10);
+    print(f"{x}");
+}

@@ -339,6 +339,7 @@ impl Display for Primitive {
 impl TypeDisplay for Type {
     fn fmt(
         &self,
+        relative_to: ScopeRef,
         type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
@@ -357,10 +358,10 @@ impl TypeDisplay for Type {
             let mut iter = args.iter();
             let mut s = String::new();
             if let Some(i) = iter.next() {
-                write!(s, "{}", i.display(type_info))?;
+                write!(s, "{}", i.display(relative_to, type_info))?;
             }
             for i in iter {
-                write!(s, ", {}", i.display(type_info))?;
+                write!(s, ", {}", i.display(relative_to, type_info))?;
             }
             Ok(s)
         };
@@ -381,7 +382,10 @@ impl TypeDisplay for Type {
                     fields
                         .iter()
                         .map(|(s, t)| {
-                            format!("{s}: {}", t.display(type_info))
+                            format!(
+                                "{s}: {}",
+                                t.display(relative_to, type_info)
+                            )
                         })
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -394,10 +398,12 @@ impl TypeDisplay for Type {
                     f,
                     "fn({}) -> {}",
                     fmt_args(args)?,
-                    ret.display(type_info)
+                    ret.display(relative_to, type_info)
                 )
             }
-            Type::Name(x) => write!(f, "{}", x.display(type_info)),
+            Type::Name(x) => {
+                write!(f, "{}", x.display(relative_to, type_info))
+            }
         }
     }
 }
@@ -405,22 +411,24 @@ impl TypeDisplay for Type {
 impl TypeDisplay for TypeDefinition {
     fn fmt(
         &self,
+        relative_to: ScopeRef,
         type_info: &TypeInfo,
         f: &mut std::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
         match self {
             TypeDefinition::Enum(type_name, _) => {
-                Display::fmt(&type_name.display(type_info), f)
+                Display::fmt(&type_name.display(relative_to, type_info), f)
             }
             TypeDefinition::Record(type_name, _) => {
-                Display::fmt(&type_name.display(type_info), f)
+                Display::fmt(&type_name.display(relative_to, type_info), f)
             }
             TypeDefinition::List(type_name) => {
-                Display::fmt(&type_name.display(type_info), f)
+                Display::fmt(&type_name.display(relative_to, type_info), f)
             }
-            TypeDefinition::Runtime(resolved_name, _) => {
-                Display::fmt(&resolved_name.display(type_info), f)
-            }
+            TypeDefinition::Runtime(resolved_name, _) => Display::fmt(
+                &resolved_name.display(relative_to, type_info),
+                f,
+            ),
             TypeDefinition::Primitive(primitive) => {
                 Display::fmt(primitive, f)
             }
@@ -450,18 +458,19 @@ impl TypeName {
 impl TypeDisplay for TypeName {
     fn fmt(
         &self,
+        relative_to: ScopeRef,
         type_info: &TypeInfo,
         f: &mut std::fmt::Formatter<'_>,
     ) -> core::fmt::Result {
-        Display::fmt(&self.name.display(type_info), f)?;
+        Display::fmt(&self.name.display(relative_to, type_info), f)?;
         let mut args = self.arguments.iter();
         if let Some(arg) = args.next() {
             f.write_char('[')?;
-            Display::fmt(&arg.display(type_info), f)?;
+            Display::fmt(&arg.display(relative_to, type_info), f)?;
             for arg in args {
                 f.write_char(',')?;
                 f.write_char(' ')?;
-                Display::fmt(&arg.display(type_info), f)?;
+                Display::fmt(&arg.display(relative_to, type_info), f)?;
             }
             f.write_char(']')?;
         }
@@ -507,27 +516,6 @@ impl Signature {
 
         Self {
             types: new_types,
-            parameter_types: self
-                .parameter_types
-                .iter()
-                .map(|t| t.substitute_many(&subs))
-                .collect(),
-            return_type: self.return_type.substitute_many(&subs),
-        }
-    }
-
-    pub fn substitute(&self, new_types: &[Type]) -> Self {
-        assert_eq!(self.types.len(), new_types.len());
-
-        let subs: Vec<_> = self
-            .types
-            .iter()
-            .zip(new_types)
-            .map(|(a, b)| (a.clone(), b.clone()))
-            .collect();
-
-        Self {
-            types: new_types.into(),
             parameter_types: self
                 .parameter_types
                 .iter()
@@ -589,7 +577,7 @@ impl Primitive {
             Bool => Layout::new(1, 1),
             Char => Layout::of::<char>(),
             Asn => Layout::new(4, 4),
-            String => Layout::of::<crate::RotoString>(),
+            String => Layout::of::<crate::value::RotoString>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
             Prefix => Layout::of::<inetnum::addr::Prefix>(),
         }
@@ -601,14 +589,14 @@ impl Primitive {
 /// This is used to extract the function pointer and any other information
 /// required to generate the code to call this function.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FunctionDefinition {
+pub(crate) enum FunctionDefinition {
     Runtime(RuntimeFunctionRef),
     Roto,
 }
 
 /// A function that can be called from Roto
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Function {
+pub(crate) struct Function {
     /// The type signature of this function
     pub signature: Signature,
 
@@ -620,22 +608,6 @@ pub struct Function {
 
     /// The source of this function
     pub definition: FunctionDefinition,
-}
-
-impl Function {
-    pub fn new(
-        name: ResolvedName,
-        vars: &[Identifier],
-        signature: Signature,
-        definition: FunctionDefinition,
-    ) -> Self {
-        Self {
-            name,
-            vars: vars.to_vec(),
-            signature,
-            definition,
-        }
-    }
 }
 
 /// The list of built-in Roto types

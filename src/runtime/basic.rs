@@ -6,12 +6,13 @@ use std::{
 use inetnum::{addr::Prefix, asn::Asn};
 
 use crate::{
-    Library, List, Val, library,
-    runtime::func::OutPtr,
+    library,
+    runtime::{func::OutPtr, items::Library},
     value::{
         DynVal, ErasedList, RotoString, StringBuf, StringBytes, StringChars,
         StringLines, VTable, list::ffi::list_get,
     },
+    value::{List, Val},
 };
 
 fn format_num(val: i128) -> std::string::String {

@@ -24,7 +24,7 @@ use super::{
 
 /// The output of the type checker that is used for lowering
 #[derive(Clone, Default)]
-pub struct TypeInfo {
+pub(crate) struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
 
@@ -98,8 +98,12 @@ impl TypeInfo {
         &self.path_kinds[&x.into()]
     }
 
-    pub fn full_name(&self, name: &ResolvedName) -> Identifier {
-        let mut s = self.scope_graph.print_scope(name.scope);
+    pub fn full_name(
+        &self,
+        relative_to: ScopeRef,
+        name: &ResolvedName,
+    ) -> Identifier {
+        let mut s = self.scope_graph.print_scope(relative_to, name.scope);
         s.push('.');
         s.push_str(name.ident.as_str());
         s.into()

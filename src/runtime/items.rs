@@ -1,9 +1,11 @@
+//! Items that can be registered into the runtime.
+
 use std::any::TypeId;
 
 use crate::runtime::extern_eq;
 use crate::value::{EqFn, TypeDescription};
 use crate::{
-    Location, Value,
+    Location,
     ast::Identifier,
     runtime::{
         CloneDrop, ConstantValue, Movability, RegistrationError, Rt,
@@ -11,6 +13,7 @@ use crate::{
         func::{FunctionDescription, RegisterableFn},
         layout::Layout,
     },
+    value::Value,
 };
 
 /// A registerable item
@@ -228,7 +231,9 @@ impl Type {
     /// value.
     ///
     /// ```rust
-    /// use roto::{Type, Val, location};
+    /// use roto::location;
+    /// use roto::value::Val;
+    /// use roto::runtime::items::Type;
     ///
     /// #[derive(Clone, PartialEq)]
     /// struct Foo(i32);
@@ -256,7 +261,9 @@ impl Type {
     /// value.
     ///
     /// ```rust
-    /// use roto::{Type, Val, location};
+    /// use roto::location;
+    /// use roto::value::Val;
+    /// use roto::runtime::items::Type;
     ///
     /// #[derive(Clone, Copy, PartialEq)]
     /// struct Foo(i32);
@@ -373,7 +380,8 @@ impl Function {
     /// to get a correct value.
     ///
     /// ```rust
-    /// use roto::{Function, location};
+    /// use roto::location;
+    /// use roto::runtime::items::Function;
     ///
     /// fn double(x: i32) -> i32 {
     ///     2 * x
@@ -497,7 +505,9 @@ impl Constant {
     /// to get a correct value.
     ///
     /// ```rust
-    /// use roto::{Constant, Val, location};
+    /// use roto::location;
+    /// use roto::value::Val;
+    /// use roto::runtime::items::Constant;
     ///
     /// Constant::new(
     ///     "PI",
@@ -564,7 +574,8 @@ impl Impl {
     /// You should generally pass [`roto::location!()`] to get a correct value.
     ///
     /// ```rust
-    /// use roto::{Impl, location, library};
+    /// use roto::{location, library};
+    /// use roto::runtime::items::Impl;
     ///
     /// let mut impl_u32 = Impl::new::<u32>(location!());
     /// impl_u32.add(library! { /* more items */ });
@@ -619,7 +630,8 @@ impl Use {
     /// You should generally pass [`roto::location!()`] to get a correct value.
     ///
     /// ```rust
-    /// use roto::{Use, location};
+    /// use roto::location;
+    /// use roto::runtime::items::Use;
     ///
     /// Use::new(
     ///     vec![

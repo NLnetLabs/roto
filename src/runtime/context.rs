@@ -1,6 +1,8 @@
+//! Declaring the context of Roto scripts
+
 use std::any::{TypeId, type_name};
 
-use crate::runtime::NoCtx;
+use sealed::sealed;
 
 /// The context or environment that a Roto script runs in
 ///
@@ -25,6 +27,58 @@ pub unsafe trait Context: 'static + Clone {
         }
     }
 }
+
+/// This trait is _sealed_, meaning that it cannot be implemented by downstream
+/// crates.
+#[sealed]
+pub trait OptCtx: 'static + Clone {
+    /// The context type this represents.
+    type Ctx: Context;
+
+    /// Get the underlying context
+    fn get_context(&mut self) -> &mut Self::Ctx;
+
+    /// Try to convert this onnto `NoCtx`.
+    fn try_to_no_ctx() -> Option<NoCtx>;
+}
+
+#[sealed]
+impl<T: Context> OptCtx for Ctx<T> {
+    type Ctx = T;
+
+    fn try_to_no_ctx() -> Option<NoCtx> {
+        None
+    }
+
+    fn get_context(&mut self) -> &mut Self::Ctx {
+        &mut self.0
+    }
+}
+
+/// A type indicating that no context type is being used.
+///
+/// This is one of the two types implementing `OptCtx`.
+#[derive(Clone)]
+pub struct NoCtx;
+
+#[sealed]
+impl OptCtx for NoCtx {
+    type Ctx = Self;
+
+    fn try_to_no_ctx() -> Option<NoCtx> {
+        Some(NoCtx)
+    }
+
+    fn get_context(&mut self) -> &mut Self::Ctx {
+        self
+    }
+}
+
+/// A type indicating that a context type `T` is being used.
+///
+/// This is one of the two types implementing `OptCtx`.
+#[derive(Clone)]
+pub struct Ctx<T>(pub T);
 
 /// Description of `Context` type
 #[derive(Clone)]

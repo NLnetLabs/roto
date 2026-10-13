@@ -1,4 +1,4 @@
-use roto::{Context, RotoString, Runtime};
+use roto::{Context, Runtime, value::RotoString};
 
 #[derive(Clone, Context)]
 struct Ctx {

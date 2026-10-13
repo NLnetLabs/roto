@@ -23,7 +23,7 @@ impl Printable for Item {
         let mut s = String::new();
 
         let printer = IrPrinter {
-            scope: Some(self.scope),
+            scope: self.scope,
             type_info: printer.type_info,
             label_store: printer.label_store,
         };
@@ -34,7 +34,7 @@ impl Printable for Item {
                     &mut s,
                     "const {}: {} = {{",
                     self.name,
-                    ty.display(printer.type_info)
+                    ty.display(printer.scope, printer.type_info)
                 );
             }
             ItemKind::Function { parameters, .. } => {
@@ -54,7 +54,7 @@ impl Printable for Item {
         s.push('\n');
         for (var, ty) in &self.variables {
             let var = var.print(&printer);
-            let ty = ty.display(printer.type_info);
+            let ty = ty.display(self.scope, printer.type_info);
             let _ = writeln!(&mut s, "  {var}: {ty}");
         }
 
@@ -90,7 +90,7 @@ impl Printable for Instruction {
             Jump(to) => format!("jump {}", to.print(printer)),
             Assign { to, ty, value } => {
                 let to = to.print(printer);
-                let ty = ty.display(printer.type_info);
+                let ty = ty.display(printer.scope, printer.type_info);
                 let value = value.print(printer);
                 format!("{to}: {ty} = {value}")
             }
@@ -118,7 +118,7 @@ impl Printable for Instruction {
                 format!(
                     "{}.$discriminant = {}.{}",
                     to.print(printer),
-                    ty.display(printer.type_info),
+                    ty.display(printer.scope, printer.type_info),
                     variant
                 )
             }
@@ -126,7 +126,7 @@ impl Printable for Instruction {
                 format!("return {}", value.print(printer))
             }
             Drop { val, ty } => {
-                let ty = ty.display(printer.type_info);
+                let ty = ty.display(printer.scope, printer.type_info);
                 let val = val.print(printer);
                 format!("drop[{ty}]({val})")
             }
@@ -153,13 +153,13 @@ impl Printable for Value {
     fn print(&self, printer: &IrPrinter) -> String {
         match self {
             Value::Const(x, ty) => {
-                let ty = ty.display(printer.type_info);
+                let ty = ty.display(printer.scope, printer.type_info);
                 let x = x.print(printer);
                 format!("{ty}({x})")
             }
             Value::Constant(x, ty) => {
                 let x = x.print(printer);
-                let ty = ty.display(printer.type_info);
+                let ty = ty.display(printer.scope, printer.type_info);
                 format!("load_constant({x}: {ty})")
             }
             Value::Context(x) => {
@@ -179,7 +179,7 @@ impl Printable for Value {
             }
             Value::Negate(var, ty) => {
                 let var = var.print(printer);
-                let ty = ty.display(printer.type_info);
+                let ty = ty.display(printer.scope, printer.type_info);
                 format!("negate({var}: {ty})")
             }
             Value::Move(var) => {
@@ -193,7 +193,7 @@ impl Printable for Value {
                 right,
             } => {
                 let left = left.print(printer);
-                let ty = ty.display(printer.type_info);
+                let ty = ty.display(printer.scope, printer.type_info);
                 let right = right.print(printer);
                 format!("{left} {binop}({ty}) {right}")
             }
@@ -234,7 +234,7 @@ impl Printable for Var {
             VarKind::Explicit(name) => name.print(printer).to_string(),
             VarKind::Tmp(idx) => format!("${idx}"),
         };
-        if Some(self.scope) != printer.scope {
+        if self.scope != printer.scope {
             let f = self.scope.print(printer);
             format!("{}.{name}", f,)
         } else {

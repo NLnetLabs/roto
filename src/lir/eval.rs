@@ -3,11 +3,11 @@
 //! This is mostly used for testing purposes, since this evaluation is
 //! fairly slow. This is because all variables at this point are identified
 //! by strings and therefore stored as a hashmap.
+#![cfg(test)]
 
 use log::trace;
 
 use crate::{
-    RotoString,
     ast::Identifier,
     lir::{
         FloatCmp, Instruction, IntCmp, Item, ItemKind, Operand, ValueOrSlot,
@@ -15,6 +15,7 @@ use crate::{
     },
     runtime::{ConstantValue, Rt, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
+    value::RotoString,
 };
 use std::collections::HashMap;
 
@@ -376,7 +377,7 @@ pub fn eval(
         }
     }
 
-    let mut program_counter = block_map[&item.entry_block];
+    let mut program_counter = block_map[&item._entry_block];
 
     loop {
         let instruction = &instructions[program_counter];
@@ -476,7 +477,7 @@ pub fn eval(
                         val.clone(),
                     );
                 }
-                program_counter = block_map[&f.entry_block];
+                program_counter = block_map[&f._entry_block];
                 continue;
             }
             Instruction::CallRuntime { func, args } => {

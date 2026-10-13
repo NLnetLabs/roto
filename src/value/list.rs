@@ -118,8 +118,8 @@ pub mod boundary {
     };
 
     use crate::{
-        Value,
         runtime::{extern_clone, extern_drop, extern_eq},
+        value::Value,
         value::{
             EqFn, VTable,
             vtable::{CloneFn, DropFn},
@@ -1277,7 +1277,7 @@ fn array_layout(elem_layout: Layout, n: usize) -> Layout {
 mod tests {
     use std::sync::atomic::AtomicUsize;
 
-    use crate::{RotoString, Val};
+    use crate::value::{RotoString, Val};
 
     use super::boundary::List;
 

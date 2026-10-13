@@ -9,7 +9,11 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use rand::RngExt;
-use roto::{Library, List, RotoString, Runtime, Val, library};
+use roto::{
+    Runtime, library,
+    runtime::items::Library,
+    value::{List, RotoString, Val},
+};
 
 #[derive(Clone, Default, PartialEq)]
 pub struct RustData(pub RotoString);

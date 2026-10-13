@@ -71,7 +71,7 @@ pub enum FilterType {
 
 #[derive(Clone, Debug)]
 pub struct FilterMap {
-    pub filter_type: FilterType,
+    pub _filter_type: FilterType,
     pub ident: Meta<Identifier>,
     pub params: Meta<Params>,
     pub body: Meta<Block>,

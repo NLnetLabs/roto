@@ -1,7 +1,7 @@
 use criterion::{
     BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main,
 };
-use roto::{List, Runtime};
+use roto::{Runtime, value::List};
 
 pub fn bench_insertion_sort(c: &mut Criterion) {
     let rt = Runtime::new();

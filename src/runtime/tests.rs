@@ -9,7 +9,6 @@ use crate::{
 };
 
 use super::Runtime;
-use roto_macros::{roto_function, roto_method, roto_static_method};
 use routecore::bgp::{
     aspath::{AsPath, HopPath},
     communities::{Community, Wellknown},

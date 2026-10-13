@@ -44,7 +44,7 @@ pub fn roto_context(item: TokenStream) -> TokenStream {
         .collect();
 
     let expanded = quote!(
-        unsafe impl Context for #struct_name {
+        unsafe impl roto::runtime::context::Context for #struct_name {
             fn fields() -> Vec<roto::__internal::ContextField> {
                 vec![
                     #(#fields),*
@@ -195,7 +195,7 @@ fn to_tokens(
                 let movability = get_movability(item.span(), &item.attrs)?;
 
                 quote! {
-                    roto::Type::#movability::<#ty>(
+                    roto::runtime::items::Type::#movability::<#ty>(
                         #ident_str,
                         #doc,
                         #location,
@@ -242,7 +242,7 @@ fn to_tokens(
 
                 if let Some(roto_sig) = roto_sig {
                     quote! {
-                        unsafe { roto::Function::new_generic(
+                        unsafe { roto::runtime::items::Function::new_generic(
                             #ident_str,
                             #doc,
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
@@ -254,7 +254,7 @@ fn to_tokens(
                     }
                 } else {
                     quote! {
-                        roto::Function::new(
+                        roto::runtime::items::Function::new(
                             #ident_str,
                             #doc,
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
@@ -406,7 +406,7 @@ fn to_tokens(
                 if let Some(roto_sig) = roto_sig {
                     quote_spanned! {span=> {
                         let #ident = #expr;
-                        unsafe { roto::Function::new_generic(
+                        unsafe { roto::runtime::items::Function::new_generic(
                             #ident_str,
                             #doc,
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
@@ -420,7 +420,7 @@ fn to_tokens(
                     quote_spanned! {span=> {
                         let #ident = #expr;
 
-                         roto::Function::new(
+                         roto::runtime::items::Function::new(
                             #ident_str,
                             #doc,
                             { let x: Vec<&'static str> = vec![#(#params),*]; x },
@@ -435,7 +435,7 @@ fn to_tokens(
                 let location = location(ident.span());
                 let items = to_tokens(items, None)?;
                 quote! {{
-                    let mut module = roto::Module::new(
+                    let mut module = roto::runtime::items::Module::new(
                         #ident_str,
                         #doc,
                         #location,
@@ -448,7 +448,7 @@ fn to_tokens(
                 let items = to_tokens(items, Some(&ty))?;
                 let location = location(span);
                 quote! {{
-                    let mut impl_block = roto::Impl::new::<#ty>(#location);
+                    let mut impl_block = roto::runtime::items::Impl::new::<#ty>(#location);
                     impl_block.add(#items);
                     impl_block
                 }}
@@ -460,7 +460,7 @@ fn to_tokens(
                 let ty = item.ty;
                 let expr = item.expr;
                 quote! {
-                    roto::Constant::new::<#ty>(
+                    roto::runtime::items::Constant::new::<#ty>(
                         #ident_str,
                         #doc,
                         #expr,
@@ -474,7 +474,7 @@ fn to_tokens(
             Item::Use(item) => {
                 let imports = flatten_use_tree(&item.tree);
                 quote! {
-                    roto::Use::new(
+                    roto::runtime::items::Use::new(
                         vec![#(vec![#(#imports.to_string()),*]),*],
                         roto::location!(),
                     )
@@ -486,8 +486,8 @@ fn to_tokens(
     }
 
     Ok(quote! {{
-        let mut lib = roto::Library::new();
-        #(roto::Registerable::add_to_lib(#items, &mut lib);)*
+        let mut lib = roto::runtime::items::Library::new();
+        #(roto::runtime::items::Registerable::add_to_lib(#items, &mut lib);)*
         lib
     }})
 }
@@ -650,162 +650,6 @@ fn param_name(pat: &syn::Pat) -> Option<String> {
     }
 }
 
-struct Intermediate {
-    function: proc_macro2::TokenStream,
-    ident: syn::Ident,
-    docstring: proc_macro2::TokenStream,
-    parameter_names: proc_macro2::TokenStream,
-}
-
-struct FunctionArgs {
-    runtime_ident: syn::Ident,
-    name: Option<syn::Ident>,
-}
-
-impl syn::parse::Parse for FunctionArgs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let runtime_ident = input.parse()?;
-
-        let mut name = None;
-        if input.peek(Token![,]) {
-            input.parse::<Token![,]>()?;
-            if input.peek(syn::Ident) {
-                name = input.parse()?;
-            }
-        }
-
-        Ok(Self {
-            runtime_ident,
-            name,
-        })
-    }
-}
-
-#[proc_macro_attribute]
-pub fn roto_function(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(item as syn::ItemFn);
-    let Intermediate {
-        function,
-        ident,
-        docstring,
-        parameter_names,
-    } = generate_function(item);
-
-    let FunctionArgs {
-        runtime_ident,
-        name,
-    } = syn::parse(attr).unwrap();
-
-    let name = name.unwrap_or(ident.clone());
-
-    let expanded = quote! {
-        #function
-
-        #runtime_ident.register_fn(
-            stringify!(#name),
-            #docstring,
-            #parameter_names,
-            #ident,
-        ).expect("failed to register function");
-    };
-
-    TokenStream::from(expanded)
-}
-
-struct MethodArgs {
-    runtime_ident: syn::Ident,
-    ty: syn::Type,
-    name: Option<syn::Ident>,
-}
-
-impl syn::parse::Parse for MethodArgs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let runtime_ident = input.parse()?;
-        input.parse::<Token![,]>()?;
-        let ty = input.parse()?;
-
-        let mut name = None;
-        if input.peek(Token![,]) {
-            input.parse::<Token![,]>()?;
-            if input.peek(syn::Ident) {
-                name = input.parse()?;
-            }
-        }
-        Ok(Self {
-            runtime_ident,
-            ty,
-            name,
-        })
-    }
-}
-
-#[proc_macro_attribute]
-pub fn roto_method(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(item as syn::ItemFn);
-    let Intermediate {
-        function,
-        ident,
-        docstring,
-        parameter_names,
-    } = generate_function(item);
-
-    let MethodArgs {
-        runtime_ident,
-        ty,
-        name,
-    } = parse_macro_input!(attr as MethodArgs);
-
-    let name = name.unwrap_or(ident.clone());
-
-    let expanded = quote! {
-        #function
-
-        #runtime_ident.register_method::<#ty, _, _>(
-            stringify!(#name),
-            #docstring,
-            #parameter_names,
-            #ident
-        ).unwrap();
-    };
-
-    TokenStream::from(expanded)
-}
-
-#[proc_macro_attribute]
-pub fn roto_static_method(
-    attr: TokenStream,
-    item: TokenStream,
-) -> TokenStream {
-    let item = parse_macro_input!(item as syn::ItemFn);
-    let Intermediate {
-        function,
-        ident,
-        docstring,
-        parameter_names,
-    } = generate_function(item);
-
-    let MethodArgs {
-        runtime_ident,
-        ty,
-        name,
-    } = parse_macro_input!(attr as MethodArgs);
-
-    let name = name.unwrap_or(ident.clone());
-
-    let expanded = quote! {
-        #function
-
-        #runtime_ident.register_static_method::<#ty, _, _>(
-            stringify!(#name),
-            #docstring.to_string(),
-            #parameter_names,
-            #ident
-        ).unwrap();
-    };
-
-    TokenStream::from(expanded)
-}
-
 fn gather_docstring(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream {
     let mut docstring = Vec::new();
 
@@ -826,39 +670,4 @@ fn gather_docstring(attrs: &[syn::Attribute]) -> proc_macro2::TokenStream {
         }),*];
         x.join("\n")
     }}
-}
-
-fn generate_function(item: syn::ItemFn) -> Intermediate {
-    let syn::ItemFn {
-        attrs,
-        vis: _,
-        sig,
-        block: _,
-    } = item.clone();
-
-    let docstring = gather_docstring(&attrs);
-
-    assert!(sig.unsafety.is_none());
-    assert!(sig.variadic.is_none());
-
-    let ident = sig.ident;
-    let args: Vec<_> = sig
-        .inputs
-        .iter()
-        .map(|i| {
-            let syn::FnArg::Typed(syn::PatType { pat, .. }) = i else {
-                panic!()
-            };
-            pat
-        })
-        .collect();
-
-    let parameter_names = quote!( [#(stringify!(#args)),*] );
-
-    Intermediate {
-        function: quote!(#item),
-        ident,
-        docstring,
-        parameter_names,
-    }
 }

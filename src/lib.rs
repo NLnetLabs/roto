@@ -1,4 +1,9 @@
-#![doc = include_str!("../README.md")]
+//! Roto is an embedded scripting language for Rust applications that is fast, safe and easy to use.
+//!
+//! Read more about it in the [manual](https://roto.docs.nlnetlabs.nl/).
+#![doc(
+    html_logo_url = "https://codeberg.org/NLnetLabs/roto/raw/branch/main/docs/source/resources/icon.svg"
+)]
 #![warn(missing_docs)]
 
 // Needed for the roto macros
@@ -9,51 +14,37 @@ mod ast;
 #[cfg(feature = "cli")]
 mod cli;
 mod codegen;
-mod file_tree;
+pub mod deps;
 #[cfg(all(test, not(miri)))]
 mod file_tree_tests;
 mod ir_printer;
 mod label;
 mod lir;
+pub mod load;
 mod mir;
 mod module;
 pub(crate) mod parser;
 mod pipeline;
-mod runtime;
+pub mod runtime;
 pub mod tools;
 mod typechecker;
-mod value;
-
-#[cfg(feature = "cli")]
-pub use cli::cli;
+pub mod value;
 
 #[cfg(all(test, not(miri)))]
 pub(crate) use pipeline::{source_file, src};
 
 use crate::ast::{Declaration, Identifier};
-pub use crate::value::List;
 pub use codegen::{TypedFunc, check::RotoFunc};
-pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub(crate) use pipeline::RotoError;
-pub use pipeline::{Package, RotoReport};
-pub use roto_macros::{
-    Context, roto_function, roto_method, roto_static_method,
-};
-pub use runtime::{
-    Ctx, NoCtx, RegistrationError, Runtime,
-    context::{Context, ContextDescription},
-    func::RegisterableFn,
-    items::{
-        Constant, Function, Impl, Item, Library, Module, Registerable, Type,
-        Use,
-    },
-};
-pub use value::{RotoString, Val, Value, Verdict};
+pub use pipeline::{Blob, RotoReport};
+pub use roto_macros::Context;
+pub use runtime::{RegistrationError, Runtime, func::RegisterableFn};
 
 /// Create a list of items to be registered.
 ///
-/// This macro evaluates to a [`Library`], which can be passed to
-/// [`Runtime::from_lib`] and [`Runtime::add`] to be registered.
+/// This macro evaluates to a [`Library`](crate::runtime::items::Library),
+/// which can be passed to [`Runtime::from_lib`] and [`Runtime::add`] to be
+/// registered.
 ///
 /// This macro automates some of the boilerplate around registering items, such
 /// as adding documentation comments and extracting the names and parameter
@@ -93,12 +84,13 @@ pub use value::{RotoString, Val, Value, Verdict};
 /// Types are declared with a `type` alias style syntax. The declaration must
 /// be  annotated with either `#[clone]` or `#[copy]`. Only types implementing
 /// `Copy` can be marked with `#[copy]`. Since the Rust type (the right-hand
-/// side) must implement [`Value`], you should wrap any custom type in `Val`.
+/// side) must implement [`Value`](crate::value::Value), you should wrap any
+/// custom type in [`Val`](crate::value::Val).
 ///
 /// ```rust
 /// # #[derive(Clone, Copy, PartialEq)]
 /// # struct Foo;
-/// # use roto::Val;
+/// # use roto::value::Val;
 /// # roto::library! {
 /// /// A `Clone` type `Val<Foo>` registered as `Foo`
 /// #[clone] type Foo = Val<Foo>;
@@ -118,7 +110,7 @@ pub use value::{RotoString, Val, Value, Verdict};
 /// # struct Foo;
 /// # #[derive(Clone, PartialEq)]
 /// # struct Bar;
-/// # use roto::Val;
+/// # use roto::value::Val;
 /// # roto::library! {
 /// /// A function
 /// fn foo(a: i32, b: Val<Foo>) -> Val<Bar> {
@@ -142,7 +134,7 @@ pub use value::{RotoString, Val, Value, Verdict};
 /// ```rust
 /// # #[derive(Clone, PartialEq)]
 /// # struct Foo(i32);
-/// # use roto::Val;
+/// # use roto::value::Val;
 /// # roto::library! {
 /// /// A constant `BAR` of type `u32`
 /// const BAR: u32 = 42;
@@ -176,7 +168,7 @@ pub use value::{RotoString, Val, Value, Verdict};
 /// ```rust
 /// # #[derive(Clone, PartialEq)]
 /// # struct Foo;
-/// # use roto::Val;
+/// # use roto::value::Val;
 /// # roto::library! {
 /// /// Add (static) methods to the `Val<Foo>`
 /// ///
@@ -236,13 +228,14 @@ pub use value::{RotoString, Val, Value, Verdict};
 ///  * It's not necessary to use this macro if you prefer not to or if you
 ///    want to define a library in a more dynamic way. This macro expands to
 ///    relatively simple function calls, though the API is a bit more verbose.
-///    For the types involved, see the [`Library`] type.
+///    For the types involved, see the
+///    [`Library`](crate::runtime::items::Library) type.
 pub use roto_macros::library;
 
 /// Items exported only for use in macros
 pub mod __internal {
-    use crate::Value;
     pub use crate::runtime::context::ContextField;
+    use crate::value::Value;
 
     /// Stub function that can be used as an assertion that a type implements [`Value`].
     ///

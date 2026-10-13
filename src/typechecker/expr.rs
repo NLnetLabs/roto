@@ -48,7 +48,7 @@ impl Context {
 }
 
 #[derive(Clone)]
-pub enum ResolvedPath {
+pub(crate) enum ResolvedPath {
     /// The path referenced a free function
     Function {
         name: ResolvedName,
@@ -66,12 +66,6 @@ pub enum ResolvedPath {
     ///
     /// A value can be a local variable, constant or context.
     Value(PathValue),
-    /// The path referenced a static method
-    StaticMethod {
-        name: ResolvedName,
-        definition: FunctionDefinition,
-        signature: Signature,
-    },
     /// The path referenced an enum constructor
     EnumConstructor {
         ty: TypeDefinition,
@@ -1165,27 +1159,58 @@ impl TypeChecker {
     ) -> TypeResult<(&'a Meta<Identifier>, Declaration)> {
         let mut ident = idents.next().unwrap();
 
-        while ident.node == "super".into() {
-            let Some(dec) = self.type_info.scope_graph.parent_module(scope)
-            else {
-                return Err(self.error_simple(
-                    "could not resolve name: too many leading `super` keywords".to_string(),
-                    "too many leading `super` keywords".to_string(),
-                    ident.id,
-                ));
-            };
-
-            let Some(s) = dec.scope else {
-                unreachable!();
-            };
-
-            scope = s;
+        if **ident == "pkg".into() {
+            let (pkg_scope, _p) =
+                self.type_info.scope_graph.find_package(scope);
+            let dec =
+                self.type_info.scope_graph.get_declaration(ResolvedName {
+                    scope: pkg_scope,
+                    ident: "pkg".into(),
+                });
 
             let Some(tmp_ident) = idents.next() else {
                 return Ok((ident, dec));
             };
 
+            scope = dec.scope.unwrap();
             ident = tmp_ident;
+        } else if ident.as_str() == "dep" {
+            let (_, p) = self.type_info.scope_graph.find_package(scope);
+            scope = p.deps;
+
+            let Some(tmp_ident) = idents.next() else {
+                return Err(self.error_simple(
+                    "path cannot just be `dep`.",
+                    "add more identifiers to this path",
+                    ident.id,
+                ));
+            };
+
+            ident = tmp_ident;
+        } else {
+            while ident.node == "super".into() {
+                let Some(dec) =
+                    self.type_info.scope_graph.parent_module(scope)
+                else {
+                    return Err(self.error_simple(
+                        "could not resolve name: too many leading `super` keywords".to_string(),
+                        "too many leading `super` keywords".to_string(),
+                        ident.id,
+                    ));
+                };
+
+                let Some(s) = dec.scope else {
+                    unreachable!();
+                };
+
+                scope = s;
+
+                let Some(tmp_ident) = idents.next() else {
+                    return Ok((ident, dec));
+                };
+
+                ident = tmp_ident;
+            }
         }
 
         // Keep checking modules until we find something that isn't a module
@@ -1448,11 +1473,6 @@ impl TypeChecker {
                 definition,
                 signature,
             } => (name, definition, signature, "function"),
-            ResolvedPath::StaticMethod {
-                name,
-                definition,
-                signature,
-            } => (name, definition, signature, "static method"),
             ResolvedPath::Method {
                 value: _,
                 definition,

@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, sync::Arc};
 
-use crate::List;
+use crate::value::List;
 
 /// Inner data type containing the string
 #[derive(Clone, Default, PartialEq, Eq)]
