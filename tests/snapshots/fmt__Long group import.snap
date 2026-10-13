@@ -1,0 +1,9 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+import foo.{
+    BarBarBarBarBarBarBarBar,
+    BazBazBazBazBazBazBazBaz,
+    QuuxQuuxQuuxQuuxQuuxQuuxQuux,
+};

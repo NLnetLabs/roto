@@ -1,0 +1,7 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    foo.new().push(bar);
+}

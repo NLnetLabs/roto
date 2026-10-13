@@ -1,0 +1,10 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+fn main() {
+    globals.insert(
+        "CONFIG_GARBAGE_LINKS_URI_SEPARATOR",
+        config.get_path_as_str("garbage.links.uri-separator")?.into_value(),
+    );
+}

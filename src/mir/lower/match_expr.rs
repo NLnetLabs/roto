@@ -256,8 +256,8 @@ impl Lowerer<'_> {
             }
 
             self.new_block(arm_labels[&arm_index]);
-            let val = self.block(&arm.body);
-            self.emit_assign(Place::new(out.clone(), ty), ty, val);
+            let val = self.expr(&arm.body);
+            self.do_assign(Place::new(out.clone(), ty), ty, val);
 
             let to_drop = self.stack_slots.pop().unwrap();
             for (var, ty) in to_drop.into_iter().rev() {
@@ -278,7 +278,7 @@ impl Lowerer<'_> {
         examinee_ty: TyRef,
         variant: Option<&(Identifier, Vec<TyRef>)>,
         lbl: LabelRef,
-        branches: &[&(Option<usize>, &ast::MatchArm, usize)],
+        branches: &[&(Option<usize>, &Meta<ast::MatchArm>, usize)],
         arm_labels: &HashMap<usize, LabelRef>,
     ) {
         self.new_block(lbl);

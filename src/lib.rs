@@ -17,6 +17,7 @@ mod codegen;
 pub mod deps;
 #[cfg(all(test, not(miri)))]
 mod file_tree_tests;
+pub mod fmt;
 mod ir_printer;
 mod label;
 mod lir;
@@ -293,7 +294,7 @@ impl std::fmt::Display for Location {
 pub fn has_main_function(script: &str) -> parser::ParseResult<bool> {
     let file = 0;
     let mut spans = parser::meta::Spans::default();
-    let ast = parser::Parser::parse(file, &mut spans, script)?;
+    let (ast, _) = parser::Parser::parse(file, &mut spans, script)?;
 
     for item in &ast.declarations {
         if let Declaration::Function(ast::FunctionDeclaration {

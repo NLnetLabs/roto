@@ -1,10 +1,10 @@
-use std::{path::PathBuf, process::ExitCode};
+use std::{fs::File, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 
 use crate::{
-    RotoError, RotoReport, Runtime, runtime::context::OptCtx,
-    tools::print::print_highlighted,
+    RotoError, RotoReport, Runtime, fmt::fmt_path, load::LoadError,
+    runtime::context::OptCtx, tools::print::print_highlighted,
 };
 
 #[derive(Parser)]
@@ -41,6 +41,12 @@ enum Command {
     },
     /// Print a Roto file with syntax highlighting
     Print {
+        #[arg()]
+        file: PathBuf,
+    },
+    Fmt {
+        #[arg(long = "check")]
+        check: bool,
         #[arg()]
         file: PathBuf,
     },
@@ -116,6 +122,44 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
         Command::Print { file } => {
             let s = std::fs::read_to_string(file).unwrap();
             print_highlighted(&s);
+        }
+        Command::Fmt { file, check } => {
+            let formatted = fmt_path(file)?;
+
+            if *check {
+                let original = match std::fs::read_to_string(file) {
+                    Ok(original) => original,
+                    Err(err) => {
+                        return Err(RotoReport {
+                            files: Vec::new(),
+                            errors: vec![RotoError::Read(LoadError {
+                                path: file.to_string_lossy().to_string(),
+                                err,
+                            })],
+                            spans: Default::default(),
+                        });
+                    }
+                };
+                let patch = diffy::create_patch(&original, &formatted);
+                let f = diffy::PatchFormatter::new().with_color();
+                print!("{}", f.fmt_patch(&patch));
+            } else {
+                use std::io::Write;
+                let mut f = match File::create(file) {
+                    Ok(f) => f,
+                    Err(err) => {
+                        return Err(RotoReport {
+                            files: Vec::new(),
+                            errors: vec![RotoError::Read(LoadError {
+                                path: file.to_string_lossy().to_string(),
+                                err,
+                            })],
+                            spans: Default::default(),
+                        });
+                    }
+                };
+                writeln!(f, "{}", formatted).unwrap();
+            }
         }
     }
     Ok(())

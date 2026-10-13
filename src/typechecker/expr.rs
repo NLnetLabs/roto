@@ -97,7 +97,13 @@ impl TypeChecker {
     ) -> TypeResult<bool> {
         let mut diverged = false;
 
-        self.imports(scope, &block.imports.iter().collect::<Vec<_>>())?;
+        let mut flat_paths = Vec::new();
+        for stmt in &block.stmts {
+            if let ast::Stmt::Import(path) = &**stmt {
+                Self::flatten_import_paths(&mut flat_paths, path);
+            }
+        }
+        self.imports(scope, flat_paths)?;
 
         for stmt in &block.stmts {
             // TODO: emit message for diverging statements
@@ -136,6 +142,10 @@ impl TypeChecker {
         stmt: &Meta<ast::Stmt>,
     ) -> TypeResult<bool> {
         match &stmt.node {
+            ast::Stmt::Import(_) => {
+                // do nothing: already resolved
+                Ok(false)
+            }
             ast::Stmt::Let(ident, ty, expr) => {
                 let ty = if let Some(ty) = ty {
                     self.evaluate_type_expr(scope, ty)?
@@ -210,6 +220,7 @@ impl TypeChecker {
 
                 Ok(true)
             }
+            Parentheses(inner) => self.expr(scope, ctx, inner),
             Literal(l) => self.literal(ctx, l),
             Block(b) => {
                 let idx = self.block_counter;
@@ -284,7 +295,7 @@ impl TypeChecker {
                 let ty = path_value.final_type();
                 let ctx = ctx.with_type(ty);
 
-                let op = match c.op {
+                let op = match c.op.node {
                     ast::CompoundAssignOp::Add => ast::BinOp::Add,
                     ast::CompoundAssignOp::Sub => ast::BinOp::Sub,
                     ast::CompoundAssignOp::Mul => ast::BinOp::Mul,
@@ -351,7 +362,7 @@ impl TypeChecker {
                 let field_types: Vec<_> = record
                     .fields
                     .iter()
-                    .map(|(s, _)| (s.clone(), self.fresh_var()))
+                    .map(|field| (field.name.clone(), self.fresh_var()))
                     .collect();
                 let rec = self.fresh_record(field_types.clone());
                 self.unify(&ctx.expected_type, &rec, id, None)?;
@@ -690,12 +701,12 @@ impl TypeChecker {
         let match_id = self.match_counter;
         self.match_counter += 1;
 
-        for ast::MatchArm {
-            pattern,
-            guard,
-            body,
-        } in arms
-        {
+        for arm in &arms.node {
+            let ast::MatchArm {
+                pattern,
+                guard,
+                body,
+            } = &**arm;
             // Anything after default is unreachable
             if default_arm {
                 return Err(self.error_unreachable_expression(body));
@@ -715,7 +726,7 @@ impl TypeChecker {
                         default_arm = true;
                     }
 
-                    arms_diverge &= self.block(arm_scope, ctx, body)?;
+                    arms_diverge &= self.expr(arm_scope, ctx, body)?;
                     continue;
                 }
                 Pattern::EnumVariant {
@@ -789,7 +800,7 @@ impl TypeChecker {
                         used_variants.push(variant.node);
                     }
 
-                    arms_diverge &= self.block(arm_scope, ctx, body)?;
+                    arms_diverge &= self.expr(arm_scope, ctx, body)?;
                 }
             }
         }
@@ -1109,7 +1120,8 @@ impl TypeChecker {
         let mut invalid_fields = Vec::new();
         let mut duplicate_fields = Vec::new();
 
-        for (ident, _) in &record.fields {
+        for field in &record.fields {
+            let ident = &field.name;
             if used_fields.contains(&ident.node) {
                 duplicate_fields.push(ident);
             } else if let Some(idx) =
@@ -1135,15 +1147,15 @@ impl TypeChecker {
         }
 
         let mut diverges = false;
-        for (ident, expr) in &record.fields {
+        for field in &record.fields {
             let expected_type = field_types
                 .iter()
-                .find_map(|(s, t)| (s.node == ident.node).then_some(t))
+                .find_map(|(s, t)| (s.node == field.name.node).then_some(t))
                 .unwrap()
                 .clone();
 
             diverges |=
-                self.expr(scope, &ctx.with_type(expected_type), expr)?;
+                self.expr(scope, &ctx.with_type(expected_type), &field.expr)?;
         }
         Ok(diverges)
     }

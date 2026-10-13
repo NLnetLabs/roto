@@ -330,9 +330,10 @@ impl<'r> Lowerer<'r> {
 
         let mut parameter_types = Vec::new();
 
-        for (x, _) in &params.0 {
-            let ty = self.type_info.type_of(x);
-            parameter_types.push((self.type_info.resolved_name(x), ty));
+        for param in &params.0 {
+            let ast::Param { name, ty: _ } = &**param;
+            let ty = self.type_info.type_of(name);
+            parameter_types.push((self.type_info.resolved_name(name), ty));
         }
 
         self.stack_slots.push(Vec::new());
@@ -446,6 +447,9 @@ impl<'r> Lowerer<'r> {
 
     fn stmt(&mut self, stmt: &Meta<ast::Stmt>) {
         match &**stmt {
+            ast::Stmt::Import(_) => {
+                // do nothing: already processed
+            }
             ast::Stmt::Let(ident, _, expr) => {
                 let val = self.expr(expr);
                 let name = self.type_info.resolved_name(ident);
@@ -476,6 +480,7 @@ impl<'r> Lowerer<'r> {
             ast::Expr::Return(return_kind, expr) => {
                 self.r#return(return_kind, expr)
             }
+            ast::Expr::Parentheses(inner) => self.expr(inner),
             ast::Expr::Literal(literal) => self.literal(literal),
             ast::Expr::Block(block) => self.block_expr(block),
             ast::Expr::Match(r#match) => self.r#match(id, r#match),
@@ -797,7 +802,8 @@ impl<'r> Lowerer<'r> {
 
         let to = self.tmp(ty);
 
-        for (s, expr) in &record.fields {
+        for field in &record.fields {
+            let ast::RecordField { name, expr } = &**field;
             let op = self.expr(expr);
             let field_ty = self.type_info.type_of(expr);
             let field_ty = self.type_info.convert(&field_ty);
@@ -805,7 +811,7 @@ impl<'r> Lowerer<'r> {
                 Place {
                     var: to.clone(),
                     root_ty: ty,
-                    projection: vec![Projection::Field(**s)],
+                    projection: vec![Projection::Field(**name)],
                 },
                 field_ty,
                 op,
@@ -945,7 +951,7 @@ impl<'r> Lowerer<'r> {
     }
 
     fn compound_assign(&mut self, c: &ast::CompoundAssign) -> Value {
-        let op = match c.op {
+        let op = match c.op.node {
             CompoundAssignOp::Add => ast::BinOp::Add,
             CompoundAssignOp::Sub => ast::BinOp::Sub,
             CompoundAssignOp::Mul => ast::BinOp::Mul,
@@ -958,7 +964,14 @@ impl<'r> Lowerer<'r> {
         };
         let bin_expr = Meta {
             id: c.binop_id,
-            node: Expr::BinOp(Box::new(left), op, c.expr.clone()),
+            node: Expr::BinOp(
+                Box::new(left),
+                Meta {
+                    node: op,
+                    id: c.op.id,
+                },
+                c.expr.clone(),
+            ),
         };
         self.assign(&c.path, &bin_expr)
     }

@@ -5,8 +5,9 @@ use inetnum::asn::Asn;
 use crate::{
     ast::{
         BinOp, Block, CompoundAssign, CompoundAssignOp, Expr, FStringPart,
-        FloatType, Identifier, IntType, Literal, Match, MatchArm, Path,
-        Pattern, Record, RecordType, ReturnKind, Stmt, TypeExpr,
+        FloatType, Identifier, ImportPath, IntType, Literal, Match, MatchArm,
+        Path, Pattern, Record, RecordField, RecordFieldType, RecordType,
+        ReturnKind, Stmt, TypeExpr,
     },
     parser::{ParseError, precedence::Associativity},
 };
@@ -41,25 +42,20 @@ impl Parser<'_, '_> {
     pub fn block(&mut self) -> ParseResult<Meta<Block>> {
         let start = self.take(Token::CurlyLeft)?;
 
-        let mut imports = Vec::new();
         let mut stmts = Vec::new();
 
         loop {
             if self.peek_is(Token::CurlyRight) {
                 let end = self.take(Token::CurlyRight)?;
-                return Ok(self.spans.add(
-                    start.merge(end),
-                    Block {
-                        imports,
-                        stmts,
-                        last: None,
-                    },
-                ));
+                return Ok(self
+                    .spans
+                    .add(start.merge(end), Block { stmts, last: None }));
             }
 
             if self.peek_is(Token::Keyword(Keyword::Import)) {
-                let mut paths = self.import()?;
-                imports.append(&mut paths);
+                let paths = self.import()?;
+                let span = self.get_span(&paths);
+                stmts.push(self.spans.add(span, Stmt::Import(paths)));
             } else if self.peek_is(Token::Keyword(Keyword::Let)) {
                 let start = self.take(Token::Keyword(Keyword::Let))?;
                 let identifier = self.identifier()?;
@@ -91,7 +87,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -114,7 +109,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -136,7 +130,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -158,7 +151,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -186,7 +178,6 @@ impl Parser<'_, '_> {
                     return Ok(self.spans.add(
                         span,
                         Block {
-                            imports,
                             stmts,
                             last: Some(Box::new(expr)),
                         },
@@ -238,16 +229,26 @@ impl Parser<'_, '_> {
             Ok(self
                 .spans
                 .add(span, Expr::Assign(path.clone(), Box::new(right))))
-        } else if self.next_is(Token::PlusEq) {
-            self.compound_assign_expr(left, CompoundAssignOp::Add, r)
-        } else if self.next_is(Token::MinusEq) {
-            self.compound_assign_expr(left, CompoundAssignOp::Sub, r)
-        } else if self.next_is(Token::StarEq) {
-            self.compound_assign_expr(left, CompoundAssignOp::Mul, r)
-        } else if self.next_is(Token::SlashEq) {
-            self.compound_assign_expr(left, CompoundAssignOp::Div, r)
-        } else if self.next_is(Token::PercentEq) {
-            self.compound_assign_expr(left, CompoundAssignOp::Mod, r)
+        } else if self.peek_is(Token::PlusEq) {
+            let (_, span) = self.next()?;
+            let op = self.spans.add(span, CompoundAssignOp::Add);
+            self.compound_assign_expr(left, op, r)
+        } else if self.peek_is(Token::MinusEq) {
+            let (_, span) = self.next()?;
+            let op = self.spans.add(span, CompoundAssignOp::Sub);
+            self.compound_assign_expr(left, op, r)
+        } else if self.peek_is(Token::StarEq) {
+            let (_, span) = self.next()?;
+            let op = self.spans.add(span, CompoundAssignOp::Mul);
+            self.compound_assign_expr(left, op, r)
+        } else if self.peek_is(Token::SlashEq) {
+            let (_, span) = self.next()?;
+            let op = self.spans.add(span, CompoundAssignOp::Div);
+            self.compound_assign_expr(left, op, r)
+        } else if self.peek_is(Token::PercentEq) {
+            let (_, span) = self.next()?;
+            let op = self.spans.add(span, CompoundAssignOp::Mod);
+            self.compound_assign_expr(left, op, r)
         } else {
             Ok(left)
         }
@@ -256,7 +257,7 @@ impl Parser<'_, '_> {
     fn compound_assign_expr(
         &mut self,
         left: Meta<Expr>,
-        op: CompoundAssignOp,
+        op: Meta<CompoundAssignOp>,
         r: Restrictions,
     ) -> ParseResult<Meta<Expr>> {
         let right = self.binop_expr(None, r)?;
@@ -353,10 +354,11 @@ impl Parser<'_, '_> {
             };
 
             // Parse the binop we previously peeked
-            let _ = self.next()?;
+            let (_, span) = self.next()?;
+            let operator = self.spans.add(span, operator);
 
             // Pass this operator as a lower bound to the recursive call.
-            let rhs = self.binop_expr(Some(operator), r)?;
+            let rhs = self.binop_expr(Some(*operator), r)?;
 
             let span = self.spans.merge(&lhs, &rhs);
             let lhs_unspanned =
@@ -472,8 +474,12 @@ impl Parser<'_, '_> {
             }
 
             let expr = self.expr()?;
-            self.take(Token::RoundRight)?;
-            return Ok(expr);
+            let span_right = self.take(Token::RoundRight)?;
+
+            let paren_expr = Expr::Parentheses(Box::new(expr));
+            return Ok(self
+                .spans
+                .add(span_left.merge(span_right), paren_expr));
         }
 
         if self.peek_is(Token::SquareLeft) {
@@ -623,7 +629,6 @@ impl Parser<'_, '_> {
                 Meta {
                     id: expr.id,
                     node: Block {
-                        imports: Vec::new(),
                         stmts: Vec::new(),
                         last: Some(Box::new(expr)),
                     },
@@ -680,7 +685,7 @@ impl Parser<'_, '_> {
         let expr = self.expr_no_records()?;
 
         let mut arms = Vec::new();
-        self.take(Token::CurlyLeft)?;
+        let start_arms = self.take(Token::CurlyLeft)?;
         while !self.peek_is(Token::CurlyRight) {
             let variant = self.identifier()?;
             let mut span = self.get_span(&variant);
@@ -722,7 +727,8 @@ impl Parser<'_, '_> {
             let body = if self.peek_is(Token::CurlyLeft) {
                 let exprs = self.block()?;
                 self.next_is(Token::Comma);
-                exprs
+                let span = self.spans.get(&exprs);
+                self.spans.add(span, Expr::Block(exprs))
             } else {
                 let expr = self.expr()?;
 
@@ -732,24 +738,25 @@ impl Parser<'_, '_> {
                     self.take(Token::Comma)?;
                 }
 
-                Meta {
-                    id: expr.id,
-                    node: Block {
-                        imports: Vec::new(),
-                        stmts: Vec::new(),
-                        last: Some(Box::new(expr)),
-                    },
-                }
+                expr
             };
 
-            arms.push(MatchArm {
-                pattern,
-                guard,
-                body,
-            })
+            let span = self.merge_spans(&pattern, &body);
+
+            arms.push(self.spans.add(
+                span,
+                MatchArm {
+                    pattern,
+                    guard,
+                    body,
+                },
+            ))
         }
 
         let end = self.take(Token::CurlyRight)?;
+        let span = start_arms.merge(end);
+        let arms = self.spans.add(span, arms);
+
         let span = start.merge(end);
         let match_expr = self.spans.add(span, Match { expr, arms });
         Ok(self.spans.add(span, Expr::Match(Box::new(match_expr))))
@@ -937,10 +944,11 @@ impl Parser<'_, '_> {
             Token::CurlyRight,
             Token::Comma,
             |parser| {
-                let key = parser.identifier()?;
+                let name = parser.identifier()?;
                 parser.take(Token::Colon)?;
-                let value = parser.expr()?;
-                Ok((key, value))
+                let expr = parser.expr()?;
+                let span = parser.merge_spans(&name, &expr);
+                Ok(parser.spans.add(span, RecordField { name, expr }))
             },
         )?;
 
@@ -1028,15 +1036,14 @@ impl Parser<'_, '_> {
         Ok(RecordType { fields })
     }
 
-    fn record_field(
-        &mut self,
-    ) -> ParseResult<(Meta<Identifier>, Meta<TypeExpr>)> {
-        let key = self.identifier()?;
+    fn record_field(&mut self) -> ParseResult<Meta<RecordFieldType>> {
+        let name = self.identifier()?;
         self.take(Token::Colon)?;
 
-        let field_type = self.type_expr()?;
+        let ty = self.type_expr()?;
 
-        Ok((key, field_type))
+        let span = self.merge_spans(&name, &ty);
+        Ok(self.spans.add(span, RecordFieldType { name, ty }))
     }
 
     pub(super) fn path(&mut self) -> ParseResult<Meta<Path>> {
@@ -1050,54 +1057,62 @@ impl Parser<'_, '_> {
         Ok(self.add_span(span, Path { idents }))
     }
 
-    pub(super) fn path_expr(&mut self) -> ParseResult<Vec<Meta<Path>>> {
-        let mut paths: Vec<Meta<Path>> = Vec::new();
-        let mut root: Path = Path { idents: Vec::new() };
+    pub(super) fn path_expr(&mut self) -> ParseResult<Meta<ImportPath>> {
+        let mut path = Path { idents: Vec::new() };
         loop {
             if self.peek_is(Token::CurlyLeft) {
-                let sub_paths = self.path_list()?;
-
-                for mut sp in sub_paths {
-                    let mut new_idents = root.idents.clone();
-                    new_idents.append(&mut sp.idents);
-                    let new_path = Meta {
-                        node: Path { idents: new_idents },
-                        id: sp.id,
-                    };
-
-                    paths.push(new_path);
-                }
-                break;
+                let group = self.path_list()?;
+                let mut span = self.get_span(&group);
+                let path = if let Some(ident) = path.idents.first() {
+                    let path_span =
+                        self.merge_spans(ident, path.idents.last().unwrap());
+                    span = span.merge(path_span);
+                    Some(self.add_span(path_span, path))
+                } else {
+                    None
+                };
+                return Ok(self.add_span(
+                    span,
+                    ImportPath {
+                        path,
+                        group: Some(group),
+                    },
+                ));
             }
 
             let ident: Meta<Identifier> = self.path_item()?;
-            root.idents.push(ident);
+            path.idents.push(ident);
 
             if !self.next_is(Token::Period) {
                 let span = self.merge_spans(
-                    root.idents.first().unwrap(),
-                    root.idents.last().unwrap(),
+                    path.idents.first().unwrap(),
+                    path.idents.last().unwrap(),
                 );
-                paths.push(self.add_span(span, root));
-                break;
+                let path = self.add_span(span, path);
+                return Ok(self.add_span(
+                    span,
+                    ImportPath {
+                        path: Some(path),
+                        group: None,
+                    },
+                ));
             }
         }
-
-        Ok(paths)
     }
 
-    fn path_list(&mut self) -> ParseResult<Vec<Meta<Path>>> {
-        let mut paths: Vec<Meta<Path>> = Vec::new();
-        self.take(Token::CurlyLeft)?;
+    fn path_list(&mut self) -> ParseResult<Meta<Vec<Meta<ImportPath>>>> {
+        let mut paths: Vec<Meta<ImportPath>> = Vec::new();
+        let start = self.take(Token::CurlyLeft)?;
         loop {
-            let mut path = self.path_expr()?;
-            paths.append(&mut path);
+            let path = self.path_expr()?;
+            paths.push(path);
             if !self.next_is(Token::Comma) {
                 break;
             }
         }
-        self.take(Token::CurlyRight)?;
-        Ok(paths)
+        let end = self.take(Token::CurlyRight)?;
+        let span = start.merge(end);
+        Ok(self.add_span(span, paths))
     }
 
     fn path_item(&mut self) -> ParseResult<Meta<Identifier>> {

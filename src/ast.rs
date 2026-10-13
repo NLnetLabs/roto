@@ -12,6 +12,7 @@ use crate::parser::meta::{Meta, MetaId};
 
 #[derive(Clone, Debug)]
 pub struct SyntaxTree {
+    pub shebang: Option<String>,
     pub declarations: Vec<Declaration>,
 }
 
@@ -23,7 +24,13 @@ pub enum Declaration {
     Enum(EnumTypeDeclaration),
     Function(FunctionDeclaration),
     Test(Test),
-    Import(Vec<Meta<Path>>),
+    Import(Meta<ImportPath>),
+}
+
+#[derive(Clone, Debug)]
+pub struct ImportPath {
+    pub path: Option<Meta<Path>>,
+    pub group: Option<Meta<Vec<Meta<ImportPath>>>>,
 }
 
 pub struct Signature {
@@ -33,21 +40,27 @@ pub struct Signature {
 }
 
 #[derive(Clone, Debug)]
-pub struct Params(pub Vec<(Meta<Identifier>, Meta<TypeExpr>)>);
+pub struct Param {
+    pub name: Meta<Identifier>,
+    pub ty: Meta<TypeExpr>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Params(pub Vec<Meta<Param>>);
 
 /// The value of a typed record
 #[derive(Clone, Debug)]
 pub struct RecordTypeDeclaration {
     pub ident: Meta<Identifier>,
-    pub type_params: Vec<Meta<Identifier>>,
+    pub type_params: Option<Meta<Vec<Meta<Identifier>>>>,
     pub record_type: RecordType,
 }
 
 #[derive(Clone, Debug)]
 pub struct EnumTypeDeclaration {
     pub ident: Meta<Identifier>,
-    pub type_params: Vec<Meta<Identifier>>,
-    pub variants: Meta<Vec<Variant>>,
+    pub type_params: Option<Meta<Vec<Meta<Identifier>>>>,
+    pub variants: Meta<Vec<Meta<Variant>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -95,7 +108,6 @@ pub struct Test {
 /// A block of multiple statements
 #[derive(Clone, Debug)]
 pub struct Block {
-    pub imports: Vec<Meta<Path>>,
     pub stmts: Vec<Meta<Stmt>>,
     pub last: Option<Box<Meta<Expr>>>,
 }
@@ -104,6 +116,7 @@ pub struct Block {
 #[derive(Clone, Debug)]
 pub enum Stmt {
     Let(Meta<Identifier>, Option<Meta<TypeExpr>>, Meta<Expr>),
+    Import(Meta<ImportPath>),
     Expr(Meta<Expr>),
 }
 
@@ -178,7 +191,7 @@ pub enum Expr {
     /// A binary operator expression
     ///
     /// Takes a left operand, the operator and the right operand
-    BinOp(Box<Meta<Expr>>, BinOp, Box<Meta<Expr>>),
+    BinOp(Box<Meta<Expr>>, Meta<BinOp>, Box<Meta<Expr>>),
 
     Negate(Box<Meta<Expr>>),
 
@@ -196,6 +209,9 @@ pub enum Expr {
 
     /// f-string
     FString(Vec<Meta<FStringPart>>),
+
+    /// Parentheses
+    Parentheses(Box<Meta<Expr>>),
 }
 
 #[derive(Clone, Debug)]
@@ -203,7 +219,7 @@ pub struct CompoundAssign {
     pub binop_id: MetaId,
     pub path_expr_id: MetaId,
     pub path: Meta<Path>,
-    pub op: CompoundAssignOp,
+    pub op: Meta<CompoundAssignOp>,
     pub expr: Box<Meta<Expr>>,
 }
 
@@ -231,21 +247,27 @@ impl ReturnKind {
 }
 
 #[derive(Clone, Debug)]
+pub struct RecordField {
+    pub name: Meta<Identifier>,
+    pub expr: Meta<Expr>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Record {
-    pub fields: Vec<(Meta<Identifier>, Meta<Expr>)>,
+    pub fields: Vec<Meta<RecordField>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Match {
     pub expr: Meta<Expr>,
-    pub arms: Vec<MatchArm>,
+    pub arms: Meta<Vec<Meta<MatchArm>>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MatchArm {
     pub pattern: Meta<Pattern>,
     pub guard: Option<Meta<Expr>>,
-    pub body: Meta<Block>,
+    pub body: Meta<Expr>,
 }
 
 #[derive(Clone, Debug)]
@@ -295,8 +317,14 @@ impl From<String> for Identifier {
 }
 
 #[derive(Clone, Debug)]
+pub struct RecordFieldType {
+    pub name: Meta<Identifier>,
+    pub ty: Meta<TypeExpr>,
+}
+
+#[derive(Clone, Debug)]
 pub struct RecordType {
-    pub fields: Meta<Vec<(Meta<Identifier>, Meta<TypeExpr>)>>,
+    pub fields: Meta<Vec<Meta<RecordFieldType>>>,
 }
 
 #[derive(Clone, Debug)]

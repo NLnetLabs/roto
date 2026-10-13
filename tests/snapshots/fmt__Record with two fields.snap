@@ -1,0 +1,8 @@
+---
+source: tests/fmt.rs
+expression: formatted
+---
+record Foo {
+    x: i32,
+    y: i32,
+}
