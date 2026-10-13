@@ -1,6 +1,6 @@
 use super::{eval::Memory, value::IrValue};
 use crate::{
-    RotoString, Runtime, file_tree::Load, library, pipeline::LoweredToLir,
+    RotoString, Runtime, library, load::Load, pipeline::LoweredToLir,
     runtime::OptCtx, src,
 };
 

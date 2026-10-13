@@ -11,9 +11,10 @@ use crate::{
         self, Module, TypedFunc,
         check::{FunctionRetrievalError, RotoFunc},
     },
-    file_tree::{ReadError, SourceFile},
     label::LabelStore,
-    lir, mir,
+    lir,
+    load::{LoadError, SourceFile},
+    mir,
     module::{ModuleTree, Parsed},
     parser::{
         ParseError,
@@ -47,7 +48,7 @@ use log::info;
 #[derive(Debug)]
 pub(crate) enum RotoError {
     DepsNotFound(Vec<String>),
-    Read(ReadError),
+    Read(LoadError),
     Parse(ParseError),
     Type(TypeError),
     TestsFailed(),
@@ -70,8 +71,8 @@ pub struct RotoReport {
     pub spans: Spans,
 }
 
-impl From<ReadError> for RotoReport {
-    fn from(value: ReadError) -> Self {
+impl From<LoadError> for RotoReport {
+    fn from(value: LoadError) -> Self {
         RotoReport {
             files: Vec::new(),
             errors: vec![RotoError::Read(value)],
@@ -110,10 +111,10 @@ pub struct LoweredToLir<'r, Ctx: OptCtx> {
     type_info: TypeInfo,
 }
 
-/// The final compiled package of script.
+/// The final compiled package of a script.
 ///
-/// Functions can be extracted from this package using [`Package::get_function`].
-pub struct Package<Ctx: OptCtx> {
+/// Functions can be extracted from this package using [`Blob::get_function`].
+pub struct Blob<Ctx: OptCtx> {
     module: Module<Ctx>,
 }
 
@@ -151,7 +152,7 @@ impl RotoReport {
                         write!(f, "Could not find dependency: `{dep}`")?;
                     }
                 }
-                RotoError::Read(ReadError { path, err }) => {
+                RotoError::Read(LoadError { path, err }) => {
                     write!(f, "Could not read file `{path}`: {err}")?;
                 }
                 RotoError::Parse(error) => {
@@ -276,7 +277,11 @@ impl std::error::Error for RotoReport {}
 #[cfg(all(test, not(miri)))]
 macro_rules! src {
     ($code:expr) => {
-        $crate::FileTree::test_file(file!(), $code, line!() as usize - 1)
+        $crate::load::FileTree::test_file(
+            file!(),
+            $code,
+            line!() as usize - 1,
+        )
     };
 }
 
@@ -286,7 +291,7 @@ pub(crate) use src;
 #[cfg(all(test, not(miri)))]
 macro_rules! source_file {
     ($module_name:literal, $code:literal) => {
-        $crate::SourceFile {
+        $crate::load::SourceFile {
             name: file!().into(),
             module_name: $module_name.into(),
             contents: $code.into(),
@@ -445,7 +450,7 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
         )
     }
 
-    pub fn codegen(self) -> Package<Ctx> {
+    pub fn codegen(self) -> Blob<Ctx> {
         let module = codegen::codegen(
             self.runtime,
             self.main,
@@ -455,14 +460,14 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
             self.label_store,
             self.type_info,
         );
-        Package { module }
+        Blob { module }
     }
 
     #[cfg(test)]
     pub(crate) fn codegen_with_memory_provider(
         self,
         memory_provider: Box<dyn cranelift_jit::JITMemoryProvider + Send>,
-    ) -> Package<Ctx> {
+    ) -> Blob<Ctx> {
         let module = codegen::codegen_with_memory_provider(
             self.runtime,
             self.main,
@@ -473,12 +478,12 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
             self.type_info,
             memory_provider,
         );
-        Package { module }
+        Blob { module }
     }
 }
 
-impl<Ctx: OptCtx> Package<Ctx> {
-    /// Return an iterator with all the tests in this [`Package`].
+impl<Ctx: OptCtx> Blob<Ctx> {
+    /// Return an iterator with all the tests in this [`Blob`].
     pub fn get_tests(
         &mut self,
     ) -> impl Iterator<Item = codegen::testing::TestCase<Ctx>> + use<'_, Ctx>
@@ -486,7 +491,7 @@ impl<Ctx: OptCtx> Package<Ctx> {
         codegen::testing::get_tests(&mut self.module)
     }
 
-    /// Get a function from this [`Package`].
+    /// Get a function from this [`Blob`].
     pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,
@@ -495,16 +500,16 @@ impl<Ctx: OptCtx> Package<Ctx> {
     }
 }
 
-impl Package<NoCtx> {
-    /// Run all tests in this [`Package`] without context.
+impl Blob<NoCtx> {
+    /// Run all tests in this [`Blob`] without context.
     #[allow(clippy::result_unit_err)]
     pub fn run_tests(&mut self) -> Result<(), ()> {
         codegen::testing::run_tests(&mut self.module, NoCtx)
     }
 }
 
-impl<C: Context> Package<Ctx<C>> {
-    /// Run all tests in this [`Package`] with context.
+impl<C: Context> Blob<Ctx<C>> {
+    /// Run all tests in this [`Blob`] with context.
     #[allow(clippy::result_unit_err)]
     pub fn run_tests(&mut self, ctx: C) -> Result<(), ()> {
         codegen::testing::run_tests(&mut self.module, Ctx(ctx))

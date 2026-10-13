@@ -10,12 +10,12 @@ mod ast;
 mod cli;
 mod codegen;
 pub mod deps;
-mod file_tree;
 #[cfg(all(test, not(miri)))]
 mod file_tree_tests;
 mod ir_printer;
 mod label;
 mod lir;
+pub mod load;
 mod mir;
 mod module;
 pub(crate) mod parser;
@@ -34,10 +34,8 @@ pub(crate) use pipeline::{source_file, src};
 use crate::ast::{Declaration, Identifier};
 pub use crate::value::List;
 pub use codegen::{TypedFunc, check::RotoFunc};
-pub use file_tree::Load;
-pub use file_tree::{FileSpec, FileTree, SourceFile};
 pub(crate) use pipeline::RotoError;
-pub use pipeline::{Package, RotoReport};
+pub use pipeline::{Blob, RotoReport};
 pub use roto_macros::{
     Context, roto_function, roto_method, roto_static_method,
 };

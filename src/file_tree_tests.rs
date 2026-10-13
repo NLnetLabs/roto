@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::file_tree::{FileTree, SourceFile};
+use crate::load::{FileTree, SourceFile};
 
 #[test]
 fn source_file_try_read_empty_file() {

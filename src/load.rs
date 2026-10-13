@@ -1,3 +1,5 @@
+//! Loading Roto scripts to be compiled.
+
 use std::{collections::HashMap, path::Path};
 
 use crate::{
@@ -7,13 +9,17 @@ use crate::{
     runtime::OptCtx,
 };
 
+/// Error for when loading source code failed.
 #[derive(Debug)]
-pub struct ReadError {
+pub struct LoadError {
+    /// The file path that is associated with this error.
     pub path: String,
+
+    /// The underlying IO error.
     pub err: std::io::Error,
 }
 
-impl ReadError {
+impl LoadError {
     fn new(path: &Path, err: std::io::Error) -> Self {
         Self {
             path: path.to_string_lossy().into(),
@@ -28,27 +34,28 @@ impl ReadError {
 /// read.
 pub trait Load {
     /// Load the [`Package`].
-    fn load(self) -> Result<Package, ReadError>;
+    fn load(self) -> Result<Package, LoadError>;
 }
 
 impl Load for &str {
-    fn load(self) -> Result<Package, ReadError> {
+    fn load(self) -> Result<Package, LoadError> {
         FileTree::read(self)?.load()
     }
 }
 
 impl Load for &Path {
-    fn load(self) -> Result<Package, ReadError> {
+    fn load(self) -> Result<Package, LoadError> {
         FileTree::read(self)?.load()
     }
 }
 
 impl Load for FileTree {
-    fn load(self) -> Result<Package, ReadError> {
+    fn load(self) -> Result<Package, LoadError> {
         Ok(Package::new(&self.files[0].module_name.clone(), self))
     }
 }
 
+/// A definition of a Roto package, ready to be compiled.
 #[derive(Clone)]
 pub struct Package {
     pub(crate) name: String,
@@ -138,8 +145,8 @@ impl SourceFile {
     }
 
     /// Read a [`Path`] into a [`SourceFile`].
-    pub fn read(path: &Path) -> Result<Self, ReadError> {
-        Self::read_internal(path).map_err(|e| ReadError::new(path, e))
+    pub fn read(path: &Path) -> Result<Self, LoadError> {
+        Self::read_internal(path).map_err(|e| LoadError::new(path, e))
     }
 
     fn read_internal(path: &Path) -> Result<Self, std::io::Error> {
@@ -199,7 +206,7 @@ impl FileTree {
     ///
     /// If the path refers to a file, only that file will be read. If the path
     /// instead refers to a directory, that directory will be read recursively.
-    pub fn read(path: impl AsRef<Path>) -> Result<Self, ReadError> {
+    pub fn read(path: impl AsRef<Path>) -> Result<Self, LoadError> {
         let path = path.as_ref();
         if path.metadata().is_ok_and(|t| t.file_type().is_dir()) {
             Self::directory(path)
@@ -209,7 +216,7 @@ impl FileTree {
     }
 
     /// Read a single file script
-    pub fn single_file(path: impl AsRef<Path>) -> Result<Self, ReadError> {
+    pub fn single_file(path: impl AsRef<Path>) -> Result<Self, LoadError> {
         let mut path = path.as_ref().to_path_buf();
         if path.extension().is_none_or(|e| e != "roto") {
             path.add_extension("roto");
@@ -280,7 +287,7 @@ impl FileTree {
     }
 
     /// A Roto script defined by a directory
-    pub fn directory(root: &Path) -> Result<FileTree, ReadError> {
+    pub fn directory(root: &Path) -> Result<FileTree, LoadError> {
         let pkg_file = SourceFile::read(&root.join("pkg.roto"))?;
         assert_eq!(pkg_file.module_name, "pkg");
         let mut tree = Self {
@@ -294,14 +301,14 @@ impl FileTree {
         &mut self,
         parent_id: usize,
         path: &Path,
-    ) -> Result<(), ReadError> {
+    ) -> Result<(), LoadError> {
         for entry in
-            std::fs::read_dir(path).map_err(|e| ReadError::new(path, e))?
+            std::fs::read_dir(path).map_err(|e| LoadError::new(path, e))?
         {
-            let entry = entry.map_err(|e| ReadError::new(path, e))?;
+            let entry = entry.map_err(|e| LoadError::new(path, e))?;
             let path = entry.path();
             let file_type =
-                entry.file_type().map_err(|e| ReadError::new(&path, e))?;
+                entry.file_type().map_err(|e| LoadError::new(&path, e))?;
 
             if file_type.is_dir() {
                 self.process_subdir(parent_id, &path)?;
@@ -315,14 +322,14 @@ impl FileTree {
             let ident = path
                 .file_stem()
                 .ok_or_else(|| {
-                    ReadError::new(
+                    LoadError::new(
                         &path,
                         std::io::Error::other("invalid path"),
                     )
                 })?
                 .to_str()
                 .ok_or_else(|| {
-                    ReadError::new(
+                    LoadError::new(
                         &path,
                         std::io::Error::other(
                             "file name is not a valid Roto identifier",
@@ -348,7 +355,7 @@ impl FileTree {
         &mut self,
         parent_id: usize,
         path: &Path,
-    ) -> Result<(), ReadError> {
+    ) -> Result<(), LoadError> {
         let file_path = path.join("mod.roto");
 
         if !file_path.exists() {

@@ -7,10 +7,9 @@ use std::{
 };
 
 use crate::{
-    Context, FileTree, List, NoCtx, Runtime,
-    file_tree::FileSpec,
-    library,
-    pipeline::Package,
+    Context, List, NoCtx, Runtime, library,
+    load::{FileSpec, FileTree},
+    pipeline::Blob,
     runtime::OptCtx,
     source_file, src,
     value::{RotoString, Val, Verdict},
@@ -18,7 +17,7 @@ use crate::{
 use inetnum::{addr::Prefix, asn::Asn};
 
 #[track_caller]
-fn compile(f: FileTree) -> Package<NoCtx> {
+fn compile(f: FileTree) -> Blob<NoCtx> {
     let runtime = Runtime::new();
     compile_with_runtime(f, runtime)
 }
@@ -27,7 +26,7 @@ fn compile(f: FileTree) -> Package<NoCtx> {
 fn compile_with_runtime<Ctx: OptCtx>(
     f: FileTree,
     runtime: Runtime<Ctx>,
-) -> Package<Ctx> {
+) -> Blob<Ctx> {
     #[cfg(feature = "logger")]
     let _ = env_logger::try_init();
 
@@ -248,7 +247,7 @@ mod far_jit_memory {
 /// Exercises the Roto compilation path that originally exposed
 /// out-of-range x86_64 symbol-address relocations in Cranelift's JIT.
 fn far_jit_data_address() {
-    use crate::file_tree::Load;
+    use crate::load::Load;
     let source = src!(
         r#"
         fn main() -> String {

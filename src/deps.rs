@@ -8,9 +8,9 @@ use std::{
 };
 
 use crate::{
-    FileTree, RotoError, RotoReport,
+    RotoError, RotoReport,
     ast::Identifier,
-    file_tree::{Load, Package, ReadError},
+    load::{FileTree, Load, LoadError, Package},
     module::Parsed,
     parser::meta::Spans,
 };
@@ -105,7 +105,8 @@ impl Clone for BoxDepSource {
 
 /// A source of Roto dependencies.
 ///
-/// This can be added to a runtime with [`Runtime::set_dependency_source`].
+/// This can be added to a runtime with
+/// [`Runtime::set_dependency_source`](crate::Runtime::set_dependency_source).
 ///
 /// You can implement this yourself or use one of the provided implementors
 /// such as [`Directory`] and [`Map`].
@@ -114,7 +115,7 @@ pub trait DepSource {
     ///
     /// The dependency is requested by name. If this source cannot provide
     /// the dependency, it should return `None`.
-    fn provide(&self, dep: &str) -> Option<Result<Package, ReadError>>;
+    fn provide(&self, dep: &str) -> Option<Result<Package, LoadError>>;
 
     /// Clone it self to a boxed version of itself.
     ///
@@ -146,7 +147,7 @@ impl DepSource for Directory {
         Box::new(self.clone())
     }
 
-    fn provide(&self, dep: &str) -> Option<Result<Package, ReadError>> {
+    fn provide(&self, dep: &str) -> Option<Result<Package, LoadError>> {
         let path = self.path.join(dep);
         if !path.exists() && !path.with_extension("roto").exists() {
             return None;
@@ -194,7 +195,7 @@ impl Map {
 }
 
 impl DepSource for Map {
-    fn provide(&self, dep: &str) -> Option<Result<Package, ReadError>> {
+    fn provide(&self, dep: &str) -> Option<Result<Package, LoadError>> {
         self.map.get(dep).map(|p| Ok(p.clone()))
     }
 
@@ -203,10 +204,10 @@ impl DepSource for Map {
     }
 }
 
-impl<F: Clone + Fn(&str) -> Option<Result<Package, ReadError>> + 'static>
+impl<F: Clone + Fn(&str) -> Option<Result<Package, LoadError>> + 'static>
     DepSource for F
 {
-    fn provide(&self, dep: &str) -> Option<Result<Package, ReadError>> {
+    fn provide(&self, dep: &str) -> Option<Result<Package, LoadError>> {
         self(dep)
     }
 

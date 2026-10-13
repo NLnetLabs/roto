@@ -164,7 +164,7 @@ pub struct Module<C: OptCtx> {
 /// A function extracted from Roto
 ///
 /// A [`TypedFunc`] can be retrieved from a compiled script using
-/// [`Package::get_function`](crate::Package::get_function).
+/// [`Blob::get_function`](crate::Blob::get_function).
 ///
 /// The function can be called with one of the [`TypedFunc::call`] functions.
 #[derive(Clone)]
@@ -389,6 +389,7 @@ pub fn codegen<Ctx: OptCtx>(
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
     main: Identifier,
