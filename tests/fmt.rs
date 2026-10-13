@@ -5,6 +5,7 @@ use pretty_assertions::assert_eq;
 use roto::fmt::fmt_str;
 
 #[test]
+#[cfg(not(miri))]
 fn fmt_tests() {
     let s = std::fs::read_to_string("tests/fmt_tests.roto").unwrap();
     let mut s = &*s;
@@ -26,6 +27,7 @@ fn fmt_tests() {
 }
 
 #[test]
+#[cfg(not(miri))]
 fn examples_idempotent() {
     run_on_all_roto_files(Path::new("examples"), &|path| {
         let s = std::fs::read_to_string(path).unwrap();
