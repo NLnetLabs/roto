@@ -29,7 +29,6 @@ pub mod value;
 mod test_eval;
 
 use crate::{
-    RotoString,
     ast::Identifier,
     label::LabelRef,
     runtime::{self, layout::Layout},
@@ -37,6 +36,7 @@ use crate::{
         self,
         scope::{ResolvedName, ScopeRef},
     },
+    value::RotoString,
     value::{CloneFn, DropFn, EqFn},
 };
 #[cfg(test)]

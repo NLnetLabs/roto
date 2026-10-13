@@ -3,7 +3,7 @@ use std::{path::PathBuf, process::ExitCode};
 use clap::{Parser, Subcommand};
 
 use crate::{
-    RotoError, RotoReport, Runtime, runtime::OptCtx,
+    RotoError, RotoReport, Runtime, runtime::context::OptCtx,
     tools::print::print_highlighted,
 };
 

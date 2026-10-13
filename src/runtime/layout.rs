@@ -86,20 +86,6 @@ impl Layout {
         let size = size.next_multiple_of(align);
         Self { size, align }
     }
-
-    pub fn concat(iter: impl IntoIterator<Item = Self>) -> Self {
-        let mut builder = LayoutBuilder::new();
-        for layout in iter {
-            builder.add(&layout);
-        }
-        builder.finish()
-    }
-
-    pub fn offset_by(&self, n: usize) -> usize {
-        let mut builder = LayoutBuilder::new();
-        builder.add(&Layout::new(n, 1));
-        builder.add(self)
-    }
 }
 
 impl Default for LayoutBuilder {

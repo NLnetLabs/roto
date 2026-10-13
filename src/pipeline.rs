@@ -21,7 +21,9 @@ use crate::{
         meta::{Span, Spans},
     },
     runtime::{
-        Ctx, NoCtx, OptCtx, Runtime, RuntimeFunctionRef, context::Context,
+        Runtime, RuntimeFunctionRef,
+        context::Context,
+        context::{Ctx, NoCtx, OptCtx},
     },
     typechecker::{
         error::{Level, TypeError},

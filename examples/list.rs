@@ -1,6 +1,6 @@
 use std::process::ExitCode;
 
-use roto::{List, Runtime};
+use roto::{Runtime, value::List};
 
 fn main() -> ExitCode {
     #[cfg(feature = "logger")]

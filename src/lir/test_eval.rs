@@ -1,7 +1,7 @@
 use super::{eval::Memory, value::IrValue};
 use crate::{
-    RotoString, Runtime, library, load::Load, pipeline::LoweredToLir,
-    runtime::OptCtx, src,
+    Runtime, library, load::Load, pipeline::LoweredToLir,
+    runtime::context::OptCtx, src, value::RotoString,
 };
 
 #[track_caller]

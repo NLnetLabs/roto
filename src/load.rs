@@ -6,7 +6,7 @@ use crate::{
     RotoError, RotoReport, Runtime,
     deps::{self, DepGraph},
     parser::meta::Spans,
-    runtime::OptCtx,
+    runtime::context::OptCtx,
 };
 
 /// Error for when loading source code failed.

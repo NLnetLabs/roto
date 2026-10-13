@@ -1,6 +1,12 @@
-//! Dependency management for Roto scripts
+//! Dependency management for Roto scripts.
 //!
-//! We're currently not taking versions of dependencies into account.
+//! Dependencies are provided by a [`DepSource`], which takes a name of
+//! a dependency and then returns the corresponding [`Package`]. When a
+//! [`Package`] is loaded, its dependencies are then in turn also requested
+//! from the [`DepSource`].
+//!
+//! A [`DepSource`] can be set on a runtime with
+//! [`Runtime::set_dependency_source`](crate::Runtime::set_dependency_source).
 
 use std::{
     collections::{HashMap, VecDeque, hash_map::Entry},
@@ -167,8 +173,7 @@ pub struct Map {
 
 /// A dependency with this name already exists in this map.
 #[derive(Debug)]
-#[allow(dead_code)]
-pub struct AlreadyExistsError(String);
+pub struct AlreadyExistsError(pub String);
 
 impl Map {
     /// Create a new [`Map`].

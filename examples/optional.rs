@@ -1,4 +1,7 @@
-use roto::{RotoString, Runtime, Val, library};
+use roto::{
+    Runtime, library,
+    value::{RotoString, Val},
+};
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]

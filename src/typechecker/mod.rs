@@ -134,7 +134,7 @@ pub mod types;
 mod unionfind;
 mod value_cycle;
 
-pub use expr::{PathValue, ResolvedPath};
+pub(crate) use expr::{PathValue, ResolvedPath};
 use info::TypeInfo;
 
 #[derive(Clone)]

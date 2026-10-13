@@ -48,7 +48,7 @@ impl Context {
 }
 
 #[derive(Clone)]
-pub enum ResolvedPath {
+pub(crate) enum ResolvedPath {
     /// The path referenced a free function
     Function {
         name: ResolvedName,
@@ -66,12 +66,6 @@ pub enum ResolvedPath {
     ///
     /// A value can be a local variable, constant or context.
     Value(PathValue),
-    /// The path referenced a static method
-    StaticMethod {
-        name: ResolvedName,
-        definition: FunctionDefinition,
-        signature: Signature,
-    },
     /// The path referenced an enum constructor
     EnumConstructor {
         ty: TypeDefinition,
@@ -1479,11 +1473,6 @@ impl TypeChecker {
                 definition,
                 signature,
             } => (name, definition, signature, "function"),
-            ResolvedPath::StaticMethod {
-                name,
-                definition,
-                signature,
-            } => (name, definition, signature, "static method"),
             ResolvedPath::Method {
                 value: _,
                 definition,

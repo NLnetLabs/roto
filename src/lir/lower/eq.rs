@@ -3,7 +3,6 @@ use std::{any::TypeId, collections::HashSet, net::IpAddr};
 use inetnum::addr::Prefix;
 
 use crate::{
-    RotoString,
     ast::Identifier,
     label::LabelRef,
     lir::{
@@ -16,6 +15,7 @@ use crate::{
         scope::{ScopeRef, ScopeType},
         types::Primitive,
     },
+    value::RotoString,
     value::{EqFn, ErasedList},
 };
 

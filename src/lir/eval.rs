@@ -8,7 +8,6 @@
 use log::trace;
 
 use crate::{
-    RotoString,
     ast::Identifier,
     lir::{
         FloatCmp, Instruction, IntCmp, Item, ItemKind, Operand, ValueOrSlot,
@@ -16,6 +15,7 @@ use crate::{
     },
     runtime::{ConstantValue, Rt, RuntimeFunctionRef},
     typechecker::{scope::ResolvedName, types::Primitive},
+    value::RotoString,
 };
 use std::collections::HashMap;
 

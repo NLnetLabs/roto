@@ -2,7 +2,11 @@ use std::error::Error;
 
 use inetnum::addr::Prefix;
 use inetnum::asn::Asn;
-use roto::{NoCtx, Runtime, TypedFunc, Val, Verdict, library};
+use roto::{
+    Runtime, TypedFunc, library,
+    runtime::context::NoCtx,
+    value::{Val, Verdict},
+};
 use routecore::bgp::aspath::{Hop, HopPath};
 use routecore::bgp::nlri::afisafi::IsPrefix;
 use routecore::bgp::workshop::route::RouteWorkshop;

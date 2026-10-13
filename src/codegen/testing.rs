@@ -1,5 +1,5 @@
 use super::{Module, TypedFunc};
-use crate::{runtime::OptCtx, value::Verdict};
+use crate::{runtime::context::OptCtx, value::Verdict};
 
 pub struct TestCase<Ctx: 'static> {
     name: String,

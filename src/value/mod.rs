@@ -1,12 +1,11 @@
-//! Type information on Rust types
+//! Types that can be passed to Roto.
 //!
-//! The [`TypeRegistry`] holds information on Rust types that we have seen,
-//! so we can match them to Roto types and use the names in error messages.
+//! Any type that can be passed to Roto must implement the [`Value`] trait.
+//! This trait is implemented by the built-in types ([`bool`], [`u8`], etc.),
+//! [`RotoString`], [`Option`], [`Result`], [`Verdict`] and [`List`].
 //!
-//! The registry should initially hold all registered types and primitives.
-//! On demand, we add more complex types via the [`Value`] trait, which
-//! is implemented for types that have a Roto equivalent. This is necessary
-//! for mapping a complex Rust type to Roto types.
+//! Additionally, any custom registered type can be wrapped in [`Val`] to be
+//! passed to a Roto script.
 
 use std::{
     any::{TypeId, type_name},
@@ -23,19 +22,20 @@ use crate::runtime::layout::Layout;
 #[cfg(test)]
 use crate::lir::{IrValue, Memory};
 
-pub use dyn_val::DynVal;
+pub(crate) use dyn_val::DynVal;
 pub(crate) use list::ErasedList;
 pub use list::boundary::List;
-pub use option::RotoOption;
-pub use result::RotoResult;
-pub use string::{RotoString, StringBytes, StringChars, StringLines};
-pub use string_buf::StringBuf;
+pub(crate) use option::RotoOption;
+pub(crate) use result::RotoResult;
+pub use string::RotoString;
+pub(crate) use string::{StringBytes, StringChars, StringLines};
+pub(crate) use string_buf::StringBuf;
 pub use val::Val;
 pub use verdict::Verdict;
-pub use vtable::{CloneFn, DropFn, EqFn, VTable};
+pub(crate) use vtable::{CloneFn, DropFn, EqFn, VTable};
 
 mod dyn_val;
-pub mod list;
+pub(crate) mod list;
 mod option;
 mod result;
 mod string;
@@ -45,7 +45,7 @@ mod verdict;
 mod vtable;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TypeDescription {
+pub(crate) enum TypeDescription {
     /// Some type that we don't know how to decompose
     Leaf,
 
@@ -66,7 +66,7 @@ pub enum TypeDescription {
 }
 
 #[derive(Clone)]
-pub struct Ty {
+pub(crate) struct Ty {
     /// The name of the type in Rust, mostly for diagnostic purposes
     pub rust_name: &'static str,
 
@@ -96,7 +96,7 @@ static GLOBAL_TYPE_REGISTRY: LazyLock<Mutex<TypeRegistry>> =
 
 /// A map from [`TypeId`] to a [`Ty`], which is a description of the type
 #[derive(Clone, Default)]
-pub struct TypeRegistry {
+pub(crate) struct TypeRegistry {
     map: HashMap<TypeId, &'static Ty>,
 }
 
@@ -149,6 +149,7 @@ pub trait Value: Sized + 'static {
     type Transformed: Clone + Send + Sync;
 
     /// The type that this type should be converted into when passed to Roto
+    #[allow(private_bounds)]
     type AsParam: Param<Self::Transformed>;
 
     /// Transform this value into a value that Roto understands
@@ -169,6 +170,7 @@ pub trait Value: Sized + 'static {
 
     /// Attempt to convert an IR value into `Self`
     #[cfg(test)]
+    #[allow(private_interfaces)]
     fn from_ir_value(
         mem: &mut Memory,
         value: IrValue,
@@ -179,6 +181,7 @@ pub trait Value: Sized + 'static {
     /// Put information about this type into the global type registry
     ///
     /// The information is also returned for direct use.
+    #[allow(private_interfaces)]
     fn resolve() -> Ty;
 
     /// Return the name of this type.
@@ -188,9 +191,9 @@ pub trait Value: Sized + 'static {
 }
 
 #[cfg(test)]
-pub struct IrValueDoesNotMatchType;
+pub(crate) struct IrValueDoesNotMatchType;
 
-pub trait Param<T>: Sized {
+pub(crate) trait Param<T>: Sized {
     fn as_param(value: &mut T) -> Self;
 
     fn to_value(self) -> T;
@@ -246,6 +249,7 @@ where
         }
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         let t = A::resolve().type_id;
         let e = R::resolve().type_id;
@@ -278,6 +282,7 @@ where
         }
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         let t = T::resolve().type_id;
         let e = E::resolve().type_id;
@@ -306,6 +311,7 @@ impl<T: Value> Value for Option<T> {
         }
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         let t = T::resolve().type_id;
 
@@ -348,6 +354,7 @@ impl<T: 'static + Clone + PartialEq + Send + Sync> Value for Val<T> {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         let t = TypeId::of::<T>();
 
@@ -373,6 +380,7 @@ impl Value for IpAddr {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -391,6 +399,7 @@ impl Value for Prefix {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -409,6 +418,7 @@ impl Value for RotoString {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -427,6 +437,7 @@ impl Value for StringBytes {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -445,6 +456,7 @@ impl Value for StringChars {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -463,6 +475,7 @@ impl Value for StringLines {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -499,6 +512,7 @@ impl<T: Value> Value for List<T> {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         let t = T::resolve().type_id;
 
@@ -521,6 +535,7 @@ impl Value for VTable {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -599,6 +614,7 @@ impl Value for () {
         transformed
     }
 
+    #[allow(private_interfaces)]
     fn resolve() -> Ty {
         TypeRegistry::store::<Self>(TypeDescription::Leaf)
     }
@@ -659,6 +675,7 @@ macro_rules! simple_value {
                 transformed
             }
 
+            #[allow(private_interfaces)]
             fn resolve() -> Ty {
                 TypeRegistry::store::<Self>(TypeDescription::Leaf)
             }

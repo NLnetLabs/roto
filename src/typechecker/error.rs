@@ -600,9 +600,6 @@ fn describe_path(p: &ResolvedPath) -> (&str, Identifier) {
                 ("value", path_value.name.ident)
             }
         }
-        ResolvedPath::StaticMethod { name, .. } => {
-            ("static method", name.ident)
-        }
         ResolvedPath::EnumConstructor { variant, .. } => {
             ("enum constructor", variant.name)
         }

@@ -521,10 +521,6 @@ impl Default for ScopeGraph {
 }
 
 impl ScopeGraph {
-    pub fn num_of_scopes(&self) -> usize {
-        self.scopes.len()
-    }
-
     pub fn module_name(&self, m: &ModuleScope) -> String {
         let mut idents = Vec::new();
 

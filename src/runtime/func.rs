@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 use std::sync::Arc;
 
-use crate::Value;
+use crate::value::Value;
 
 #[cfg(test)]
 use crate::lir::{IrValue, Memory};

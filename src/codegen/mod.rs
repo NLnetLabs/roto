@@ -18,8 +18,8 @@ use crate::{
         value::IrType,
     },
     runtime::{
-        ConstantValue, Ctx, NoCtx, OptCtx, RuntimeConstant,
-        RuntimeFunctionRef, context::Context,
+        ConstantValue, RuntimeConstant, RuntimeFunctionRef,
+        context::{Context, Ctx, NoCtx, OptCtx},
     },
     typechecker::{
         info::TypeInfo,

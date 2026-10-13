@@ -7,12 +7,12 @@ use std::{
 };
 
 use crate::{
-    Context, List, NoCtx, Runtime, library,
+    Context, Runtime, library,
     load::{FileSpec, FileTree},
     pipeline::Blob,
-    runtime::OptCtx,
+    runtime::context::{NoCtx, OptCtx},
     source_file, src,
-    value::{RotoString, Val, Verdict},
+    value::{List, RotoString, Val, Verdict},
 };
 use inetnum::{addr::Prefix, asn::Asn};
 

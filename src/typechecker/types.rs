@@ -524,27 +524,6 @@ impl Signature {
             return_type: self.return_type.substitute_many(&subs),
         }
     }
-
-    pub fn substitute(&self, new_types: &[Type]) -> Self {
-        assert_eq!(self.types.len(), new_types.len());
-
-        let subs: Vec<_> = self
-            .types
-            .iter()
-            .zip(new_types)
-            .map(|(a, b)| (a.clone(), b.clone()))
-            .collect();
-
-        Self {
-            types: new_types.into(),
-            parameter_types: self
-                .parameter_types
-                .iter()
-                .map(|t| t.substitute_many(&subs))
-                .collect(),
-            return_type: self.return_type.substitute_many(&subs),
-        }
-    }
 }
 
 impl Type {
@@ -598,7 +577,7 @@ impl Primitive {
             Bool => Layout::new(1, 1),
             Char => Layout::of::<char>(),
             Asn => Layout::new(4, 4),
-            String => Layout::of::<crate::RotoString>(),
+            String => Layout::of::<crate::value::RotoString>(),
             IpAddr => Layout::of::<std::net::IpAddr>(),
             Prefix => Layout::of::<inetnum::addr::Prefix>(),
         }
@@ -610,14 +589,14 @@ impl Primitive {
 /// This is used to extract the function pointer and any other information
 /// required to generate the code to call this function.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum FunctionDefinition {
+pub(crate) enum FunctionDefinition {
     Runtime(RuntimeFunctionRef),
     Roto,
 }
 
 /// A function that can be called from Roto
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Function {
+pub(crate) struct Function {
     /// The type signature of this function
     pub signature: Signature,
 
@@ -629,22 +608,6 @@ pub struct Function {
 
     /// The source of this function
     pub definition: FunctionDefinition,
-}
-
-impl Function {
-    pub fn new(
-        name: ResolvedName,
-        vars: &[Identifier],
-        signature: Signature,
-        definition: FunctionDefinition,
-    ) -> Self {
-        Self {
-            name,
-            vars: vars.to_vec(),
-            signature,
-            definition,
-        }
-    }
 }
 
 /// The list of built-in Roto types

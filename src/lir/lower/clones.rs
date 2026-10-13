@@ -1,7 +1,6 @@
 use std::{any::TypeId, collections::HashSet};
 
 use crate::{
-    RotoString,
     ast::Identifier,
     ice,
     lir::{
@@ -18,6 +17,7 @@ use crate::{
         scope::{ScopeRef, ScopeType},
         types::Primitive,
     },
+    value::RotoString,
     value::{CloneFn, ErasedList},
 };
 

@@ -24,7 +24,7 @@ use super::{
 
 /// The output of the type checker that is used for lowering
 #[derive(Clone, Default)]
-pub struct TypeInfo {
+pub(crate) struct TypeInfo {
     /// The unionfind structure that maps type variables to types
     pub(super) unionfind: UnionFind,
 

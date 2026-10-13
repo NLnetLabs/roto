@@ -2,14 +2,13 @@ use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
 use crate::{
-    RotoString,
     typechecker::{
         info::TypeInfo,
         scope::{ResolvedName, ScopeRef},
         scoped_display::TypeDisplay,
         types::{Type, TypeDefinition},
     },
-    value::{TypeDescription, TypeRegistry, Value},
+    value::{RotoString, TypeDescription, TypeRegistry, Value},
 };
 use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
@@ -261,7 +260,7 @@ fn check_roto_type(
     }
 }
 
-/// Parameters of a Roto function
+/// A function that can be registered in a runtime.
 ///
 /// This trait allows for checking the types against Roto types and converting
 /// the values into values appropriate for Roto.
@@ -288,6 +287,7 @@ pub trait RotoFunc {
     type RotoWithoutReturnPointer;
 
     /// Check whether these parameters match a parameter list from Roto.
+    #[allow(private_interfaces)]
     fn check_args(
         type_info: &mut TypeInfo,
         main_scope: ScopeRef,
@@ -348,6 +348,7 @@ macro_rules! func {
             type RotoWithReturnPointer = extern "C" fn(*mut $r::Transformed, *mut (), $($a::AsParam),*) -> ();
             type RotoWithoutReturnPointer = extern "C" fn(*mut (), $($a::AsParam,)*) -> $r::Transformed;
 
+            #[allow(private_interfaces)]
             fn check_args(
                 type_info: &mut TypeInfo,
                 main_scope: ScopeRef,

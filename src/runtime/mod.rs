@@ -1,15 +1,15 @@
-//! Runtime definition for Roto
+//! Runtime definition for Roto.
 
 mod basic;
 pub mod context;
 mod docs;
-pub mod func;
+pub(crate) mod func;
 mod io;
 pub mod items;
-pub mod layout;
+pub(crate) mod layout;
 
 #[cfg(all(test, not(miri)))]
-pub mod tests;
+mod tests;
 
 #[cfg(feature = "cli")]
 use std::process::ExitCode;
@@ -21,8 +21,12 @@ use std::{
 use crate::{
     ast,
     deps::{BoxDepSource, DepSource},
-    file_tree::Load,
+    load::Load,
     parser::{Parser, meta::Spans},
+    runtime::{
+        context::{Context, Ctx, NoCtx, OptCtx},
+        items::Impl,
+    },
     typechecker::scope::{DeclarationKind, ScopeType},
     value::{
         CloneFn, DropFn, DynVal, EqFn, Ty, TypeDescription, TypeRegistry,
@@ -31,10 +35,9 @@ use crate::{
 use context::ContextDescription;
 use func::FunctionDescription;
 use layout::Layout;
-use sealed::sealed;
 
 use crate::{
-    Context, Impl, Location, Package, RotoReport,
+    Blob, Location, RotoReport,
     ast::Identifier,
     parser::{lexer::Lexer, token::Token},
     runtime::items::{
@@ -96,54 +99,6 @@ impl<Ctx: OptCtx> std::fmt::Debug for Runtime<Ctx> {
     }
 }
 
-/// This trait is _sealed_, meaning that it cannot be implemented by downstream
-/// crates.
-#[sealed]
-pub trait OptCtx: 'static + Clone {
-    type Ctx: Context;
-    fn get_context(&mut self) -> &mut Self::Ctx;
-
-    fn try_to_no_ctx() -> Option<NoCtx>;
-}
-
-/// A type indicating that a context type `T` is being used.
-///
-/// This is one of the two types implementing `OptCtx`.
-#[derive(Clone)]
-pub struct Ctx<T>(pub T);
-
-#[sealed]
-impl<T: Context> OptCtx for Ctx<T> {
-    type Ctx = T;
-
-    fn try_to_no_ctx() -> Option<NoCtx> {
-        None
-    }
-
-    fn get_context(&mut self) -> &mut Self::Ctx {
-        &mut self.0
-    }
-}
-
-/// A type indicating that no context type is being used.
-///
-/// This is one of the two types implementing `OptCtx`.
-#[derive(Clone)]
-pub struct NoCtx;
-
-#[sealed]
-impl OptCtx for NoCtx {
-    type Ctx = Self;
-
-    fn try_to_no_ctx() -> Option<NoCtx> {
-        Some(NoCtx)
-    }
-
-    fn get_context(&mut self) -> &mut Self::Ctx {
-        self
-    }
-}
-
 /// Compiling a script
 impl<Ctx: OptCtx> Runtime<Ctx> {
     /// Check a script for syntax and typechecking errors.
@@ -159,10 +114,7 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
     ///
     /// If the path is a file, then that file will be loaded. If the path is a
     /// directory, the directory will be scanned for modules.
-    pub fn compile(
-        &self,
-        path: impl Load,
-    ) -> Result<Package<Ctx>, RotoReport> {
+    pub fn compile(&self, path: impl Load) -> Result<Blob<Ctx>, RotoReport> {
         let this = path.load()?.resolve(self)?;
         let checked = this.parse()?.typecheck(self)?;
         let pkg = checked.lower_to_mir().lower_to_lir().codegen();
@@ -177,7 +129,7 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
         &self,
         path: impl Load,
         deps: &[&str],
-    ) -> Result<Package<Ctx>, RotoReport> {
+    ) -> Result<Blob<Ctx>, RotoReport> {
         let mut pkg = path.load()?;
 
         for dep in deps {
@@ -275,7 +227,9 @@ impl<C: OptCtx> Runtime<C> {
     /// For example:
     ///
     /// ```rust
-    /// use roto::{Runtime, Constant, Function, Impl, location, Item};
+    /// use roto::runtime::items::{Constant, Function, Impl, Item};
+    /// use roto::runtime::Runtime;
+    /// use roto::location;
     ///
     /// let mut rt = Runtime::new();
     ///
@@ -336,25 +290,10 @@ impl<C: OptCtx> Runtime<C> {
         self.rt.context()
     }
 
-    /// Get the registered types.
-    pub fn types(&self) -> &[RuntimeType] {
-        self.rt.types()
-    }
-
-    /// Get the registered functions.
-    pub fn functions(&self) -> &[RuntimeFunction] {
-        self.rt.functions()
-    }
-
-    /// Get the registered constants.
-    pub fn constants(&self) -> &HashMap<ResolvedName, RuntimeConstant> {
-        self.rt.constants()
-    }
-
     /// Run a CLI based on this runtime.
     #[cfg(feature = "cli")]
     pub fn cli(&self) -> ExitCode {
-        crate::cli(self)
+        crate::cli::cli(self)
     }
 
     /// Try to obtain a `Runtime` that does not have a context.
@@ -393,11 +332,6 @@ impl Rt {
         &self.types
     }
 
-    /// Get the registered functions.
-    pub fn functions(&self) -> &[RuntimeFunction] {
-        &self.functions
-    }
-
     /// Get the registered constants.
     pub fn constants(&self) -> &HashMap<ResolvedName, RuntimeConstant> {
         &self.constants
@@ -405,7 +339,7 @@ impl Rt {
 }
 
 #[derive(Clone, Debug)]
-pub enum Movability {
+pub(crate) enum Movability {
     /// This type is passed by value, only available for built-in types.
     Value,
 
@@ -417,7 +351,7 @@ pub enum Movability {
 }
 
 #[derive(Clone, Debug)]
-pub struct CloneDrop {
+pub(crate) struct CloneDrop {
     pub clone: CloneFn,
     pub drop: DropFn,
 }
@@ -448,7 +382,7 @@ pub(crate) unsafe extern "C" fn extern_eq<T: PartialEq + 'static>(
 }
 
 #[derive(Clone, Debug)]
-pub struct RuntimeType {
+pub(crate) struct RuntimeType {
     /// The name the type can be referenced by from Roto
     name: ResolvedName,
 
@@ -493,7 +427,7 @@ impl RuntimeType {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeFunction {
+pub(crate) struct RuntimeFunction {
     /// Name that the function can be referenced by
     pub(crate) name: ResolvedName,
 
@@ -514,7 +448,7 @@ pub struct RuntimeFunction {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct RuntimeFunctionRef(usize);
+pub(crate) struct RuntimeFunctionRef(usize);
 
 impl std::fmt::Display for RuntimeFunctionRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -522,22 +456,16 @@ impl std::fmt::Display for RuntimeFunctionRef {
     }
 }
 
-impl RuntimeFunction {
-    pub fn get_ref(&self) -> RuntimeFunctionRef {
-        RuntimeFunctionRef(self.id)
-    }
-}
-
 #[derive(Clone, Debug)]
-pub struct RuntimeConstant {
+pub(crate) struct RuntimeConstant {
     pub name: ResolvedName,
-    pub ty: TypeId,
-    pub docstring: String,
+    pub _ty: TypeId,
+    pub _docstring: String,
     pub value: ConstantValue,
 }
 
 #[derive(Clone)]
-pub struct ConstantValue(Arc<dyn Send + Sync + 'static>);
+pub(crate) struct ConstantValue(Arc<dyn Send + Sync + 'static>);
 
 impl std::fmt::Debug for ConstantValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -990,8 +918,8 @@ impl Rt {
             name,
             RuntimeConstant {
                 name,
-                ty: constant.type_id,
-                docstring: constant.doc.clone(),
+                _ty: constant.type_id,
+                _docstring: constant.doc.clone(),
                 value: constant.value.clone(),
             },
         );
@@ -1152,13 +1080,13 @@ impl Default for Runtime<NoCtx> {
     }
 }
 
-pub unsafe extern "C" fn init_string(
-    s: *mut crate::RotoString,
+pub(crate) unsafe extern "C" fn init_string(
+    s: *mut crate::value::RotoString,
     data: *mut u8,
     len: u32,
 ) {
     let slice = unsafe { slice::from_raw_parts(data, len as usize) };
     let str = unsafe { std::str::from_utf8_unchecked(slice) };
-    let arc = crate::RotoString::from(str);
+    let arc = crate::value::RotoString::from(str);
     unsafe { ptr::write(s, arc) };
 }
