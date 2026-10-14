@@ -44,6 +44,7 @@ enum Command {
         #[arg()]
         file: PathBuf,
     },
+    /// Format a Roto file
     Fmt {
         #[arg(long = "check")]
         check: bool,
