@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.13.0
+
+Released 2026-10-15.
+
+### Meta
+
+- To open a PR, you must now check a few boxes to confirm that you're adhering
+  to our code of conduct and LLM policy.
+
+### Language
+
+#### Breaking changes
+
+#### Added
+
+- Added the exponentiation operator `**` for integers and floats. Thanks
+  @sha90w! ([#463](https://codeberg.org/NLnetLabs/roto/pulls/468))
+- Added the `List.set` method for updating values in a list. Thanks, @lazyeye!
+  ([#468](https://codeberg.org/NLnetLabs/roto/pulls/468))
+- There is now limited support for adding dependencies to scripts. Dependencies
+  can be accessed with the `dep` keyword. For instance, to access a package
+  called `http`, you can write `dep.http`. The `pkg` keyword always refers
+  to the current package.
+  ([#469](https://codeberg.org/NLnetLabs/roto/pulls/469))
+
+#### Bug fixes
+
+- Roto no longer panics on x86 when a jump larger than 2 GiB is needed to call
+  a function. Thanks, @glebpom!
+  ([#461](https://codeberg.org/NLnetLabs/roto/pulls/461))
+
+### Crate
+
+#### Breaking changes
+
+- The MSRV is now 1.96.
+- The `Package` type is now called `Blob`.
+  ([#469](https://codeberg.org/NLnetLabs/roto/pulls/469))
+- The API is no longer exposed as a single module, but more structured
+  to make it easier to navigate.
+  ([#469](https://codeberg.org/NLnetLabs/roto/pulls/469))
+
+  - Values passed to scripts now live under the `value` module. For example:
+    `RotoString`, `Val`, `List` and the `Value` trait.
+  - Anything related to context now lives under `runtime::context`.
+  - Registerable items now live under `runtime::items`.
+  - Types related to loading scripts now live under `load`.
+
+#### Added
+
+- Added an experimental formatter. We don't recommend using this in production
+  at this point but please send us feedback on it. This is available as the
+  functions `roto::fmt::fmt_path` and `roto::fmt::fmt_string`. The CLI also
+  has a new `fmt` subcommand.
+  ([#449](https://codeberg.org/NLnetLabs/roto/pulls/449))
+- Dependencies for a script can be added to the compilation with the
+  `Runtime::compile_with_deps` method, provided that a dependency source has
+  been defined.
+  ([#469](https://codeberg.org/NLnetLabs/roto/pulls/469))
+
 ## 0.12.0
 
 Released 2026-08-14.
