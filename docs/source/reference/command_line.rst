@@ -16,6 +16,8 @@ Commands
     Run a script's function. ``main`` by default, but a function name can be provided.
 ``print``
     Print a Roto file with syntax highlighting
+``fmt``
+    Format a Roto file.
 ``help``
     Print this message or the help of the given subcommand(s)
 
