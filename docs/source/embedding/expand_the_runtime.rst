@@ -16,7 +16,8 @@ method ``add_io_functions`` on ``Runtime`` to add the ``print`` function.
     let mut rt = Runtime::new();
     rt.add_io_functions();
 
-However, Roto truly starts shining when you add your own functionality, so that your application becomes scriptable.
+However, Roto truly starts shining when you add your own functionality, so that
+your application becomes scriptable.
 
 We support this via ``Runtime::from_lib`` and ``Runtime::add`` in combination
 with the ``library!`` macro. You construct a library with that macro and then
@@ -37,7 +38,7 @@ compile.
 
     use std::fs::OpenOptions;
     use std::io::Write;
-    use roto::{RotoString, Runtime, roto_function};
+    use roto::{RotoString, Runtime};
 
     let lib = library!{
         /// Print to the log file.
@@ -79,7 +80,8 @@ type and not built in.
 
 .. code-block:: rust
 
-    use roto::{library, Runtime, Val};
+    use roto::{library, Runtime};
+    use roto::value::Val;
 
     #[derive(Clone, Copy, Debug, PartialEq)]
     struct Range {
@@ -108,7 +110,7 @@ Not very useful yet, of course, but let's see it in action anyway:
 
 .. code-block:: rust
 
-    use roto::Val;
+    use roto::value::Val;
 
     let mut pkg = rt.compile("script.roto").unwrap();
     let f = pkg
@@ -238,7 +240,7 @@ then create and register the following type.
 .. code-block:: rust
 
     use std::sync::Arc;
-    use roto::{Context, RotoString};
+    use roto::{Context, value::RotoString};
 
     #[derive(Context)]
     struct Ctx {
@@ -307,11 +309,11 @@ module, so that's how we can then access it from Roto:
 .. code-block:: roto
     :class: test-ignore
 
-    # import the cos function so we can use it directly
+    // import the cos function so we can use it directly
     import math.cos;
 
     fn foo(x: f64) -> f64 {
-        # we haven't imported sin so we have to access it via `math`
+        // we haven't imported sin so we have to access it via `math`
         math.sin(x)
     }
 

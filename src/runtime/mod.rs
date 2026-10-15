@@ -49,6 +49,7 @@ use crate::{
         types,
     },
 };
+pub use func::RegisterableFn;
 
 /// Provides the types and functions that Roto can access via FFI
 ///
