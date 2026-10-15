@@ -1,6 +1,8 @@
 //! Roto is an embedded scripting language for Rust applications that is fast, safe and easy to use.
 //!
-//! Read more about it in the [manual](https://roto.docs.nlnetlabs.nl/).
+//! This is API documentation of the Roto crate, for a more comprehensive
+//! introduction to the language, see the
+//! [manual](https://roto.docs.nlnetlabs.nl/).
 #![doc(
     html_logo_url = "https://codeberg.org/NLnetLabs/roto/raw/branch/main/docs/source/resources/icon.svg"
 )]
@@ -39,7 +41,8 @@ pub use codegen::{TypedFunc, check::RotoFunc};
 pub(crate) use pipeline::RotoError;
 pub use pipeline::{Blob, RotoReport};
 pub use roto_macros::Context;
-pub use runtime::{RegistrationError, Runtime, func::RegisterableFn};
+#[doc(inline)]
+pub use runtime::Runtime;
 
 /// Create a list of items to be registered.
 ///
