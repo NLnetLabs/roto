@@ -67,7 +67,7 @@ extensions = [
     'my_code',
 ]
 
-myst_enable_extensions = ['colon_fence', 'attrs_block']
+myst_enable_extensions = ['colon_fence', 'attrs_block', "deflist"]
 
 test_code_output = "../tests/doctests.json"
 autosectionlabel_prefix_document = True

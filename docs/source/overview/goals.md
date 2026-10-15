@@ -1,12 +1,10 @@
-Goals
-=====
+# Goals
 
 By now, you might like the idea of Roto, but you're not sure whether it is the
 right fit for your project. To help you figure that out, we explain some of the
 design goals and their consequences below.
 
-Easy to learn and use
----------------------
+## Easy to Learn and Use
 
 Experienced programmers should be able to pick it up easily. Since it is a
 new language, we are careful to not make it too surprising for most users.
@@ -17,8 +15,7 @@ programmers might not be familiar with, especially when coming from scripting
 languages. An example of this is that Roto is garbage collected and has no
 ownership concepts like Rust.
 
-Designed to be integrated
--------------------------
+## Designed to be Integrated
 
 Any Rust application should be able to add support for Roto scripts with
 minimal hassle. Roto can be added to a project simply by adding the crate
@@ -28,24 +25,21 @@ and functions to Roto scripts. Roto doesn’t produce its own binaries, but is
 always embedded into some host application. Since the host application decides
 what to expose to the scripts, we do not have an extensive standard library.
 
-Reliable
---------
+## Reliable
 
 We want you to be able to rely on a Roto script once it is compiled. It should
 be possible to use Roto in critical software that needs to be run reliably. To
 achieve this, Roto is statically typed and memory-safe. We also do not want it
 to crash the process.
 
-Good Performance
-----------------
+## Good Performance
 
 We want Roto to be faster than most other embedded scripting languages.
 However, we do not need to compete with other statically typed and compiled
 languages. Roto will be most suited for applications that compile a script once
 and then run that many times.
 
-Non-goals
----------
+## Non-Goals
 
 We also have some things we're not trying to achieve with Roto.
 
@@ -58,8 +52,7 @@ We also have some things we're not trying to achieve with Roto.
   person running the application.
 - Roto is not designed to be picked up as a first programming language.
 
-Conclusion
-----------
+## Conclusion
 
 Roto is probably a good fit for your application if it requires flexible
 configuration or plugins, that need to be executed many times quickly and
