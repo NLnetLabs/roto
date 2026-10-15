@@ -2,17 +2,17 @@
     {
         "src": "overview/hello_world",
         "lang": "roto",
-        "code": "fn main() {\n    print(\"Hello, world!\");\n}",
-        "source": "source/overview/hello_world.rst",
-        "line": 6,
+        "code": "fn main() {\n    print(\"Hello, world!\");\n}\n",
+        "source": "source/overview/hello_world.md",
+        "line": 5,
         "testoutput": "Hello, world!\n",
         "mode": "run"
     },
     {
         "src": "overview/hello_world",
         "lang": "roto",
-        "code": "fn main() {\n    print(5);\n}",
-        "source": "source/overview/hello_world.rst",
+        "code": "fn main() {\n    print(5);\n}\n",
+        "source": "source/overview/hello_world.md",
         "line": 36,
         "testoutput": "",
         "mode": "error"

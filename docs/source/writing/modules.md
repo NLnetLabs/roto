@@ -60,8 +60,6 @@ You can explicitly [`import`](lang_imports) individual items from modules
 into your current file's namespace. If we `import bar.double`, then we can use
 `double` to refer to `bar.double`.
 
-@todo I'm not sure if namespace is the right word here, but it is the same concept as in other languages.
-
 {class="test-ignore"}
 ```roto
 import bar.double;
@@ -79,7 +77,7 @@ differences so you may want to avoid it in larger projects.
 {class="test-ignore"}
 ```roto
 import bar.{double, triple};
-# is identical to
+// is identical to
 import bar.double;
 import bar.triple;
 ```
