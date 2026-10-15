@@ -23,23 +23,23 @@ pub(crate) struct YangValue(Option<String>);
 #[derive(Copy, Clone, Serialize, Deserialize, Hash, PartialEq, Eq, Debug)]
 pub(crate) struct YangNodeId(pub(crate) u16);
 
-#[derive(Debug)]
-pub(crate) struct YangNode {
-    // name: String,
-    ty: YangNodeType,
-    sub_statements: Vec<YangStatement>,
-    child_nodes: HashMap<YangNodeId, YangNode>,
-}
+// #[derive(Debug)]
+// pub(crate) struct YangNode {
+//     // name: String,
+//     ty: YangNodeType,
+//     sub_statements: Vec<YangStatement>,
+//     child_nodes: HashMap<YangNodeId, YangNode>,
+// }
 
 #[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq)]
 pub struct YangNameSpace(Vec<String>);
 
-#[derive(Debug, PartialEq)]
-pub enum YangNodeType {
-    Tree,
-    Value,
-    Attr(YangArgType),
-}
+// #[derive(Debug, PartialEq)]
+// pub enum YangNodeType {
+//     Tree,
+//     Value,
+//     Attr(YangArgType),
+// }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum YangArgType {

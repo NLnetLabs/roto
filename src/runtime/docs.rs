@@ -293,6 +293,9 @@ impl Rt {
                         }
                     }
                 }
+                DeclarationKind::Leaf(_, _) => {
+                    todo!()
+                }
                 DeclarationKind::Type(t) => {
                     let TypeOrStub::Type(ty) = t else { ice!() };
                     let scope = self

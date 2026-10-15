@@ -1316,6 +1316,7 @@ impl TypeChecker {
             }
             DeclarationKind::YangModule(yang_module_declaration) => todo!(),
             DeclarationKind::YangSubModule(ysm) => todo!(),
+            DeclarationKind::Leaf(_, _) => todo!(),
         }
     }
 
@@ -1383,6 +1384,7 @@ impl TypeChecker {
             DeclarationKind::YangSubModule(yang_sub_module_declaration) => {
                 todo!()
             }
+            DeclarationKind::Leaf(_, _) => todo!(),
         }
     }
 

@@ -3,21 +3,22 @@ module type-scope-test {
   namespace "urn:nlnetlabs:rotonda:conf";
   prefix "rotonda";
 
-  import ietf-yang-types {
-     prefix yang;
-  }
+  //import ietf-yang-types {
+  //   prefix yang;
+  //}
+  
 
   import ietf-rpki-rtr {
-    prefix rtr;
+     prefix rtr;
   }
 
   typedef horror-show {
-     type yang:date-and-time;
+     type uint32;
   }
 
   container "rotonda-root" {
     typedef horror-show1.9 {
-      type yang:xpath1.0;
+      type uint32;
     }
 
     leaf hs0 {
@@ -31,7 +32,7 @@ module type-scope-test {
     }
     
     leaf rotor {
-      type horror-show;
+      type rtr:ipv4-pfx-len;
     }
   }
 }

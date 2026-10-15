@@ -554,8 +554,11 @@ impl TypeChecker {
     ) -> TypeResult<Vec<(ScopeRef, &'a Module)>> {
         println!("[declare_modules] start");
         println!(
-            "[declare_modules] {:?}",
-            tree.modules.iter().map(|m| &m.ident).collect::<Vec<_>>()
+            "[declare_modules] {:#?}",
+            tree.modules
+                .iter()
+                .map(|m| m.ident.node.as_str())
+                .collect::<Vec<_>>()
         );
         let mut modules = Vec::<(ScopeRef, &'a Module)>::new();
         for m in &tree.modules {
@@ -714,7 +717,10 @@ impl TypeChecker {
             //     .type_info
             //     .scope_graph
             //     .wrap(ScopeRef::GLOBAL, ScopeType::Module(mod_scope));
-            println!("module {} scope {:?}", module.ident, scope);
+            println!(
+                "[declare_modules] imports & type: module {} scope {:?}",
+                module.ident, scope
+            );
 
             for d in &module.ast.declarations {
                 if let ast::Declaration::YangModule(ymd) = d {
@@ -733,11 +739,6 @@ impl TypeChecker {
         module: &ast::YangModuleDeclaration,
     ) -> TypeResult<()> {
         {
-            println!(
-                "[declare_types_in_module] '{}' ({:?})",
-                module.ident, scope
-            );
-
             // Insert all the type declarations ('typedef') that
             // we find inside a module. Types that are directly
             // derived from a base type can be inserted with their
@@ -831,7 +832,7 @@ impl TypeChecker {
                     });
                 };
 
-                println!("found module decla {:?}", target_module);
+                println!("found module decla {:?}", target_module.name.ident);
                 let name = ResolvedName {
                     scope: target_module.name.scope,
                     ident: *import_name,
@@ -1734,6 +1735,7 @@ impl TypeChecker {
         prefix: &Identifier,
         id: &MetaId,
     ) -> TypeResult<DeclarationKind> {
+        // find the module by its prefix
         let Some(mod_decla) = self.type_info.scope_graph.resolve_name(
             scope,
             &Meta {
@@ -1768,18 +1770,12 @@ impl TypeChecker {
         };
 
         println!(
-            "[leaf] type `{}` w/ module prefix `{}`: {:?} in scope \
+            "[prefixed_types] type `{}` w/ module prefix `{}`: {:?} in scope \
                     {:?}",
-            base_ty, prefix, mod_decla, scope
+            base_ty, prefix, mod_decla.name, scope
         );
 
-        let mod_decla_rname = self
-            .type_info
-            .scope_graph
-            .get_declaration(mod_decla.name)
-            .name;
-        println!("[leaf] module declaration {:?}", mod_decla_rname);
-
+        // now find the typedef in the module that we just found
         let Some(lt) = self
             .type_info
             .scope_graph
@@ -1802,7 +1798,7 @@ impl TypeChecker {
                         format!(
                             "this type cannot be found in module \
                                     `{}`",
-                            mod_decla_rname.ident
+                            mod_decla.name.ident
                         ),
                         *id,
                     ),
@@ -1812,12 +1808,13 @@ impl TypeChecker {
             });
         };
 
-        println!("[leaf] type {:?}", lt);
+        println!("[prefixed_types] type {:?}", lt);
         let mod_scope = &self.type_info.scope_graph.scopes[lt.name.scope.0];
         let ScopeType::Module(ModuleScope {
             name: mod_scope, ..
         }) = &mod_scope.scope_type
         else {
+            println!("[prefixed_types] lookup failure in {:?}", mod_scope);
             return Err(TypeError {
                 description: "the type mentioned is unknown".to_string(),
                 location: *id,
@@ -1833,7 +1830,7 @@ impl TypeChecker {
                         format!(
                             "this type cannot be found in module \
                                     `{}`",
-                            mod_decla_rname.ident
+                            mod_decla.name.ident
                         ),
                         *id,
                     ),
@@ -1843,12 +1840,12 @@ impl TypeChecker {
             });
         };
 
-        // println!(
-        //     "[leaf] module scope name {:?}",
-        //     *mod_scope == mod_decla_rname
-        // );
+        println!(
+            "[prefixed_types] module scope name {:?}",
+            *mod_scope == mod_decla.name
+        );
 
-        if *mod_scope == mod_decla_rname {
+        if *mod_scope == mod_decla.name {
             Ok(lt.kind.clone())
         } else {
             Err(TypeError {
@@ -1860,7 +1857,7 @@ impl TypeChecker {
                         format!(
                             "this type cannot be found in module \
                                     `{}`",
-                            mod_decla_rname.ident
+                            mod_decla.name.ident
                         ),
                         *id,
                     ),

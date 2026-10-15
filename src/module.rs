@@ -1,7 +1,7 @@
 //! Module tree of a Roto script
 
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, hash_map::Entry},
     path::{Path, PathBuf},
 };
 
@@ -56,7 +56,8 @@ impl FileTree {
 }
 
 impl Parsed {
-    /// docs here
+    /// create a list of all modules that are imported from an entry point
+    /// module, directly or indirectly.
     pub fn from_entry_point(
         entry_point_file: &Path,
         lib_path: &Path,
@@ -84,12 +85,12 @@ impl Parsed {
             entry_point_idx
         );
 
-        let (ast, mut imported_modules) = match YangParser::parse(
+        let (ast, imports) = match YangParser::parse(
             entry_point_idx,
             &mut spans,
             &entry_point.contents,
         ) {
-            Ok((ast, i_mods)) => (ast, vec![(entry_point_idx, i_mods)]),
+            Ok((ast, i_mods)) => (ast, i_mods),
             Err(err) => {
                 errors.push(RotoError::Parse(*err));
                 return Err(RotoReport {
@@ -104,97 +105,27 @@ impl Parsed {
         spans =
             Parsed::add_modules(&ast, spans, entry_point_idx, &mut modules)?;
 
+        let (mut modules, spans, errors) = Self::recurse_module_imports(
+            entry_point_idx,
+            imports,
+            &mut lib,
+            &mut files,
+            &ast,
+            spans,
+            modules,
+            errors,
+        )?;
+
         // now, go over the imported modules in the entry point module, and
         // descendd into those if we find more imported modules in them
         // loop {
         println!(
             "[from_entry_point] found imported modules {:?}",
-            imported_modules
+            modules
+                .iter()
+                .map(|m| m.ident.node.as_str())
+                .collect::<Vec<_>>()
         );
-        // go over all module imports found in the previous imported
-        // module
-        loop {
-            let mut new_imported_modules = vec![];
-            for (parent_file, i_mods) in imported_modules.clone() {
-                for module_path in i_mods {
-                    // look the module up in the library
-                    let (search_mod, file_idx) = lib
-                        .try_get_or_load(&module_path.node)
-                        .map_err(|e| RotoReport {
-                            errors: vec![RotoError::Parse(
-                                ParseError::custom(
-                                    format!(
-                                        "{} in module `{}`",
-                                        e,
-                                        files
-                                            .get(&parent_file)
-                                            .map(|sf| &sf.name)
-                                            .unwrap_or(
-                                                &"<NO MODULE NAME>"
-                                                    .to_string()
-                                            )
-                                    ),
-                                    "this import",
-                                    spans.get(module_path.id),
-                                ),
-                            )],
-                            files: files.clone(),
-                            ..Default::default()
-                        })?;
-
-                    match YangParser::parse(
-                        file_idx,
-                        &mut spans,
-                        &search_mod.contents,
-                    ) {
-                        Ok((ast, mods)) => {
-                            if let std::collections::hash_map::Entry::Vacant(
-                                entry,
-                            ) = files.entry(file_idx)
-                            {
-                                new_imported_modules.push((file_idx, mods));
-                                entry.insert(search_mod.clone());
-
-                                spans = Self::add_modules(
-                                    &ast,
-                                    spans,
-                                    file_idx,
-                                    &mut modules,
-                                )?;
-                                // files.insert(file_idx, search_mod.clone());
-                                println!(
-                                    "[from_entry_point] inserted imported \
-                                    module with idx {file_idx} name {} for \
-                                    parent {:?}",
-                                    search_mod.name,
-                                    files
-                                        .get(&parent_file)
-                                        .map(|sf| &sf.name)
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            if let std::collections::hash_map::Entry::Vacant(
-                                entry,
-                            ) = files.entry(file_idx)
-                            {
-                                entry.insert(search_mod.clone());
-                            }
-                            errors.push(RotoError::Parse(*err));
-                            return Err(RotoReport {
-                                files,
-                                errors,
-                                spans,
-                            });
-                        }
-                    };
-                }
-            }
-            if new_imported_modules.is_empty() {
-                break;
-            }
-            imported_modules.extend(new_imported_modules.clone());
-        }
 
         println!("[from_entry_point] done parsing");
         println!(
@@ -202,19 +133,118 @@ impl Parsed {
             lib.lib
                 .iter()
                 .enumerate()
-                .map(|(i, m)| (i, m.0))
+                .map(|(i, m)| (i, m.0.as_str()))
                 .collect::<Vec<_>>()
         );
         println!(
             "modules {:?}",
-            modules.iter().map(|m| &m.ident).collect::<Vec<_>>()
+            modules
+                .iter()
+                .map(|m| m.ident.node.as_str())
+                .collect::<Vec<_>>()
         );
-        modules.reverse();
-        Ok(Self {
-            module_tree: ModuleTree { modules },
-            file_tree: lib,
-            spans,
-        })
+
+        if errors.is_empty() {
+            // modules.reverse();
+            // modules.dedup_by(|a, b| a.ident == b.ident);
+            Ok(Self {
+                module_tree: ModuleTree { modules },
+                file_tree: lib,
+                spans,
+            })
+        } else {
+            Err(RotoReport {
+                files,
+                errors,
+                spans,
+            })
+        }
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    fn recurse_module_imports(
+        parent_file: usize,
+        imports: Vec<Meta<Identifier>>,
+        lib: &mut YangFiles,
+        files: &mut HashMap<usize, SourceFile>,
+        ast: &SyntaxTree,
+        mut spans: Spans,
+        mut modules: Vec<Module>,
+        mut errors: Vec<RotoError>,
+    ) -> Result<(Vec<Module>, Spans, Vec<RotoError>), RotoReport> {
+        println!("parent_file {}", parent_file);
+        println!("imports {:?}", imports);
+        if imports.is_empty() {
+            spans = Self::add_modules(ast, spans, parent_file, &mut modules)?;
+        }
+
+        for module_path in &imports {
+            // look up the imported module in the library
+            let (search_mod, file_idx) = lib
+                .try_get_or_load(&module_path.node)
+                .map_err(|e| RotoReport {
+                    errors: vec![RotoError::Parse(ParseError::custom(
+                        format!(
+                            "{} in module `{}`",
+                            e,
+                            files
+                                .get(&parent_file)
+                                .map(|sf| &sf.name)
+                                .unwrap_or(&"<NO MODULE NAME>".to_string())
+                        ),
+                        "this import",
+                        spans.get(module_path.id),
+                    ))],
+                    files: files.clone(),
+                    ..Default::default()
+                })?;
+
+            match YangParser::parse(
+                file_idx,
+                &mut spans,
+                &search_mod.contents,
+            ) {
+                Ok((ast, new_imports)) => {
+                    if !new_imports.is_empty() {
+                        (modules, spans, errors) =
+                            Self::recurse_module_imports(
+                                file_idx,
+                                new_imports,
+                                lib,
+                                files,
+                                &ast,
+                                spans,
+                                modules,
+                                errors,
+                            )?;
+                    }
+
+                    if modules
+                        .iter()
+                        .find(|m| m.ident.node == module_path.node)
+                        .is_none()
+                    {
+                        spans = Self::add_modules(
+                            &ast,
+                            spans,
+                            parent_file,
+                            &mut modules,
+                        )?;
+                    }
+                    println!("done with imports in {}", parent_file);
+                }
+                Err(err) => {
+                    errors.push(RotoError::Parse(*err));
+                    // return Err(RotoReport {
+                    //     files: files.clone(),
+                    //     errors,
+                    //     spans,
+                    // });
+                }
+            };
+        }
+
+        Ok((modules, spans, errors))
     }
 
     fn add_modules(

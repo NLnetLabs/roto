@@ -588,6 +588,7 @@ fn describe_declaration(d: &Declaration) -> &str {
         DeclarationKind::TypeParam(..) => "type parameter",
         DeclarationKind::YangModule(yang_module_declaration) => "yang module",
         DeclarationKind::YangSubModule(ysm) => "yang submodule",
+        DeclarationKind::Leaf(_, _) => "yang leaf",
     }
 }
 

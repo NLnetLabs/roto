@@ -244,8 +244,6 @@ impl std::fmt::Debug for RotoReport {
 
 impl RotoReport {
     fn filename(&self, s: Span) -> String {
-        println!("s.file {} len {}", s.file, self.files.len());
-        println!("{:?}", self.files.keys());
         self.files.get(&s.file).unwrap().name()
     }
 }

@@ -92,6 +92,7 @@ pub enum DeclarationKind {
     Method(Option<FunctionDeclaration>),
     Enum(Option<(TypeDefinition, EnumVariant)>),
     TypeParam(Identifier),
+    Leaf(Identifier, TypeDefinition),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -243,14 +244,8 @@ impl ScopeGraph {
             }
 
             if let Some(x) = self.scopes[scope.0].imports.get(ident) {
-                println!("[resolve_name] #0 {scope:?}");
                 return Some(self.declarations.get(&x.1).unwrap().clone());
             }
-
-            println!(
-                "[resolve_name] {} #1 {:#?}",
-                ident, self.scopes[scope.0]
-            );
 
             scope = self.parent(scope)?;
         }
@@ -609,6 +604,17 @@ impl ScopeGraph {
 
             scope = self.parent(scope)?;
         }
+    }
+
+    pub fn leafs(
+        &self,
+    ) -> impl Iterator<Item = (Identifier, TypeDefinition)> {
+        self.declarations.values().filter_map(|d| {
+            if let DeclarationKind::Leaf(name, ty) = &d.kind {
+                return Some((*name, ty.clone()));
+            }
+            None
+        })
     }
 }
 

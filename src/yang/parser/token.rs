@@ -1,4 +1,5 @@
 //! Lexer for Roto scripts
+#![allow(missing_docs)]
 
 use core::{ops::Range, str};
 use std::{fmt::Display, ops::ControlFlow};
@@ -17,7 +18,7 @@ use crate::{
             ast::{Argument, AxisName},
             expr::Cardinality,
         },
-        types::{YangArgType, YangNodeType},
+        types::YangArgType,
     },
 };
 
@@ -895,82 +896,82 @@ impl Keyword {
         }
     }
 
-    pub(crate) fn yang_expr_type(&self) -> YangNodeType {
-        match self {
-            Keyword::Module => YangNodeType::Tree,
-            Keyword::Import => YangNodeType::Tree,
-            Keyword::Include => YangNodeType::Tree,
-            Keyword::Organization => YangNodeType::Attr(YangArgType::String),
-            Keyword::YangVersion => YangNodeType::Attr(YangArgType::String),
-            Keyword::Contact => YangNodeType::Attr(YangArgType::String),
-            Keyword::Revision => YangNodeType::Tree,
-            Keyword::SubModule => YangNodeType::Tree,
-            Keyword::BelongsTo => YangNodeType::Tree,
-            Keyword::Units => YangNodeType::Attr(YangArgType::String),
-            Keyword::TypeDef => YangNodeType::Tree,
-            Keyword::Type => YangNodeType::Tree,
-            Keyword::Bit => YangNodeType::Tree,
-            Keyword::Position => YangNodeType::Attr(YangArgType::String),
-            Keyword::Enum => YangNodeType::Tree,
-            Keyword::FractionDigits => {
-                YangNodeType::Attr(YangArgType::String)
-            }
-            Keyword::Length => YangNodeType::Tree,
-            Keyword::Path => YangNodeType::Attr(YangArgType::Path),
-            Keyword::Pattern => YangNodeType::Tree,
-            Keyword::Range => YangNodeType::Attr(YangArgType::RangeExpr),
-            Keyword::RequireInstance => {
-                YangNodeType::Attr(YangArgType::String)
-            }
-            Keyword::Container => YangNodeType::Tree,
-            Keyword::Must => YangNodeType::Tree,
-            Keyword::Presence => YangNodeType::Attr(YangArgType::Bool),
-            Keyword::ErrorMessage => YangNodeType::Attr(YangArgType::String),
-            Keyword::ErrorAppTag => YangNodeType::Attr(YangArgType::String),
-            Keyword::Leaf => YangNodeType::Tree,
-            Keyword::Mandatory => YangNodeType::Attr(YangArgType::String),
-            Keyword::LeafList => YangNodeType::Tree,
-            Keyword::MinElements => YangNodeType::Attr(YangArgType::String),
-            Keyword::MaxElements => YangNodeType::Attr(YangArgType::String),
-            Keyword::OrderedBy => YangNodeType::Attr(YangArgType::String),
-            Keyword::List => YangNodeType::Tree,
-            Keyword::Unique => YangNodeType::Attr(YangArgType::String),
-            Keyword::Key => YangNodeType::Attr(YangArgType::String),
-            Keyword::Choice => YangNodeType::Tree,
-            Keyword::Case => YangNodeType::Tree,
-            Keyword::AnyData => YangNodeType::Tree,
-            Keyword::AnyXml => YangNodeType::Tree,
-            Keyword::Grouping => YangNodeType::Tree,
-            Keyword::Uses => YangNodeType::Tree,
-            Keyword::Refine => YangNodeType::Tree,
-            Keyword::Rpc => YangNodeType::Tree,
-            Keyword::Input => YangNodeType::Tree,
-            Keyword::Output => YangNodeType::Tree,
-            Keyword::Action => YangNodeType::Tree,
-            Keyword::Notification => YangNodeType::Tree,
-            Keyword::Augment => YangNodeType::Tree,
-            Keyword::Feature => YangNodeType::Tree,
-            Keyword::Identity => YangNodeType::Tree,
-            Keyword::Base => YangNodeType::Attr(YangArgType::Ident),
-            Keyword::Extension => YangNodeType::Tree,
-            Keyword::Argument => YangNodeType::Attr(YangArgType::String),
-            Keyword::YinElement => YangNodeType::Attr(YangArgType::String),
-            Keyword::IfFeature => YangNodeType::Attr(YangArgType::String),
-            Keyword::Deviation => YangNodeType::Tree,
-            Keyword::Deviate => YangNodeType::Attr(YangArgType::String),
-            Keyword::Config => YangNodeType::Attr(YangArgType::Bool),
-            Keyword::Status => YangNodeType::Attr(YangArgType::String),
-            Keyword::Description => YangNodeType::Attr(YangArgType::String),
-            Keyword::Default => YangNodeType::Attr(YangArgType::String),
-            Keyword::Reference => YangNodeType::Attr(YangArgType::String),
-            Keyword::When => YangNodeType::Tree,
-            Keyword::Value => YangNodeType::Attr(YangArgType::Int),
-            Keyword::NameSpace => YangNodeType::Attr(YangArgType::String),
-            Keyword::Prefix => YangNodeType::Attr(YangArgType::String),
-            Keyword::RevisionDate => YangNodeType::Attr(YangArgType::String),
-            Keyword::Modifier => YangNodeType::Attr(YangArgType::String),
-        }
-    }
+    // pub(crate) fn yang_expr_type(&self) -> YangNodeType {
+    //     match self {
+    //         Keyword::Module => YangNodeType::Tree,
+    //         Keyword::Import => YangNodeType::Tree,
+    //         Keyword::Include => YangNodeType::Tree,
+    //         Keyword::Organization => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::YangVersion => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Contact => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Revision => YangNodeType::Tree,
+    //         Keyword::SubModule => YangNodeType::Tree,
+    //         Keyword::BelongsTo => YangNodeType::Tree,
+    //         Keyword::Units => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::TypeDef => YangNodeType::Tree,
+    //         Keyword::Type => YangNodeType::Tree,
+    //         Keyword::Bit => YangNodeType::Tree,
+    //         Keyword::Position => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Enum => YangNodeType::Tree,
+    //         Keyword::FractionDigits => {
+    //             YangNodeType::Attr(YangArgType::String)
+    //         }
+    //         Keyword::Length => YangNodeType::Tree,
+    //         Keyword::Path => YangNodeType::Attr(YangArgType::Path),
+    //         Keyword::Pattern => YangNodeType::Tree,
+    //         Keyword::Range => YangNodeType::Attr(YangArgType::RangeExpr),
+    //         Keyword::RequireInstance => {
+    //             YangNodeType::Attr(YangArgType::String)
+    //         }
+    //         Keyword::Container => YangNodeType::Tree,
+    //         Keyword::Must => YangNodeType::Tree,
+    //         Keyword::Presence => YangNodeType::Attr(YangArgType::Bool),
+    //         Keyword::ErrorMessage => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::ErrorAppTag => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Leaf => YangNodeType::Tree,
+    //         Keyword::Mandatory => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::LeafList => YangNodeType::Tree,
+    //         Keyword::MinElements => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::MaxElements => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::OrderedBy => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::List => YangNodeType::Tree,
+    //         Keyword::Unique => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Key => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Choice => YangNodeType::Tree,
+    //         Keyword::Case => YangNodeType::Tree,
+    //         Keyword::AnyData => YangNodeType::Tree,
+    //         Keyword::AnyXml => YangNodeType::Tree,
+    //         Keyword::Grouping => YangNodeType::Tree,
+    //         Keyword::Uses => YangNodeType::Tree,
+    //         Keyword::Refine => YangNodeType::Tree,
+    //         Keyword::Rpc => YangNodeType::Tree,
+    //         Keyword::Input => YangNodeType::Tree,
+    //         Keyword::Output => YangNodeType::Tree,
+    //         Keyword::Action => YangNodeType::Tree,
+    //         Keyword::Notification => YangNodeType::Tree,
+    //         Keyword::Augment => YangNodeType::Tree,
+    //         Keyword::Feature => YangNodeType::Tree,
+    //         Keyword::Identity => YangNodeType::Tree,
+    //         Keyword::Base => YangNodeType::Attr(YangArgType::Ident),
+    //         Keyword::Extension => YangNodeType::Tree,
+    //         Keyword::Argument => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::YinElement => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::IfFeature => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Deviation => YangNodeType::Tree,
+    //         Keyword::Deviate => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Config => YangNodeType::Attr(YangArgType::Bool),
+    //         Keyword::Status => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Description => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Default => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Reference => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::When => YangNodeType::Tree,
+    //         Keyword::Value => YangNodeType::Attr(YangArgType::Int),
+    //         Keyword::NameSpace => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Prefix => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::RevisionDate => YangNodeType::Attr(YangArgType::String),
+    //         Keyword::Modifier => YangNodeType::Attr(YangArgType::String),
+    //     }
+    // }
 
     pub(crate) fn allowed_sub_stmts(&self) -> Vec<(Keyword, Cardinality)> {
         match self {
