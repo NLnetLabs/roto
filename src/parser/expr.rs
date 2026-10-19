@@ -1121,16 +1121,21 @@ impl Parser<'_, '_> {
             Token::Keyword(Keyword::Pkg) => "pkg".into(),
             Token::Keyword(Keyword::Dep) => "dep".into(),
             Token::Keyword(Keyword::Super) => "super".into(),
+            Token::Keyword(Keyword::Std) => "std".into(),
             Token::Ident(s) => s.into(),
-            _ => return Err(ParseError::expected(
-                "an identifier, `super`, `pkg` or `dep`",
-                &tok,
-                span,
-            )
-            .with_note(format!(
-                "`{tok}` is a keyword and cannot be used as an identifier."
-            ))
-            .into()),
+            _ => {
+                let mut err = ParseError::expected(
+                    "an identifier, `super`, `pkg`, `std` or `dep`",
+                    &tok,
+                    span,
+                );
+                if matches!(tok, Token::Keyword(_)) {
+                    err = err.with_note(format!(
+                        "`{tok}` is a keyword and cannot be used as an identifier."
+                    ));
+                }
+                return Err(err.into());
+            }
         };
         Ok(self.spans.add(span, ident))
     }

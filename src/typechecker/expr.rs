@@ -569,7 +569,7 @@ impl TypeChecker {
                 };
                 if (type_name.name
                     != ResolvedName {
-                        scope: ScopeRef::GLOBAL,
+                        scope: ScopeRef::STD,
                         ident: "Option".into(),
                     })
                 {
@@ -854,7 +854,7 @@ impl TypeChecker {
                 let function = self
                     .get_function_in_type(
                         ResolvedName {
-                            scope: ScopeRef::GLOBAL,
+                            scope: ScopeRef::STD,
                             ident: "Prefix".into(),
                         },
                         "new".into(),
@@ -883,7 +883,7 @@ impl TypeChecker {
                 let function = self
                     .get_function_in_type(
                         ResolvedName {
-                            scope: ScopeRef::GLOBAL,
+                            scope: ScopeRef::STD,
                             ident: "String".into(),
                         },
                         "append".into(),
@@ -895,7 +895,7 @@ impl TypeChecker {
 
             if let Type::Name(n) = resolved {
                 let list_name = ResolvedName {
-                    scope: ScopeRef::GLOBAL,
+                    scope: ScopeRef::STD,
                     ident: "List".into(),
                 };
 
@@ -907,7 +907,7 @@ impl TypeChecker {
                     let function = self
                         .get_function_in_type(
                             ResolvedName {
-                                scope: ScopeRef::GLOBAL,
+                                scope: ScopeRef::STD,
                                 ident: "List".into(),
                             },
                             "concat".into(),

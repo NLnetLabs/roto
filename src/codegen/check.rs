@@ -182,7 +182,7 @@ fn check_roto_type(
 
             if type_name.name
                 != (ResolvedName {
-                    scope: ScopeRef::GLOBAL,
+                    scope: ScopeRef::STD,
                     ident: "Verdict".into(),
                 })
             {
@@ -204,7 +204,7 @@ fn check_roto_type(
 
             if type_name.name
                 != (ResolvedName {
-                    scope: ScopeRef::GLOBAL,
+                    scope: ScopeRef::STD,
                     ident: "Result".into(),
                 })
             {
@@ -226,7 +226,7 @@ fn check_roto_type(
 
             if type_name.name
                 != (ResolvedName {
-                    scope: ScopeRef::GLOBAL,
+                    scope: ScopeRef::STD,
                     ident: "Option".into(),
                 })
             {
@@ -245,7 +245,7 @@ fn check_roto_type(
 
             if type_name.name
                 != (ResolvedName {
-                    scope: ScopeRef::GLOBAL,
+                    scope: ScopeRef::STD,
                     ident: "List".into(),
                 })
             {

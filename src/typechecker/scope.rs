@@ -24,6 +24,10 @@ pub struct ScopeRef(usize);
 impl ScopeRef {
     /// The scope at the root of a [`ScopeGraph`]
     pub const GLOBAL: Self = Self(0);
+    /// The scope of the standard library of a [`ScopeGraph`]
+    pub const STD_PKG: Self = Self(1);
+    /// The scope of the standard library of a [`ScopeGraph`]
+    pub const STD: Self = Self(2);
 }
 
 /// Combination of a scope and an identifier
@@ -42,6 +46,19 @@ impl TypeDisplay for ResolvedName {
         type_info: &TypeInfo,
         f: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
+        // Little hack for the global prelude.
+        if let Some(dec) = type_info.scope_graph.resolve_name(
+            ScopeRef::GLOBAL,
+            &Meta {
+                node: self.ident,
+                id: MetaId(0),
+            },
+            false,
+        ) && dec.name == *self
+        {
+            return write!(f, "{}", self.ident);
+        }
+
         let scope =
             type_info.scope_graph.print_scope(relative_to, self.scope);
         if scope.is_empty() {
@@ -104,7 +121,14 @@ pub struct ScopeGraph {
 struct Scope {
     scope_type: ScopeType,
     parent: Option<ScopeRef>,
-    imports: BTreeMap<Identifier, (MetaId, ResolvedName)>,
+    imports: BTreeMap<Identifier, Import>,
+}
+
+#[derive(Clone, Debug)]
+struct Import {
+    id: MetaId,
+    name: ResolvedName,
+    public: bool,
 }
 
 /// The syntactic structure that a scope represents
@@ -141,14 +165,64 @@ pub struct ModuleScope {
 
 impl ScopeGraph {
     pub fn new() -> Self {
-        Self {
+        let mut this = Self {
             declarations: BTreeMap::new(),
             scopes: vec![Scope {
                 scope_type: ScopeType::Root,
                 parent: None,
                 imports: BTreeMap::new(),
             }],
-        }
+        };
+
+        let pkg_name = ResolvedName {
+            scope: ScopeRef::GLOBAL,
+            ident: "std".into(),
+        };
+
+        this.declarations.insert(
+            pkg_name,
+            Declaration {
+                name: pkg_name,
+                kind: DeclarationKind::Module,
+                id: MetaId(0),
+                scope: Some(ScopeRef::STD),
+                doc: "".into(),
+            },
+        );
+
+        this.scopes.push(Scope {
+            scope_type: ScopeType::Package(PackageScope {
+                name: "std".into(),
+                deps: ScopeRef::STD,
+            }),
+            parent: Some(ScopeRef::GLOBAL),
+            imports: BTreeMap::new(),
+        });
+
+        let mod_name = ResolvedName {
+            scope: ScopeRef::STD_PKG,
+            ident: "pkg".into(),
+        };
+
+        this.scopes.push(Scope {
+            scope_type: ScopeType::Module(ModuleScope {
+                name: mod_name,
+                parent_module: None,
+            }),
+            parent: Some(ScopeRef::STD_PKG),
+            imports: BTreeMap::new(),
+        });
+
+        this.scopes[0].imports.insert(
+            "std".into(),
+            Import {
+                id: MetaId(0),
+                name: mod_name,
+                public: true,
+            },
+        );
+
+        this
     }
 
     /// Create a new root scope
@@ -216,12 +290,21 @@ impl ScopeGraph {
                 return Some(d.clone());
             }
 
-            if !recurse {
-                return None;
+            if let Some(x) = self.scopes[scope.0].imports.get(ident)
+                && (x.public || recurse)
+            {
+                return self.resolve_name(
+                    x.name.scope,
+                    &Meta {
+                        node: x.name.ident,
+                        id: x.id,
+                    },
+                    false,
+                );
             }
 
-            if let Some(x) = self.scopes[scope.0].imports.get(ident) {
-                return Some(self.declarations.get(&x.1).unwrap().clone());
+            if !recurse {
+                return None;
             }
 
             scope = self.parent(scope)?;
@@ -250,12 +333,13 @@ impl ScopeGraph {
         scope: ScopeRef,
         id: MetaId,
         name: ResolvedName,
+        public: bool,
     ) -> Result<(), MetaId> {
         let map = &mut self.scopes[scope.0].imports;
         match map.entry(name.ident) {
-            Entry::Occupied(entry) => Err(entry.get().0),
+            Entry::Occupied(entry) => Err(entry.get().id),
             Entry::Vacant(entry) => {
-                entry.insert((id, name));
+                entry.insert(Import { id, name, public });
                 Ok(())
             }
         }
@@ -270,9 +354,13 @@ impl ScopeGraph {
     ) -> Result<(), MetaId> {
         let map = &mut self.scopes[scope.0].imports;
         match map.entry(ident) {
-            Entry::Occupied(entry) => Err(entry.get().0),
+            Entry::Occupied(entry) => Err(entry.get().id),
             Entry::Vacant(entry) => {
-                entry.insert((id, name));
+                entry.insert(Import {
+                    id,
+                    name,
+                    public: false,
+                });
                 Ok(())
             }
         }
@@ -567,7 +655,11 @@ impl ScopeGraph {
             let ident = match &s.scope_type {
                 ScopeType::Root => break,
                 ScopeType::Package(PackageScope { name, .. }) => {
-                    format!("dep.{name}")
+                    if name.as_str() == "std" {
+                        name.as_str().into()
+                    } else {
+                        format!("dep.{name}")
+                    }
                 }
                 ScopeType::Deps => "deps".into(),
                 ScopeType::Module(m) => {

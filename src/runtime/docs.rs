@@ -246,7 +246,7 @@ impl Rt {
     }
 
     fn build_doc(&self) -> Doc {
-        let items = self.get_items(ScopeRef::GLOBAL, None);
+        let items = self.get_items(ScopeRef::STD, None);
 
         Doc {
             root: DocMod {
