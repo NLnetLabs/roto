@@ -1,0 +1,27 @@
+(rust_interop)=
+# Rust Interoperability
+
+Roto types map directly to Rust types for interoperability. The `inetnum`
+types use the [inetnum crate](https://crates.io/crates/inetnum).
+
+| Roto type         | Rust type             |
+| ----------------- | --------------------- |
+| `bool`            | `bool`                |
+| `u8`              | `u8`                  |
+| `u16`             | `u16`                 |
+| `u32`             | `u32`                 |
+| `u64`             | `u64`                 |
+| `i8`              | `i8`                  |
+| `i16`             | `i16`                 |
+| `i32`             | `i32`                 |
+| `i64`             | `i64`                 |
+| `f32`             | `f32`                 |
+| `f64`             | `f64`                 |
+| `String`          | `roto::RotoString`    |
+| `List[T]`         | `roto::List<T>`       |
+| `IpAddr`          | `std::net::IpAddr`    |
+| `Prefix`          | `inetnum::Prefix`     |
+| `Asn`             | `inetnum::Asn`        |
+| `Verdict[A, R]`   | `roto::Verdict<A, R>` |
+| `T?`, `Option[T]` | `Option<T>`           |
+| other types `T`   | `roto::Val<T>`        |

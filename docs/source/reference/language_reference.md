@@ -1050,10 +1050,9 @@ super.super.foo.square
 There are 3 special identifiers that can only be used at the start of a
 path and automatically make the path an absolute path:
 
-- `pkg` for the current package
-- `std` for the Roto standard library
-- `dep` for dependencies (not implemented yet, but the identifier is
-  reserved)
+- `pkg` for the current package,
+- `dep` for dependencies,
+- `std` for the Roto standard library.
 
 (lang_imports)=
 ### Imports
