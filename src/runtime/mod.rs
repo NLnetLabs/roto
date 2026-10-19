@@ -158,7 +158,27 @@ impl Runtime<NoCtx> {
             constants: Default::default(),
             dependency_provider: None,
         };
-        rt.add(basic::built_ins()).unwrap();
+        rt.add_std(basic::built_ins()).unwrap();
+        rt.add_prelude(
+            [
+                &["u8", "u16", "u32", "u64"] as &[_],
+                &["i8", "i16", "i32", "i64"],
+                &["f32", "f64"],
+                &["char"],
+                &["bool"],
+                &["List"],
+                &["Option", "Result", "Verdict"],
+                &["String", "StringBuf"],
+                &["StringLines", "StringChars", "StringBytes"],
+                &["IpAddr", "Prefix", "Asn"],
+                &["Some", "None"],
+                &["Ok", "Err"],
+            ]
+            .into_iter()
+            .flatten()
+            .map(|&s| s.into()),
+        );
+
         Self {
             rt,
             _ctx: PhantomData,
@@ -319,6 +339,35 @@ impl Rt {
         self.declare_functions(root, &items)?;
         self.declare_constants(root, &items)?;
         self.declare_imports(root, &items)?;
+        Ok(())
+    }
+
+    fn add_prelude(&mut self, names: impl IntoIterator<Item = Identifier>) {
+        for ident in names {
+            self.type_checker
+                .declare_runtime_import(
+                    ScopeRef::GLOBAL,
+                    ResolvedName {
+                        scope: ScopeRef::STD,
+                        ident,
+                    },
+                )
+                .unwrap();
+        }
+    }
+
+    fn add_std(
+        &mut self,
+        items: impl Registerable,
+    ) -> Result<(), RegistrationError> {
+        let scope = ScopeRef::STD;
+
+        let items = items.into_lib().items;
+        self.declare_modules(Some(scope), &items)?;
+        self.declare_types(scope, &items)?;
+        self.declare_functions(scope, &items)?;
+        self.declare_constants(scope, &items)?;
+        self.declare_imports(scope, &items)?;
         Ok(())
     }
 

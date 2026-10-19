@@ -6447,3 +6447,20 @@ fn list_get_from_const() {
 
     assert_eq!(f.call(), Some(42));
 }
+
+#[test]
+fn list_get_from_const_with_std() {
+    let s = src!(
+        r#"
+        const FOO: std.List[std.i32] = [42];
+        fn main() -> i32? {
+            FOO.get(0)
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Option<i32>>("main").unwrap();
+
+    assert_eq!(f.call(), Some(42));
+}

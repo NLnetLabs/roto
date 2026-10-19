@@ -9,12 +9,14 @@ impl<Ctx: OptCtx> Runtime<Ctx> {
     /// For now, this just adds the `print` function. More functions will be
     /// added in the future.
     pub fn add_io_functions(&mut self) {
-        self.add(library! {
-            /// Print a string to stdout
-            fn print(s: RotoString) {
-                println!("{s}");
-            }
-        })
-        .unwrap();
+        self.rt
+            .add_std(library! {
+                /// Print a string to stdout
+                fn print(s: RotoString) {
+                    println!("{s}");
+                }
+            })
+            .unwrap();
+        self.rt.add_prelude(["print".into()]);
     }
 }

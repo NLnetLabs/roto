@@ -257,12 +257,12 @@ impl TypeChecker {
                 id: MetaId(0),
             };
             let name = ResolvedName {
-                scope: ScopeRef::GLOBAL,
+                scope: ScopeRef::STD,
                 ident: *ident,
             };
             self.type_info
                 .scope_graph
-                .insert_type(ScopeRef::GLOBAL, &ident, doc, ty.clone())
+                .insert_type(ScopeRef::STD, &ident, doc, ty.clone())
                 .map_err(|id| self.error_declared_twice(&ident, id))?;
 
             if let TypeDefinition::Enum(_, variants) = &ty {
@@ -508,7 +508,7 @@ impl TypeChecker {
         if self
             .type_info
             .scope_graph
-            .insert_import(scope, MetaId(0), name)
+            .insert_import(scope, MetaId(0), name, true)
             .is_err()
         {
             // TODO: Improve error message
@@ -1216,7 +1216,7 @@ impl TypeChecker {
 
         self.type_info
             .scope_graph
-            .insert_import(scope, ident.id, declaration.name)
+            .insert_import(scope, ident.id, declaration.name, false)
             .map_err(|old| self.error_declared_twice(ident, old))
     }
 

@@ -86,7 +86,7 @@ impl Type {
     pub fn named(ident: impl Into<Identifier>, arguments: Vec<Type>) -> Type {
         Type::Name(TypeName {
             name: ResolvedName {
-                scope: ScopeRef::GLOBAL,
+                scope: ScopeRef::STD,
                 ident: ident.into(),
             },
             arguments,
@@ -223,7 +223,7 @@ impl TypeDefinition {
             },
             TypeDefinition::Primitive(primitive) => TypeName {
                 name: ResolvedName {
-                    scope: ScopeRef::GLOBAL,
+                    scope: ScopeRef::STD,
                     ident: primitive.to_string().into(),
                 },
                 arguments: Vec::new(),
@@ -699,7 +699,7 @@ pub fn default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     {
         let ident = Identifier::from(name);
         let name = ResolvedName {
-            scope: ScopeRef::GLOBAL,
+            scope: ScopeRef::STD,
             ident,
         };
 
