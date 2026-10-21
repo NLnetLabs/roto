@@ -5,6 +5,7 @@ use crate::{
     parser::meta::Meta,
     runtime::{RuntimeFunctionRef, layout::Layout},
     typechecker::scope::ScopeRef,
+    yang::refine::Refinement,
 };
 use core::fmt;
 use std::{
@@ -124,6 +125,7 @@ pub enum MustBeSigned {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeDefinition {
     Enum(TypeName, Vec<EnumVariant>),
+    YangEnum(TypeName, Vec<Refinement>),
     Record(TypeName, Vec<(Meta<Identifier>, Type)>),
     Runtime(ResolvedName, TypeId),
     Primitive(Primitive),
@@ -227,6 +229,9 @@ impl TypeDefinition {
                 },
                 arguments: Vec::new(),
             },
+            TypeDefinition::YangEnum(type_name, _refinements) => {
+                type_name.clone()
+            }
         }
     }
 
@@ -425,6 +430,9 @@ impl TypeDisplay for TypeDefinition {
             }
             TypeDefinition::Primitive(primitive) => {
                 Display::fmt(primitive, f)
+            }
+            TypeDefinition::YangEnum(type_name, _) => {
+                Display::fmt(&type_name.display(type_info), f)
             }
         }
     }

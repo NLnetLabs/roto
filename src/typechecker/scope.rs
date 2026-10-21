@@ -13,6 +13,7 @@ use crate::{
         error::{Label, TypeError},
         types::Signature,
     },
+    yang::refine::{EnumDefinition, Refinement},
 };
 
 use super::{
@@ -614,6 +615,15 @@ impl ScopeGraph {
                 return Some((*name, ty.clone()));
             }
             None
+        })
+    }
+
+    pub fn types(&self) -> impl Iterator<Item = &Declaration> {
+        self.declarations.values().filter(|d| {
+            if let DeclarationKind::Type(_) = &d.kind {
+                return true;
+            }
+            false
         })
     }
 }

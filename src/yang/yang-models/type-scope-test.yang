@@ -8,8 +8,12 @@ module type-scope-test {
   //}
   
 
-  import ietf-rpki-rtr {
-     prefix rtr;
+  //import ietf-rpki-rtr {
+  //   prefix rtr;
+  //}
+
+  import iana-ssh-public-key-algs {
+    prefix sshpka;
   }
 
   typedef horror-show {
@@ -28,11 +32,15 @@ module type-scope-test {
 
   container "rotonda-non-root" {
     typedef horror-show2 {
-      type uint64;
+      type uint64 {
+        range "10..90 | 100..120" {
+          description "blaffer";
+        }
+      }
     }
-    
-    leaf rotor {
-      type rtr:ipv4-pfx-len;
-    }
+      
+    //leaf rotor {
+    //  type rtr:ipv4-pfx-len;
+    //}
   }
 }

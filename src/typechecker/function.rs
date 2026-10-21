@@ -6,12 +6,18 @@ use crate::{
     parser::meta::Meta,
     typechecker::{
         error::{Label, TypeError},
-        scope::{DeclarationKind, ModuleScope, TypeOrStub},
-        types::Signature,
+        scope::{DeclarationKind, TypeOrStub},
+        types::{Signature, TypeDefinition, TypeName},
     },
-    yang::parser::{
-        Keyword, YangStmt,
-        ast::{Argument, YangStmtSeq},
+    yang::{
+        parser::{
+            Keyword, YangStmt,
+            ast::{Argument, YangStmtSeq},
+        },
+        refine::{
+            EnumDefinition, RangeDefinition, Ranges, RefineAttrs, Refinement,
+            YangStatus, allowed_restriction_for, required_specifications,
+        },
     },
 };
 
@@ -354,7 +360,7 @@ impl TypeChecker {
             .map(|d| d.to_string())
             .unwrap_or_default();
 
-        match sub_stmts.find_attr("type") {
+        match sub_stmts.find_attr_argument("type") {
             Some(Meta {
                 id,
                 node: Argument::Ident(b_ty),
@@ -386,7 +392,13 @@ impl TypeChecker {
 
                 let DeclarationKind::Type(TypeOrStub::Type(ty)) = decla.kind
                 else {
-                    ice!("this type is not fully resolved")
+                    println!("kind {:?}", decla.kind);
+                    ice!(
+                        "the type `{}` mentioned in this {:?} is not fully \
+                         resolved",
+                        b_ty,
+                        stmt.node.as_ident().unwrap().as_str()
+                    )
                 };
 
                 self.type_info
@@ -532,7 +544,9 @@ impl TypeChecker {
             }
 
             // what is the type the current typedef is based on?
-            let (base_ty, kind) = match sub_stmts.find_attr("type") {
+            let (derived_from_ty, base_kind) = match sub_stmts
+                .find_attr_argument("type")
+            {
                 // this is a single identifier for a type, meaning it can be a
                 // built-in, or declared in this module, in this scope or in a
                 // parent scope.
@@ -571,12 +585,39 @@ impl TypeChecker {
                             notes: Vec::new(),
                         })?;
 
+                    let ty_sub_stmts = sub_stmts
+                        .node
+                        .find_attr("type")
+                        .map(|s| s.sub_stmts())
+                        .into_iter()
+                        .flatten();
+
+                    // we have the type definition of the base type, but this
+                    // may be a refinement of that base type
+                    let refines = self.refinements(
+                        &Meta {
+                            id: *id,
+                            node: *b_ty,
+                        },
+                        ty_sub_stmts,
+                    )?;
+
+                    let kind = DeclarationKind::Type(TypeOrStub::Type(
+                        TypeDefinition::YangEnum(
+                            TypeName {
+                                name: decla.name,
+                                arguments: vec![],
+                            },
+                            refines,
+                        ),
+                    ));
+
                     (
                         Meta {
                             id: *id,
                             node: *b_ty,
                         },
-                        decla.kind,
+                        kind,
                     )
                 }
                 // This is a type that has a prefix (`module:type`), the
@@ -605,7 +646,7 @@ impl TypeChecker {
             println!(
                 "[declare_types_in_modules] insert typedef for '{}': scope \
                 {:?}, base type `{}`",
-                ty_ident, scope, base_ty.node
+                ty_ident, scope, derived_from_ty.node
             );
 
             let dec = self.type_info.scope_graph.insert_declaration(
@@ -614,7 +655,7 @@ impl TypeChecker {
                     id: kw.id,
                     node: ty_ident,
                 },
-                kind,
+                base_kind,
                 stmt.node
                     .description()
                     .map(|d| d.to_string())
@@ -642,5 +683,172 @@ impl TypeChecker {
 
             Ok(())
         }
+    }
+
+    fn refinements<'a>(
+        &'a self,
+        derived_from_ty: &'a Meta<Identifier>,
+        stmts: impl Iterator<Item = &'a Meta<Stmt>>,
+    ) -> TypeResult<Vec<Refinement>> {
+        let mut refines = vec![];
+
+        for y_stmt in stmts {
+            let Stmt::YangStmtSeq(YangStmtSeq {
+                stmt,
+                arg,
+                sub_stmts,
+            }) = &y_stmt.node
+            else {
+                ice!(
+                    "{y_stmt:?} is not a valid yang statement sequence. This \
+                     shouldn't have been parsed."
+                )
+            };
+
+            let Some(keyword) = stmt.as_keyword() else {
+                ice!(
+                    "{stmt} is not a keyword. This shouldn't have been parsed."
+                );
+            };
+
+            let err = TypeError {
+                description: format!(
+                    "`{:?}` statement is not allowed as a sub-statement \
+                        of a `{}` statement",
+                    keyword, derived_from_ty.node
+                ),
+                location: y_stmt.id,
+                labels: vec![
+                    Label::info(
+                        "this statement defined here, has a sub-statement...",
+                        derived_from_ty.id,
+                    ),
+                    Label::error(
+                        "defined here, but that's not allowed",
+                        y_stmt.id,
+                    ),
+                ],
+                notes: vec![],
+            };
+
+            match (
+                required_specifications(derived_from_ty.node, keyword),
+                allowed_restriction_for(derived_from_ty.node, keyword),
+            ) {
+                (Some(Keyword::Base), None) => {
+                    let Some(arg) = arg else {
+                        return Err(err);
+                    };
+
+                    let def =
+                        crate::yang::refine::BaseDefinition(arg.to_string());
+                    refines.push(Refinement::Base(def));
+                }
+                (Some(Keyword::Enum), None) => {
+                    let Some(arg) = arg else {
+                        return Err(err);
+                    };
+
+                    refines.push(Refinement::Enum(
+                        self.enum_definition(
+                            arg.as_str().as_str(),
+                            sub_stmts,
+                        ),
+                    ));
+                }
+                (None, Some(Keyword::Range)) => {
+                    println!("range arg {:?}", arg);
+                    println!("sub {:#?}", (*sub_stmts).as_str());
+
+                    // this only works for refinements without sub-statments
+                    let Some(range_str) = sub_stmts
+                        .as_str()
+                        .or_else(|| arg.clone().map(|a| a.as_str()))
+                    else {
+                        return Err(err);
+                    };
+
+                    let ranges =
+                        Ranges::parse(range_str.as_str()).ok_or(err)?;
+
+                    refines.push(Refinement::Range(RangeDefinition {
+                        ranges,
+                        attrs: RefineAttrs::from(sub_stmts),
+                    }));
+                }
+                (None, Some(refine)) => {
+                    ice!(
+                        "The refinement `{refine:?}` is currently \
+                         unimplemented"
+                    );
+                }
+                (Some(spec), None) => {
+                    ice!(
+                        "The specification `{spec:?}` is currently \
+                         unimplemented for the statement `{:?}` ",
+                        y_stmt
+                    );
+                }
+                _ => {
+                    ice!(
+                        "The refinement `{keyword:?}` is unknown for the \
+                        type `{:?}`",
+                        derived_from_ty
+                    );
+                }
+            };
+        }
+
+        Ok(refines)
+    }
+
+    fn enum_definition<'a>(
+        &'a self,
+        enumeration: &'a str,
+        sub_stmts: &'a Meta<Expr>,
+    ) -> EnumDefinition {
+        let mut def = EnumDefinition::new(enumeration.to_string());
+
+        for enu in sub_stmts.iter_stmt() {
+            if let Stmt::YangStmtSeq(seq) = &enu.node {
+                match seq.stmt.as_keyword() {
+                    Some(Keyword::Description) => {
+                        def.description =
+                            seq.argument().map(|a| a.node.as_str())
+                    }
+                    Some(Keyword::Status) => {
+                        if let Some(s) = seq.argument().map(|a| {
+                            YangStatus::from(a.node.as_str().as_str())
+                        }) {
+                            def.status = s;
+                        }
+                    }
+                    Some(Keyword::Reference) => {
+                        def.reference = seq.argument_as_str();
+                    }
+                    Some(Keyword::Value) => {
+                        def.value = seq
+                            .argument_as_str()
+                            .and_then(|a| a.parse::<i32>().ok());
+                    }
+                    Some(kw) => {
+                        ice!(
+                            "unknown statement `{:?}` in `enum` statement \
+                            `{}`",
+                            kw,
+                            &enumeration
+                        );
+                    }
+                    _ => {
+                        ice!(
+                            "cannot parse `enum` statement `{}`",
+                            enumeration
+                        );
+                    }
+                }
+            }
+        }
+
+        def
     }
 }

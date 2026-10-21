@@ -1108,7 +1108,12 @@ impl Keyword {
                 (Reference, ZeroOrOne),
             ),
             Keyword::Path => vec![],
-            Keyword::Range => vec![],
+            Keyword::Range => allowed_subs2!(
+                (Description, ZeroOrOne),
+                (ErrorAppTag, ZeroOrOne),
+                (ErrorMessage, ZeroOrOne),
+                (Reference, ZeroOrOne),
+            ),
             Keyword::RequireInstance => vec![],
             Keyword::Pattern => allowed_subs2!(
                 (Description, ZeroOrOne),

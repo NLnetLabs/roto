@@ -19,9 +19,9 @@ module rotonda-conf {
     prefix yang;
   }
 
-  import ietf-rpki-rtr {
-    prefix rtr;
-  }
+  // import ietf-rpki-rtr {
+  //   prefix rtr;
+  // }
 
   typedef "xip-address-origin" {
     type inet:ipv4-prefix;

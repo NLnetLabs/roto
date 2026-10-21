@@ -1,8 +1,13 @@
 #![allow(missing_docs)]
 
-use std::{collections::HashMap, marker::PhantomData};
-
 use rust_decimal::Decimal;
+
+use crate::ast::{Expr, Identifier, Stmt};
+use crate::parser::ParseError;
+use crate::parser::meta::Meta;
+use crate::yang::parser::YangStmt;
+use crate::yang::parser::ast::YangStmtSeq;
+use crate::yang::parser::token::Keyword;
 
 // Restrictions
 //
@@ -15,9 +20,36 @@ use rust_decimal::Decimal;
 // bits               | bit
 // binary             | length
 // leafref            | require-instance
-// instance-identifier| requre-instance
+// instance-identifier| require-instance
 
-#[derive(Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Refinement {
+    Range(RangeDefinition),
+    Length(LengthDefinition),
+    FractionDigits(FractionDigitsDefinition),
+    Pattern(PatternDefinition),
+    Base(BaseDefinition),
+    Enum(EnumDefinition),
+    InstanceIndentifier(RequireInstanceDefinition),
+}
+
+impl Refinement {
+    pub fn validate(&self, value: impl Length) -> bool {
+        match self {
+            Refinement::Range(def) => def.validate(&value),
+            Refinement::Length(def) => def.validate(&value),
+            Refinement::FractionDigits(def) => def.validate(&value),
+            Refinement::Pattern(def) => def.validate(&value),
+            Refinement::Base(def) => true,
+            Refinement::InstanceIndentifier(def) => def.validate(value),
+            Refinement::Enum(enum_definition) => {
+                enum_definition.validate(value)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub struct RefineAttrs {
     description: Option<String>,
     error_app_tag: Option<String>,
@@ -25,54 +57,147 @@ pub struct RefineAttrs {
     reference: Option<String>,
 }
 
-pub struct RangeDefinition<T, L: PartialEq + PartialOrd + Ord> {
-    ranges: Ranges<L>,
+impl From<&Meta<Expr>> for RefineAttrs {
+    fn from(value: &Meta<Expr>) -> Self {
+        let mut attrs = RefineAttrs::default();
+        for stmt in value.iter_stmt() {
+            if let Stmt::YangStmtSeq(YangStmtSeq {
+                stmt, sub_stmts, ..
+            }) = &stmt.node
+            {
+                // None have these can have sub-statements, so the argument is
+                // in the first sub-statement
+                match stmt.as_keyword() {
+                    Some(Keyword::Description) => {
+                        attrs.description = sub_stmts.as_str()
+                    }
+                    Some(Keyword::ErrorAppTag) => {
+                        attrs.error_app_tag = sub_stmts.as_str()
+                    }
+                    Some(Keyword::ErrorMessage) => {
+                        attrs.error_message = sub_stmts.as_str()
+                    }
+                    Some(Keyword::Reference) => {
+                        attrs.reference = sub_stmts.as_str()
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        attrs
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct RangeDefinition {
+    pub ranges: Ranges,
+    pub attrs: RefineAttrs,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct FractionDigitsDefinition {
+    len: usize,
     attrs: RefineAttrs,
-    _t: PhantomData<T>,
 }
 
-pub trait Length<T> {
-    fn len(&self) -> T;
+impl FractionDigitsDefinition {
+    fn validate(&self, _value: &impl Length) -> bool {
+        todo!()
+    }
+}
+
+pub trait Length {
+    fn len(&self) -> isize;
     fn is_empty(&self) -> bool;
+    fn to_string(&self) -> String;
 }
 
-impl Length<usize> for String {
-    fn len(&self) -> usize {
-        self.len()
+impl Length for &String {
+    fn len(&self) -> isize {
+        String::len(self) as isize
     }
 
     fn is_empty(&self) -> bool {
-        self.is_empty()
+        String::is_empty(self)
+    }
+
+    fn to_string(&self) -> String {
+        String::to_string(self)
     }
 }
 
-impl<T, L: PartialEq + PartialOrd + Ord + Copy + std::fmt::Debug>
-    RangeDefinition<T, L>
-{
-    fn validate(&self) -> impl Fn(T) -> Option<T>
-    where
-        L: Sized,
-        T: Length<L>,
-    {
-        |value| {
-            let mut res = false;
-            let len = value.len();
-            for range in self.ranges.0.iter() {
-                if range.0 <= len && range.1 >= len {
-                    res = true;
+impl RangeDefinition {
+    fn validate(&self, value: &impl Length) -> bool {
+        let mut res = false;
+        let len = value.len();
+        for range in self.ranges.0.iter() {
+            if range.0 <= len && range.1 >= len {
+                res = true;
+            } else {
+                return false;
+            }
+        }
+
+        res
+    }
+}
+
+pub type LengthDefinition = RangeDefinition;
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct Ranges(Vec<(isize, isize)>);
+
+impl Ranges {
+    pub fn parse(value: &str) -> Option<Self> {
+        let mut ranges = vec![];
+        for range in value.split('|') {
+            let mut start_stop = range.split("..");
+            let Some(start) = start_stop
+                .next()
+                .map(|s| s.split_whitespace().next())
+                .flatten()
+            else {
+                return None;
+            };
+            let start = start.parse::<isize>().ok().or_else(|| {
+                if start.contains("max") {
+                    Some(isize::MAX)
+                } else if start.contains("min") {
+                    Some(isize::MIN)
                 } else {
-                    return None;
+                    None
                 }
+            })?;
+
+            let Some(end) = start_stop
+                .next()
+                .map(|s| s.split_whitespace().next())
+                .flatten()
+            else {
+                return None;
+            };
+
+            if start_stop.next().is_some() {
+                return None;
             }
 
-            if res { Some(value) } else { None }
+            let end = end.parse::<isize>().ok().or_else(|| {
+                if end.contains("max") {
+                    Some(isize::MAX)
+                } else if end.contains("min") {
+                    Some(isize::MIN)
+                } else {
+                    None
+                }
+            })?;
+
+            ranges.push((start, end));
         }
+
+        Some(Ranges(ranges))
     }
 }
-
-pub type LengthDefinition<T, L> = RangeDefinition<T, L>;
-
-pub struct Ranges<T: PartialEq>(Vec<(T, T)>);
 
 //  Bit substatements
 // +--------------+---------+-------------+
@@ -107,19 +232,84 @@ pub struct BitDefinition {
     status: YangStatus,
 }
 
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub enum YangStatus {
+    #[default]
     Current,
     Deprecated,
     Obsolete,
 }
 
+impl From<&str> for YangStatus {
+    fn from(value: &str) -> Self {
+        match value {
+            "deprecated" => YangStatus::Deprecated,
+            "obsolete" => YangStatus::Obsolete,
+            _ => YangStatus::Current,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct PatternDefinition {
+    pattern: String,
     modifier: PatternModifier,
     attrs: RefineAttrs,
 }
 
+impl PatternDefinition {
+    fn validate(&self, _value: &impl Length) -> bool {
+        todo!()
+    }
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PatternModifier {
     InvertMatch,
+}
+
+// #[derive(Debug)]
+// pub struct EnumDefinition(pub Vec<VariantDefinition>);
+
+impl EnumDefinition {
+    fn validate(&self, value: impl Length) -> bool {
+        true
+    }
+}
+
+#[derive(Clone, Default, Debug, Eq, PartialEq, Hash)]
+pub struct EnumDefinition {
+    pub name: String,
+    pub status: YangStatus,
+    pub description: Option<String>,
+    pub if_feature: Option<String>,
+    pub reference: Option<String>,
+    pub value: Option<i32>,
+}
+
+impl EnumDefinition {
+    pub fn new(name: String) -> Self {
+        EnumDefinition {
+            name,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct BaseDefinition(pub String);
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct RequireInstanceDefinition(bool);
+
+impl RequireInstanceDefinition {
+    fn validate(&self, value: impl Length) -> bool {
+        match value.to_string().as_str() {
+            "true" => true,
+            "false" => false,
+            _ => false,
+        }
+    }
 }
 
 pub trait RefinedValue
@@ -127,99 +317,213 @@ where
     Self: Sized,
 {
     type Input;
-    fn validate(
-        apply_fn: impl Fn(Self) -> Option<Self>,
-        value: Self::Input,
+    fn new(
+        def: &RefinedTypes,
+        id: TypeId,
+        value: &Self::Input,
     ) -> Option<Self>;
-    fn convert() -> impl Fn(Self::Input) -> Self;
+    fn convert(id: TypeId, v: &Self::Input) -> Self;
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct TypeId(u32);
+
+impl From<u32> for TypeId {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
 }
 
 #[derive(Copy, Clone, std::fmt::Debug)]
-pub struct Decimal64 {
+pub struct RDecimal64 {
+    id: TypeId,
     value: Decimal,
 }
 
-impl RefinedValue for Decimal64 {
+impl RefinedValue for RDecimal64 {
     type Input = String;
 
-    fn validate(
-        apply_fn: impl Fn(Self) -> Option<Self>,
-        value: Self::Input,
+    fn new(
+        type_refs: &RefinedTypes,
+        id: TypeId,
+        value: &Self::Input,
     ) -> Option<Self> {
-        (apply_fn)((Self::convert)()(value))
+        let v = Self::convert(id, value);
+        let def = type_refs.0.get(id.0 as usize)?;
+        if def.validate(v) {
+            return Some(v);
+        }
+        None
     }
 
-    fn convert() -> impl Fn(Self::Input) -> Self {
-        |v| Decimal64 {
-            value: Decimal::from_str_exact(&v).unwrap(),
+    fn convert(id: TypeId, v: &Self::Input) -> Self {
+        RDecimal64 {
+            id,
+            value: Decimal::from_str_exact(v).unwrap(),
         }
     }
 }
 
-impl Length<Decimal> for Decimal64 {
-    fn len(&self) -> Decimal {
-        self.value
+impl Length for RDecimal64 {
+    fn len(&self) -> isize {
+        self.value.as_f64().floor() as isize
     }
 
     fn is_empty(&self) -> bool {
         false
     }
+
+    fn to_string(&self) -> String {
+        self.value.to_string()
+    }
 }
 
-impl RefinedValue for String {
+#[derive(Debug, Clone)]
+pub struct RString {
+    id: TypeId,
+    value: String,
+}
+
+impl RefinedValue for RString {
     type Input = String;
 
-    fn validate(
-        apply_fn: impl Fn(Self) -> Option<Self>,
-        value: Self::Input,
+    fn new(
+        type_refs: &RefinedTypes,
+        id: TypeId,
+        value: &Self::Input,
     ) -> Option<Self> {
-        (apply_fn)(value)
+        let def = type_refs.get(id)?;
+        if def.validate(value) {
+            Some(Self::convert(id, value))
+        } else {
+            None
+        }
     }
 
-    fn convert() -> impl Fn(Self::Input) -> Self {
-        |v| -> Self { v }
+    fn convert(id: TypeId, v: &Self::Input) -> Self {
+        Self {
+            id,
+            value: v.clone(),
+        }
     }
 }
 
-//----------- playground -------------------------------------------
-pub fn main() {
-    // let type_defs = HashMap::<u32, LengthDefinition>::new();
+#[derive(Debug, Default)]
+pub struct RefinedTypes(Vec<Refinement>);
 
-    let length_def = LengthDefinition {
-        ranges: Ranges(vec![(Decimal::new(1, 0), Decimal::new(32, 0))]),
-        attrs: RefineAttrs::default(),
-        _t: PhantomData,
+impl RefinedTypes {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn insert(&mut self, def: Refinement) -> TypeId {
+        let id = self.0.len();
+        self.0.push(def);
+        TypeId(id as u32)
+    }
+
+    pub fn get(&self, id: TypeId) -> Option<&Refinement> {
+        self.0.get(id.0 as usize)
+    }
+}
+
+// Type Restrictions
+//
+// types              | refinements
+// --------------------------------------------
+// all integer types  | range
+// decimal64          | range, fraction-digits
+// string             | length
+//
+// Type Specifications
+//
+// enumeration        | enum
+// bits               | bit
+// binary             | length
+// identityref        | base
+// leafref            | require-instance
+// instance-identifier| require-instance
+
+pub fn required_specifications(
+    ty: Identifier,
+    stmt: Keyword,
+) -> Option<Keyword> {
+    let mut kw = None;
+    match ty.as_str() {
+        "identityref" if Keyword::Base == stmt => kw = Some(Keyword::Base),
+        "binary" if Keyword::Length == stmt => kw = Some(Keyword::Length),
+        "bits" if Keyword::Bit == stmt => kw = Some(Keyword::Bit),
+        "decimal64" if Keyword::FractionDigits == stmt => {
+            kw = Some(Keyword::FractionDigits)
+        }
+        "enumeration" if stmt == Keyword::Enum => kw = Some(Keyword::Enum),
+        // [Keyword::Value, Keyword::Status, Keyword::Reference]
+        //     .contains(&stmt)
+        "instance-identifier" if Keyword::RequireInstance == stmt => {
+            kw = Some(Keyword::RequireInstance)
+        }
+        _ => {}
     };
 
-    let dec1 = Decimal64::validate(length_def.validate(), "1.0".to_string())
-        .unwrap();
-    println!("val#1 {dec1:?}",);
+    kw
+}
 
+pub fn allowed_restriction_for(
+    ty: Identifier,
+    stmt: Keyword,
+) -> Option<Keyword> {
+    let mut kw = None;
+    match ty.as_str() {
+        "int8" | "int16" | "int32" | "int64" | "uint8" | "uint16"
+        | "uint32" | "uint64" | "decimal64"
+            if stmt == Keyword::Range =>
+        {
+            kw = Some(Keyword::Range)
+        }
+        "string" if stmt == Keyword::Length => kw = Some(Keyword::Length),
+        "string" if stmt == Keyword::Pattern => kw = Some(Keyword::Pattern),
+        "identityref" if stmt == Keyword::Base => kw = Some(Keyword::Base),
+        _ => {}
+    };
+
+    kw
+}
+
+//----------- playground -----------------------------------------------------
+
+pub fn main() {
+    let mut type_defs = RefinedTypes::new();
+
+    let length_def = LengthDefinition {
+        ranges: Ranges(vec![(1, 32)]),
+        attrs: RefineAttrs::default(),
+    };
+
+    let id = type_defs.insert(Refinement::Length(length_def));
+    let dec1 = RDecimal64::new(&type_defs, id, &"1.0".to_string()).unwrap();
+
+    println!("val#1 {dec1:?}",);
     println!(
         "val#2 {:?}",
-        Decimal64::validate(length_def.validate(), "64.0".to_string())
+        RDecimal64::new(&type_defs, id, &"64.0".to_string())
     );
-
     println!(
         "val#3 {:?}",
-        Decimal64::validate(length_def.validate(), "20.0".to_string())
+        RDecimal64::new(&type_defs, id, &"20.0".to_string())
     );
 
     let string_length_def = LengthDefinition {
-        ranges: Ranges(vec![(1_usize, 10)]),
+        ranges: Ranges(vec![(1_isize, 10)]),
         attrs: RefineAttrs::default(),
-        _t: PhantomData,
     };
+    let id = type_defs.insert(Refinement::Length(string_length_def));
 
-    let val_s = String::validate(
-        string_length_def.validate(),
-        "someshit".to_string(),
-    );
+    let val_s = RString::new(&type_defs, id, &"someshit".to_string());
     println!("string#1 {val_s:?}");
 
-    let val_s = String::validate(
-        string_length_def.validate(),
-        "someshitistoolong".to_string(),
-    );
+    let val_s =
+        RString::new(&type_defs, id, &"someshitistoolong".to_string());
     println!("string#1 {val_s:?}");
+
+    println!("refinements {:#?}", type_defs);
 }

@@ -586,9 +586,9 @@ fn describe_declaration(d: &Declaration) -> &str {
         DeclarationKind::Method(..) => "method",
         DeclarationKind::Enum(..) => "enum",
         DeclarationKind::TypeParam(..) => "type parameter",
-        DeclarationKind::YangModule(yang_module_declaration) => "yang module",
-        DeclarationKind::YangSubModule(ysm) => "yang submodule",
-        DeclarationKind::Leaf(_, _) => "yang leaf",
+        DeclarationKind::YangModule(..) => "yang module",
+        DeclarationKind::YangSubModule(..) => "yang submodule",
+        DeclarationKind::Leaf(..) => "yang leaf",
     }
 }
 

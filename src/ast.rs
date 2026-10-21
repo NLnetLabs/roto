@@ -211,12 +211,23 @@ impl Stmt {
         yang_s.description()
     }
 
-    fn argument_type_definition(&self) -> Option<TypeDefinition> {
-        let Stmt::YangStmtSeq(yang_s) = &self else {
-            return None;
+    pub fn sub_stmts(&self) -> impl Iterator<Item = &Meta<Stmt>> {
+        let iter = if let Stmt::YangStmtSeq(yang_s) = &self {
+            Some(yang_s.sub_stmts.iter_stmt())
+        } else {
+            None
         };
+        iter.into_iter().flatten()
+    }
 
-        yang_s.argument_type_definition()
+    pub fn find_attr(&self, ident: &Identifier) -> Option<Stmt> {
+        self.sub_stmts().find_map(|s| {
+            if s.as_ident() == Some(*ident) {
+                Some(s.node.clone())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -331,12 +342,22 @@ impl Expr {
         .flatten()
     }
 
-    pub fn find_attr(&self, name: &str) -> Option<&Meta<Argument>> {
-        self.iter_stmt()
-            .find(|stmt| {
-                stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false)
-            })
-            .and_then(|stmt| stmt.argument())
+    pub fn find_attr_argument(&self, name: &str) -> Option<&Meta<Argument>> {
+        self.find_attr(name).and_then(|stmt| stmt.argument())
+    }
+
+    pub fn find_attr(&self, name: &str) -> Option<&Meta<Stmt>> {
+        self.iter_stmt().find(|stmt| {
+            stmt.as_ident().map(|i| i.as_str() == name).unwrap_or(false)
+        })
+    }
+
+    pub fn as_str(&self) -> Option<String> {
+        if let Expr::Argument(s) = self {
+            Some(s.as_str())
+        } else {
+            None
+        }
     }
 }
 

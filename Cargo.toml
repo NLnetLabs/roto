@@ -37,6 +37,12 @@ path = "bin/rotonda-conf.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "refine-test"
+path = "src/yang/refine.rs"
+test = false
+bench = false
+
 [features]
 default = ["cli"]
 cli = ["clap"]
@@ -59,6 +65,7 @@ sealed = "0.6.0"
 indexmap = "2.14.0"
 icu = { version = "1.5", features = ["compiled_data"] }
 serde = { version = "1.0.228", features = ["derive"] }
+rust_decimal = "1.43.0"
 
 [dependencies.cranelift]
 version = "0.127.1"

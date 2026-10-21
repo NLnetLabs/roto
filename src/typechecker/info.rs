@@ -229,6 +229,9 @@ impl TypeInfo {
 
                         Ty::Enum(variants)
                     }
+                    TypeDefinition::YangEnum(type_name, refinements) => {
+                        todo!()
+                    }
                     TypeDefinition::Record(type_name, fields) => {
                         let subs: Vec<_> = type_name
                             .arguments

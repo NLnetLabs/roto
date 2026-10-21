@@ -162,7 +162,7 @@ impl YangStmtSeq {
     pub fn description(&self) -> Option<String> {
         self.sub_stmts
             .node
-            .find_attr("description")
+            .find_attr_argument("description")
             .map(|d| d.to_string())
     }
 
@@ -239,6 +239,15 @@ impl YangStmtSeq {
             Some(arg)
         } else {
             self.arg.as_ref()
+        }
+    }
+
+    /// docs
+    pub fn argument_as_str(&self) -> Option<String> {
+        if let Expr::Argument(arg) = &self.sub_stmts.node {
+            Some(arg.as_str())
+        } else {
+            None
         }
     }
 }

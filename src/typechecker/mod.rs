@@ -596,7 +596,7 @@ impl TypeChecker {
                         }),
                         ym.ident.clone(),
                         ym.body
-                            .find_attr("description")
+                            .find_attr_argument("description")
                             .map(|d| d.as_str())
                             .unwrap_or(String::new()),
                     ),
@@ -615,7 +615,7 @@ impl TypeChecker {
                         ),
                         ysm.ident.clone(),
                         ysm.body
-                            .find_attr("description")
+                            .find_attr_argument("description")
                             .map(|d| d.as_str())
                             .unwrap_or(String::new()),
                     ),
@@ -786,7 +786,7 @@ impl TypeChecker {
                 // statement, again, this already have been checked by the
                 // parser.
                 let Some(import_pfx) =
-                    sub_stmts.find_attr("prefix").map(|t| Meta {
+                    sub_stmts.find_attr_argument("prefix").map(|t| Meta {
                         id: t.id,
                         node: t.as_ident().unwrap(),
                     })

@@ -905,6 +905,13 @@ impl YangStmt {
         }
     }
 
+    pub fn as_keyword(&self) -> Option<Keyword> {
+        match self {
+            YangStmt::Stmt(kw) => Some(kw.node),
+            _ => None,
+        }
+    }
+
     pub fn as_ident(&self) -> Identifier {
         match self {
             YangStmt::Module(meta, _) => Identifier::from(meta.node.as_str()),

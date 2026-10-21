@@ -128,9 +128,13 @@ fn cli_inner() -> Result<(), RotoReport> {
                 modules.iter().map(|m| m.ident.clone()).collect::<Vec<_>>()
             );
 
+            let leafs =
+                t_checked.type_info.scope_graph.leafs().collect::<Vec<_>>();
+            println!("leafs {:#?}", leafs);
+
             println!(
-                "resolved name {:#?}",
-                t_checked.type_info.resolved_names
+                "types {:#?}",
+                t_checked.type_info.scope_graph.types().collect::<Vec<_>>()
             );
         }
         Command::Print { file } => {
