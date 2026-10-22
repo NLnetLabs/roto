@@ -1,6 +1,8 @@
 use std::any::{Any, TypeId};
 use std::sync::Arc;
 
+use sealed::sealed;
+
 use crate::value::Value;
 
 #[cfg(test)]
@@ -37,6 +39,7 @@ unsafe impl Sync for FunctionDescription {}
     note = "All arguments and the return type of this function implement `Value`.",
     note = "You might have forgotten to wrap one of the arguments in `Val<T>`."
 )]
+#[sealed]
 pub trait RegisterableFn<A, R, MaybeOutPtr>: Send + 'static {
     /// Whether the first parameter is an out pointer
     const HAS_OUT_PTR: bool;
@@ -65,7 +68,20 @@ impl FunctionDescription {
     pub fn of<A, R, O, F: RegisterableFn<A, R, O>>(func: F) -> Self {
         let parameter_types = func.parameter_types();
         let return_type = F::return_type();
-        let trampoline_ptr = &F::TRAMPOLINE as *const _ as *const *const u8;
+
+        // Ok, I looked back at this after a while and this needs some serious
+        // documentation. We are taking Self::RustWrapper and turning it into
+        // a pointer. However, the compiler doesn't know that it is always some
+        // function pointer and therefore does not accept any direct casts or
+        // transmutes. We work around this by first taking a pointer to the
+        // value, which we can then cast to the type that we need and then
+        // deref again.
+        //
+        // This is highly unsafe and only works as long as that trampoline
+        // value is actually a function pointer, but we control who can
+        // implement it because it's sealed so that's fine.
+        let trampoline = F::TRAMPOLINE;
+        let trampoline_ptr = &raw const trampoline as *const *const u8;
         let trampoline = unsafe { *trampoline_ptr };
 
         #[cfg(test)]
@@ -145,6 +161,7 @@ macro_rules! registerable_fn {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         #[allow(unused_mut)]
+        #[sealed]
         impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r, WithoutOutPtr> for F
         where
             $($a: Value,)*
@@ -180,7 +197,7 @@ macro_rules! registerable_fn {
 
             #[cfg(test)]
             fn ir_function(&self) -> RustIrFunction {
-                let f = self as *const _;
+                let f = self as *const F;
                 // We reuse the type names as variable names, so they are
                 // uppercase, but that's the easiest way to do this.
                 #[allow(non_snake_case)]
@@ -226,6 +243,7 @@ macro_rules! registerable_fn_out_ptr {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
         #[allow(unused_mut)]
+        #[sealed]
         impl<$($a,)* $r, F> RegisterableFn<($($a,)*), $r, WithOutPtr> for F
         where
             $($a: Value,)*
@@ -259,7 +277,7 @@ macro_rules! registerable_fn_out_ptr {
 
             #[cfg(test)]
             fn ir_function(&self) -> RustIrFunction {
-                let f = self as *const _;
+                let f = self as *const F;
                 // We reuse the type names as variable names, so they are
                 // uppercase, but that's the easiest way to do this.
                 #[allow(non_snake_case)]
