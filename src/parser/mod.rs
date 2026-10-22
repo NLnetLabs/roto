@@ -5,7 +5,7 @@
 //! There is currently no way that the parser can recover from invalid syntax.
 //! Therefore, we can only report one parse error.
 
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::ControlFlow};
 
 use crate::{
     ast::{

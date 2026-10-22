@@ -172,6 +172,7 @@ impl<'s> Lexer<'s> {
         let tok = match *x {
             [b'=', b'='] => Token::EqEq,
             [b'!', b'='] => Token::BangEq,
+            [b'.', b'.'] => Token::DotDot,
             [b'&', b'&'] => Token::AmpAmp,
             [b'|', b'|'] => Token::PipePipe,
             [b'>', b'='] => Token::AngleRightEq,
@@ -211,7 +212,7 @@ impl<'s> Lexer<'s> {
             b':' => Token::Colon,
             b';' => Token::SemiColon,
             b',' => Token::Comma,
-            b'.' => Token::Period,
+            b'.' => Token::Dot,
             b'+' => Token::Plus,
             b'*' => Token::Star,
             b'/' => Token::Slash,
