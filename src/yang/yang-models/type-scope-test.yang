@@ -33,7 +33,7 @@ module type-scope-test {
   container "rotonda-non-root" {
     typedef horror-show2 {
       type uint64 {
-        range "10..90 | 100..120" {
+        range "80..90 | 100..max" {
           description "blaffer";
         }
       }

@@ -153,13 +153,9 @@ impl Ranges {
         let mut ranges = vec![];
         for range in value.split('|') {
             let mut start_stop = range.split("..");
-            let Some(start) = start_stop
+            let start = start_stop
                 .next()
-                .map(|s| s.split_whitespace().next())
-                .flatten()
-            else {
-                return None;
-            };
+                .and_then(|s| s.split_whitespace().next())?;
             let start = start.parse::<isize>().ok().or_else(|| {
                 if start.contains("max") {
                     Some(isize::MAX)
@@ -170,13 +166,9 @@ impl Ranges {
                 }
             })?;
 
-            let Some(end) = start_stop
+            let end = start_stop
                 .next()
-                .map(|s| s.split_whitespace().next())
-                .flatten()
-            else {
-                return None;
-            };
+                .and_then(|s| s.split_whitespace().next())?;
 
             if start_stop.next().is_some() {
                 return None;
@@ -194,6 +186,21 @@ impl Ranges {
 
             ranges.push((start, end));
         }
+
+        ranges.sort_by_key(|a| a.0);
+        let _ = ranges.iter().try_fold(
+            (isize::MIN, isize::MIN),
+            |acc: (isize, isize), &(start, end)| {
+                if let (_min_start, last_end) = acc
+                    && start <= end
+                    && last_end <= start
+                {
+                    return Some((start, end));
+                }
+
+                None
+            },
+        )?;
 
         Some(Ranges(ranges))
     }
