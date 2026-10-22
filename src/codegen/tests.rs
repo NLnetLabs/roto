@@ -3518,7 +3518,7 @@ fn mutate() {
     let mut t = MyType {
         i: AtomicI32::new(0),
     };
-    let ptr = Ptr(&mut t as *mut _);
+    let ptr = Ptr(&raw mut t);
     let res = f.call(Val(ptr));
 
     use std::sync::atomic::Ordering::Relaxed;

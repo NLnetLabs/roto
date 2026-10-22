@@ -150,16 +150,16 @@ impl Memory {
         }
     }
 
-    pub fn read_array<const N: usize>(&self, p: usize) -> [u8; N] {
+    pub fn read_array<const N: usize>(&mut self, p: usize) -> [u8; N] {
         let slice = self.read_slice(p, N);
         slice.try_into().unwrap()
     }
 
-    pub fn read_slice(&self, p: usize, size: usize) -> &[u8] {
+    pub fn read_slice(&mut self, p: usize, size: usize) -> &[u8] {
         let p = &self.pointers[p];
         match p {
             Pointer::Local(p) => {
-                let frame = &self.stack[p.stack_index];
+                let frame = &mut self.stack[p.stack_index];
                 assert_eq!(frame.id, p.stack_id);
                 frame.read(p, size)
             }
@@ -222,11 +222,11 @@ impl Memory {
         self.pointers.len() - 1
     }
 
-    pub fn get(&self, p: usize) -> *mut () {
+    pub fn get(&mut self, p: usize) -> *mut () {
         let p = &self.pointers[p];
         match p {
             Pointer::Local(p) => {
-                let frame = &self.stack[p.stack_index];
+                let frame = &mut self.stack[p.stack_index];
                 frame.get(p)
             }
             Pointer::Global(p) => p.ptr,
@@ -240,13 +240,13 @@ impl StackFrame {
         alloc.write(p.allocation_offset, val);
     }
 
-    fn read(&self, p: &LocalPointer, size: usize) -> &[u8] {
-        let alloc = &self.allocations[p.allocation_index];
+    fn read(&mut self, p: &LocalPointer, size: usize) -> &[u8] {
+        let alloc = &mut self.allocations[p.allocation_index];
         alloc.read(p.allocation_offset, size)
     }
 
-    fn get(&self, p: &LocalPointer) -> *mut () {
-        let alloc = &self.allocations[p.allocation_index];
+    fn get(&mut self, p: &LocalPointer) -> *mut () {
+        let alloc = &mut self.allocations[p.allocation_index];
         alloc.get(p.allocation_offset)
     }
 }
@@ -265,7 +265,7 @@ impl Allocation {
         self.inner[offset..offset + val.len()].copy_from_slice(val);
     }
 
-    fn read(&self, offset: usize, size: usize) -> &[u8] {
+    fn read(&mut self, offset: usize, size: usize) -> &[u8] {
         assert!(
             offset + size <= self.inner.len(),
             "memory access out of bounds"
@@ -275,8 +275,8 @@ impl Allocation {
         &self.inner[offset..offset + size]
     }
 
-    fn get(&self, offset: usize) -> *mut () {
-        &self.inner[offset] as *const _ as *mut _
+    fn get(&mut self, offset: usize) -> *mut () {
+        &raw mut self.inner[offset] as *mut ()
     }
 }
 
