@@ -368,13 +368,11 @@ impl<'a, 's> State<'a, 's> {
         if !first && preserve_trailing_whitespace {
             self.newlines(position);
             true
+        } else if preserve_only_whitespace {
+            self.newlines(position)
         } else {
-            if preserve_only_whitespace {
-                self.newlines(position)
-            } else {
-                self.ignore_newlines(position);
-                false
-            }
+            self.ignore_newlines(position);
+            false
         }
     }
 
