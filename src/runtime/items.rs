@@ -3,7 +3,7 @@
 use std::any::TypeId;
 
 use crate::runtime::extern_eq;
-use crate::value::{EqFn, TypeDescription};
+use crate::value::{CloneFn, DropFn, EqFn, TypeDescription};
 use crate::{
     Location,
     ast::Identifier,
@@ -246,8 +246,8 @@ impl Type {
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let movability = Movability::CloneDrop(CloneDrop {
-            clone: extern_clone::<T> as _,
-            drop: extern_drop::<T> as _,
+            clone: extern_clone::<T> as CloneFn,
+            drop: extern_drop::<T> as DropFn,
         });
         Self::new::<T>(name, doc, movability, location)
     }
