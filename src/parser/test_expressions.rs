@@ -222,6 +222,37 @@ fn match_with_braces_without_commas() {
 }
 
 #[test]
+fn patterns() {
+    let s = r#"
+        match s {
+            Foo | Bar => {}
+            | Foo | Bar => {}
+            10 => {}
+            10..20 => {}
+            10.3..20.0 => {}
+            true => {}
+            false => {}
+            _ => {}
+            Foo(10 | 20 | 30) => {}
+            Foo(1, 2, 3, 4) => {}
+            Foo(1, .., 4) => {}
+            Foo(1, ..) => {}
+            Foo(.., 4) => {}
+            Foo.Bar.Baz => {}
+            Foo.Bar { foo: 10, bar: 20 | 30, baz } => {}
+            Foo.Bar { .. } => {}
+            Foo.Bar {} => {}
+            Foo.Bar { foo: (10 | 20 | 30) } => {}
+            ((((((((((x)))))))))) => {}
+            () => {}
+            "hello" => {}
+            'c' => {}
+        }
+    "#;
+    parse_expr(s).unwrap();
+}
+
+#[test]
 fn anonymous_record() {
     let s = "
         { foo: 10, bar: 20 }

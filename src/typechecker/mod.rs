@@ -125,6 +125,7 @@ pub(crate) mod error;
 mod expr;
 mod function;
 pub mod info;
+mod match_expr;
 pub mod scope;
 pub mod scoped_display;
 #[cfg(all(test, not(miri)))]

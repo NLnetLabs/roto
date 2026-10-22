@@ -1,14 +1,16 @@
 use std::{net::IpAddr, ops::Range};
 
+use cranelift_codegen::isa::x64::args::CC::L;
 use inetnum::asn::Asn;
 
 use crate::{
     ast::{
-        BinOp, Block, CompoundAssign, CompoundAssignOp, Expr, FStringPart,
-        FloatType, Identifier, ImportPath, IntType, Literal, Match, MatchArm,
-        Path, Pattern, Record, RecordField, RecordFieldType, RecordType,
-        ReturnKind, Stmt, TypeExpr,
+        ArgPattern, BinOp, Block, CompoundAssign, CompoundAssignOp, Expr,
+        FStringPart, FieldPattern, FloatType, Identifier, ImportPath,
+        IntType, Literal, Match, MatchArm, Path, Pattern, Record,
+        RecordField, RecordFieldType, RecordType, ReturnKind, Stmt, TypeExpr,
     },
+    ice,
     parser::{ParseError, precedence::Associativity},
 };
 
@@ -432,7 +434,7 @@ impl Parser<'_, '_> {
                 expr = self
                     .spans
                     .add(span, Expr::FunctionCall(Box::new(expr), args));
-            } else if self.next_is(Token::Period) {
+            } else if self.next_is(Token::Dot) {
                 let ident = self.identifier()?;
                 let span = self.merge_spans(&expr, &ident);
                 expr =
@@ -677,8 +679,8 @@ impl Parser<'_, '_> {
     ///
     /// ```ebnf
     /// MatchExpr    ::= 'match' Expr '{' MatchArm* MatchArmLast? '}'
-    /// MatchArm     ::= Pattern ('|' Expr)? '=>' (Block | (Expr ','))
-    /// MatchArmLast ::= Pattern ('|' Expr)? '=>' Expr
+    /// MatchArm     ::= Pattern ('if' Expr)? '=>' (Block | (Expr ','))
+    /// MatchArmLast ::= Pattern ('if' Expr)? '=>' Expr
     /// ```
     fn match_expr(&mut self) -> ParseResult<Meta<Expr>> {
         let start = self.take(Token::Keyword(Keyword::Match))?;
@@ -687,34 +689,7 @@ impl Parser<'_, '_> {
         let mut arms = Vec::new();
         let start_arms = self.take(Token::CurlyLeft)?;
         while !self.peek_is(Token::CurlyRight) {
-            let variant = self.identifier()?;
-            let mut span = self.get_span(&variant);
-
-            let resolved_variant = variant.as_str();
-
-            let pattern = if resolved_variant == "_" {
-                Pattern::Underscore
-            } else {
-                let data_field = if self.peek_is(Token::RoundLeft) {
-                    let fields = self.separated(
-                        Token::RoundLeft,
-                        Token::RoundRight,
-                        Token::Comma,
-                        Self::identifier,
-                    )?;
-                    span = self.merge_spans(&variant, &fields);
-                    Some(fields)
-                } else {
-                    None
-                };
-
-                Pattern::EnumVariant {
-                    variant,
-                    fields: data_field,
-                }
-            };
-
-            let pattern = self.add_span(span, pattern);
+            let pattern = self.pattern()?;
 
             let guard = if self.next_is(Token::Keyword(Keyword::If)) {
                 Some(self.expr()?)
@@ -760,6 +735,253 @@ impl Parser<'_, '_> {
         let span = start.merge(end);
         let match_expr = self.spans.add(span, Match { expr, arms });
         Ok(self.spans.add(span, Expr::Match(Box::new(match_expr))))
+    }
+
+    fn pattern(&mut self) -> ParseResult<Meta<Pattern>> {
+        // Leading pipe character is allowed
+        self.next_is(Token::Pipe);
+
+        let first = self.pattern_inner()?;
+
+        if !self.peek_is(Token::Pipe) {
+            return Ok(first);
+        }
+
+        let mut list = Vec::new();
+        list.push(first);
+
+        while self.next_is(Token::Pipe) {
+            let new = self.pattern_inner()?;
+            list.push(new);
+        }
+
+        let (Some(first), Some(last)) = (list.first(), list.last()) else {
+            ice!("we have added at least one item above");
+        };
+
+        let span = self.merge_spans(first, last);
+        Ok(self.add_span(span, Pattern::Or(list)))
+    }
+
+    fn pattern_inner(&mut self) -> ParseResult<Meta<Pattern>> {
+        let Some(first) = self.peek() else {
+            return Err(Box::new(ParseError {
+                kind: ParseErrorKind::EndOfInput,
+                location: Span::new(
+                    self.file,
+                    self.file_length..self.file_length,
+                ),
+                note: None,
+                hints: Vec::new(),
+            }));
+        };
+
+        Ok(match first {
+            Token::RoundLeft => {
+                let start = self.take(Token::RoundLeft)?;
+                if self.peek_is(Token::RoundRight) {
+                    let end = self.take(Token::RoundRight)?;
+                    let span = start.merge(end);
+                    self.add_span(span, Pattern::Unit)
+                } else {
+                    let pat = self.pattern()?;
+                    let end = self.take(Token::RoundRight)?;
+                    let span = start.merge(end);
+                    self.add_span(span, Pattern::Parens(Box::new(pat)))
+                }
+            }
+            Token::Ident("_") => {
+                let (_, span) = self.next()?;
+                self.add_span(span, Pattern::Underscore)
+            }
+            Token::Ident(_) => {
+                let path = self.path()?;
+                if self.peek_is(Token::RoundLeft) {
+                    let arguments = self.separated(
+                        Token::RoundLeft,
+                        Token::RoundRight,
+                        Token::Comma,
+                        Self::arg_pattern,
+                    )?;
+                    let span = self.merge_spans(&path, &arguments);
+                    self.add_span(
+                        span,
+                        Pattern::EnumConstructor { path, arguments },
+                    )
+                } else if self.peek_is(Token::CurlyLeft) {
+                    let fields = self.separated(
+                        Token::CurlyLeft,
+                        Token::CurlyRight,
+                        Token::Comma,
+                        Self::field_pattern,
+                    )?;
+                    let span = self.merge_spans(&path, &fields);
+                    self.add_span(
+                        span,
+                        Pattern::RecordConstructor { path, fields },
+                    )
+                } else {
+                    let span = self.get_span(&path);
+                    self.add_span(span, Pattern::Path(path))
+                }
+            }
+            _ => {
+                let lit = self.literal()?;
+                let span = self.spans.get(lit.id);
+                match lit.node {
+                    Literal::String(s) => self.add_span(
+                        span,
+                        Pattern::String(Meta {
+                            node: s,
+                            id: lit.id,
+                        }),
+                    ),
+                    Literal::Char(c) => self.add_span(
+                        span,
+                        Pattern::Char(Meta {
+                            node: c,
+                            id: lit.id,
+                        }),
+                    ),
+                    Literal::Asn(_) => {
+                        // We should remove AS numbers anyway.
+                        todo!("error")
+                    }
+                    Literal::IpAddress(_) => {
+                        // We should remove IP addrs anyway.
+                        todo!("error")
+                    }
+                    Literal::Integer(start, int_type) => {
+                        if self.next_is(Token::DotDot) {
+                            let end = self.integer()?;
+                            if let (Some(t1), Some(t2)) = (&int_type, &end.1)
+                                && t1 != t2
+                            {
+                                todo!("error")
+                            }
+                            let span = span.merge(self.get_span(&end));
+                            self.add_span(
+                                span,
+                                Pattern::RangeInt(
+                                    Meta {
+                                        node: start,
+                                        id: lit.id,
+                                    },
+                                    Meta {
+                                        node: end.0,
+                                        id: end.id,
+                                    },
+                                    int_type.clone().or(end.1.clone()),
+                                ),
+                            )
+                        } else {
+                            let span = self.spans.get(lit.id);
+                            self.add_span(
+                                span,
+                                Pattern::Int(start, int_type.clone()),
+                            )
+                        }
+                    }
+                    Literal::Float(start, float_type) => {
+                        if self.next_is(Token::DotDot) {
+                            let end = self.float()?;
+                            if let (Some(t1), Some(t2)) =
+                                (&float_type, &end.1)
+                                && t1 != t2
+                            {
+                                todo!("error")
+                            }
+                            let span = span.merge(self.get_span(&end));
+                            self.add_span(
+                                span,
+                                Pattern::RangeFloat(
+                                    Meta {
+                                        node: start,
+                                        id: lit.id,
+                                    },
+                                    Meta {
+                                        node: end.0,
+                                        id: end.id,
+                                    },
+                                    float_type.clone().or(end.1.clone()),
+                                ),
+                            )
+                        } else {
+                            todo!("error")
+                        }
+                    }
+                    Literal::Bool(b) => {
+                        let span = self.spans.get(lit.id);
+                        self.add_span(
+                            span,
+                            Pattern::Bool(Meta {
+                                node: b,
+                                id: lit.id,
+                            }),
+                        )
+                    }
+                    Literal::Unit => {
+                        let span = self.spans.get(lit.id);
+                        self.add_span(span, Pattern::Unit)
+                    }
+                }
+            }
+            _ => {
+                todo!("error")
+            }
+        })
+    }
+
+    fn arg_pattern(&mut self) -> ParseResult<Meta<ArgPattern>> {
+        if let Some([Token::DotDot, x]) = self.peek_many()
+            && !matches!(x, Token::Integer(..) | Token::Float(..))
+        {
+            let span = self.take(Token::DotDot)?;
+            Ok(self.add_span(span, ArgPattern::Rest))
+        } else {
+            let pat = self.pattern()?;
+            let span = self.get_span(&pat);
+            Ok(self.add_span(span, ArgPattern::Pattern(pat)))
+        }
+    }
+
+    fn field_pattern(&mut self) -> ParseResult<Meta<FieldPattern>> {
+        if self.peek_is(Token::DotDot) {
+            let span = self.take(Token::DotDot)?;
+            return Ok(self.add_span(span, FieldPattern::Rest));
+        }
+
+        let ident = self.identifier()?;
+        if self.next_is(Token::Colon) {
+            let pat = self.pattern()?;
+            let span = self.merge_spans(&ident, &pat);
+            Ok(self.add_span(span, FieldPattern::Pattern(ident, pat)))
+        } else {
+            let span = self.get_span(&ident);
+            Ok(self.add_span(span, FieldPattern::Ident(ident)))
+        }
+    }
+
+    fn integer(&mut self) -> ParseResult<Meta<(i64, Option<IntType>)>> {
+        let lit = self.simple_literal()?;
+        let Literal::Integer(x, ty) = lit.node else {
+            todo!("error");
+        };
+        Ok(Meta {
+            id: lit.id,
+            node: (x, ty),
+        })
+    }
+
+    fn float(&mut self) -> ParseResult<Meta<(f64, Option<FloatType>)>> {
+        let lit = self.simple_literal()?;
+        let Literal::Float(x, ty) = lit.node else {
+            todo!("error");
+        };
+        Ok(Meta {
+            id: lit.id,
+            node: (x, ty),
+        })
     }
 
     /// Parse any literal, including prefixes, ip addresses and communities
@@ -1049,7 +1271,7 @@ impl Parser<'_, '_> {
     pub(super) fn path(&mut self) -> ParseResult<Meta<Path>> {
         let mut idents = Vec::new();
         idents.push(self.path_item()?);
-        while self.next_is(Token::Period) {
+        while self.next_is(Token::Dot) {
             idents.push(self.path_item()?);
         }
         let span =
@@ -1083,7 +1305,7 @@ impl Parser<'_, '_> {
             let ident: Meta<Identifier> = self.path_item()?;
             path.idents.push(ident);
 
-            if !self.next_is(Token::Period) {
+            if !self.next_is(Token::Dot) {
                 let span = self.merge_spans(
                     path.idents.first().unwrap(),
                     path.idents.last().unwrap(),

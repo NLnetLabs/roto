@@ -39,7 +39,7 @@ pub struct Context {
 
 impl Context {
     /// Create a new context with the expected type set to the passed type
-    fn with_type(&self, t: impl Borrow<Type>) -> Self {
+    pub(crate) fn with_type(&self, t: impl Borrow<Type>) -> Self {
         Context {
             expected_type: t.borrow().clone(),
             ..self.clone()
@@ -715,98 +715,7 @@ impl TypeChecker {
             if default_arm {
                 return Err(self.error_unreachable_expression(body));
             }
-
-            match &pattern.node {
-                Pattern::Underscore => {
-                    let arm_scope = self
-                        .type_info
-                        .scope_graph
-                        .wrap(scope, ScopeType::MatchArm(match_id, None));
-
-                    if let Some(guard) = guard {
-                        let ctx = ctx.with_type(Type::bool());
-                        self.expr(arm_scope, &ctx, guard)?;
-                    } else {
-                        default_arm = true;
-                    }
-
-                    arms_diverge &= self.expr(arm_scope, ctx, body)?;
-                    continue;
-                }
-                Pattern::EnumVariant {
-                    variant,
-                    fields: data_field,
-                } => {
-                    let Some(idx) =
-                        variants.iter().position(|v| v.name == variant.node)
-                    else {
-                        return Err(self
-                            .error_variant_does_not_exist(variant, &t_expr));
-                    };
-
-                    let variant_already_used =
-                        used_variants.contains(&variant.node);
-                    if variant_already_used {
-                        println!(
-                            "WARNING: Variant occurs multiple times in match! This arm is unreachable"
-                        )
-                    }
-
-                    let field_types = &variants[idx].fields;
-                    let arm_scope = self.type_info.scope_graph.wrap(
-                        scope,
-                        ScopeType::MatchArm(match_id, Some(idx)),
-                    );
-
-                    match (field_types.as_slice(), data_field) {
-                        ([], None) => {} // ok!
-                        ([], Some(_)) => {
-                            return Err(self
-                                .error_variant_does_not_have_fields(
-                                    variant, &t_expr,
-                                ));
-                        }
-                        (field_types, Some(fields)) => {
-                            if field_types.len() != fields.len() {
-                                return Err(self
-                                    .error_number_of_arguments_dont_match(
-                                        "pattern",
-                                        variant,
-                                        field_types.len(),
-                                        fields.len(),
-                                    ));
-                            }
-                            for (ty, field) in
-                                field_types.iter().zip(&fields.node)
-                            {
-                                self.insert_var(
-                                    arm_scope,
-                                    field.clone(),
-                                    ty,
-                                )?;
-                            }
-                        }
-                        (_field_types, None) => {
-                            return Err(self
-                                .error_need_arguments_on_pattern(
-                                    variant, &t_expr,
-                                ));
-                        }
-                    }
-
-                    if let Some(guard) = guard {
-                        let ctx = ctx.with_type(Type::bool());
-                        self.expr(arm_scope, &ctx, guard)?;
-                    } else if !variant_already_used {
-                        // If there is a guard we don't mark the variant as used,
-                        // because the guard could evaluate to false and hence the
-                        // variant _should_ actually be used again.
-                        used_variants.push(variant.node);
-                    }
-
-                    arms_diverge &= self.expr(arm_scope, ctx, body)?;
-                }
-            }
+            todo!();
         }
 
         if !default_arm && used_variants.len() < variants.len() {
@@ -1264,7 +1173,7 @@ impl TypeChecker {
     }
 
     /// Resolve a path of identifiers into a value
-    fn resolve_expression_path(
+    pub(super) fn resolve_expression_path(
         &mut self,
         scope: ScopeRef,
         ctx: &Context,

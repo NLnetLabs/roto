@@ -1,7 +1,7 @@
 //! Types used by the type checker
 
 use crate::{
-    ast::Identifier,
+    ast::{self, Identifier},
     parser::meta::Meta,
     runtime::{RuntimeFunctionRef, layout::Layout},
     typechecker::scope::ScopeRef,
@@ -80,6 +80,28 @@ impl Type {
 
     pub fn list(t: impl Borrow<Type>) -> Type {
         Type::named("List", vec![t.borrow().clone()])
+    }
+
+    pub fn from_int_type(t: ast::IntType) -> Type {
+        let ident = match t {
+            ast::IntType::I8 => "i8",
+            ast::IntType::I16 => "i16",
+            ast::IntType::I32 => "i32",
+            ast::IntType::I64 => "i64",
+            ast::IntType::U8 => "u8",
+            ast::IntType::U16 => "u16",
+            ast::IntType::U32 => "u32",
+            ast::IntType::U64 => "u64",
+        };
+        Type::named(ident, Vec::new())
+    }
+
+    pub fn from_float_type(t: ast::FloatType) -> Type {
+        let ident = match t {
+            ast::FloatType::F32 => "f32",
+            ast::FloatType::F64 => "f64",
+        };
+        Type::named(ident, Vec::new())
     }
 
     /// Create a named type in the global scope

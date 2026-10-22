@@ -272,11 +272,86 @@ pub struct MatchArm {
 
 #[derive(Clone, Debug)]
 pub enum Pattern {
+    /// The wildcard pattern `_`.
     Underscore,
-    EnumVariant {
-        variant: Meta<Identifier>,
-        fields: Option<Meta<Vec<Meta<Identifier>>>>,
+
+    /// Parenthesized pattern.
+    Parens(Box<Meta<Pattern>>),
+
+    /// An integer to check against.
+    ///
+    /// We don't have floats because those shouldn't be compared directly.
+    Int(i64, Option<IntType>),
+
+    /// Range of integers: `10..20`.
+    RangeInt(Meta<i64>, Meta<i64>, Option<IntType>),
+
+    /// Range of floats: `..`, `..10.0`, `10.0..`, `10.0..20.0`.
+    RangeFloat(Meta<f64>, Meta<f64>, Option<FloatType>),
+
+    /// A string literal
+    Char(Meta<char>),
+
+    /// A string literal
+    String(Meta<String>),
+
+    /// A boolean literal.
+    Bool(Meta<bool>),
+
+    /// A path to a constructor.
+    Path(Meta<Path>),
+
+    Unit,
+
+    /// Path to a constructor like an enum variant with arguments
+    ///
+    /// ```txt
+    /// foo.Bar(baz, quux, ..)
+    /// ─┬───── ─┬─  ─┬──  ─┬
+    ///  ╰─ path │    │     ╰─ rest
+    ///          ╰────┴─ arguments
+    /// ```
+    EnumConstructor {
+        path: Meta<Path>,
+        arguments: Meta<Vec<Meta<ArgPattern>>>,
     },
+
+    /// A record constructor with fields.
+    ///
+    /// ```txt
+    /// foo.Bar { baz, quux: 10, .. }
+    /// ─┬─────   ─┬─  ─┬──────  ─┬
+    ///  ╰─ path   │    │         ╰─ rest
+    ///            │    ╰─ field with pattern
+    ///            ╰─ field without pattern
+    /// ```
+    RecordConstructor {
+        path: Meta<Path>,
+        fields: Meta<Vec<Meta<FieldPattern>>>,
+    },
+
+    /// A set of alternatives.
+    ///
+    /// ```txt
+    /// 10 | 20 | 1..5 | _
+    /// ```
+    Or(Vec<Meta<Pattern>>),
+}
+
+#[derive(Clone, Debug)]
+pub enum ArgPattern {
+    /// A normal pattern.
+    Pattern(Meta<Pattern>),
+
+    /// The rest pattern `..`.
+    Rest,
+}
+
+#[derive(Clone, Debug)]
+pub enum FieldPattern {
+    Rest,
+    Ident(Meta<Identifier>),
+    Pattern(Meta<Identifier>, Meta<Pattern>),
 }
 
 /// An identifier is the name of variables or other things.
@@ -339,7 +414,7 @@ pub enum Literal {
     Unit,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum IntType {
     I8,
     I16,
@@ -367,7 +442,7 @@ impl Display for IntType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FloatType {
     F32,
     F64,

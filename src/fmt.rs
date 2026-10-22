@@ -1162,24 +1162,7 @@ impl<'a, 's> State<'a, 's> {
             WrapStyle::Wrap,
             |this, arm| {
                 match &*arm.pattern {
-                    ast::Pattern::Underscore => this.push(Node::Ascii("_")),
-                    ast::Pattern::EnumVariant { variant, fields } => {
-                        this.push(Node::ident(**variant));
-                        if let Some(fields) = fields {
-                            let span = self.spans.get(fields);
-                            this.separated(
-                                "(",
-                                ")",
-                                ",",
-                                &fields.node,
-                                span,
-                                WrapStyle::Tight,
-                                |this, field| {
-                                    this.push(Node::ident(**field));
-                                },
-                            );
-                        }
-                    }
+                    _ => todo!(),
                 }
                 if let Some(guard) = &arm.guard {
                     this.push(Node::Ascii(" if "));
