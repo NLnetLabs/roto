@@ -89,11 +89,7 @@ impl From<&Meta<Expr>> for RefineAttrs {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct RangeDefinition {
-    pub ranges: Ranges,
-    pub attrs: RefineAttrs,
-}
+pub struct RefineError(pub String);
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct FractionDigitsDefinition {
@@ -127,6 +123,12 @@ impl Length for &String {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct RangeDefinition {
+    pub ranges: Ranges,
+    pub attrs: RefineAttrs,
+}
+
 impl RangeDefinition {
     fn validate(&self, value: &impl Length) -> bool {
         let mut res = false;
@@ -143,66 +145,117 @@ impl RangeDefinition {
     }
 }
 
-pub type LengthDefinition = RangeDefinition;
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct LengthDefinition {
+    pub ranges: Ranges,
+    pub attrs: RefineAttrs,
+}
+
+impl LengthDefinition {
+    fn validate(&self, value: &impl Length) -> bool {
+        let mut res = false;
+        let len = value.len();
+        for range in self.ranges.0.iter() {
+            if range.0 <= len && range.1 >= len {
+                res = true;
+            } else {
+                return false;
+            }
+        }
+
+        res
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Ranges(Vec<(isize, isize)>);
 
 impl Ranges {
-    pub fn parse(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Result<Self, RefineError> {
         let mut ranges = vec![];
         for range in value.split('|') {
             let mut start_stop = range.split("..");
             let start = start_stop
                 .next()
-                .and_then(|s| s.split_whitespace().next())?;
-            let start = start.parse::<isize>().ok().or_else(|| {
-                if start.contains("max") {
-                    Some(isize::MAX)
-                } else if start.contains("min") {
-                    Some(isize::MIN)
-                } else {
-                    None
-                }
-            })?;
+                .and_then(|s| s.split_whitespace().next())
+                .ok_or(RefineError(format!(
+                    "range(s) `{}` are invalid",
+                    range
+                )))?;
+            let start = start
+                .parse::<isize>()
+                .ok()
+                .or_else(|| {
+                    if start.contains("min") {
+                        Some(isize::MIN)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or(RefineError(format!(
+                    "the lower boundary `{}` in range `{}` is invalid",
+                    start, range
+                )))?;
 
             let end = start_stop
                 .next()
-                .and_then(|s| s.split_whitespace().next())?;
+                .and_then(|s| s.split_whitespace().next())
+                .ok_or(RefineError(format!(
+                    "range(s) `{}` are invalid",
+                    range
+                )))?;
+
+            let end = end
+                .parse::<isize>()
+                .ok()
+                .or_else(|| {
+                    if end.contains("max") {
+                        Some(isize::MAX)
+                    } else {
+                        None
+                    }
+                })
+                .ok_or(RefineError(format!(
+                    "the upper boundary `{}` in range `{}` is invalid",
+                    end, range
+                )))?;
 
             if start_stop.next().is_some() {
-                return None;
+                return Err(RefineError(format!(
+                    "There are trailing characters `{}` that cannot be \
+                    parsed",
+                    start_stop.next().unwrap()
+                )));
             }
-
-            let end = end.parse::<isize>().ok().or_else(|| {
-                if end.contains("max") {
-                    Some(isize::MAX)
-                } else if end.contains("min") {
-                    Some(isize::MIN)
-                } else {
-                    None
-                }
-            })?;
 
             ranges.push((start, end));
         }
 
         ranges.sort_by_key(|a| a.0);
         let _ = ranges.iter().try_fold(
-            (isize::MIN, isize::MIN),
-            |acc: (isize, isize), &(start, end)| {
-                if let (_min_start, last_end) = acc
-                    && start <= end
-                    && last_end <= start
-                {
-                    return Some((start, end));
+            isize::MIN,
+            |f_end, &(n_start, n_end)| {
+                if n_start <= f_end {
+                    return Err(RefineError(format!(
+                        "The range `{}-{}` overlaps one of the other ranges. \
+                         This is not allowed.",
+                        n_start, n_end
+                    )));
                 }
 
-                None
+                if n_end <= n_start {
+                    return Err(RefineError(format!(
+                        "The lower boundary `{}` \
+                         is bigger than the upper boundary `{}`",
+                        n_start, f_end
+                    )));
+                }
+
+                Ok(n_end)
             },
         )?;
 
-        Some(Ranges(ranges))
+        Ok(Ranges(ranges))
     }
 }
 

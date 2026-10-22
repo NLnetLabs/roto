@@ -769,7 +769,18 @@ impl TypeChecker {
                     };
 
                     let ranges =
-                        Ranges::parse(range_str.as_str()).ok_or(err)?;
+                        Ranges::parse(range_str.as_str()).map_err(|e| {
+                            println!("error {:?}", e.0);
+                            let mut err_msg = err.clone();
+                            err_msg.description = e.0;
+                            err_msg.labels[0].message =
+                                "this type definition here has a sub-\
+                                 statement"
+                                    .to_string();
+                            err_msg.labels[1].message =
+                                "this range is invalid".to_string();
+                            err_msg
+                        })?;
 
                     refines.push(Refinement::Range(RangeDefinition {
                         ranges,
