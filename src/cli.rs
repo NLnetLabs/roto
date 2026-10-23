@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     RotoError, RotoReport, Runtime, fmt::fmt_path, load::LoadError,
-    runtime::context::OptCtx, tools::print::print_highlighted,
+    runtime::context::OptCtx,
 };
 
 #[derive(Parser)]
@@ -38,11 +38,6 @@ enum Command {
         file: PathBuf,
         #[arg(default_value = "main")]
         function: String,
-    },
-    /// Print a Roto file with syntax highlighting
-    Print {
-        #[arg()]
-        file: PathBuf,
     },
     /// Format a Roto file
     Fmt {
@@ -119,10 +114,6 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 })?;
 
             f.call()
-        }
-        Command::Print { file } => {
-            let s = std::fs::read_to_string(file).unwrap();
-            print_highlighted(&s);
         }
         Command::Fmt { file, check } => {
             let formatted = fmt_path(file)?;

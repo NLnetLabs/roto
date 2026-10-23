@@ -146,7 +146,7 @@ fn run_with_prefix(
     let route =
         RotondaRoute::Ipv4Unicast(RouteWorkshop::new(prefix.parse()?));
     let mut output = OutputStream::default();
-    let log = Log(&mut output as *mut _);
+    let log = Log(&raw mut output);
 
     let verdict = function.call(Val(log), Val(route));
 

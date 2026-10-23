@@ -29,7 +29,6 @@ mod module;
 pub(crate) mod parser;
 mod pipeline;
 pub mod runtime;
-pub mod tools;
 mod typechecker;
 pub mod value;
 

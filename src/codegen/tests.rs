@@ -3518,7 +3518,7 @@ fn mutate() {
     let mut t = MyType {
         i: AtomicI32::new(0),
     };
-    let ptr = Ptr(&mut t as *mut _);
+    let ptr = Ptr(&raw mut t);
     let res = f.call(Val(ptr));
 
     use std::sync::atomic::Ordering::Relaxed;
@@ -3527,7 +3527,7 @@ fn mutate() {
             let val = unsafe { (*val.0.0).i.load(Relaxed) };
             assert_eq!(val, 1, "returned value should be 1")
         }
-        Verdict::Reject(_) => todo!(),
+        Verdict::Reject(_) => unreachable!(),
     }
 
     assert_eq!(t.i.load(Relaxed), 1, "mutated value should be 1");

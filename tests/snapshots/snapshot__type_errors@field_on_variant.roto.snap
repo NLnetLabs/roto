@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/field_on_variant.roto
+---
+Error: Type error: an enum variant cannot have fields
+   ╭─[ tests/scripts/type_errors/field_on_variant.roto:6:13 ]
+   │
+ 6 │     Foo.Bar.baz;
+   │             ─┬─  
+   │              ╰─── field does not exist
+───╯

@@ -322,7 +322,7 @@ impl<T: Value> Value for Option<T> {
 
 impl<T> Param<Val<T>> for *mut T {
     fn as_param(value: &mut Val<T>) -> Self {
-        &mut value.0 as *mut _
+        &raw mut value.0
     }
 
     fn to_value(self) -> Val<T> {
@@ -555,7 +555,7 @@ impl Param<DynVal> for DynVal {
         _mem: &mut Memory,
         _value: IrValue,
     ) -> Result<Self, IrValueDoesNotMatchType> {
-        todo!()
+        panic!("not supported in IR evaluation")
     }
 }
 

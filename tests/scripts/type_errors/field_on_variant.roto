@@ -1,0 +1,7 @@
+enum Foo {
+    Bar(i32)
+}
+
+fn main() {
+    Foo.Bar.baz;
+}

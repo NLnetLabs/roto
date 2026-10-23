@@ -822,14 +822,14 @@ impl Lowerer<'_, '_> {
                         use types::IntKind::*;
                         use types::IntSize::*;
                         match (k, s) {
-                            (Unsigned, I8) => IrValue::U8(*x as _),
-                            (Unsigned, I16) => IrValue::U16(*x as _),
-                            (Unsigned, I32) => IrValue::U32(*x as _),
-                            (Unsigned, I64) => IrValue::U64(*x as _),
-                            (Signed, I8) => IrValue::I8(*x as _),
-                            (Signed, I16) => IrValue::I16(*x as _),
-                            (Signed, I32) => IrValue::I32(*x as _),
-                            (Signed, I64) => IrValue::I64(*x as _),
+                            (Unsigned, I8) => IrValue::U8(*x as u8),
+                            (Unsigned, I16) => IrValue::U16(*x as u16),
+                            (Unsigned, I32) => IrValue::U32(*x as u32),
+                            (Unsigned, I64) => IrValue::U64(*x as u64),
+                            (Signed, I8) => IrValue::I8(*x as i8),
+                            (Signed, I16) => IrValue::I16(*x as i16),
+                            (Signed, I32) => IrValue::I32(*x as i32),
+                            (Signed, I64) => IrValue::I64(*x),
                         }
                         .into()
                     }

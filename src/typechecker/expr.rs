@@ -675,7 +675,11 @@ impl TypeChecker {
         };
 
         if diverges {
-            todo!("make a pretty error")
+            return Err(self.error_simple(
+                "condition in `match` is not allowed to diverge",
+                "never evaluates to a value",
+                expr.id,
+            ));
         }
 
         let Type::Name(type_name) = &t_expr else {
@@ -1356,8 +1360,12 @@ impl TypeChecker {
                 }))
             }
             DeclarationKind::Enum(Some((ty, variant))) => {
-                if let Some(_field) = idents.next() {
-                    todo!("make a nice error for variant cannot have field")
+                if let Some(field) = idents.next() {
+                    return Err(self.error_simple(
+                        "an enum variant cannot have fields",
+                        "field does not exist",
+                        field.id,
+                    ));
                 }
                 Ok(ResolvedPath::EnumConstructor {
                     ty: ty.clone(),
