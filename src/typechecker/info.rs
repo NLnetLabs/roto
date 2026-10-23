@@ -214,7 +214,7 @@ impl TypeInfo {
             Type::Var(_) => return TyRef::NEVER,
             Type::ExplicitVar(e) => ice!("Cannot convert {e}"),
             Type::Never => return TyRef::UNIT,
-            Type::Function(_, _) => todo!(),
+            Type::Function(_, _) => ice!("Cannot convert function type"),
             Type::IntVar(_, _) => return TyRef::I32,
             Type::FloatVar(_) => return TyRef::F64,
             Type::Record(items) | Type::RecordVar(_, items) => {

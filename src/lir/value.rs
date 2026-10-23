@@ -297,7 +297,7 @@ impl IrValue {
             IrValue::U8(x) => *x as u32,
             IrValue::U16(x) => *x as u32,
             IrValue::U32(x) => *x,
-            _ => todo!(),
+            _ => panic!("Invalid value!"),
         }
     }
 }

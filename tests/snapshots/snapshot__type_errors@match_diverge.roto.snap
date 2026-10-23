@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/match_diverge.roto
+---
+Error: Type error: condition in `match` is not allowed to diverge
+   ╭─[ tests/scripts/type_errors/match_diverge.roto:2:11 ]
+   │
+ 2 │     match return () {
+   │           ────┬────  
+   │               ╰────── never evaluates to a value
+───╯

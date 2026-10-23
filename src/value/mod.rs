@@ -555,7 +555,7 @@ impl Param<DynVal> for DynVal {
         _mem: &mut Memory,
         _value: IrValue,
     ) -> Result<Self, IrValueDoesNotMatchType> {
-        todo!()
+        panic!("not supported in IR evaluation")
     }
 }
 
