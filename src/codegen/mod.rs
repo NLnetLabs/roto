@@ -30,13 +30,9 @@ use crate::{
 };
 use check::{FunctionRetrievalError, RotoFunc, check_roto_type_reflect};
 use cranelift::{
-    codegen::{
-        ir::{
-            self, AbiParam, Block, InstBuilder, MemFlagsData, StackSlotData,
-            StackSlotKind, condcodes::IntCC, types::*,
-        },
-        isa::TargetIsa,
-        settings::{self, Configurable as _},
+    codegen::ir::{
+        self, AbiParam, Block, InstBuilder, MemFlagsData, StackSlotData,
+        StackSlotKind, condcodes::IntCC, types::*,
     },
     frontend::{
         FuncInstBuilder, FunctionBuilder, FunctionBuilderContext, Switch,
@@ -314,9 +310,6 @@ struct ModuleBuilder {
     /// query it.
     variable_map: HashMap<Var, (Variable, Type)>,
 
-    /// Instruction set architecture
-    isa: Arc<dyn TargetIsa>,
-
     /// To print labels for debugging.
     #[allow(unused)]
     label_store: LabelStore,
@@ -425,24 +418,9 @@ fn codegen_inner<Ctx: OptCtx>(
 ) -> Module<Ctx> {
     let runtime = &runtime.rt;
 
-    // The ISA is the Instruction Set Architecture. We always compile for
-    // the system we run on, so we use `cranelift_native` to get the ISA
-    // for the current system. We enable building for speed only. Size is
-    // not super important at the moment.
-    let mut settings = settings::builder();
-    settings.set("opt_level", "speed").unwrap();
-    // Match JITBuilder's default so x86_64 symbol addresses can be resolved
-    // even when code and data are outside the ±2 GiB relative addressing range.
-    if cfg!(target_arch = "x86_64") {
-        settings.set("is_pic", "true").unwrap();
-    }
-    let flags = settings::Flags::new(settings);
-    let isa = cranelift::native::builder().unwrap().finish(flags).unwrap();
+    let mut builder =
+        JITBuilder::new(cranelift::module::default_libcall_names()).unwrap();
 
-    let mut builder = JITBuilder::with_isa(
-        isa.clone(),
-        cranelift::module::default_libcall_names(),
-    );
     if let Some(memory_provider) = memory_provider {
         builder.memory_provider(memory_provider);
     }
@@ -471,6 +449,7 @@ fn codegen_inner<Ctx: OptCtx>(
     }
 
     let jit = JITModule::new(builder);
+    let isa = jit.isa();
 
     let pointer_ty = AbiParam::new(isa.pointer_type());
     let mut drop_signature = jit.make_signature();
@@ -501,7 +480,6 @@ fn codegen_inner<Ctx: OptCtx>(
         registered_fns: Vec::new(),
         runtime_functions: HashMap::new(),
         inner: jit,
-        isa,
         variable_map: HashMap::new(),
         label_store,
         type_info,
@@ -520,7 +498,7 @@ fn codegen_inner<Ctx: OptCtx>(
 
         // This function is the trampoline, so we need to pass the pointer
         // to the actual function.
-        sig.params.push(AbiParam::new(module.isa.pointer_type()));
+        sig.params.push(AbiParam::new(module.pointer_type()));
 
         for (_, ty) in &ir_sig.parameters {
             sig.params.push(AbiParam::new(module.cranelift_type(ty)));
@@ -604,6 +582,10 @@ fn codegen_inner<Ctx: OptCtx>(
 }
 
 impl ModuleBuilder {
+    fn pointer_type(&self) -> ir::Type {
+        self.inner.isa().pointer_type()
+    }
+
     fn declare_constant(&mut self, constant: &RuntimeConstant) {
         // Every constant needs to live as long as the functions and therefore
         // module that references them. However, the runtime might be dropped
@@ -855,7 +837,7 @@ impl ModuleBuilder {
             IrType::U64 | IrType::I64 => I64,
             IrType::F32 => F32,
             IrType::F64 => F64,
-            IrType::Pointer => self.isa.pointer_type(),
+            IrType::Pointer => self.pointer_type(),
         }
     }
 }
@@ -863,7 +845,8 @@ impl ModuleBuilder {
 impl<'c> FuncGen<'c> {
     fn finalize(mut self) {
         self.builder.seal_all_blocks();
-        self.builder.finalize(self.module.isa.frontend_config())
+        self.builder
+            .finalize(self.module.inner.isa().frontend_config())
     }
 
     /// Set up the entry block for the function
@@ -951,7 +934,7 @@ impl<'c> FuncGen<'c> {
         }
 
         for (v, slot) in stack_slots {
-            let pointer_ty = self.module.isa.pointer_type();
+            let pointer_ty = self.module.pointer_type();
             let p = self.ins().stack_addr(pointer_ty, slot, 0);
             self.def(self.module.variable_map[&v].0, p);
         }
@@ -1046,7 +1029,7 @@ impl<'c> FuncGen<'c> {
                     self.builder.func,
                 );
 
-                let ptr_type = self.module.isa.pointer_type();
+                let ptr_type = self.module.pointer_type();
                 let ptr = self.ins().iconst(ptr_type, ptr as usize as i64);
 
                 let mut new_args = Vec::new();
@@ -1189,7 +1172,7 @@ impl<'c> FuncGen<'c> {
                 self.def(var, val);
             }
             lir::Instruction::Initialize { to, bytes, layout } => {
-                let pointer_ty = self.module.isa.pointer_type();
+                let pointer_ty = self.module.pointer_type();
                 let slot =
                     self.builder.create_sized_stack_slot(StackSlotData::new(
                         StackSlotKind::ExplicitSlot,
@@ -1217,7 +1200,7 @@ impl<'c> FuncGen<'c> {
                 let var = self.variable(to, pointer_ty);
                 let p = self.ins().stack_addr(pointer_ty, slot, 0);
                 self.builder.emit_small_memory_copy(
-                    self.module.isa.frontend_config(),
+                    self.module.inner.isa().frontend_config(),
                     p,
                     value,
                     bytes.len() as u64,
@@ -1243,7 +1226,7 @@ impl<'c> FuncGen<'c> {
             lir::Instruction::Offset { to, from, offset } => {
                 let (from, _) = self.operand(from);
                 let tmp = self.ins().iadd_imm_s(from, *offset as i64);
-                let to = self.variable(to, self.module.isa.pointer_type());
+                let to = self.variable(to, self.module.pointer_type());
                 self.def(to, tmp)
             }
             lir::Instruction::Copy { to, from, size } => {
@@ -1251,7 +1234,7 @@ impl<'c> FuncGen<'c> {
                 let (src, _) = self.operand(from);
 
                 self.builder.emit_small_memory_copy(
-                    self.module.isa.frontend_config(),
+                    self.module.inner.isa().frontend_config(),
                     dest,
                     src,
                     *size as u64,
@@ -1264,7 +1247,7 @@ impl<'c> FuncGen<'c> {
             lir::Instruction::Clone { to, from, clone_fn } => {
                 let (dest, _) = self.operand(to);
                 let (src, _) = self.operand(from);
-                let pointer_ty = self.module.isa.pointer_type();
+                let pointer_ty = self.module.pointer_type();
                 let clone = self
                     .ins()
                     .iconst(pointer_ty, *clone_fn as *mut u8 as usize as i64);
@@ -1285,7 +1268,7 @@ impl<'c> FuncGen<'c> {
 
                 let var = self.variable(to, I8);
 
-                let pointer_ty = self.module.isa.pointer_type();
+                let pointer_ty = self.module.pointer_type();
                 let eq_fn = self
                     .ins()
                     .iconst(pointer_ty, *eq_fn as *mut u8 as usize as i64);
@@ -1300,7 +1283,7 @@ impl<'c> FuncGen<'c> {
             lir::Instruction::Drop { var, drop } => {
                 if let Some(drop) = drop {
                     let (var, _) = self.operand(var);
-                    let pointer_ty = self.module.isa.pointer_type();
+                    let pointer_ty = self.module.pointer_type();
                     let drop = self
                         .ins()
                         .iconst(pointer_ty, *drop as *mut u8 as usize as i64);
@@ -1366,7 +1349,7 @@ impl<'c> FuncGen<'c> {
                     .inner
                     .declare_data_in_func(data_id, self.builder.func);
 
-                let pointer_ty = self.module.isa.pointer_type();
+                let pointer_ty = self.module.pointer_type();
                 let init_func = self.ins().iconst(
                     pointer_ty,
                     *init_func as *mut u8 as usize as i64,
@@ -1408,7 +1391,7 @@ impl<'c> FuncGen<'c> {
                 if p.kind == VarKind::Context
                     && !self.module.variable_map.contains_key(p)
                 {
-                    let ty = self.module.isa.pointer_type();
+                    let ty = self.module.pointer_type();
                     return (self.ins().iconst(ty, 0), ty);
                 }
 
@@ -1441,7 +1424,7 @@ impl<'c> FuncGen<'c> {
     }
 
     fn integer_operand(&self, val: &IrValue) -> Option<(Type, i64)> {
-        let pointer_ty = self.module.isa.pointer_type();
+        let pointer_ty = self.module.pointer_type();
         Some(match val {
             IrValue::Bool(x) => (I8, *x as i64),
             IrValue::U8(x) => (I8, *x as i64),
