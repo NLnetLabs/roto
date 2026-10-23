@@ -440,7 +440,7 @@ fn codegen_inner<Ctx: OptCtx>(
     let isa = cranelift::native::builder().unwrap().finish(flags).unwrap();
 
     let mut builder = JITBuilder::with_isa(
-        isa.to_owned(),
+        isa.clone(),
         cranelift::module::default_libcall_names(),
     );
     if let Some(memory_provider) = memory_provider {
@@ -1523,12 +1523,12 @@ impl<Ctx: OptCtx> Module<Ctx> {
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         let name = format!("pkg.{name}");
-        let function_info = self.functions.get(&name).ok_or_else(|| {
-            FunctionRetrievalError::DoesNotExist {
-                name: name.to_string(),
+        let Some(function_info) = self.functions.get(&name) else {
+            return Err(FunctionRetrievalError::DoesNotExist {
+                name,
                 existing: self.functions.keys().cloned().collect(),
-            }
-        })?;
+            });
+        };
 
         let sig = &function_info.signature;
         let id = function_info.id;
@@ -1537,7 +1537,7 @@ impl<Ctx: OptCtx> Module<Ctx> {
         // clone, drop or eq. These are not available to extract.
         let Some(sig) = &sig else {
             return Err(FunctionRetrievalError::DoesNotExist {
-                name: name.to_string(),
+                name,
                 existing: self.functions.keys().cloned().collect(),
             });
         };

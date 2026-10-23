@@ -105,7 +105,7 @@ impl Printable for Block {
 impl Printable for Var {
     fn print(&self, printer: &IrPrinter) -> String {
         let name = match &self.kind {
-            VarKind::Explicit(name) => name.print(printer).to_string(),
+            VarKind::Explicit(name) => name.print(printer).clone(),
             VarKind::Tmp(idx) => format!("${idx}"),
             VarKind::Return => "$return".to_string(),
             VarKind::Context => "$context".to_string(),
