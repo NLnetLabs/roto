@@ -3,6 +3,8 @@
 use core::fmt;
 use std::collections::btree_map::{BTreeMap, Entry};
 
+use libc::IFLA_CAN_CTRLMODE_UNSPEC;
+
 use crate::{
     ast::{Identifier, Stmt},
     ice,
@@ -11,7 +13,7 @@ use crate::{
     typechecker::{
         TypeResult,
         error::{Label, TypeError},
-        types::Signature,
+        types::{Signature, TypeName, TypePath, is_builtin_value},
     },
     yang::refine::{EnumDefinition, Refinement},
 };
@@ -94,6 +96,39 @@ pub enum DeclarationKind {
     Enum(Option<(TypeDefinition, EnumVariant)>),
     TypeParam(Identifier),
     Leaf(Identifier, TypeDefinition),
+}
+
+impl DeclarationKind {
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self,
+            Self::Type(TypeOrStub::Type(TypeDefinition::Primitive(_)))
+        )
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        if self.is_primitive() {
+            return true;
+        }
+        if let Self::Type(TypeOrStub::Type(t)) = self {
+            return is_builtin_value(t.type_name().name.ident.as_str());
+        }
+        false
+    }
+
+    pub fn last_from_path(&self) -> Option<&ResolvedName> {
+        match self {
+            Self::Type(TypeOrStub::Type(TypeDefinition::RefinedType(
+                TypePath { name, path },
+                _,
+            ))) => Some(path.last().unwrap_or(name)),
+            Self::Type(TypeOrStub::Type(TypeDefinition::Enum(
+                TypeName { name, .. },
+                _,
+            ))) => Some(name),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

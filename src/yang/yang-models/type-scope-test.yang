@@ -38,9 +38,37 @@ module type-scope-test {
         }
       }
     }
+
+    typedef horror-show3 {
+      type string {
+        length "1..12";
+      }
+    }
       
     //leaf rotor {
     //  type rtr:ipv4-pfx-len;
     //}
+
+    typedef e-num {
+      type enumeration {
+        enum one {
+          description "the first variant";
+          value 1;
+        }
+        enum two {
+          description "the second variant";
+          value 2;
+        }
+      }
+    }
+
+    typedef e-num-3 {
+      type e-num {
+        enum three {
+          description "the third and final variant";
+          value 3;
+        }
+      }
+    }
   }
 }

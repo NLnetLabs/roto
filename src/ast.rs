@@ -211,17 +211,23 @@ impl Stmt {
         yang_s.description()
     }
 
-    pub fn sub_stmts(&self) -> impl Iterator<Item = &Meta<Stmt>> {
+    pub fn sub_stmts(&self) -> Option<&Meta<Expr>> {
+        if let Stmt::YangStmtSeq(yang_s) = &self {
+            Some(&yang_s.sub_stmts)
+        } else {
+            None
+        }
+        // iter.into_iter().flatten()
+    }
+
+    pub fn find_attr(&self, ident: &Identifier) -> Option<Stmt> {
         let iter = if let Stmt::YangStmtSeq(yang_s) = &self {
             Some(yang_s.sub_stmts.iter_stmt())
         } else {
             None
         };
-        iter.into_iter().flatten()
-    }
 
-    pub fn find_attr(&self, ident: &Identifier) -> Option<Stmt> {
-        self.sub_stmts().find_map(|s| {
+        iter.into_iter().flatten().find_map(|s| {
             if s.as_ident() == Some(*ident) {
                 Some(s.node.clone())
             } else {

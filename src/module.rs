@@ -174,9 +174,9 @@ impl Parsed {
     ) -> Result<(Vec<Module>, Spans, Vec<RotoError>), RotoReport> {
         println!("parent_file {}", parent_file);
         println!("imports {:?}", imports);
-        if imports.is_empty() {
-            spans = Self::add_modules(ast, spans, parent_file, &mut modules)?;
-        }
+        // if imports.is_empty() {
+        //     spans = Self::add_modules(ast, spans, parent_file, &mut modules)?;
+        // }
 
         for module_path in &imports {
             // look up the imported module in the library

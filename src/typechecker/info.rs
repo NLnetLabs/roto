@@ -229,7 +229,7 @@ impl TypeInfo {
 
                         Ty::Enum(variants)
                     }
-                    TypeDefinition::YangEnum(type_name, refinements) => {
+                    TypeDefinition::RefinedType(type_name, refinements) => {
                         todo!()
                     }
                     TypeDefinition::Record(type_name, fields) => {

@@ -9,6 +9,7 @@ use crate::ast::{
     Identifier, Literal, Stmt, SyntaxTree, YangModuleDeclaration,
     YangSubModuleDeclaration,
 };
+use crate::ice;
 use crate::parser::Declaration;
 use crate::parser::{ParseError, ParseErrorKind};
 use crate::yang::parser::expr::Cardinality;
@@ -893,6 +894,21 @@ impl YangStmt {
                     id: meta.id,
                     node: Keyword::SubModule,
                 }),
+            },
+        }
+    }
+
+    pub fn id(&self) -> MetaId {
+        match self {
+            YangStmt::Module(meta, _) => meta.id,
+            YangStmt::Stmt(meta) => meta.id,
+            YangStmt::ExtStmt(p_meta) => match p_meta {
+                (_, Some(m)) => m.id,
+                (Some(p), _) => p.id,
+                _ => ice!(
+                    "no identifier of prefix found for statement `{:?}`",
+                    self
+                ),
             },
         }
     }

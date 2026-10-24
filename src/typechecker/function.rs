@@ -1,5 +1,7 @@
 //! Type checking function-like items
 
+use uppsala::XsdRegex;
+
 use crate::{
     ast::{self, Expr, Identifier, Stmt},
     ice,
@@ -7,7 +9,9 @@ use crate::{
     typechecker::{
         error::{Label, TypeError},
         scope::{DeclarationKind, TypeOrStub},
-        types::{Signature, TypeDefinition, TypeName},
+        types::{
+            Signature, TypeDefinition, TypeName, TypePath, is_builtin_value,
+        },
     },
     yang::{
         parser::{
@@ -15,8 +19,10 @@ use crate::{
             ast::{Argument, YangStmtSeq},
         },
         refine::{
-            EnumDefinition, RangeDefinition, Ranges, RefineAttrs, Refinement,
-            YangStatus, allowed_restriction_for, required_specifications,
+            EnumDefinition, LengthDefinition, PatternDefinition,
+            PatternModifier, RangeDefinition, Ranges, RefineAttrs,
+            Refinement, YangStatus, allowed_restriction_for,
+            required_specifications,
         },
     },
 };
@@ -544,18 +550,24 @@ impl TypeChecker {
             }
 
             // what is the type the current typedef is based on?
-            let (derived_from_ty, base_kind) = match sub_stmts
-                .find_attr_argument("type")
-            {
-                // this is a single identifier for a type, meaning it can be a
-                // built-in, or declared in this module, in this scope or in a
-                // parent scope.
-                Some(Meta {
-                    id,
-                    node: Argument::Ident(b_ty),
-                }) => {
-                    println!("[type_def] type {} in scope {:?}", b_ty, scope);
-                    let decla = self
+            let mut path = vec![];
+            let mut base_kind: Option<DeclarationKind> = None;
+            let mut seq_sub_stmts = Some(sub_stmts);
+
+            while let Some(sub_stmts) = seq_sub_stmts {
+                match sub_stmts.find_attr_argument("type") {
+                    // this is a single identifier for a type, meaning it
+                    // can be a built-in, or declared in this module, in this
+                    // scope or in a parent scope.
+                    Some(Meta {
+                        id,
+                        node: Argument::Ident(b_ty),
+                    }) => {
+                        println!(
+                            "[type_def] type {} in scope {:?}",
+                            b_ty, scope
+                        );
+                        let decla = self
                         .type_info
                         .scope_graph
                         .resolve_name(
@@ -585,68 +597,197 @@ impl TypeChecker {
                             notes: Vec::new(),
                         })?;
 
-                    let ty_sub_stmts = sub_stmts
-                        .node
-                        .find_attr("type")
-                        .map(|s| s.sub_stmts())
-                        .into_iter()
-                        .flatten();
+                        seq_sub_stmts = sub_stmts
+                            .node
+                            .find_attr("type")
+                            .and_then(|s| s.sub_stmts());
 
-                    // we have the type definition of the base type, but this
-                    // may be a refinement of that base type
-                    let refines = self.refinements(
-                        &Meta {
-                            id: *id,
-                            node: *b_ty,
-                        },
-                        ty_sub_stmts,
-                    )?;
+                        path.push(decla.name);
 
-                    let kind = DeclarationKind::Type(TypeOrStub::Type(
-                        TypeDefinition::YangEnum(
-                            TypeName {
-                                name: decla.name,
-                                arguments: vec![],
+                        seq_sub_stmts
+                            .unwrap()
+                            .iter_stmt()
+                            .for_each(|s| println!("[refine input] {s:?}"));
+                        let refine_stmts = seq_sub_stmts.unwrap().iter_stmt();
+                        println!("[type_def] found type {:?}", decla.name);
+                        println!("[type_def] kind {:?}", decla.kind);
+                        println!("[type_def] path {:?}", path);
+
+                        let refines = match decla.kind.is_primitive() {
+                            true => self.refinements(
+                                &Meta {
+                                    id: *id,
+                                    node: *b_ty,
+                                },
+                                refine_stmts,
+                            )?,
+                            false => {
+                                println!("[type_def] not a base type");
+                                let base_ty = decla
+                                    .kind
+                                    .last_from_path()
+                                    .map(|k| k.ident);
+                                println!(
+                                    "[type_def] base_type = {base_ty:?}"
+                                );
+
+                                if let Some(base_ty) = base_ty {
+                                    self.refinements(
+                                        &Meta {
+                                            id: *id,
+                                            node: base_ty,
+                                        },
+                                        refine_stmts,
+                                    )?
+                                } else {
+                                    vec![]
+                                }
+                            }
+                        };
+
+                        let kind = DeclarationKind::Type(TypeOrStub::Type(
+                            TypeDefinition::RefinedType(
+                                TypePath {
+                                    name: ResolvedName {
+                                        scope,
+                                        ident: ty_ident,
+                                    },
+                                    path: path.clone(),
+                                },
+                                refines,
+                            ),
+                        ));
+
+                        base_kind = Some(kind);
+                        println!(
+                            "[type_def] is builtin? decla.name {}",
+                            decla.kind.is_builtin()
+                        );
+
+                        if decla.kind.is_builtin() {
+                            break;
+                        }
+                        if let Some(base_ty) = decla.kind.last_from_path()
+                            && self
+                                .type_info
+                                .scope_graph
+                                .get_declaration(*base_ty)
+                                .kind
+                                .is_builtin()
+                        {
+                            break;
+                        };
+                    }
+                    // This is a type that has a prefix (`module:type`), the
+                    // prefix must be the prefix of an `import` statement in
+                    // the module root
+                    Some(Meta {
+                        id,
+                        node: Argument::PrefixIdent((p, b_ty)),
+                    }) => {
+                        let _base_kind = self.evaluate_prefixed_type(
+                            scope, stmt, b_ty, p, id,
+                        )?;
+
+                        let decla = self
+                        .type_info
+                        .scope_graph
+                        .resolve_name(
+                            scope,
+                            &Meta {
+                                id: *id,
+                                node: *b_ty,
                             },
-                            refines,
-                        ),
-                    ));
+                            true,
+                        )
+                        .ok_or(TypeError {
+                            description: format!(
+                                "the type mentioned in this {} is unknown",
+                                stmt.node.as_ident().unwrap()
+                            ),
+                            location: stmt.id,
+                            labels: vec![
+                                Label::error(
+                                    format!(
+                                        "in this {}",
+                                        stmt.node.as_ident().unwrap()
+                                    ),
+                                    stmt.id,
+                                ),
+                                Label::info("this type is unknown", *id),
+                            ],
+                            notes: Vec::new(),
+                        })?;
 
-                    (
-                        Meta {
-                            id: *id,
-                            node: *b_ty,
-                        },
-                        kind,
-                    )
-                }
-                // This is a type that has a prefix (`module:type`), the
-                // prefix must be the prefix of an `import` statement in the
-                // module root
-                Some(Meta {
-                    id,
-                    node: Argument::PrefixIdent((p, b_ty)),
-                }) => {
-                    let kind = self
-                        .evaluate_prefixed_type(scope, stmt, b_ty, p, id)?;
+                        path.push(decla.name);
 
-                    (
-                        Meta {
-                            id: *id,
-                            node: *b_ty,
-                        },
-                        kind,
-                    )
+                        seq_sub_stmts = sub_stmts
+                            .node
+                            .find_attr("type")
+                            .and_then(|s| s.sub_stmts());
+
+                        let refine_stmts = seq_sub_stmts.unwrap().iter_stmt();
+                        let refines = match decla.kind.is_primitive() {
+                            true => self.refinements(
+                                &Meta {
+                                    id: *id,
+                                    node: *b_ty,
+                                },
+                                refine_stmts,
+                            )?,
+                            false => {
+                                println!("[type_def] not a base type");
+                                let base_ty = decla
+                                    .kind
+                                    .last_from_path()
+                                    .map(|k| k.ident);
+                                println!(
+                                    "[type_def] base_type = {base_ty:?}"
+                                );
+
+                                if let Some(base_ty) = base_ty {
+                                    self.refinements(
+                                        &Meta {
+                                            id: *id,
+                                            node: base_ty,
+                                        },
+                                        refine_stmts,
+                                    )?
+                                } else {
+                                    vec![]
+                                }
+                            }
+                        };
+
+                        let kind = DeclarationKind::Type(TypeOrStub::Type(
+                            TypeDefinition::RefinedType(
+                                TypePath {
+                                    name: ResolvedName {
+                                        scope,
+                                        ident: ty_ident,
+                                    },
+                                    path: path.clone(),
+                                },
+                                refines,
+                            ),
+                        ));
+
+                        base_kind = Some(kind);
+                    }
+                    _ => {
+                        ice!(
+                            "type name `{ty}` cannot be traced back to its \
+                             basetype. We came as far as : `{:#?}`",
+                            path
+                        );
+                    }
                 }
-                _ => {
-                    ice!("type name {ty} is not an identifier");
-                }
-            };
+            }
 
             println!(
                 "[declare_types_in_modules] insert typedef for '{}': scope \
-                {:?}, base type `{}`",
-                ty_ident, scope, derived_from_ty.node
+                {:?}, base type `{:?}`",
+                ty_ident, scope, path
             );
 
             let dec = self.type_info.scope_graph.insert_declaration(
@@ -655,7 +796,7 @@ impl TypeChecker {
                     id: kw.id,
                     node: ty_ident,
                 },
-                base_kind,
+                base_kind.unwrap(),
                 stmt.node
                     .description()
                     .map(|d| d.to_string())
@@ -690,9 +831,12 @@ impl TypeChecker {
         derived_from_ty: &'a Meta<Identifier>,
         stmts: impl Iterator<Item = &'a Meta<Stmt>>,
     ) -> TypeResult<Vec<Refinement>> {
+        println!("[refinements] on {}", derived_from_ty);
         let mut refines = vec![];
 
         for y_stmt in stmts {
+            //.filter(|stmt| stmt.argument().is_none()) {
+            println!("[refinement] found {:?}", y_stmt);
             let Stmt::YangStmtSeq(YangStmtSeq {
                 stmt,
                 arg,
@@ -787,6 +931,55 @@ impl TypeChecker {
                         attrs: RefineAttrs::from(sub_stmts),
                     }));
                 }
+                (None, Some(Keyword::Length)) => {
+                    let Some(length_str) = sub_stmts
+                        .as_str()
+                        .or_else(|| arg.clone().map(|a| a.as_str()))
+                    else {
+                        return Err(err);
+                    };
+
+                    let ranges =
+                        Ranges::parse(length_str.as_str()).map_err(|e| {
+                            println!("error {:?}", e.0);
+                            let mut err_msg = err.clone();
+                            err_msg.description = e.0;
+                            err_msg.labels[0].message =
+                                "this type definition here has a sub-\
+                                 statement"
+                                    .to_string();
+                            err_msg.labels[1].message =
+                                "this range is invalid".to_string();
+                            err_msg
+                        })?;
+
+                    refines.push(Refinement::Length(LengthDefinition {
+                        ranges,
+                        attrs: RefineAttrs::from(sub_stmts),
+                    }));
+                }
+                (None, Some(Keyword::Pattern)) => {
+                    let Some(length_str) = sub_stmts
+                        .as_str()
+                        .or_else(|| arg.clone().map(|a| a.as_str()))
+                    else {
+                        return Err(err);
+                    };
+
+                    let _pattern =
+                        XsdRegex::compile(&length_str).map_err(|e| {
+                            let mut err = err.clone();
+                            err.description = e;
+                            err
+                        })?;
+                    let modifier = PatternModifier::from(sub_stmts);
+
+                    refines.push(Refinement::Pattern(PatternDefinition {
+                        pattern: length_str,
+                        modifier,
+                        attrs: RefineAttrs::from(sub_stmts),
+                    }));
+                }
                 (None, Some(refine)) => {
                     ice!(
                         "The refinement `{refine:?}` is currently \
@@ -801,11 +994,23 @@ impl TypeChecker {
                     );
                 }
                 _ => {
-                    ice!(
-                        "The refinement `{keyword:?}` is unknown for the \
-                        type `{:?}`",
-                        derived_from_ty
-                    );
+                    return Err(TypeError {
+                        description: format!(
+                            "The refinement `{keyword:?}` is not allowed for \
+                             the type `{}`",
+                            *derived_from_ty
+                        ),
+                        location: y_stmt.id,
+                        labels: vec![
+                            Label::info(
+                                "this type statement has an invalid sub-\
+                                statement",
+                                derived_from_ty.id,
+                            ),
+                            Label::error("defined here", stmt.id()),
+                        ],
+                        notes: vec![],
+                    });
                 }
             };
         }

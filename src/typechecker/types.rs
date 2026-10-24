@@ -125,7 +125,7 @@ pub enum MustBeSigned {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum TypeDefinition {
     Enum(TypeName, Vec<EnumVariant>),
-    YangEnum(TypeName, Vec<Refinement>),
+    RefinedType(TypePath, Vec<Refinement>),
     Record(TypeName, Vec<(Meta<Identifier>, Type)>),
     Runtime(ResolvedName, TypeId),
     Primitive(Primitive),
@@ -229,8 +229,11 @@ impl TypeDefinition {
                 },
                 arguments: Vec::new(),
             },
-            TypeDefinition::YangEnum(type_name, _refinements) => {
-                type_name.clone()
+            TypeDefinition::RefinedType(type_name, _refinements) => {
+                TypeName {
+                    name: type_name.name,
+                    arguments: vec![],
+                }
             }
         }
     }
@@ -431,7 +434,7 @@ impl TypeDisplay for TypeDefinition {
             TypeDefinition::Primitive(primitive) => {
                 Display::fmt(primitive, f)
             }
-            TypeDefinition::YangEnum(type_name, _) => {
+            TypeDefinition::RefinedType(type_name, _) => {
                 Display::fmt(&type_name.display(type_info), f)
             }
         }
@@ -442,6 +445,34 @@ impl TypeDisplay for TypeDefinition {
 pub struct TypeName {
     pub name: ResolvedName,
     pub arguments: Vec<Type>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TypePath {
+    pub name: ResolvedName,
+    pub path: Vec<ResolvedName>,
+}
+
+impl TypeDisplay for TypePath {
+    fn fmt(
+        &self,
+        type_info: &TypeInfo,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> core::fmt::Result {
+        Display::fmt(&self.name.display(type_info), f)?;
+        let mut args = self.path.iter();
+        if let Some(arg) = args.next() {
+            f.write_char('[')?;
+            Display::fmt(&arg.display(type_info), f)?;
+            for arg in args {
+                f.write_char(',')?;
+                f.write_char(' ')?;
+                Display::fmt(&arg.display(type_info), f)?;
+            }
+            f.write_char(']')?;
+        }
+        Ok(())
+    }
 }
 
 impl TypeName {
@@ -722,6 +753,12 @@ pub fn yang_default_types() -> Vec<(Identifier, String, TypeDefinition)> {
     // types.push(("List".into(), "".into(), TypeDefinition::List(list_type)));
 
     types
+}
+
+pub fn is_builtin_value(ident: &str) -> bool {
+    ident == "enumeration"
+        || ident == "union"
+        || yang_default_types().iter().any(|yt| yt.0.as_str() == ident)
 }
 
 /// The list of built-in Roto types

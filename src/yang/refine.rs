@@ -40,7 +40,7 @@ impl Refinement {
             Refinement::Length(def) => def.validate(&value),
             Refinement::FractionDigits(def) => def.validate(&value),
             Refinement::Pattern(def) => def.validate(&value),
-            Refinement::Base(def) => true,
+            Refinement::Base(_def) => true,
             Refinement::InstanceIndentifier(def) => def.validate(value),
             Refinement::Enum(enum_definition) => {
                 enum_definition.validate(value)
@@ -312,9 +312,9 @@ impl From<&str> for YangStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct PatternDefinition {
-    pattern: String,
-    modifier: PatternModifier,
-    attrs: RefineAttrs,
+    pub pattern: String,
+    pub modifier: PatternModifier,
+    pub attrs: RefineAttrs,
 }
 
 impl PatternDefinition {
@@ -326,6 +326,21 @@ impl PatternDefinition {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum PatternModifier {
     InvertMatch,
+    None,
+}
+
+impl From<&Meta<Expr>> for PatternModifier {
+    fn from(sub_stmts: &Meta<Expr>) -> Self {
+        for stmt in sub_stmts.iter_stmt() {
+            if let Stmt::YangStmtSeq(YangStmtSeq { stmt, .. }) = &stmt.node
+                && let Some(Keyword::Modifier) = stmt.as_keyword()
+            {
+                return PatternModifier::InvertMatch;
+            }
+        }
+
+        PatternModifier::None
+    }
 }
 
 // #[derive(Debug)]

@@ -71,7 +71,7 @@ fn visit_name(
                 }
             }
         }
-        TypeDefinition::YangEnum(_, _) => {}
+        TypeDefinition::RefinedType(_, _) => {}
         TypeDefinition::Record(_, fields) => {
             for (_, field_ty) in fields {
                 visit(types, visited, field_ty)?;

@@ -661,26 +661,26 @@ impl TypeChecker {
 
                 // We have to insert stub declarations for all the enum
                 // variants, so that they can be imported.
-                if let ast::Declaration::Enum(x) = d
-                    && let Some(new_scope) = new_scope
-                {
-                    for variant in &*x.variants {
-                        let res =
-                            self.type_info.scope_graph.insert_declaration(
-                                new_scope,
-                                &variant.ident,
-                                DeclarationKind::Enum(None),
-                                String::new(),
-                                |_| false,
-                            );
+                // if let ast::Declaration::Enum(x) = d
+                //     && let Some(new_scope) = new_scope
+                // {
+                //     for variant in &*x.variants {
+                //         let res =
+                //             self.type_info.scope_graph.insert_declaration(
+                //                 new_scope,
+                //                 &variant.ident,
+                //                 DeclarationKind::Enum(None),
+                //                 String::new(),
+                //                 |_| false,
+                //             );
 
-                        if let Err(e) = res {
-                            return Err(
-                                self.error_declared_twice(&x.ident, e)
-                            );
-                        };
-                    }
-                }
+                //         if let Err(e) = res {
+                //             return Err(
+                //                 self.error_declared_twice(&x.ident, e)
+                //             );
+                //         };
+                //     }
+                // }
 
                 if let ast::Declaration::YangModule(module) = d {
                     let ctx = Context {
