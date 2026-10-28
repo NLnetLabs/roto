@@ -1,0 +1,5 @@
+const S: String = "abc";
+
+fn main() {
+    S = "xyz";
+}

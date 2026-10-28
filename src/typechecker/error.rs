@@ -558,6 +558,20 @@ impl TypeChecker {
         )
     }
 
+    pub fn error_cannot_assign_to_constant(
+        &self,
+        path: &Meta<Path>,
+        name: Identifier,
+    ) -> TypeError {
+        let mut err = self.error_simple(
+            format!("cannot assign to constant `{name}`"),
+            "cannot assign to a constant",
+            path.id,
+        );
+        err.notes.push("constants cannot be changed".into());
+        err
+    }
+
     pub fn error_cannot_assign_to_this_expression(
         &self,
         path: &Meta<Path>,
