@@ -1561,10 +1561,21 @@ impl<'r> Lowerer<'r> {
                 })
             }
             ValueKind::Constant => {
-                if !fields.is_empty() {
-                    panic!("Getting fields of constants not supported yet")
+                let constant = Value::Constant(*name, root_ty);
+                if fields.is_empty() {
+                    return constant;
                 }
-                Value::Constant(*name, root_ty)
+
+                // Constants have no place to project from, so clone into variable
+                let var = self.assign_to_var(constant, root_ty);
+                let projection =
+                    fields.iter().map(|f| Projection::Field(f.0)).collect();
+
+                Value::Clone(Place {
+                    var,
+                    root_ty,
+                    projection,
+                })
             }
             ValueKind::Context(x) => Value::Context(*x),
         }

@@ -6140,6 +6140,58 @@ fn simple_roto_constant_string() {
 }
 
 #[test]
+fn roto_constant_record_field() {
+    let s = src!(
+        r#"
+        record Foo { x: u32, y: u32 }
+
+        const FOO: Foo = Foo {
+            x: 33,
+            y: 42,
+        };
+
+        fn main() -> u32 {
+            FOO.y
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> u32>("main").unwrap();
+
+    assert_eq!(f.call(), 42);
+}
+
+#[test]
+fn roto_constant_record_nested_string_field() {
+    let s = src!(
+        r#"
+        record Bar { n: u32, s: String }
+        record Foo { x: u32, inner: Bar }
+
+        const FOO: Foo = Foo {
+            x: 33,
+            inner: Bar {
+                n: 123,
+                s: "Inner"
+            }
+        };
+
+        fn main() -> String {
+            FOO.inner.s
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> RotoString>("main").unwrap();
+
+    // Run twice to ensure that reading a field leaves constant intact
+    assert_eq!(f.call(), "Inner".into());
+    assert_eq!(f.call(), "Inner".into());
+}
+
+#[test]
 fn simple_roto_constant_string_2() {
     let s = src!(
         r#"
