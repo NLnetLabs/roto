@@ -254,3 +254,17 @@ fn non_ascii_identifiers_and_tokens() {
     let err = parse_expr("€").unwrap_err();
     assert_eq!(err.location.start..err.location.end, 0.."€".len());
 }
+
+#[test]
+fn literal_at_end_of_input() {
+    parse_expr(r#""hi""#).unwrap();
+    parse_expr(r#""a" + "b""#).unwrap();
+    parse_expr(r#""""#).unwrap();
+    parse_expr("'c'").unwrap();
+    parse_expr(r#""\"""#).unwrap();
+    parse_expr(r#""a\\""#).unwrap();
+
+    parse_expr(r#""hi"#).unwrap_err();
+    parse_expr(r#""hi\""#).unwrap_err();
+    parse_expr("'c").unwrap_err();
+}
