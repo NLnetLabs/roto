@@ -851,11 +851,14 @@ impl Rt {
             .collect();
 
         // If DynVal is used then we need to get a pointer to the values that we pass, so
-        // we need to keep track of which parameters are DynVals.
+        // we need to keep track of which parameters are DynVals. This is indexed
+        // by Roto argument, and the vtables come first in the Rust signature
+        // without being arguments, so they are skipped.
         let dyn_vals = f
             .func
             .parameter_types()
             .iter()
+            .skip(f.vtables.len())
             .map(|t| *t == TypeId::of::<DynVal>())
             .collect();
 
