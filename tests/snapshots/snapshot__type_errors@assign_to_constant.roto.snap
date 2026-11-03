@@ -1,0 +1,14 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/assign_to_constant.roto
+---
+Error: Type error: cannot assign to constant `S`
+   ╭─[ tests/scripts/type_errors/assign_to_constant.roto:4:5 ]
+   │
+ 4 │     S = "xyz";
+   │     ┬  
+   │     ╰── cannot assign to a constant
+   │ 
+   │ Note: constants cannot be changed
+───╯

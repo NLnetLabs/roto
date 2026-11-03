@@ -272,6 +272,12 @@ impl TypeChecker {
                         self.error_cannot_assign_to_this_expression(p)
                     );
                 };
+                if let ValueKind::Constant = path_value.kind {
+                    return Err(self.error_cannot_assign_to_constant(
+                        p,
+                        path_value.name.ident,
+                    ));
+                }
 
                 let ty = path_value.final_type();
                 let ctx = ctx.with_type(ty);
@@ -291,6 +297,12 @@ impl TypeChecker {
                         self.error_cannot_assign_to_this_expression(&c.path)
                     );
                 };
+                if let ValueKind::Constant = path_value.kind {
+                    return Err(self.error_cannot_assign_to_constant(
+                        &c.path,
+                        path_value.name.ident,
+                    ));
+                }
 
                 let ty = path_value.final_type();
                 let ctx = ctx.with_type(ty);

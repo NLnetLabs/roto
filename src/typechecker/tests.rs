@@ -1160,6 +1160,59 @@ fn assignment_to_record() {
 }
 
 #[test]
+fn assignment_to_constant() {
+    let s = src!(
+        "
+            const A: i32 = 0;
+
+            fn foo() {
+                A = 1;
+            }
+        "
+    );
+
+    typecheck(s).unwrap_err();
+
+    let s = src!(
+        "
+            const A: i32 = 0;
+
+            fn foo() {
+                A += 1;
+            }
+        "
+    );
+
+    typecheck(s).unwrap_err();
+
+    let s = src!(
+        "
+            const S: String = \"abc\";
+
+            fn foo() {
+                S = \"xyz\";
+            }
+        "
+    );
+
+    typecheck(s).unwrap_err();
+
+    // A local variable that shadows a constant can still be assigned to
+    let s = src!(
+        "
+            const A: i32 = 0;
+
+            fn foo() -> i32 {
+                let A = 5;
+                A = 6;
+                A
+            }
+        "
+    );
+    typecheck(s).unwrap();
+}
+
+#[test]
 fn invalid_type_in_f_string() {
     let s = src!(
         r#"
