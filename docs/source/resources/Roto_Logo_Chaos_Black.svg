@@ -35,8 +35,7 @@
     <style
        id="style1">
       .cls-1 {
-        color-scheme: light dark;
-        fill: light-dark(#141414, #f2efed);
+         fill: #141414;
       }
     </style>
   </defs>

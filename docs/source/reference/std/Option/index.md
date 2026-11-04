@@ -1,5 +1,5 @@
-# Option[T]
-`````{roto:type} Option[T]
+# Option
+`````{roto:type} Option
 An optional value.
 
 The `Option[T]` is an enum with two constructors: `Some(T)` and `None`. To get the value of an `Option`, you can either match on it or use the `?` operator.

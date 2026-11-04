@@ -4,6 +4,30 @@ from sphinx import addnodes
 from sphinx.roles import XRefRole
 from sphinx.application import Sphinx
 from sphinx.util.nodes import make_refnode
+import re
+
+
+class desc_roto_type(addnodes.desc_sig_element):
+    classes = ["sig-type"]
+
+def add_type(node, ty):
+    ty = re.split(r'(\W+)', ty)
+    for elem in ty:
+        if not elem:
+            continue
+        elif elem in "[]":
+            node += addnodes.desc_sig_punctuation(text=elem)
+        elif elem == ", ":
+            node += addnodes.desc_sig_punctuation(text=",")
+            node += addnodes.desc_sig_space(text=" ")
+        else:
+            node += addnodes.pending_xref(
+                "",
+                desc_roto_type(text=elem),
+                refdomain="roto",
+                reftype="ref",
+                reftarget=elem,
+            )
 
 class RotoFunctionLike(ObjectDescription):
     """Generic Roto function-like object that we don't register into the domain"""
@@ -27,16 +51,10 @@ class RotoFunctionLike(ObjectDescription):
                 continue
             param_name, _, ty = param.partition(': ') 
             sig_param = addnodes.desc_parameter()
-            sig_param += addnodes.desc_name(text=param_name)
+            sig_param += addnodes.desc_sig_element(text=param_name)
             sig_param += addnodes.desc_sig_punctuation(text=':')
             sig_param += addnodes.desc_sig_space(text=' ')
-            sig_param += addnodes.pending_xref(
-                "",
-                addnodes.desc_type(text=ty),
-                refdomain="roto",
-                reftype="ref",
-                reftarget=ty,
-            )
+            add_type(sig_param, ty)
             sig_param_list += sig_param
 
         signode += addnodes.desc_annotation(text=self.class_name)    
@@ -48,14 +66,7 @@ class RotoFunctionLike(ObjectDescription):
         ret = ret.strip().removeprefix('->').strip()
         if ret:
             sig_ret = addnodes.desc_returns()
-            sig_ret += addnodes.pending_xref(
-                "",
-                addnodes.desc_type(text=ret),
-                refdomain="roto",
-                reftype="ref",
-                reftarget=ret,
-            )
-
+            add_type(sig_ret, ret)
             signode += sig_ret
 
         signode['path'] = sig
@@ -205,6 +216,7 @@ class RecipeDomain(Domain):
 
 def setup(app: Sphinx):
     app.add_domain(RecipeDomain)
+    app.add_node(desc_roto_type)
 
     return {
         'version': '0.1',
