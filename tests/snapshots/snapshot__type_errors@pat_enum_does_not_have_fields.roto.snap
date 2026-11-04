@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_enum_does_not_have_fields.roto
+---
+Error: Type error: pattern has 1 fields, but the corresponding enum variant has 0 fields
+   ╭─[ tests/scripts/type_errors/pat_enum_does_not_have_fields.roto:7:9 ]
+   │
+ 7 │         Foo.Bar(x) => {}
+   │         ─────┬────  
+   │              ╰────── expected 0 fields, got 1
+───╯

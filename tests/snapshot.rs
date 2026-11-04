@@ -27,9 +27,9 @@ fn type_errors() {
         let runtime = Runtime::new();
 
         let relative_path = path.strip_prefix(&root).unwrap();
-        let res = runtime.compile(relative_path);
+        let res = runtime.check(relative_path);
         let Err(e) = res else {
-            panic!("should not succeed");
+            panic!("should not succeed: {}", path.display());
         };
         let mut string = String::new();
         e.write(&mut string, false).unwrap();

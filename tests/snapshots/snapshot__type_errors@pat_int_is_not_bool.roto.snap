@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_int_is_not_bool.roto
+---
+Error: Type error: mismatched types
+   ╭─[ tests/scripts/type_errors/pat_int_is_not_bool.roto:3:9 ]
+   │
+ 3 │         false => {}
+   │         ──┬──  
+   │           ╰──── expected `{integer}`, found `bool`
+───╯

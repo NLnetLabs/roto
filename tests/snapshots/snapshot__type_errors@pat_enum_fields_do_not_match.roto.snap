@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_enum_fields_do_not_match.roto
+---
+Error: Type error: pattern has 3 fields, but the corresponding enum variant has 2 fields
+   ╭─[ tests/scripts/type_errors/pat_enum_fields_do_not_match.roto:7:9 ]
+   │
+ 7 │         Foo.Bar(x, y, z) => {}
+   │         ────────┬───────  
+   │                 ╰───────── expected 2 fields, got 3
+───╯

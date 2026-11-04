@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_unit_is_not_string.roto
+---
+Error: Type error: mismatched types
+   ╭─[ tests/scripts/type_errors/pat_unit_is_not_string.roto:3:9 ]
+   │
+ 3 │         () => {}
+   │         ─┬  
+   │          ╰── expected `String`, found `()`
+───╯

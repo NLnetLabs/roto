@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_multiple_rest_patterns.roto
+---
+Error: Type error: cannot use rest pattern `..` multiple times in a pattern
+   ╭─[ tests/scripts/type_errors/pat_multiple_rest_patterns.roto:8:22 ]
+   │
+ 8 │         Foo { x, .., .. } => {}
+   │                      ─┬  
+   │                       ╰── can only be used once
+───╯

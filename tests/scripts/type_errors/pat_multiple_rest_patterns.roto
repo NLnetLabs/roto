@@ -1,0 +1,10 @@
+record Foo {
+    x: i32,
+}
+
+fn main() {
+    let x = Foo { x: 10 };
+    match x {
+        Foo { x, .., .. } => {}
+    }
+}

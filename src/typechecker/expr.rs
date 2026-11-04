@@ -668,6 +668,7 @@ impl TypeChecker {
         Ok(false)
     }
 
+    #[cfg(false)]
     fn match_expr(
         &mut self,
         scope: ScopeRef,

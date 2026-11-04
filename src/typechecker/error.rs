@@ -31,7 +31,7 @@ pub struct Label {
 
 impl Label {
     /// Create an error label
-    fn error(msg: impl Display, id: MetaId) -> Self {
+    pub fn error(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Error,
             id,
@@ -40,7 +40,7 @@ impl Label {
     }
 
     /// Create an info label
-    fn info(msg: impl Display, id: MetaId) -> Self {
+    pub fn info(msg: impl Display, id: MetaId) -> Self {
         Label {
             level: Level::Info,
             id,
@@ -149,6 +149,56 @@ impl TypeChecker {
             description: format!("expected type, but found {kind} `{ident}`",),
             location: ident.id,
             labels: vec![Label::error("expected type", ident.id)],
+            notes: Vec::new(),
+        }
+    }
+
+    pub fn error_expected_enum_variant(
+        &self,
+        ident: &Meta<Identifier>,
+        stub: Declaration,
+    ) -> TypeError {
+        let kind = describe_declaration(&stub);
+        TypeError {
+            description: format!(
+                "expected enum variant, but found {kind} `{ident}`",
+            ),
+            location: ident.id,
+            labels: vec![Label::error("expected enum variant", ident.id)],
+            notes: Vec::new(),
+        }
+    }
+
+    pub fn error_expected_record(
+        &self,
+        ident: &Meta<Identifier>,
+        stub: Declaration,
+    ) -> TypeError {
+        let kind = describe_declaration(&stub);
+        TypeError {
+            description: format!(
+                "expected record, but found {kind} `{ident}`",
+            ),
+            location: ident.id,
+            labels: vec![Label::error("expected record", ident.id)],
+            notes: Vec::new(),
+        }
+    }
+
+    pub fn error_field_used_multiple_times(
+        &self,
+        ident: &Meta<Identifier>,
+        old_id: MetaId,
+    ) -> TypeError {
+        TypeError {
+            description: format!(
+                "field `{ident}` used multiple times in pattern",
+            ),
+            location: ident.id,
+            labels: vec![
+                Label::error("multiple uses of `{ident}`", ident.id),
+                Label::info(format!("first use of `{ident}`"), old_id),
+            ],
             notes: Vec::new(),
         }
     }
@@ -511,6 +561,21 @@ impl TypeChecker {
             labels: vec![Label::error("expected a function", ident.id)],
             notes: Vec::new(),
         }
+    }
+
+    pub fn error_invalid_path_in_pattern(
+        &self,
+        ty: &impl TypeDisplay,
+        ident: &Meta<Identifier>,
+    ) -> TypeError {
+        self.error_simple(
+            format!(
+                "cannot access `{ident}` on type `{}` in pattern",
+                ty.display(self.module_scope, &self.type_info)
+            ),
+            format!("invalid access of `{ident}`"),
+            ident.id,
+        )
     }
 
     pub fn error_no_field_on_type(

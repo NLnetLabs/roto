@@ -1,0 +1,13 @@
+---
+source: tests/snapshot.rs
+assertion_line: 36
+expression: string
+input_file: tests/scripts/type_errors/pat_variable_not_bound_in_all_patterns.roto
+---
+Error: Type error: cannot find value `x` in this scope
+   ╭─[ tests/scripts/type_errors/pat_variable_not_bound_in_all_patterns.roto:9:17 ]
+   │
+ 9 │         Foo.Bar(x) | Foo.Baz(x) | Foo.Bob(_) => {}
+   │                 ┬  
+   │                 ╰── not found in this scope
+───╯

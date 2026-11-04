@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_enum_field_type_does_not_match.roto
+---
+Error: Type error: mismatched types
+   ╭─[ tests/scripts/type_errors/pat_enum_field_type_does_not_match.roto:7:17 ]
+   │
+ 7 │         Foo.Bar(false) => {}
+   │                 ──┬──  
+   │                   ╰──── expected `i32`, found `bool`
+───╯

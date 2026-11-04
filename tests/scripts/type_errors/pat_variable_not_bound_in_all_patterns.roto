@@ -1,0 +1,11 @@
+enum Foo {
+    Bar(i32),
+    Baz(i32),
+    Bob(i32),
+}
+
+fn main() {
+    match Foo.Bar(10) {
+        Foo.Bar(x) | Foo.Baz(x) | Foo.Bob(_) => {}
+    }
+}
