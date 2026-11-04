@@ -9,21 +9,21 @@ for the full explanation of these concepts.
 | Comment                  | `# this is a comment`                               | {ref}`lang_comments`                                     |
 | Unit                     | `()`                                                | {ref}`lang_unit`                                         |
 | Never type               | `!`                                                 | {ref}`lang_never`                                        |
-| Boolean                  | `true`, `false`                                     | {ref}`lang_booleans`, :roto:ref:`bool`                   |
+| Boolean                  | `true`, `false`                                     | {ref}`lang_booleans`, {roto:ref}`bool`                   |
 | Integer                  | `10`, `-100`, `0`                                   | {ref}`lang_integers`                                     |
 | Float                    | `10.5`, `-10.0`, `1.`, `1e+10`                      | {ref}`lang_floats`                                       |
-| IP address               | `0.0.0.0`, `2001:DB8::5673:23b5`, `::`              | {rot}:ref:`IpAddr`                                       |
-| AS number                | `AS1234`                                            | {rot}:ref:`Asn`                                          |
-| String                   | `"hello, world!"`                                   | {ref}`lang_strings`, :roto:ref:`String`                  |
+| IP address               | `0.0.0.0`, `2001:DB8::5673:23b5`, `::`              | {roto:ref}`IpAddr`                                       |
+| AS number                | `AS1234`                                            | {roto:ref}`Asn`                                          |
+| String                   | `"hello, world!"`                                   | {ref}`lang_strings`, {roto:ref}`String`                  |
 | Format string            | `f"hello, world!"`                                  | {ref}`lang_string_formatting`                            |
 | Optional values          | `None`, `Some(x)`                                   | {ref}`lang_optionals`                                    |
 | Anonymous record         | `{ x: 10, y: 20 }`                                  | {ref}`lang_anonymous_records`                            |
 | Named record             | `Foo { x: 10, y: 20 }`                              | {ref}`lang_named_records`                                |
-| List                     | `[10, 20, 30]`                                      | {ref}`lang_lists`, :roto:ref:`List[T]`                   |
+| List                     | `[10, 20, 30]`                                      | {ref}`lang_lists`, {roto:ref}`List`                      |
 | Unary operator           | `-x`                                                | {ref}`lang_arithmetic`                                   |
 | Binary operator          | `x + y`                                             | {ref}`lang_arithmetic`                                   |
 | Assignment               | `x = 10`                                            | {ref}`lang_locals`                                       |
-| Field access             | `x.y`                                               | {ref}`lang_anonymous_records`, :ref:`lang_named_records` |
+| Field access             | `x.y`                                               | {ref}`lang_anonymous_records`, {ref}`lang_named_records` |
 | Function call            | `add(x, y)`                                         |                                                          |
 | Method call              | `x.add(y)`                                          |                                                          |
 | Static method call       | `String.append(x, y)`                               |                                                          |

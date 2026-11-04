@@ -1,4 +1,4 @@
-use std::{fs::File, io, path::Path};
+use std::{cmp::Ordering, fs::File, io, path::Path};
 
 use crate::{
     ice,
@@ -6,7 +6,7 @@ use crate::{
     typechecker::{
         scope::{DeclarationKind, ScopeRef, TypeOrStub, ValueKind},
         scoped_display::TypeDisplay,
-        types,
+        types::{self, Type},
     },
 };
 
@@ -34,6 +34,7 @@ struct DocMod {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct DocTy {
     ident: String,
+    args: Vec<String>,
     doc: String,
     items: Vec<DocItem>,
 }
@@ -141,6 +142,7 @@ impl DocMod {
             writeln!(file, "## Types")?;
             writeln!(file, "```{{toctree}}")?;
             writeln!(file, ":maxdepth: 1")?;
+            writeln!(file, ":hidden: 1")?;
             for t in &ts {
                 writeln!(
                     file,
@@ -150,6 +152,21 @@ impl DocMod {
                 )?;
             }
             writeln!(file, "```")?;
+
+            writeln!(file)?;
+            writeln!(file, ":::{{list-table}}")?;
+            writeln!(file, ":class: roto-contents")?;
+            for t in &ts {
+                writeln!(
+                    file,
+                    "* - [`{}`]({})",
+                    t.ident,
+                    Path::new(&t.ident).join("index").display(),
+                )?;
+                writeln!(file, "  - {}", doc_slug(&t.doc),)?;
+            }
+            writeln!(file, ":::")?;
+            writeln!(file)?;
         }
 
         if !cs.is_empty() {
@@ -177,6 +194,10 @@ impl DocMod {
 
         Ok(())
     }
+}
+
+fn doc_slug(s: &str) -> String {
+    s.split_once("\n\n").map_or(s, |s| s.0).into()
 }
 
 impl DocConst {
@@ -306,7 +327,18 @@ impl Rt {
                     );
 
                     out.push(DocItem::Ty(DocTy {
-                        ident: self.print_ty(ty),
+                        ident: ty.type_name().name.ident.to_string(),
+                        args: ty
+                            .type_name()
+                            .arguments
+                            .iter()
+                            .map(|t| {
+                                let Type::ExplicitVar(s) = t else {
+                                    panic!();
+                                };
+                                s.to_string()
+                            })
+                            .collect(),
                         doc: dec.doc.clone(),
                         items,
                     }));
@@ -378,11 +410,65 @@ impl Rt {
             }
         }
 
-        fs.sort();
-        cs.sort();
-        ts.sort();
-        ms.sort();
+        fs.sort_by(|a, b| version_cmp(&a.ident, &b.ident));
+        cs.sort_by(|a, b| version_cmp(&a.ident, &b.ident));
+        ts.sort_by(|a, b| version_cmp(&a.ident, &b.ident));
+        ms.sort_by(|a, b| version_cmp(&a.ident, &b.ident));
 
         (fs, cs, ts, ms)
     }
+}
+
+fn version_cmp(a: &str, b: &str) -> Ordering {
+    // 1. Compare leading non-numerical part
+    // 2. Compare leading numerical part
+    // 3. Repeat
+    let mut a = a.as_bytes();
+    let mut b = b.as_bytes();
+    while !a.is_empty() || !b.is_empty() {
+        let a_numerical_start =
+            a.iter().position(u8::is_ascii_digit).unwrap_or(a.len());
+        let b_numerical_start =
+            b.iter().position(u8::is_ascii_digit).unwrap_or(b.len());
+
+        let a_str = &a[..a_numerical_start];
+        let b_str = &b[..b_numerical_start];
+
+        match a_str.cmp(b_str) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+
+        a = &a[a_numerical_start..];
+        b = &b[a_numerical_start..];
+
+        let a_numerical_end = a
+            .iter()
+            .position(|c| !c.is_ascii_digit())
+            .unwrap_or(a.len());
+        let b_numerical_end = b
+            .iter()
+            .position(|c| !c.is_ascii_digit())
+            .unwrap_or(b.len());
+
+        let a_str = &a[a.iter().position(|&c| c != b'0').unwrap_or(a.len())
+            ..a_numerical_end];
+        let b_str = &b[b.iter().position(|&c| c != b'0').unwrap_or(b.len())
+            ..b_numerical_end];
+
+        match a_str.len().cmp(&b_str.len()) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+
+        match a_str.cmp(b_str) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+
+        a = &a[a_numerical_end..];
+        b = &b[b_numerical_end..];
+    }
+
+    Ordering::Equal
 }

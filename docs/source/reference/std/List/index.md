@@ -1,5 +1,5 @@
-# List[T]
-`````{roto:type} List[T]
+# List
+`````{roto:type} List
 A growable array.
 `````
 

@@ -1,6 +1,12 @@
 :::{image} resources/Roto_Logo_Chaos_Black.svg
   :alt: Roto logo
   :width: 100%
+  :class: only-light
+:::
+:::{image} resources/Roto_Logo_Chaos_White.svg
+  :alt: Roto logo
+  :width: 100%
+  :class: only-dark
 :::
 
 :::{note}

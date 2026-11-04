@@ -1,5 +1,5 @@
-# Result[T, E]
-`````{roto:type} Result[T, E]
+# Result
+`````{roto:type} Result
 A type that represents either success (`Ok`) or failure (`Err`).
 `````
 
