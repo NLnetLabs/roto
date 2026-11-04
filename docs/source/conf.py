@@ -110,13 +110,11 @@ pygments_style = None
 #
 html_theme = 'furo'
 # html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-html_logo = 'resources/logo-off-white.svg'
+# html_logo = 'resources/logo_white.svg'
 html_css_files = ["css/nlnetlabs.css", "css/roto.css"]
 html_title = "Roto Manual"
 html_favicon = 'resources/icon.svg'
 html_theme_options = {
-    'logo_only': True,
-    'style_external_links': False,
     'source_repository': 'https://github.com/NLnetLabs/routinator/',
     'source_branch': os.environ.get('READTHEDOCS_GIT_IDENTIFIER', 'main'),
     'source_directory': 'doc/manual/source/',

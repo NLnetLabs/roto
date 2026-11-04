@@ -123,10 +123,6 @@ table.roto-contents {
   }
 }
 
-@media not print {
-  @media (prefers-color-sheme: dark)
-}
-
 body[data-theme="light"] .only-dark {
   display: none;
 }

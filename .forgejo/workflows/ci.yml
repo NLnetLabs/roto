@@ -11,19 +11,12 @@ jobs:
     steps:
     - name: Run apt-get update
       run: apt-get update
-    - name: Install pip
-      run: apt-get install -y python3 python3-pip python3-venv python-is-python3
+    - name: Install uv
+      run: curl -LsSf https://astral.sh/uv/install.sh | sh
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - name: Make virtualenv
-      run: python -m venv sphinx-env
-    - name: Install docs requirements
-      run: |
-        source sphinx-env/bin/activate
-        cd docs
-        pip install -r requirements.txt
     - name: Install Rust
       uses: https://github.com/dtolnay/rust-toolchain@v1
       with:
@@ -35,9 +28,7 @@ jobs:
       run: cargo run -- doc docs/source/reference/std
     - name: Build the docs
       run: |
-        source sphinx-env/bin/activate
-        cd docs
-        make html
+        uv run - make html
     - name: Check whether the docs are outdated
       run: git diff --exit-code
   
