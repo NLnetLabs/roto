@@ -1,0 +1,16 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_variable_not_bound_in_all_patterns.roto
+---
+Error: Type error: variable `x` is not bound in all patterns
+   ╭─[ tests/scripts/type_errors/pat_variable_not_bound_in_all_patterns.roto:9:9 ]
+   │
+ 9 │         Foo.Bar(x) | Foo.Baz(x) | Foo.Bob(_) => {}
+   │                 ┬            ┬    ─────┬────  
+   │                 ╰───────────────────────────── variable bound here
+   │                              │         │      
+   │                              ╰──────────────── variable bound here
+   │                                        │      
+   │                                        ╰────── variable missing in this pattern
+───╯

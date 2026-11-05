@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_super.roto
+---
+Error: Parse error: expected a literal but got 'super'
+   ╭─[ tests/scripts/type_errors/pat_super.roto:3:9 ]
+   │
+ 3 │         super => {}
+   │         ──┬──  
+   │           ╰──── expected a literal
+───╯

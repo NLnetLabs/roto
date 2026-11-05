@@ -1,0 +1,14 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_binding_different_types_in_variant.roto
+---
+Error: Type error: variable is bound multiple times in pattern
+   ╭─[ tests/scripts/type_errors/pat_binding_different_types_in_variant.roto:7:20 ]
+   │
+ 7 │         Foo.Bar(x, x) => {}
+   │                 ┬  ┬  
+   │                 ╰───── first defined here
+   │                    │  
+   │                    ╰── defined again here
+───╯

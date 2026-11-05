@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_missing_fields_on_record.roto
+---
+Error: Type error: record pattern missing field `y`
+   ╭─[ tests/scripts/type_errors/pat_missing_fields_on_record.roto:8:9 ]
+   │
+ 8 │         Foo { x } => {}
+   │         ────┬────  
+   │             ╰────── missing field `y`
+───╯

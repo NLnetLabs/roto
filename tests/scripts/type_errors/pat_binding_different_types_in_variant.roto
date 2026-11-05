@@ -1,0 +1,9 @@
+enum Foo {
+    Bar(i32, bool),
+}
+
+fn main() {
+    match Foo.Bar(10, false) {
+        Foo.Bar(x, x) => {}
+    }
+}

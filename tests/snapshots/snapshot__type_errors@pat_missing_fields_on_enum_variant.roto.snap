@@ -1,0 +1,12 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_missing_fields_on_enum_variant.roto
+---
+Error: Type error: pattern has 1 fields, but the corresponding enum variant has 2 fields
+   ╭─[ tests/scripts/type_errors/pat_missing_fields_on_enum_variant.roto:7:9 ]
+   │
+ 7 │         Foo.Bar(x) => {}
+   │         ─────┬────  
+   │              ╰────── expected 2 fields, got 1
+───╯

@@ -1,0 +1,10 @@
+record Foo {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    match (Foo { x: 10, y: 20 }) {
+        Foo { x } => {}
+    }
+}

@@ -38,6 +38,8 @@ use crate::{
     },
 };
 
+use super::scope::{DeclarationKind, ValueKind};
+
 struct Variable;
 
 enum Decision {
@@ -210,12 +212,44 @@ impl TypeChecker {
             ast::Pattern::Path(path) => {
                 let idents = &path.idents;
 
+                if let [ident] = &idents[..] {
+                    let stub = self
+                        .type_info
+                        .scope_graph
+                        .resolve_name(scope, ident, true);
+
+                    match stub.map(|s| s.kind) {
+                        None
+                        | Some(
+                            DeclarationKind::Value(ValueKind::Local, _)
+                            | DeclarationKind::Function(_)
+                            | DeclarationKind::Method(_)
+                            | DeclarationKind::Module
+                            | DeclarationKind::TypeParam(_),
+                        ) => {
+                            // It's ok to use this identifier as a new variable
+                            let mut vars = VariableSet::default();
+                            vars.add(ident.clone(), ty.clone())?;
+                            return Ok(vars);
+                        }
+                        Some(
+                            DeclarationKind::Value(ValueKind::Constant, _)
+                            | DeclarationKind::Value(ValueKind::Context(_), _)
+                            | DeclarationKind::Type(_)
+                            | DeclarationKind::Enum(_),
+                        ) => {
+                            // This pattern cannot be a new variable.
+                            // We fallthrough to comparing to a constant.
+                        }
+                    }
+                }
+
                 let mut idents = idents.iter();
                 let (ident, dec) =
                     self.resolve_module_part_of_path(scope, &mut idents)?;
 
                 match dec.kind {
-                    super::scope::DeclarationKind::Enum(Some((
+                    DeclarationKind::Enum(Some((
                         super::types::TypeDefinition::Enum(enum_ty, _),
                         variant,
                     ))) => {
@@ -252,7 +286,7 @@ impl TypeChecker {
                     self.resolve_module_part_of_path(scope, &mut idents)?;
 
                 match dec.kind {
-                    super::scope::DeclarationKind::Enum(Some((
+                    DeclarationKind::Enum(Some((
                         super::types::TypeDefinition::Enum(enum_ty, _),
                         variant,
                     ))) => {
@@ -299,12 +333,13 @@ impl TypeChecker {
                 fields: pattern_fields,
             } => {
                 let idents = &path.idents;
+
                 let mut idents = idents.iter();
                 let (ident, dec) =
                     self.resolve_module_part_of_path(scope, &mut idents)?;
 
                 match dec.kind {
-                    super::scope::DeclarationKind::Type(
+                    DeclarationKind::Type(
                         super::scope::TypeOrStub::Type(
                             TypeDefinition::Record(record_ty, record_fields),
                         ),
@@ -386,11 +421,24 @@ impl TypeChecker {
                                 }
                             }
                         }
+
+                        if !found_rest {
+                            let mut missing = Vec::new();
+                            for field in record_fields {
+                                if !seen_fields.contains_key(&field.0) {
+                                    missing.push(*field.0)
+                                }
+                            }
+                            if !missing.is_empty() {
+                                return Err(self
+                                    .error_pattern_missing_fields(
+                                        pattern.id, missing,
+                                    ));
+                            }
+                        }
                         Ok(vars)
                     }
-                    _ => {
-                        return Err(self.error_expected_record(ident, dec));
-                    }
+                    _ => Err(self.error_expected_record(ident, dec)),
                 }
             }
             ast::Pattern::Or(patterns) => {
@@ -431,7 +479,7 @@ impl TypeChecker {
                     &value.1,
                     &secondary_value.1,
                     secondary_value.0,
-                    None,
+                    Some(value.0),
                 )?;
                 results.push(Ok(secondary_value.0));
             }

@@ -169,6 +169,24 @@ impl TypeChecker {
         }
     }
 
+    pub fn error_pattern_missing_fields(
+        &self,
+        pat: MetaId,
+        missing: Vec<Identifier>,
+    ) -> TypeError {
+        let s = if missing.len() > 1 { "s" } else { "" };
+        let list = join_quoted(&missing);
+        TypeError {
+            description: format!("record pattern missing field{s} {list}",),
+            location: pat,
+            labels: vec![Label::error(
+                format!("missing field{s} {list}"),
+                pat,
+            )],
+            notes: Vec::new(),
+        }
+    }
+
     pub fn error_expected_record(
         &self,
         ident: &Meta<Identifier>,

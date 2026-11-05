@@ -1,0 +1,14 @@
+---
+source: tests/snapshot.rs
+expression: string
+input_file: tests/scripts/type_errors/pat_binding_different_types.roto
+---
+Error: Type error: mismatched types
+   ╭─[ tests/scripts/type_errors/pat_binding_different_types.roto:8:30 ]
+   │
+ 8 │         Foo.Bar(x) | Foo.Baz(x) => {}
+   │                 ┬            ┬  
+   │                 ╰─────────────── expected because this is `i32`
+   │                              │  
+   │                              ╰── expected `i32`, found `bool`
+───╯
