@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub struct Lexer<'a> {
-    input: &'a str,
+    pub input: &'a str,
     original_length: usize,
     peeked: VecDeque<(Result<Token<'a>, ()>, Range<usize>)>,
     file: usize,

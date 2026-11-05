@@ -29,6 +29,7 @@ default = ["cli"]
 cli = ["clap"]
 logger = ["env_logger"]
 disas = ["cranelift-codegen/disas"]
+fuzz = []
 
 [dependencies]
 ariadne = "0.6.0"
@@ -77,7 +78,7 @@ debug = "full"
 ignored = ["cranelift-jit"]
 
 [workspace]
-members = ["macros"]
+members = ["macros", "fuzz"]
 
 [workspace.package]
 version = "0.13.0"

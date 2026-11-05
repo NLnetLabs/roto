@@ -66,6 +66,7 @@ pub enum Token<'s> {
     FStringStart,
 }
 
+#[derive(Debug)]
 pub enum FStringToken<'s> {
     /// The final part of a string.
     ///
