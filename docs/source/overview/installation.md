@@ -22,9 +22,9 @@ Here is a list of known third party extensions for adding Roto highlighting to o
 
 - [Zed](https://zed.dev/extensions/roto)
 
-A tree-sitter grammar for Roto is available in the [tree-sitter-roto repository]
-(https://github.com/NLnetLabs/tree-sitter-roto). If your editor supports tree-sitter
-you can install it from that repository.
+A tree-sitter grammar for Roto is available in the
+[tree-sitter-roto repository](https://github.com/NLnetLabs/tree-sitter-roto). If
+your editor supports tree-sitter you can install it from that repository.
 
 Here is the relevant documentation on adding a new language for a few common editors:
 
@@ -38,6 +38,10 @@ not be able to maintain plugins for editors that do not support tree-sitter
 and LSP.
 :::
 
+### Gram
+
+[Gram](https://gram-editor.com/) has support for Roto built in!
+
 ### Sublime Text
 
 For Roto syntax highlighting we provide the syntax file
@@ -46,9 +50,10 @@ Grab a copy of it and place it inside your users Sublime Text packages
 configuration folder:
 
 ```console
-curl https://codeberg.org/NLnetLabs/roto/raw/branch/main/tooling/sublime/roto.sublime-syntax > ~/.config/sublime-text/Packages/User/roto.sublime-syntax
+curl https://codeberg.org/NLnetLabs/roto/raw/branch/main/tooling/sublime/roto.sublime-syntax \
+  > ~/.config/sublime-text/Packages/User/roto.sublime-syntax
 ```
 
 Roto should now be available for highlighting. For further
-information take a look at the [Sublime Text documentation]
-(https://www.sublimetext.com/docs/packages.html).
+information take a look at the
+[Sublime Text documentation](https://www.sublimetext.com/docs/packages.html).
