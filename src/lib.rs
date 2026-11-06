@@ -322,3 +322,10 @@ macro_rules! location {
         }
     };
 }
+
+/// Module only used to expose code that should be fuzzed.
+#[cfg(feature = "fuzz")]
+#[allow(missing_docs)]
+pub mod fuzz {
+    pub use crate::parser::lexer::Lexer;
+}
