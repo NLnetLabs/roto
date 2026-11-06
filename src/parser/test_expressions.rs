@@ -236,3 +236,21 @@ fn block() {
     ";
     parse_expr(s).unwrap();
 }
+
+#[test]
+fn f_string_with_non_ascii() {
+    parse_expr(r#"f"é""#).unwrap();
+    parse_expr(r#"f"é{1}ü""#).unwrap();
+    parse_expr(r#"f"日本{"語"}""#).unwrap();
+    parse_expr(r#"f"\u{e9}{1}""#).unwrap();
+}
+
+#[test]
+fn non_ascii_identifiers_and_tokens() {
+    parse_expr("é").unwrap();
+    parse_expr("日本 + 1").unwrap();
+    parse_expr("aé").unwrap();
+
+    let err = parse_expr("€").unwrap_err();
+    assert_eq!(err.location.start..err.location.end, 0.."€".len());
+}

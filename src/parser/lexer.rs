@@ -65,7 +65,9 @@ impl<'a> Lexer<'a> {
                     None
                 } else {
                     let start = self.original_length - self.input.len();
-                    let end = start + 1;
+                    let len =
+                        self.input.chars().next().map_or(1, char::len_utf8);
+                    let end = start + len;
                     Some((Err(()), start..end))
                 }
             }
@@ -370,7 +372,7 @@ impl<'s> Lexer<'s> {
     pub fn f_string_part(
         &mut self,
     ) -> Option<(FStringToken<'s>, Range<usize>)> {
-        let mut chars = self.input.chars().enumerate();
+        let mut chars = self.input.char_indices();
         'outer: while let Some((i, c)) = chars.next() {
             match c {
                 '\\' => {
@@ -492,7 +494,7 @@ impl<'s> Lexer<'s> {
             return ControlFlow::Continue(());
         }
 
-        tail = &tail[1..];
+        tail = &tail[c.len_utf8()..];
         tail.eat_while(|c: &char| is_xid_continue(*c));
 
         let (ident, span) = self.bump_to(tail);
