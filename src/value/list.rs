@@ -27,6 +27,8 @@ use crate::value::{VTable, vtable::DropFn};
 
 /// The functions for list operations that we call from Roto
 pub mod ffi {
+    use std::ptr::NonNull;
+
     use crate::value::RotoOption;
 
     use super::ErasedList;
@@ -109,11 +111,59 @@ pub mod ffi {
             }
         }
     }
+
+    /// Remove a value from this list and write it to `out`
+    ///
+    /// # Safety
+    ///
+    ///  - `out` must be an uninitialized value that is properly aligned.
+    ///  - `this` must contain a valid `InnerList`. We take ownership of this
+    ///    value.
+    ///
+    pub unsafe fn list_remove(
+        out: *mut RotoOption<T>,
+        this: ErasedList,
+        idx: u64,
+    ) {
+        // Start by writing `None` so that we have a valid value if we return
+        // early.
+
+        // SAFETY: 1 is the discriminant of `None`. We asserted that
+        // `out` must be a valid RotoOption<T>.
+        unsafe { out.cast::<u8>().write(1) };
+
+        let Ok(idx) = idx.try_into() else {
+            return;
+        };
+
+        let mut raw = this.0.lock().unwrap();
+        let alignment = raw.vtable.align();
+        let offset = 1usize.next_multiple_of(alignment);
+
+        // SAFETY: `out` is an uninitialized properly aligned value of
+        // RotoOption<T> so we can write the T at the right alignment
+        // by writing it to the next multiple of the alignment. The offset
+        // is therefore the correct byte offset.
+        let dst = unsafe { out.byte_add(offset) };
+        let dst = NonNull::new(dst).unwrap().cast::<T>();
+
+        // SAFETY: dst is aligned by construction.
+        let removed = unsafe { raw.remove(dst, idx) };
+
+        if removed {
+            // SAFETY: 1 is the discriminant of `None`. We asserted that
+            // `out` must be a valid RotoOption<T>.
+            unsafe { out.cast::<u8>().write(0) };
+        }
+    }
 }
 
 pub mod boundary {
     use std::{
-        alloc::Layout, marker::PhantomData, mem::ManuallyDrop, ptr::NonNull,
+        alloc::Layout,
+        marker::PhantomData,
+        mem::{ManuallyDrop, MaybeUninit},
+        ptr::NonNull,
         sync::Arc,
     };
 
@@ -268,6 +318,26 @@ pub mod boundary {
             unsafe { self.inner.set(idx, elem_ptr) }
         }
 
+        /// Remove the element at index `idx`.
+        ///
+        /// Returns the element if it has been removed.
+        pub fn remove(&self, idx: usize) -> Option<T> {
+            let mut ret = MaybeUninit::<T>::uninit();
+            let ret_ptr = NonNull::from_mut(&mut ret).cast::<()>();
+
+            // SAFETY: We have a valid value behind the pointer and forget
+            // the value to ensure that we give ownership.
+            let removed = unsafe { self.inner.remove(ret_ptr, idx) };
+            if removed {
+                // SAFETY: If `remove` call returned true, the return value will
+                // be initialized by it.
+                let ret = unsafe { ret.assume_init() };
+                Some(ret)
+            } else {
+                None
+            }
+        }
+
         /// Check whether this list contains a certain value.
         pub fn contains(&self, elem: T) -> bool {
             let elem = T::transform(elem);
@@ -312,6 +382,11 @@ pub mod boundary {
         /// Swap the elements at index `i` and `j`
         pub fn swap(&self, i: usize, j: usize) {
             self.inner.swap(i, j)
+        }
+
+        /// Remove all elements from this list
+        pub fn clear(&self) {
+            self.inner.clear()
         }
 
         /// Return the length of this `List`
@@ -575,6 +650,20 @@ impl ErasedList {
         unsafe { self.0.lock().unwrap().set(idx, elem_ptr) }
     }
 
+    /// Remove the element at index `idx` from the list.
+    ///
+    /// If `idx` is in bounds, this function returns `true` and writes the value to
+    /// `ret`. Otherwise, this function returns `false` and does not touch `ret`.
+    ///
+    /// # Safety
+    ///
+    ///  - `ret` must be an aligned pointer for the element type and cannot overlap
+    ///    with the list.
+    pub unsafe fn remove(&self, ret: NonNull<T>, idx: usize) -> bool {
+        // SAFETY: We pass on the requirements of this function.
+        unsafe { self.0.lock().unwrap().remove(ret, idx) }
+    }
+
     /// Check whether a list contains a value.
     ///
     /// # Safety
@@ -623,6 +712,11 @@ impl ErasedList {
         res
     }
 
+    /// Remove all elements from this list.
+    pub fn clear(&self) {
+        self.0.lock().unwrap().clear()
+    }
+
     pub fn swap(&self, i: usize, j: usize) {
         self.0.lock().unwrap().swap(i, j)
     }
@@ -668,15 +762,7 @@ unsafe impl Sync for RawList {}
 
 impl Drop for RawList {
     fn drop(&mut self) {
-        match self.vtable.drop_fn {
-            Some(drop_fn) => {
-                // SAFETY: By construction of the RawList, we have a valid drop_fn
-                unsafe { self.drop_elements_with(drop_fn) };
-            }
-            None => {
-                self.forget_elements();
-            }
-        }
+        self.drop_elements();
 
         // SAFETY: We are the only one to dealloc
         unsafe { self.dealloc() };
@@ -686,6 +772,18 @@ impl Drop for RawList {
 impl RawList {
     fn new(vtable: VTable) -> Self {
         Self::with_capacity(0, vtable)
+    }
+
+    fn drop_elements(&mut self) {
+        match self.vtable.drop_fn {
+            Some(drop_fn) => {
+                // SAFETY: By construction of the RawList, we have a valid drop_fn
+                unsafe { self.drop_elements_with(drop_fn) };
+            }
+            None => {
+                self.forget_elements();
+            }
+        }
     }
 
     fn forget_elements(&mut self) {
@@ -1069,6 +1167,66 @@ impl RawList {
         }
 
         None
+    }
+
+    /// Remove the element at index `idx` from the list.
+    ///
+    /// If `idx` is in bounds, this function returns `true` and writes the value to
+    /// `ret`. Otherwise, this function returns `false` and does not touch `ret`.
+    ///
+    /// # Safety
+    ///
+    ///  - `ret` must be an aligned pointer for the element type and cannot overlap
+    ///    with the list.
+    unsafe fn remove(&mut self, ret: NonNull<T>, idx: usize) -> bool {
+        if idx >= self.len {
+            return false;
+        }
+
+        let i_offset = self.offset_of(idx);
+
+        // SAFETY: Since we know that idx < len < capacity and capacity is the
+        // size of the allocation, we know that we'll stay within the
+        // allocation.
+        let ptr_i = unsafe { self.ptr.byte_add(i_offset) };
+
+        // SAFETY: THe pointer is an element in the list and therefore aligned
+        // and initialized. We require that `ret` is outside of the list and
+        // therefore does not overlap.
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                ptr_i.cast::<u8>().as_ptr(),
+                ret.cast::<u8>().as_ptr(),
+                self.vtable.size(),
+            );
+        }
+
+        self.len -= 1;
+
+        let j = idx + 1;
+
+        let j_offset = self.offset_of(j);
+
+        // SAFETY: Since we know that idx < len < capacity and capacity is the
+        // size of the allocation, we know that we'll stay within the
+        // allocation.
+        let ptr_j = unsafe { self.ptr.byte_add(j_offset) };
+
+        // SAFETY: Both elements are part of the list and therefore valid.
+        unsafe {
+            std::ptr::copy(
+                ptr_j.cast::<u8>().as_ptr(),
+                ptr_i.cast::<u8>().as_ptr(),
+                (self.len - idx) * self.vtable.size(),
+            )
+        };
+
+        true
+    }
+
+    /// Remove all elements from this list, without deallocating.
+    fn clear(&mut self) {
+        self.drop_elements();
     }
 
     fn swap(&self, i: usize, j: usize) {
@@ -1491,5 +1649,47 @@ mod tests {
         assert_eq!(list.index(None), Some(0));
         assert_eq!(list.index(Some(10)), Some(1));
         assert_eq!(list.index(Some(20)), Some(2));
+    }
+
+    #[test]
+    fn clear() {
+        let list = List::from_iter(1..7);
+        list.clear();
+        assert_eq!(list.len(), 0);
+    }
+
+    #[test]
+    fn remove() {
+        let list = List::from_iter(1..7);
+        assert_eq!(list.remove(8), None);
+        assert_eq!(list.len(), 6);
+        assert_eq!(list.remove(3), Some(4));
+        assert_eq!(list.len(), 5);
+
+        let mut total = 0;
+        for x in list {
+            total += x;
+        }
+
+        assert_eq!(total, (1..7).sum::<i32>() - 4);
+    }
+
+    #[test]
+    fn remove_strings() {
+        // Create a list of string to and concat it a few times, which
+        // should exercise the clone and drop implementation (especially
+        // under valgrind).
+        let list = List::<RotoString>::from([
+            "zero".into(),
+            "one".into(),
+            "two".into(),
+            "three".into(),
+        ]);
+
+        assert_eq!(Some("two".into()), list.remove(2));
+        assert_eq!(Some("three".into()), list.remove(2));
+        assert_eq!(list.len(), 2);
+        assert_eq!(list.get(0), Some("zero".into()));
+        assert_eq!(list.get(1), Some("one".into()));
     }
 }

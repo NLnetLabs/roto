@@ -8,6 +8,10 @@ A growable array.
 Returns the capacity of the current allocation of this list.
 ````
 
+````{roto:method} List.clear(self: List[T])
+Remove all elements from the list.
+````
+
 ````{roto:method} List.concat(self: List[T], other: List[T]) -> List[T]
 Concatenate this list with another, returning the result.
 
@@ -47,6 +51,14 @@ Create a new empty list.
 
 ````{roto:method} List.push(self: List[T], elem: T)
 Append an element to the end of this list.
+````
+
+````{roto:method} List.remove(self: List[T], idx: u64) -> Option[T]
+Remove and return an element from the list.
+
+All elements to the right of the element are shifted to the left.
+
+This function returns `None` if the index is out of bounds.
 ````
 
 ````{roto:method} List.set(self: List[T], idx: u64, elem: T) -> bool

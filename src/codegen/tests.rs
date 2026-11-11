@@ -5191,6 +5191,49 @@ fn list_set() {
 }
 
 #[test]
+fn list_clear() {
+    let s = src!(
+        r#"
+        fn main(list: List[String]) {
+            list.clear();
+            list.push("foo");
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn(List<RotoString>)>("main").unwrap();
+
+    let list = List::from(["one".into(), "two".into(), "three".into()]);
+    f.call(list.clone());
+
+    assert_eq!(list.to_vec(), vec!["foo".into()]);
+}
+
+#[test]
+fn list_remove() {
+    let s = src!(
+        r#"
+        fn main() -> List[String] {
+            let x = ["zero", "one", "two"];
+            x.remove(0);
+            x.remove(1);
+            x
+        }
+    "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> List<RotoString>>("main")
+        .unwrap();
+
+    let res = f.call();
+
+    assert_eq!(res.to_vec(), vec!["one".into()]);
+}
+
+#[test]
 fn list_plus_strings() {
     let s = src!(
         r#"
