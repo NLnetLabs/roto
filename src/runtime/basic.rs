@@ -9,10 +9,10 @@ use crate::{
     library,
     runtime::{func::OutPtr, items::Library},
     value::{
-        DynVal, ErasedList, RotoString, StringBuf, StringBytes, StringChars,
-        StringLines, VTable, list::ffi::list_get,
+        DynVal, ErasedList, List, RotoString, StringBuf, StringBytes,
+        StringChars, StringLines, VTable, Val,
+        list::ffi::{list_get, list_remove},
     },
-    value::{List, Val},
 };
 
 fn format_num(val: i128) -> std::string::String {
@@ -787,6 +787,24 @@ pub fn built_ins() -> Library {
                 // SAFETY: Roto ensures that the return type of this function
                 // matches the element type of the list.
                 unsafe { list_get(out.ptr.cast(), self_, idx) }
+            }
+
+            /// Remove and return an element from the list.
+            ///
+            /// All elements to the right of the element are shifted to the left.
+            ///
+            /// This function returns `None` if the index is out of bounds.
+            #[sig = "fn[T](List[T], u64) -> T?"]
+            fn remove(out: OutPtr<DynVal>, self_: Self, idx: u64) {
+                // SAFETY: Roto ensures that the return type of this function
+                // matches the element type of the list.
+                unsafe { list_remove(out.ptr.cast(), self_, idx) }
+            }
+
+            /// Remove all elements from the list.
+            #[sig = "fn[T](List[T])"]
+            fn clear(self) {
+                self.clear()
             }
 
             /// Replace the element at the given index in this list.
