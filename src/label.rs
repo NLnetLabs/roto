@@ -7,6 +7,8 @@
 //! a parent. When they are displayed, we join the linked list formed by the
 //! parent labels as separated by `::`.
 
+use std::collections::{HashMap, hash_map::Entry};
+
 use crate::ast::Identifier;
 
 /// A label for a basic block
@@ -27,17 +29,29 @@ pub struct LabelRef(usize);
 /// Holds all the information of labels and gives out references
 #[derive(Default)]
 pub struct LabelStore {
+    last: HashMap<(Option<LabelRef>, Identifier), usize>,
     labels: Vec<Label>,
 }
 
 impl LabelStore {
     /// Create a new label with an identifier and without any parent label
     pub fn new_label(&mut self, identifier: Identifier) -> LabelRef {
+        let counter = match self.last.entry((None, identifier)) {
+            Entry::Occupied(mut e) => {
+                let e = e.get_mut();
+                *e += 1;
+                *e
+            }
+            Entry::Vacant(e) => {
+                e.insert(0);
+                0
+            }
+        };
         self.labels.push(Label {
             identifier,
             internal: false,
             parent: None,
-            counter: 0,
+            counter,
         });
         LabelRef(self.labels.len() - 1)
     }
@@ -49,11 +63,22 @@ impl LabelStore {
         parent: LabelRef,
         identifier: Identifier,
     ) -> LabelRef {
+        let counter = match self.last.entry((Some(parent), identifier)) {
+            Entry::Occupied(mut e) => {
+                let e = e.get_mut();
+                *e += 1;
+                *e
+            }
+            Entry::Vacant(e) => {
+                e.insert(0);
+                0
+            }
+        };
         self.labels.push(Label {
             identifier,
             internal: false,
             parent: Some(parent),
-            counter: 0,
+            counter,
         });
         LabelRef(self.labels.len() - 1)
     }
@@ -64,11 +89,22 @@ impl LabelStore {
         parent: LabelRef,
         identifier: Identifier,
     ) -> LabelRef {
+        let counter = match self.last.entry((Some(parent), identifier)) {
+            Entry::Occupied(mut e) => {
+                let e = e.get_mut();
+                *e += 1;
+                *e
+            }
+            Entry::Vacant(e) => {
+                e.insert(0);
+                0
+            }
+        };
         self.labels.push(Label {
             identifier,
             internal: true,
             parent: Some(parent),
-            counter: 0,
+            counter,
         });
         LabelRef(self.labels.len() - 1)
     }
@@ -76,8 +112,15 @@ impl LabelStore {
     /// Increment the counter of the label by one and return a reference to it
     pub fn next(&mut self, previous: LabelRef) -> LabelRef {
         let previous = &self.labels[previous.0];
+        let counter = self
+            .last
+            .get_mut(&(previous.parent, previous.identifier))
+            .unwrap();
+
+        *counter += 1;
+
         self.labels.push(Label {
-            counter: previous.counter + 1,
+            counter: *counter,
             ..*previous
         });
         LabelRef(self.labels.len() - 1)
