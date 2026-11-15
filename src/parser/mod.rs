@@ -9,11 +9,15 @@ use std::collections::VecDeque;
 
 use crate::{
     ast::{
-        ConstantDeclaration, Declaration, Expr, FunctionDeclaration,
-        Identifier, ImportPath, Stmt, SyntaxTree, Test,
+        ConstantDeclaration, Declaration, FunctionDeclaration, Identifier,
+        ImportPath, SyntaxTree, Test,
     },
     parser::error::Hint,
 };
+
+#[cfg(feature = "repl")]
+use crate::ast::Stmt;
+
 use lexer::Lexer;
 use token::{Keyword, Token};
 
@@ -37,11 +41,11 @@ mod test_sections;
 
 pub type ParseResult<T> = Result<T, Box<ParseError>>;
 
-#[cfg_attr(not(feature = "repl"), allow(dead_code))]
-pub enum ParsedStmt {
+#[cfg(feature = "repl")]
+pub enum ReplStmt {
     Declaration(Declaration),
     Let(Meta<Stmt>),
-    Expr(#[allow(dead_code)] Meta<Expr>),
+    Expr,
 }
 
 pub struct Parser<'source, 'spans> {
@@ -193,12 +197,12 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// can appear at the top level of a script.
     ///
     /// The span of the statement leaves out the optional semicolon after it.
-    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
-    pub fn parse_stmt(
+    #[cfg(feature = "repl")]
+    pub fn parse_repl_stmt(
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
-    ) -> ParseResult<Meta<ParsedStmt>> {
+    ) -> ParseResult<Meta<ReplStmt>> {
         let (stmt, _) = Self::run_parser(Self::stmt, file, spans, input)?;
         Ok(stmt)
     }
@@ -273,14 +277,16 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// ```ebnf
     /// Stmt ::= (Declaration | LetStmt | Expr) ';'?
     /// ```
-    fn stmt(&mut self) -> ParseResult<Meta<ParsedStmt>> {
+    #[cfg(feature = "repl")]
+    fn stmt(&mut self) -> ParseResult<Meta<ReplStmt>> {
         let stmt = self.spanned(|p| {
             Ok(if let Some(declaration) = p.try_root()? {
-                ParsedStmt::Declaration(declaration)
+                ReplStmt::Declaration(declaration)
             } else if matches!(p.peek(), Some(Token::Keyword(Keyword::Let))) {
-                ParsedStmt::Let(p.let_stmt()?)
+                ReplStmt::Let(p.let_stmt()?)
             } else {
-                ParsedStmt::Expr(p.expr()?)
+                p.expr()?;
+                ReplStmt::Expr
             })
         })?;
 
@@ -446,6 +452,7 @@ impl Parser<'_, '_> {
     }
 
     /// Run `parser` and register the span of the tokens it took
+    #[cfg(feature = "repl")]
     fn spanned<T>(
         &mut self,
         parser: impl FnOnce(&mut Self) -> ParseResult<T>,

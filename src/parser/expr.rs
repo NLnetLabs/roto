@@ -1170,7 +1170,11 @@ impl Parser<'_, '_> {
             }
 
             if matches!(part, FStringToken::StringEnd(_)) {
-                let span = start_span.merge(Span::new(self.file, span));
+                // span stops before the closing quote; include it
+                let end = span.end + 1;
+                self.prev_end = end;
+                let span =
+                    start_span.merge(Span::new(self.file, span.start..end));
                 return Ok(self.spans.add(span, Expr::FString(parts)));
             }
 

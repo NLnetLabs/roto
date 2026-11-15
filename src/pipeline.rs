@@ -479,7 +479,7 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
 }
 
 impl<Ctx: OptCtx> Blob<Ctx> {
-    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
+    #[cfg(feature = "repl")]
     pub(crate) fn shared_data(&self) -> codegen::SharedModuleData {
         self.module.shared_data()
     }

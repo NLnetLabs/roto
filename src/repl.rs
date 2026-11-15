@@ -1,4 +1,4 @@
-#[cfg(feature = "repl")]
+#![cfg(feature = "repl")]
 use rustyline::error::ReadlineError;
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::{
@@ -21,7 +21,7 @@ use crate::{
     parser::lexer::Lexer,
     parser::meta::{Span, Spans},
     parser::token::Token,
-    parser::{ParseError, ParseErrorKind, ParsedStmt},
+    parser::{ParseError, ParseErrorKind, ReplStmt},
     pipeline::{Blob, TypeChecked},
     runtime::context::NoCtx,
     runtime::func::OutPtr,
@@ -46,7 +46,7 @@ impl Validator for ReplValidator {
         }
 
         let mut spans = Spans::default();
-        match Parser::parse_stmt(0, &mut spans, ctx.input()) {
+        match Parser::parse_repl_stmt(0, &mut spans, ctx.input()) {
             Err(e) if matches!(e.kind, ParseErrorKind::EndOfInput) => {
                 Ok(ValidationResult::Incomplete)
             }
@@ -112,22 +112,22 @@ fn is_blank(src: &str) -> bool {
 
 fn parse_input(line: &str) -> Result<ReplInput, RotoReport> {
     let mut spans = Spans::default();
-    let stmt = Parser::parse_stmt(0, &mut spans, line)
+    let stmt = Parser::parse_repl_stmt(0, &mut spans, line)
         .map_err(|e| parse_report(line, *e))?;
     // The text is taken by the span of the statement,
     // which skips the optional trailing semicolon or comment
     let text = span_text(line, spans.get(&stmt));
     match stmt.node {
-        ParsedStmt::Declaration(d) => {
+        ReplStmt::Declaration(d) => {
             classify_declaration(&d, &spans, line, text)
         }
-        ParsedStmt::Let(stmt) => {
+        ReplStmt::Let(stmt) => {
             let Stmt::Let(ident, _, _) = stmt.node else {
                 ice!("broken let statement parsing")
             };
             Ok(ReplInput::Let(ident.node, text.into()))
         }
-        ParsedStmt::Expr(_) => Ok(ReplInput::Expr(text.into())),
+        ReplStmt::Expr => Ok(ReplInput::Expr(text.into())),
     }
 }
 
@@ -557,7 +557,7 @@ impl<'r> Session<'r> {
         } else {
             if !matches!(p.ty, Type::Unit) {
                 eprintln!(
-                    "Warning: Expression result has type {} and can't be converted to string",
+                    "Warning: Expression result has type '{}' and can't be converted to string",
                     p.ty.display(p.checked.main_scope, &p.checked.type_info)
                 );
             }

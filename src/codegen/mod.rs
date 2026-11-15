@@ -283,7 +283,7 @@ impl RotoConstant {
         }
     }
 
-    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
+    #[cfg(feature = "repl")]
     pub(crate) fn ptr(&self) -> *mut () {
         self.ptr
     }
@@ -1572,7 +1572,7 @@ impl<Ctx: OptCtx> Module<Ctx> {
         })
     }
 
-    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
+    #[cfg(feature = "repl")]
     pub(crate) fn shared_data(&self) -> SharedModuleData {
         self.inner.clone()
     }
