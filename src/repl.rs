@@ -30,7 +30,7 @@ use crate::{
     typechecker::scope::{DeclarationKind, ResolvedName},
     typechecker::scoped_display::TypeDisplay,
     typechecker::types::{Type, TypeName},
-    value::{DynVal, RotoString, VTable},
+    value::{DynVal, RotoString, VTable, Value},
 };
 
 #[derive(Completer, Helper, Highlighter, Hinter)]
@@ -415,7 +415,7 @@ impl<'r> Session<'r> {
             .lower_to_mir()
             .lower_to_lir()
             .codegen_with_constants(&self.cells);
-        run_function(&mut blob, "__repl_init");
+        run_function::<()>(&mut blob, "__repl_init");
         self.modules.push(blob.shared_data());
         let Some(cell) = STORED.take() else {
             ice!("__repl_init stores a value")
@@ -547,10 +547,11 @@ impl<'r> Session<'r> {
             return Ok(());
         }
 
-        let checked = if has_to_string(&mut p.checked.type_info, &p.ty) {
+        let printable = has_to_string(&mut p.checked.type_info, &p.ty);
+        let checked = if printable {
             self.check(self.source(
                 &format!(
-                    "fn __repl_main() {{\n__repl_display(f\"{{\n{line}\n}}\");\n}}"
+                    "fn __repl_main()->std.String {{\nf\"{{\n{line}\n}}\"\n}}"
                 ),
                 None,
             ))?
@@ -568,7 +569,12 @@ impl<'r> Session<'r> {
             .lower_to_mir()
             .lower_to_lir()
             .codegen_with_constants(&self.cells);
-        run_function(&mut pkg, "__repl_main");
+        if printable {
+            let text = run_function::<RotoString>(&mut pkg, "__repl_main");
+            println!("{text}");
+        } else {
+            run_function::<()>(&mut pkg, "__repl_main");
+        }
         self.modules.push(pkg.shared_data());
 
         Ok(())
@@ -618,11 +624,10 @@ fn has_to_string(type_info: &mut TypeInfo, ty: &Type) -> bool {
 }
 
 /// Run the generated function `name`
-fn run_function(prog: &mut Blob<NoCtx>, name: &str) {
-    let f = prog
-        .get_function::<fn()>(name)
-        .unwrap_or_else(|e| ice!("cannot get `{name}`: {e}"));
-    f.call();
+fn run_function<R: Value>(prog: &mut Blob<NoCtx>, name: &str) -> R {
+    prog.get_function::<fn() -> R>(name)
+        .unwrap_or_else(|e| ice!("cannot get `{name}`: {e}"))
+        .call()
 }
 
 /// The key of the cell of `name`: the full name of its constant
@@ -716,13 +721,6 @@ unsafe extern "C" fn no_drop(_: *mut ()) {}
 fn repl_runtime(rt: &Runtime<NoCtx>) -> Runtime<NoCtx> {
     let mut rt = rt.clone();
     rt.add(library! {
-        /// Print the value of an expression. The REPL has its own, rather
-        /// than calling `print`, which the host may not have registered and
-        /// the session may shadow.
-        fn __repl_display(s: RotoString) {
-            println!("{s}");
-        }
-
         /// Move a value into a new cell, see `Session::add_let`
         #[sig = "fn[T](T)"]
         #[vtables(T)]
