@@ -500,6 +500,16 @@ impl<Ctx: OptCtx> Blob<Ctx> {
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         self.module.get_function(name)
     }
+
+    /// Return an iterator with all matching functions in this [`Blob`].
+    ///
+    /// Returns an iterator of `(name, function)` tuples of all functions within
+    /// the `Blob` that match the `F` [`RotoFunc`] signature.
+    pub fn get_functions_by_signature<F: RotoFunc>(
+        &mut self,
+    ) -> impl Iterator<Item = (&str, TypedFunc<Ctx, F>)> {
+        self.module.get_functions_by_signature()
+    }
 }
 
 impl Blob<NoCtx> {
