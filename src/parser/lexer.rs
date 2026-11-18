@@ -428,7 +428,7 @@ impl<'s> Lexer<'s> {
         };
 
         let mut last_is_backslash = false;
-        tail.eat_until_fn(|c| {
+        let closed = tail.eat_until_fn(|c| {
             if last_is_backslash {
                 last_is_backslash = false;
                 return false;
@@ -444,7 +444,7 @@ impl<'s> Lexer<'s> {
             }
         });
 
-        if tail.is_empty() {
+        if !closed {
             return ControlFlow::Continue(());
         };
 
@@ -459,7 +459,7 @@ impl<'s> Lexer<'s> {
         };
 
         let mut last_is_backslash = false;
-        tail.eat_until_fn(|c| {
+        let closed = tail.eat_until_fn(|c| {
             if last_is_backslash {
                 last_is_backslash = false;
                 return false;
@@ -475,7 +475,7 @@ impl<'s> Lexer<'s> {
             }
         });
 
-        if tail.is_empty() {
+        if !closed {
             return ControlFlow::Continue(());
         };
 
@@ -564,7 +564,7 @@ trait StrExt {
     fn eat_str(&mut self, s: &str) -> bool;
     fn eat_one_of<const N: usize>(&mut self, options: [char; N]) -> bool;
     fn eat_until(&mut self, c: char);
-    fn eat_until_fn(&mut self, c: impl FnMut(&char) -> bool);
+    fn eat_until_fn(&mut self, c: impl FnMut(&char) -> bool) -> bool;
     fn eat_while(&mut self, pat: impl FnMut(&char) -> bool) -> bool;
     fn eat_whitespace(&mut self);
 }
@@ -605,12 +605,14 @@ impl StrExt for &str {
         };
     }
 
-    fn eat_until_fn(&mut self, mut f: impl FnMut(&char) -> bool) {
-        *self = if let Some((_, tail)) = self.split_once(|c: char| f(&c)) {
-            tail
+    fn eat_until_fn(&mut self, mut f: impl FnMut(&char) -> bool) -> bool {
+        if let Some((_, tail)) = self.split_once(|c: char| f(&c)) {
+            *self = tail;
+            true
         } else {
-            ""
-        };
+            *self = "";
+            false
+        }
     }
 
     fn eat_while(&mut self, mut pat: impl FnMut(&char) -> bool) -> bool {
