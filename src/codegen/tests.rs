@@ -6578,3 +6578,35 @@ fn get_functions_by_signature() {
         pkg.get_functions_by_signature::<fn() -> Verdict<(), ()>>();
     assert!(verdict_funcs.next().is_none());
 }
+
+#[test]
+fn module_type_in_args() {
+    let s = src!("fn module_type_in_arg(request: dummy.Dummy) {}");
+
+    #[derive(Clone, PartialEq)]
+    struct Dummy;
+
+    let dummy_lib = library! {
+        #[clone] type Dummy = Val<Dummy>;
+
+        impl Val<Dummy> {
+            fn new() -> Self {
+                Val(Dummy)
+            }
+        }
+    };
+    let rt = Runtime::from_lib(library! {
+        mod dummy {
+            include!(dummy_lib);
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
+
+    let f = p
+        .get_function::<fn(Val<Dummy>)>("module_type_in_arg")
+        .unwrap();
+
+    f.call(Val(Dummy));
+}

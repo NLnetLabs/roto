@@ -1189,7 +1189,7 @@ impl TypeChecker {
 
         if **ident == "pkg".into() {
             let (pkg_scope, _p) =
-                self.type_info.scope_graph.find_package(scope);
+                self.type_info.scope_graph.find_package(scope).unwrap();
             let dec =
                 self.type_info.scope_graph.get_declaration(ResolvedName {
                     scope: pkg_scope,
@@ -1203,7 +1203,8 @@ impl TypeChecker {
             scope = dec.scope.unwrap();
             ident = tmp_ident;
         } else if ident.as_str() == "dep" {
-            let (_, p) = self.type_info.scope_graph.find_package(scope);
+            let (_, p) =
+                self.type_info.scope_graph.find_package(scope).unwrap();
             scope = p.deps;
 
             let Some(tmp_ident) = idents.next() else {
