@@ -1505,11 +1505,26 @@ impl<Ctx: OptCtx> Module<Ctx> {
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
+        // Helper function to filter out generated functions from the available
+        // list, used in two error paths. Doesn't run until used in the error
+        // path.
+        let existing_hint = || {
+            self.functions
+                .iter()
+                .filter_map(|(name, function_info)| {
+                    // Generated functions have no signature, and are not
+                    // available to extract - filter them out. See a page or so
+                    // below for further information.
+                    function_info.signature.as_ref()?;
+                    Some(name.to_owned())
+                })
+                .collect()
+        };
         let name = format!("pkg.{name}");
         let Some(function_info) = self.functions.get(&name) else {
             return Err(FunctionRetrievalError::DoesNotExist {
                 name,
-                existing: self.functions.keys().cloned().collect(),
+                existing: existing_hint(),
             });
         };
 
@@ -1521,7 +1536,7 @@ impl<Ctx: OptCtx> Module<Ctx> {
         let Some(sig) = &sig else {
             return Err(FunctionRetrievalError::DoesNotExist {
                 name,
-                existing: self.functions.keys().cloned().collect(),
+                existing: existing_hint(),
             });
         };
 
