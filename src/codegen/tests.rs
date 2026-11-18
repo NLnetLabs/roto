@@ -1010,6 +1010,38 @@ fn call_runtime_method() {
 }
 
 #[test]
+fn call_generic_runtime_function_with_vtable_and_value() {
+    let s = src!(
+        "
+        fn main(x: u32) -> u64 {
+            size_plus_value(x)
+        }
+    "
+    );
+
+    let rt = Runtime::from_lib(library! {
+        #[sig = "fn[T](T) -> u64"]
+        #[vtables(T)]
+        fn size_plus_value(
+            vtable: crate::value::VTable,
+            v: crate::value::DynVal,
+        ) -> u64 {
+            // SAFETY: the test only calls this with a `u32`
+            let value = unsafe { *(v.0 as *const u32) };
+            vtable.size() as u64 + u64::from(value)
+        }
+    })
+    .unwrap();
+
+    let mut p = compile_with_runtime(s, rt);
+    let f = p
+        .get_function::<fn(u32) -> u64>("main")
+        .expect("No function found (or mismatched types)");
+
+    assert_eq!(f.call(5), 9);
+}
+
+#[test]
 fn int_var() {
     let s = src!(
         "
