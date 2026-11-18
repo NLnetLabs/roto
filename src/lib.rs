@@ -28,6 +28,8 @@ mod mir;
 mod module;
 pub(crate) mod parser;
 mod pipeline;
+#[cfg(feature = "repl")]
+mod repl;
 pub mod runtime;
 mod typechecker;
 pub mod value;

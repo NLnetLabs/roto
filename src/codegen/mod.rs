@@ -257,15 +257,22 @@ pub struct FunctionInfo {
     return_by_ref: bool,
 }
 
-struct RotoConstant {
+pub(crate) struct RotoConstant {
     ptr: *mut (),
     size: usize,
     align: usize,
     drop_fn: DropFn,
 }
 
+/// Constants whose storage already exists outside the module being
+/// compiled, keyed by full name (`pkg.x`)
+///
+/// Codegen uses their address as is, instead of allocating them and
+/// running their initializers.
+pub(crate) type ConstantImports = HashMap<String, RotoConstant>;
+
 impl RotoConstant {
-    fn new(size: usize, align: usize, drop_fn: DropFn) -> Self {
+    pub(crate) fn new(size: usize, align: usize, drop_fn: DropFn) -> Self {
         let layout = Layout::from_size_align(size, align).unwrap();
         let ptr = unsafe { std::alloc::alloc(layout) };
         Self {
@@ -274,6 +281,11 @@ impl RotoConstant {
             align,
             drop_fn,
         }
+    }
+
+    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
+    pub(crate) fn ptr(&self) -> *mut () {
+        self.ptr
     }
 }
 
@@ -292,6 +304,9 @@ struct ModuleBuilder {
     runtime_constants: HashMap<ResolvedName, ConstantValue>,
 
     roto_constants: HashMap<ResolvedName, RotoConstant>,
+
+    /// Addresses of the constants from `ConstantImports`
+    imported_constants: HashMap<ResolvedName, *mut ()>,
 
     registered_fns: Vec<Arc<Box<dyn Any>>>,
 
@@ -360,6 +375,7 @@ struct FuncGen<'c> {
 // point, or at least be configurable.
 const MEMFLAGS: MemFlagsData = MemFlagsData::new().with_aligned();
 
+#[allow(clippy::too_many_arguments)]
 pub fn codegen<Ctx: OptCtx>(
     runtime: &Runtime<Ctx>,
     main: Identifier,
@@ -368,6 +384,7 @@ pub fn codegen<Ctx: OptCtx>(
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
+    constants: &ConstantImports,
 ) -> Module<Ctx> {
     codegen_inner(
         runtime,
@@ -377,6 +394,7 @@ pub fn codegen<Ctx: OptCtx>(
         runtime_functions,
         label_store,
         type_info,
+        constants,
         None,
     )
 }
@@ -401,6 +419,7 @@ pub(crate) fn codegen_with_memory_provider<Ctx: OptCtx>(
         runtime_functions,
         label_store,
         type_info,
+        &HashMap::new(),
         Some(memory_provider),
     )
 }
@@ -414,6 +433,7 @@ fn codegen_inner<Ctx: OptCtx>(
     runtime_functions: &HashMap<RuntimeFunctionRef, lir::Signature>,
     label_store: LabelStore,
     type_info: TypeInfo,
+    constants: &ConstantImports,
     memory_provider: Option<Box<dyn JITMemoryProvider + Send>>,
 ) -> Module<Ctx> {
     let runtime = &runtime.rt;
@@ -476,6 +496,7 @@ fn codegen_inner<Ctx: OptCtx>(
         main_scope,
         runtime_constants: HashMap::new(),
         roto_constants: HashMap::new(),
+        imported_constants: HashMap::new(),
         functions: HashMap::new(),
         registered_fns: Vec::new(),
         runtime_functions: HashMap::new(),
@@ -537,6 +558,10 @@ fn codegen_inner<Ctx: OptCtx>(
                 layout,
                 name,
             } => {
+                if let Some(cell) = constants.get(item.name.as_str()) {
+                    module.imported_constants.insert(*name, cell.ptr);
+                    continue;
+                }
                 let func_id =
                     module.define_function(item, &mut builder_context);
                 module.inner.finalize_definitions().unwrap();
@@ -1305,6 +1330,10 @@ impl<'c> FuncGen<'c> {
                     self.module.roto_constants.get(name)
                 {
                     roto_constant.ptr
+                } else if let Some(ptr) =
+                    self.module.imported_constants.get(name)
+                {
+                    *ptr
                 } else {
                     ice!("Constant not defined")
                 };
@@ -1541,6 +1570,11 @@ impl<Ctx: OptCtx> Module<Ctx> {
                 },
             ))
         })
+    }
+
+    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
+    pub(crate) fn shared_data(&self) -> SharedModuleData {
+        self.inner.clone()
     }
 
     pub fn get_function<F: RotoFunc>(

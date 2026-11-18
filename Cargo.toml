@@ -30,6 +30,7 @@ cli = ["clap"]
 logger = ["env_logger"]
 disas = ["cranelift-codegen/disas"]
 fuzz = []
+repl = ["rustyline"]
 
 [dependencies]
 ariadne = "0.6.0"
@@ -46,6 +47,7 @@ sealed = "0.6.0"
 indexmap = "2.14.0"
 unicode-width = "0.2.2"
 diffy = { version = "0.5.1", features = ["color"] }
+rustyline = { version = "18.0.1", features = ["derive"], optional = true }
 
 [dependencies.cranelift]
 version = "0.136.0"

@@ -39,6 +39,9 @@ enum Command {
         #[arg(default_value = "main")]
         function: String,
     },
+    #[cfg(feature = "repl")]
+    /// Run roto REPL
+    Repl,
     /// Format a Roto file
     Fmt {
         #[arg(long = "check")]
@@ -114,6 +117,19 @@ fn cli_inner(rt: &Runtime<impl OptCtx>) -> Result<(), RotoReport> {
                 })?;
 
             f.call()
+        }
+        #[cfg(feature = "repl")]
+        Command::Repl => {
+            let Some(rt) = rt.clone().try_without_ctx() else {
+                return Err(RotoReport {
+                    errors: vec![RotoError::Custom(
+                        "Can only run a REPL with a Runtime without Context"
+                            .into(),
+                    )],
+                    ..Default::default()
+                });
+            };
+            crate::repl::repl(&rt)?;
         }
         Command::Fmt { file, check } => {
             let formatted = fmt_path(file)?;

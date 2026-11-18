@@ -84,9 +84,9 @@ impl From<LoadError> for RotoReport {
 
 /// Compiler stage: loaded, parsed and type checked
 pub struct TypeChecked<'r, Ctx: OptCtx> {
-    module_tree: ModuleTree,
-    type_info: TypeInfo,
-    main_scope: ScopeRef,
+    pub(crate) module_tree: ModuleTree,
+    pub(crate) type_info: TypeInfo,
+    pub(crate) main_scope: ScopeRef,
     order: Vec<ResolvedName>,
     runtime: &'r Runtime<Ctx>,
 }
@@ -439,6 +439,13 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
     }
 
     pub fn codegen(self) -> Blob<Ctx> {
+        self.codegen_with_constants(&Default::default())
+    }
+
+    pub(crate) fn codegen_with_constants(
+        self,
+        constants: &codegen::ConstantImports,
+    ) -> Blob<Ctx> {
         let module = codegen::codegen(
             self.runtime,
             self.main,
@@ -447,6 +454,7 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
             &self.runtime_functions,
             self.label_store,
             self.type_info,
+            constants,
         );
         Blob { module }
     }
@@ -471,6 +479,11 @@ impl<Ctx: OptCtx> LoweredToLir<'_, Ctx> {
 }
 
 impl<Ctx: OptCtx> Blob<Ctx> {
+    #[cfg_attr(not(feature = "repl"), allow(dead_code))]
+    pub(crate) fn shared_data(&self) -> codegen::SharedModuleData {
+        self.module.shared_data()
+    }
+
     /// Return an iterator with all the tests in this [`Blob`].
     pub fn get_tests(
         &mut self,
