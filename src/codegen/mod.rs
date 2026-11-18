@@ -1505,6 +1505,14 @@ impl<Ctx: OptCtx> Module<Ctx> {
         &mut self,
         name: &str,
     ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
+        let name = format!("pkg.{name}");
+        self.get_function_inner(&name)
+    }
+
+    pub fn get_function_inner<F: RotoFunc>(
+        &mut self,
+        name: &str,
+    ) -> Result<TypedFunc<Ctx, F>, FunctionRetrievalError> {
         // Helper function to filter out generated functions from the available
         // list, used in two error paths. Doesn't run until used in the error
         // path.
@@ -1520,10 +1528,10 @@ impl<Ctx: OptCtx> Module<Ctx> {
                 })
                 .collect()
         };
-        let name = format!("pkg.{name}");
-        let Some(function_info) = self.functions.get(&name) else {
+
+        let Some(function_info) = self.functions.get(name) else {
             return Err(FunctionRetrievalError::DoesNotExist {
-                name,
+                name: name.to_string(),
                 existing: existing_hint(),
             });
         };
@@ -1535,7 +1543,7 @@ impl<Ctx: OptCtx> Module<Ctx> {
         // clone, drop or eq. These are not available to extract.
         let Some(sig) = &sig else {
             return Err(FunctionRetrievalError::DoesNotExist {
-                name,
+                name: name.to_string(),
                 existing: existing_hint(),
             });
         };
