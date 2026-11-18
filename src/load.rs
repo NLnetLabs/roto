@@ -153,17 +153,18 @@ impl SourceFile {
         let file_name = path
             .file_name()
             .ok_or(std::io::Error::other("invalid path"))?;
-        let module_name = if file_name == "mod.roto" {
-            path.parent()
-                .ok_or(std::io::Error::other("invalid path"))?
-                .file_name()
-                .ok_or(std::io::Error::other("invalid path"))?
-        } else {
-            path.file_stem()
-                .ok_or(std::io::Error::other("invalid path"))?
-        }
-        .to_string_lossy()
-        .to_string();
+        let module_name =
+            if file_name == "mod.roto" || file_name == "pkg.roto" {
+                path.parent()
+                    .ok_or(std::io::Error::other("invalid path"))?
+                    .file_name()
+                    .ok_or(std::io::Error::other("invalid path"))?
+            } else {
+                path.file_stem()
+                    .ok_or(std::io::Error::other("invalid path"))?
+            }
+            .to_string_lossy()
+            .to_string();
 
         let name = path.to_string_lossy().to_string();
         let contents = std::fs::read_to_string(path)?;
@@ -289,7 +290,6 @@ impl FileTree {
     /// A Roto script defined by a directory
     pub fn directory(root: &Path) -> Result<FileTree, LoadError> {
         let pkg_file = SourceFile::read(&root.join("pkg.roto"))?;
-        assert_eq!(pkg_file.module_name, "pkg");
         let mut tree = Self {
             files: vec![pkg_file],
         };
