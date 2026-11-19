@@ -48,9 +48,7 @@ pub(crate) fn get_tests<Ctx: OptCtx>(
         TestCase::new(
             name.replace("test#", ""),
             module
-                .get_function::<fn() -> Verdict<(), ()>>(
-                    name.strip_prefix("pkg.").unwrap(),
-                )
+                .get_function_inner::<fn() -> Verdict<(), ()>>(&name)
                 .unwrap(),
         )
     })
