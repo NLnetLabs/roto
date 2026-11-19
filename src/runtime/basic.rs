@@ -752,7 +752,7 @@ pub fn built_ins() -> Library {
                 // SAFETY: The Roto signature ensures that the types match up
                 // between the list and the element. We get item by value so we
                 // can pass it to contains_owned.
-                unsafe { self.contains_owned(ptr) }
+                unsafe { self.contains(ptr) }
             }
 
             /// Returns the index of the first occurrence of the given item in
@@ -765,7 +765,7 @@ pub fn built_ins() -> Library {
                 // SAFETY: The Roto signature ensures that the types match up
                 // between the list and the element. We get item by value so we
                 // can pass it to contains_owned.
-                let idx_usize = unsafe { self.index_owned(ptr) };
+                let idx_usize = unsafe { self.index(ptr) };
                 idx_usize.map(|i| i as u64)
             }
 

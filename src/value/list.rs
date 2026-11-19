@@ -269,21 +269,31 @@ pub mod boundary {
         }
 
         /// Check whether this list contains a certain value.
-        pub fn contains(&self, item: &T) -> bool {
-            let item_ptr = NonNull::from_ref(item).cast::<()>();
+        pub fn contains(&self, elem: T) -> bool {
+            let elem = T::transform(elem);
+
+            // Don't drop the element because we move it into the list
+            let mut elem = ManuallyDrop::new(elem);
+
+            let elem_ptr = NonNull::from_mut(&mut elem).cast::<()>();
 
             // SAFETY: We have a valid value behind the pointer and forget
             // the value to ensure that we give ownership.
-            unsafe { self.inner.contains(item_ptr) }
+            unsafe { self.inner.contains(elem_ptr) }
         }
 
         /// Returns the index of the first element that is equal to the given value.
-        pub fn index(&self, item: &T) -> Option<usize> {
-            let item_ptr = NonNull::from_ref(item).cast::<()>();
+        pub fn index(&self, elem: T) -> Option<usize> {
+            let elem = T::transform(elem);
+
+            // Don't drop the element because we move it into the list
+            let mut elem = ManuallyDrop::new(elem);
+
+            let elem_ptr = NonNull::from_mut(&mut elem).cast::<()>();
 
             // SAFETY: We have a valid value behind the pointer and forget
             // the value to ensure that we give ownership.
-            unsafe { self.inner.index(item_ptr) }
+            unsafe { self.inner.index(elem_ptr) }
         }
 
         /// Concatenate two lists, returning the result.
@@ -570,22 +580,9 @@ impl ErasedList {
     /// # Safety
     ///
     ///  - The `item_ptr` must point to a value of the same type as is in the list.
-    ///  - There must be no mutables references to that value.
-    ///  - The caller is responsible for dropping that value.
-    pub unsafe fn contains(&self, item_ptr: NonNull<T>) -> bool {
-        // SAFETY: We require that the item_ptr points to the same type as in
-        // the list.
-        unsafe { self.0.lock().unwrap().contains(item_ptr) }
-    }
-
-    /// Check whether a list contains a value.
-    ///
-    /// # Safety
-    ///
-    ///  - The `item_ptr` must point to a value of the same type as is in the list.
     ///  - There must be no references to that value.
-    ///  - The value cannot be used after this function.
-    pub unsafe fn contains_owned(&self, item_ptr: NonNull<T>) -> bool {
+    ///  - This function takes ownership over the value under `item_ptr`.
+    pub unsafe fn contains(&self, item_ptr: NonNull<T>) -> bool {
         let raw = self.0.lock().unwrap();
 
         // SAFETY: We require that the item_ptr points to the same type as in
@@ -608,21 +605,8 @@ impl ErasedList {
     ///
     ///  - The `item_ptr` must point to a value of the same type as is in the list.
     ///  - There must be no mutables references to that value.
-    ///  - The caller is responsible for dropping that value.
+    ///  - This function takes ownership over the value under `item_ptr`.
     pub unsafe fn index(&self, item_ptr: NonNull<T>) -> Option<usize> {
-        // SAFETY: We require that the item_ptr points to the same type as in
-        // the list.
-        unsafe { self.0.lock().unwrap().index(item_ptr) }
-    }
-
-    /// Returns the index of the first element that is equal to the given value.
-    ///
-    /// # Safety
-    ///
-    ///  - The `item_ptr` must point to a value of the same type as is in the list.
-    ///  - There must be no references to that value.
-    ///  - The value cannot be used after this function.
-    pub unsafe fn index_owned(&self, item_ptr: NonNull<T>) -> Option<usize> {
         let raw = self.0.lock().unwrap();
 
         // SAFETY: We require that the item_ptr points to the same type as in
@@ -1420,11 +1404,11 @@ mod tests {
     fn contains_int() {
         let list = List::<i32>::from([1, 2, 3]);
 
-        assert!(!list.contains(&0));
-        assert!(list.contains(&1));
-        assert!(list.contains(&2));
-        assert!(list.contains(&3));
-        assert!(!list.contains(&4));
+        assert!(!list.contains(0));
+        assert!(list.contains(1));
+        assert!(list.contains(2));
+        assert!(list.contains(3));
+        assert!(!list.contains(4));
     }
 
     #[test]
@@ -1435,21 +1419,21 @@ mod tests {
             "Gamma".into(),
         ]);
 
-        assert!(list.contains(&"Alpha".into()));
-        assert!(list.contains(&"Beta".into()));
-        assert!(list.contains(&"Gamma".into()));
-        assert!(!list.contains(&"Delta".into()));
+        assert!(list.contains("Alpha".into()));
+        assert!(list.contains("Beta".into()));
+        assert!(list.contains("Gamma".into()));
+        assert!(!list.contains("Delta".into()));
     }
 
     #[test]
     fn index_int() {
         let list = List::<i32>::from([1, 2, 3]);
 
-        assert_eq!(list.index(&0), None);
-        assert_eq!(list.index(&1), Some(0));
-        assert_eq!(list.index(&2), Some(1));
-        assert_eq!(list.index(&3), Some(2));
-        assert_eq!(list.index(&4), None);
+        assert_eq!(list.index(0), None);
+        assert_eq!(list.index(1), Some(0));
+        assert_eq!(list.index(2), Some(1));
+        assert_eq!(list.index(3), Some(2));
+        assert_eq!(list.index(4), None);
     }
 
     #[test]
@@ -1460,10 +1444,10 @@ mod tests {
             "Gamma".into(),
         ]);
 
-        assert_eq!(list.index(&"Alpha".into()), Some(0));
-        assert_eq!(list.index(&"Beta".into()), Some(1));
-        assert_eq!(list.index(&"Gamma".into()), Some(2));
-        assert_eq!(list.index(&"Delta".into()), None);
+        assert_eq!(list.index("Alpha".into()), Some(0));
+        assert_eq!(list.index("Beta".into()), Some(1));
+        assert_eq!(list.index("Gamma".into()), Some(2));
+        assert_eq!(list.index("Delta".into()), None);
     }
 
     #[test]
@@ -1483,5 +1467,29 @@ mod tests {
         }
 
         assert_eq!(total, (1..7).sum());
+    }
+
+    #[test]
+    fn list_contains_option() {
+        let list = List::new();
+        list.push(None);
+        list.push(Some(10));
+        list.push(Some(20));
+
+        assert!(list.contains(None));
+        assert!(list.contains(Some(10)));
+        assert!(list.contains(Some(20)));
+    }
+
+    #[test]
+    fn list_index_option() {
+        let list = List::new();
+        list.push(None);
+        list.push(Some(10));
+        list.push(Some(20));
+
+        assert_eq!(list.index(None), Some(0));
+        assert_eq!(list.index(Some(10)), Some(1));
+        assert_eq!(list.index(Some(20)), Some(2));
     }
 }
