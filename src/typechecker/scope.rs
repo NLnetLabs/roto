@@ -248,15 +248,15 @@ impl ScopeGraph {
     pub fn find_package(
         &self,
         mut scope: ScopeRef,
-    ) -> (ScopeRef, &PackageScope) {
+    ) -> Option<(ScopeRef, &PackageScope)> {
         let mut s = &self.scopes[scope.0];
 
         loop {
             if let ScopeType::Package(p) = &s.scope_type {
-                return (scope, p);
+                return Some((scope, p));
             }
 
-            scope = s.parent.unwrap();
+            scope = s.parent?;
             s = &self.scopes[scope.0];
         }
     }
@@ -638,12 +638,10 @@ impl ScopeGraph {
             return String::new();
         }
 
-        let current_pkg = if relative_to != ScopeRef::GLOBAL {
-            self.find_package(relative_to).0
-        } else {
-            ScopeRef::GLOBAL
-        };
-        let symbol_pkg = self.find_package(scope).0;
+        let current_pkg = self
+            .find_package(relative_to)
+            .map_or(ScopeRef::GLOBAL, |x| x.0);
+        let symbol_pkg = self.find_package(scope).map(|x| x.0);
 
         let mut scope = Some(scope);
 
@@ -664,8 +662,15 @@ impl ScopeGraph {
                 ScopeType::Deps => "deps".into(),
                 ScopeType::Module(m) => {
                     if m.parent_module.is_none() {
-                        if current_pkg == symbol_pkg {
+                        if Some(current_pkg) == symbol_pkg {
                             "pkg".into()
+                        } else if let Some(s) = s.parent
+                            && !matches!(
+                                &self.scopes[s.0].scope_type,
+                                ScopeType::Package(..)
+                            )
+                        {
+                            self.module_name(m)
                         } else {
                             scope = s.parent;
                             continue;
