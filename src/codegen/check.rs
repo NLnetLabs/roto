@@ -12,16 +12,33 @@ use crate::{
 };
 use std::{any::TypeId, fmt::Display, mem::MaybeUninit, net::IpAddr};
 
+/// Function retrieval failed.
 #[derive(Debug)]
 pub enum FunctionRetrievalError {
-    DoesNotExist { name: String, existing: Vec<String> },
-    IncorrectNumberOfArguments { expected: usize, got: usize },
+    /// The function does not exist.
+    DoesNotExist {
+        /// The name of the function.
+        name: String,
+        /// List of retrievable functions.
+        existing: Vec<String>,
+    },
+    /// The number of arguments of the function does not match the expected number.
+    IncorrectNumberOfArguments {
+        /// The expected number of arguments.
+        expected: usize,
+        /// The actual number of arguments.
+        got: usize,
+    },
+    /// The types for a given context of the function do not match.
     TypeMismatch(String, TypeMismatch),
 }
 
+/// Mismatching types
 #[derive(Debug)]
 pub struct TypeMismatch {
+    /// Type on the Rust side.
     pub rust_type: String,
+    /// Type on the Roto side.
     pub roto_type: String,
 }
 
