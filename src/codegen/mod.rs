@@ -1501,6 +1501,48 @@ impl<'c> FuncGen<'c> {
 }
 
 impl<Ctx: OptCtx> Module<Ctx> {
+    pub fn get_functions_by_signature<F: RotoFunc>(
+        &mut self,
+    ) -> impl Iterator<Item = (&str, TypedFunc<Ctx, F>)> {
+        self.functions.iter().filter_map(|(name, func)| {
+            // No signature means generated function, and they're not available
+            // for extraction.
+            let Some(sig) = &func.signature else {
+                return None;
+            };
+
+            // Perform the same checks as `get_function()`, but skip the
+            // function if they fail, instead of returning an error.
+            F::check_args(
+                &mut self.type_info,
+                self.main_scope,
+                &sig.parameter_types,
+            )
+            .ok()?;
+
+            check_roto_type_reflect::<F::Return>(
+                &mut self.type_info,
+                self.main_scope,
+                &sig.return_type,
+            )
+            .ok()?;
+
+            // When all checks pass, and the function matches the signature,
+            // extract it, and yield it along with its name, as a tuple.
+            let func_ptr =
+                self.inner.0.cranelift_jit.get_finalized_function(func.id);
+            Some((
+                name.as_str(),
+                TypedFunc {
+                    func: func_ptr,
+                    return_by_ref: func.return_by_ref,
+                    _module: self.inner.clone(),
+                    _ty: PhantomData,
+                },
+            ))
+        })
+    }
+
     pub fn get_function<F: RotoFunc>(
         &mut self,
         name: &str,

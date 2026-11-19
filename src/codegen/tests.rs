@@ -6548,3 +6548,33 @@ fn list_get_from_const_with_std() {
 
     assert_eq!(f.call(), Some(42));
 }
+
+#[test]
+fn get_functions_by_signature() {
+    let s = src!(
+        r#"
+        fn return_42() -> i32 {
+            42
+        }
+        fn return_67() -> i32 {
+            67
+        }
+        fn greet() -> String {
+            "Hello world!"
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+
+    let i32_funcs = pkg
+        .get_functions_by_signature::<fn() -> i32>()
+        .collect::<Vec<_>>();
+    assert!(i32_funcs[0].0.starts_with("pkg.return_"));
+    let i32_res = i32_funcs[0].1.call();
+    assert!(i32_res == 42 || i32_res == 67);
+
+    let mut verdict_funcs =
+        pkg.get_functions_by_signature::<fn() -> Verdict<(), ()>>();
+    assert!(verdict_funcs.next().is_none());
+}
