@@ -339,6 +339,7 @@ impl TypeChecker {
         &mut self,
         scope: ScopeRef,
         ident: Identifier,
+        params: &[Identifier],
         type_id: TypeId,
         doc: String,
     ) -> Result<(), String> {
@@ -362,7 +363,17 @@ impl TypeChecker {
             return Ok(());
         }
 
-        let ty = TypeDefinition::Runtime(name, type_id);
+        let ty = TypeDefinition::Runtime(
+            TypeName {
+                name,
+                arguments: params
+                    .iter()
+                    .copied()
+                    .map(Type::ExplicitVar)
+                    .collect(),
+            },
+            type_id,
+        );
         self.type_info
             .scope_graph
             .insert_type(scope, &ident, doc, ty.clone())
@@ -458,6 +469,10 @@ impl TypeChecker {
             TypeDescription::List(t) => {
                 Ok(Type::list(Self::rust_type_to_roto_type(runtime, t)?))
             }
+            TypeDescription::Map(k, v) => Ok(Type::map(
+                Self::rust_type_to_roto_type(runtime, k)?,
+                Self::rust_type_to_roto_type(runtime, v)?,
+            )),
             TypeDescription::Val(_) => {
                 let name = runtime
                     .get_runtime_type(ty.type_id)

@@ -17,7 +17,7 @@ use std::{
 use inetnum::{addr::Prefix, asn::Asn};
 use sealed::sealed;
 
-use crate::runtime::layout::Layout;
+use crate::{runtime::layout::Layout, value::map::ErasedMap};
 
 #[cfg(test)]
 use crate::lir::{IrValue, Memory};
@@ -25,6 +25,7 @@ use crate::lir::{IrValue, Memory};
 pub(crate) use dyn_val::DynVal;
 pub(crate) use list::ErasedList;
 pub use list::boundary::List;
+pub use map::boundary::Map;
 pub(crate) use option::RotoOption;
 pub(crate) use result::RotoResult;
 pub use string::RotoString;
@@ -36,6 +37,7 @@ pub(crate) use vtable::{CloneFn, DropFn, EqFn, VTable};
 
 mod dyn_val;
 pub(crate) mod list;
+pub(crate) mod map;
 mod option;
 mod result;
 mod string;
@@ -60,6 +62,9 @@ pub(crate) enum TypeDescription {
 
     /// `List<T>`
     List(TypeId),
+
+    /// `Map<K, V>`
+    Map(TypeId, TypeId),
 
     /// `Val<T>`
     Val(TypeId),
@@ -517,6 +522,47 @@ impl<T: Value> Value for List<T> {
         let t = T::resolve().type_id;
 
         let desc = TypeDescription::List(t);
+        TypeRegistry::store::<Self>(desc)
+    }
+}
+
+#[sealed]
+impl Value for ErasedMap {
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    fn resolve() -> Ty {
+        TypeRegistry::store::<Self>(TypeDescription::Leaf)
+    }
+}
+
+#[sealed]
+impl<K: Value, V: Value> Value for Map<K, V> {
+    type Transformed = Self;
+    type AsParam = *mut Self;
+
+    fn transform(self) -> Self::Transformed {
+        self
+    }
+
+    fn untransform(transformed: Self::Transformed) -> Self {
+        transformed
+    }
+
+    #[allow(private_interfaces)]
+    fn resolve() -> Ty {
+        let k = K::resolve().type_id;
+        let v = V::resolve().type_id;
+
+        let desc = TypeDescription::Map(k, v);
         TypeRegistry::store::<Self>(desc)
     }
 }

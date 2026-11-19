@@ -12,6 +12,7 @@ use crate::{
         DynVal, ErasedList, List, RotoString, StringBuf, StringBytes,
         StringChars, StringLines, VTable, Val,
         list::ffi::{list_get, list_remove},
+        map::{ErasedMap, ffi::map_get},
     },
 };
 
@@ -858,6 +859,59 @@ pub fn built_ins() -> Library {
                     .to_vec()
                     .join(&separator);
                 s.into()
+            }
+        }
+
+        /// A map from one set of value to another.
+        #[clone] type Map<K, V> = ErasedMap;
+
+        impl ErasedMap {
+            /// Create a new empty map.
+            #[sig = "fn[K, V]() -> Map[K, V]"]
+            #[vtables(K)]
+            #[vtables(V)]
+            fn new(key_vtable: VTable, value_vtable: VTable) -> Self {
+                Self::new(key_vtable, value_vtable)
+            }
+
+            /// Insert a new value into the map.
+            ///
+            /// If the key is already present in the map, its value is overwritten.
+            #[sig = "fn[K, V](Map[K, V], K, V)"]
+            fn insert(self, key: DynVal, value: DynVal) {
+                // SAFETY: Roto ensures we don't get a null value
+                let key_ptr = unsafe { NonNull::new_unchecked(key.0) };
+
+                // SAFETY: Roto ensures we don't get a null value
+                let value_ptr = unsafe { NonNull::new_unchecked(value.0) };
+
+                // SAFETY: The Roto signature ensures that the types match up
+                // between the list and the element.
+                unsafe { self.insert(key_ptr, value_ptr) };
+            }
+
+            /// Get a value from the map.
+            ///
+            /// This function returns `None` if the key is not in the map.
+            #[sig = "fn[K, V](Map[K, V], K) -> V?"]
+            fn get(out: OutPtr<DynVal>, self_: Self, key: DynVal) {
+                // SAFETY: Roto ensures we don't get a null value
+                let key_ptr = unsafe { NonNull::new_unchecked(key.0) };
+
+                // SAFETY: Roto ensures that the return type of this function
+                // matches the element type of the list.
+                unsafe { map_get(out.ptr.cast(), self_, key_ptr) }
+            }
+
+            /// Returns whether the map contains a certain key.
+            #[sig = "fn[K, V](Map[K, V], K) -> bool"]
+            fn contains(self, key: DynVal) -> bool {
+                // SAFETY: Roto ensures we don't get a null value
+                let key_ptr = unsafe { NonNull::new_unchecked(key.0) };
+
+                // SAFETY: Roto ensures that `key` is valid and we give
+                // ownership over it.
+                unsafe { self.contains(key_ptr) }
             }
         }
     }

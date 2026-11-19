@@ -212,6 +212,7 @@ impl From<Module> for Item {
 #[derive(Clone, Debug)]
 pub struct Type {
     pub(crate) ident: Identifier,
+    pub(crate) params: Vec<Identifier>,
     pub(crate) rust_name: &'static str,
     pub(crate) doc: String,
     pub(crate) type_id: TypeId,
@@ -238,10 +239,11 @@ impl Type {
     /// #[derive(Clone, PartialEq)]
     /// struct Foo(i32);
     ///
-    /// Type::clone::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
+    /// Type::clone::<Val<Foo>>("Foo", Vec::new(), "This is a foo!", location!()).unwrap();
     /// ```
     pub fn clone<T: Value + Clone + PartialEq>(
         name: impl Into<Identifier>,
+        params: Vec<&str>,
         doc: impl AsRef<str>,
         location: Location,
     ) -> Result<Self, RegistrationError> {
@@ -249,7 +251,7 @@ impl Type {
             clone: extern_clone::<T> as CloneFn,
             drop: extern_drop::<T> as DropFn,
         });
-        Self::new::<T>(name, doc, movability, location)
+        Self::new::<T>(name, params, doc, movability, location)
     }
 
     /// A type implementing `Copy`.
@@ -268,33 +270,38 @@ impl Type {
     /// #[derive(Clone, Copy, PartialEq)]
     /// struct Foo(i32);
     ///
-    /// Type::copy::<Val<Foo>>("Foo", "This is a foo!", location!()).unwrap();
+    /// Type::copy::<Val<Foo>>("Foo", Vec::new(), "This is a foo!", location!()).unwrap();
     /// ```
     pub fn copy<T: Value + Copy + PartialEq>(
         name: impl Into<Identifier>,
+        params: Vec<&str>,
         doc: impl AsRef<str>,
         location: Location,
     ) -> Result<Self, RegistrationError> {
-        Self::new::<T>(name, doc, Movability::Copy, location)
+        Self::new::<T>(name, params, doc, Movability::Copy, location)
     }
 
     /// For internal use only, might lead to unexpected behaviour if used incorrectly
     pub(crate) fn value<T: Value + Copy + PartialEq>(
         name: impl Into<Identifier>,
+        params: Vec<&str>,
         doc: impl AsRef<str>,
         location: Location,
     ) -> Result<Self, RegistrationError> {
-        Self::new::<T>(name, doc, Movability::Value, location)
+        Self::new::<T>(name, params, doc, Movability::Value, location)
     }
 
     fn new<T: Value + PartialEq>(
         name: impl Into<Identifier>,
+        params: Vec<&str>,
         doc: impl AsRef<str>,
         movability: Movability,
         location: Location,
     ) -> Result<Self, RegistrationError> {
         let name = name.into();
         Rt::check_name(&location, name)?;
+
+        let params = params.into_iter().map(Into::into).collect();
 
         let ty = T::resolve();
 
@@ -305,6 +312,7 @@ impl Type {
             TypeDescription::Verdict(_, _) => false,
             TypeDescription::Result(_, _) => false,
             TypeDescription::List(_) => false,
+            TypeDescription::Map(_, _) => false,
         };
 
         if !is_allowed {
@@ -323,6 +331,7 @@ impl Type {
 
         Ok(Self {
             ident: name,
+            params,
             rust_name: std::any::type_name::<T>(),
             doc: doc.as_ref().into(),
             type_id: ty.type_id,

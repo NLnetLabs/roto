@@ -189,6 +189,25 @@ fn to_tokens(
         let new = match item {
             Item::Type(item) => {
                 let ident = &item.ident;
+
+                let params: Vec<String> = item
+                    .generics
+                    .params
+                    .iter()
+                    .map(|x| match x {
+                        syn::GenericParam::Lifetime(_) => {
+                            todo!("error")
+                        }
+                        syn::GenericParam::Type(type_param) => {
+                            if !type_param.bounds.is_empty() {
+                                todo!("error")
+                            }
+                            type_param.ident.to_string()
+                        }
+                        syn::GenericParam::Const(_) => todo!("error"),
+                    })
+                    .collect();
+
                 let location = location(ident.span());
                 let ident_str = ident.to_string();
                 let ty = &item.ty;
@@ -197,6 +216,7 @@ fn to_tokens(
                 quote! {
                     roto::runtime::items::Type::#movability::<#ty>(
                         #ident_str,
+                        vec![#(#params),*],
                         #doc,
                         #location,
                     ).expect(#ERROR_MSG)

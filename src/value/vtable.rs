@@ -1,3 +1,5 @@
+use crate::runtime::{extern_clone, extern_drop, extern_eq};
+
 /// A placeholder type alias representing the type parameter of the extern "C" functions
 type T = ();
 
@@ -40,6 +42,22 @@ pub struct VTable {
 }
 
 impl VTable {
+    pub fn of<T: Clone + PartialEq>() -> Self {
+        let drop_fn: Option<DropFn> =
+            std::mem::needs_drop::<T>().then_some(extern_drop::<T> as DropFn);
+
+        let clone_fn: Option<CloneFn> = Some(extern_clone::<T>);
+
+        let eq_fn: EqFn = extern_eq::<T>;
+
+        VTable {
+            size: std::mem::size_of::<T>(),
+            align: std::mem::align_of::<T>(),
+            clone_fn,
+            drop_fn,
+            eq_fn,
+        }
+    }
     pub fn new(
         size: usize,
         align: usize,

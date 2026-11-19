@@ -12,7 +12,7 @@ use crate::{
     pipeline::Blob,
     runtime::context::{NoCtx, OptCtx},
     source_file, src,
-    value::{List, RotoString, Val, Verdict},
+    value::{List, Map, RotoString, Val, Verdict},
 };
 use inetnum::{addr::Prefix, asn::Asn};
 
@@ -6652,4 +6652,82 @@ fn module_type_in_args() {
         .unwrap();
 
     f.call(Val(Dummy));
+}
+
+#[test]
+fn map_insert() {
+    let s = src!(
+        r#"
+        fn main() -> Map[u32, u32] {
+            let map = Map.new();
+            map.insert(1, 10);
+            map.insert(2, 20);
+            map.insert(3, 30);
+            map.insert(2, 200);
+            map
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg.get_function::<fn() -> Map<u32, u32>>("main").unwrap();
+
+    let map = f.call();
+    assert_eq!(map.get(1), Some(10));
+    assert_eq!(map.get(2), Some(200));
+    assert_eq!(map.get(3), Some(30));
+    assert_eq!(map.get(4), None);
+}
+
+#[test]
+fn map_insert_str() {
+    let s = src!(
+        r#"
+        fn main() -> Map[String, String] {
+            let map = Map.new();
+            map.insert("A", "a");
+            map.insert("B", "b");
+            map.insert("C", "c");
+            map.insert("B", "bbb");
+            map
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn() -> Map<RotoString, RotoString>>("main")
+        .unwrap();
+
+    let map = f.call();
+    assert_eq!(map.get("A".into()), Some("a".into()));
+    assert_eq!(map.get("B".into()), Some("bbb".into()));
+    assert_eq!(map.get("C".into()), Some("c".into()));
+    assert_eq!(map.get("Z".into()), None);
+}
+
+#[test]
+fn map_insert_custom() {
+    let s = src!(
+        r#"
+        fn main(x: String) -> i32? {
+            let map = Map.new();
+            map.insert("A", { x: 1, y: 2 });
+            map.insert("B", { x: 3, y: 4 });
+            map.insert("C", { x: 5, y: 6 });
+            let rec = map.get(x)?;
+            Some(rec.x + rec.y)
+        }
+        "#
+    );
+
+    let mut pkg = compile(s);
+    let f = pkg
+        .get_function::<fn(RotoString) -> Option<i32>>("main")
+        .unwrap();
+
+    assert_eq!(f.call("A".into()), Some(3));
+    assert_eq!(f.call("B".into()), Some(7));
+    assert_eq!(f.call("C".into()), Some(11));
+    assert_eq!(f.call("Z".into()), None);
 }
