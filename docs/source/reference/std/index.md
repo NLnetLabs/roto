@@ -8,6 +8,7 @@
 Asn <Asn/index>
 IpAddr <IpAddr/index>
 List <List/index>
+Map <Map/index>
 Option <Option/index>
 Prefix <Prefix/index>
 Result <Result/index>
@@ -39,6 +40,8 @@ u64 <u64/index>
   - An IP address.
 * - [`List`](List/index)
   - A growable array.
+* - [`Map`](Map/index)
+  - A map from one set of value to another.
 * - [`Option`](Option/index)
   - An optional value.
 * - [`Prefix`](Prefix/index)

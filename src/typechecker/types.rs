@@ -82,6 +82,10 @@ impl Type {
         Type::named("List", vec![t.borrow().clone()])
     }
 
+    pub fn map(k: impl Borrow<Type>, v: impl Borrow<Type>) -> Type {
+        Type::named("Map", vec![k.borrow().clone(), v.borrow().clone()])
+    }
+
     /// Create a named type in the global scope
     pub fn named(ident: impl Into<Identifier>, arguments: Vec<Type>) -> Type {
         Type::Name(TypeName {
@@ -128,7 +132,7 @@ pub enum MustBeSigned {
 pub enum TypeDefinition {
     Enum(TypeName, Vec<EnumVariant>),
     Record(TypeName, Vec<(Meta<Identifier>, Type)>),
-    Runtime(ResolvedName, TypeId),
+    Runtime(TypeName, TypeId),
     Primitive(Primitive),
     List(TypeName),
 }
@@ -217,10 +221,7 @@ impl TypeDefinition {
             TypeDefinition::Enum(type_name, _) => type_name.clone(),
             TypeDefinition::Record(type_name, _) => type_name.clone(),
             TypeDefinition::List(type_name) => type_name.clone(),
-            TypeDefinition::Runtime(resolved_name, _) => TypeName {
-                name: *resolved_name,
-                arguments: Vec::new(),
-            },
+            TypeDefinition::Runtime(type_name, _) => type_name.clone(),
             TypeDefinition::Primitive(primitive) => TypeName {
                 name: ResolvedName {
                     scope: ScopeRef::STD,

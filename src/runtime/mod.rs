@@ -167,7 +167,7 @@ impl Runtime<NoCtx> {
                 &["f32", "f64"],
                 &["char"],
                 &["bool"],
-                &["List"],
+                &["List", "Map"],
                 &["Option", "Result", "Verdict"],
                 &["String", "StringBuf"],
                 &["StringLines", "StringChars", "StringBytes"],
@@ -422,7 +422,7 @@ pub(crate) unsafe extern "C" fn extern_drop<T>(x: *mut ()) {
     unsafe { x.cast::<T>().drop_in_place() };
 }
 
-pub(crate) unsafe extern "C" fn extern_eq<T: PartialEq + 'static>(
+pub(crate) unsafe extern "C" fn extern_eq<T: PartialEq>(
     x: *const (),
     y: *const (),
 ) -> bool {
@@ -648,7 +648,13 @@ impl Rt {
         }
 
         self.type_checker
-            .declare_runtime_type(scope, ty.ident, ty.type_id, ty.doc.clone())
+            .declare_runtime_type(
+                scope,
+                ty.ident,
+                &ty.params,
+                ty.type_id,
+                ty.doc.clone(),
+            )
             .map_err(|e| RegistrationError {
                 message: e,
                 location: ty.location.clone(),

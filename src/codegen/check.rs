@@ -257,6 +257,39 @@ fn check_roto_type(
             };
             check_roto_type(type_info, main_scope, rust_type, roto_type)
         }
+        TypeDescription::Map(rust_key_type, rust_value_type) => {
+            let Type::Name(type_name) = &roto_type else {
+                return Err(error_message);
+            };
+
+            if type_name.name
+                != (ResolvedName {
+                    scope: ScopeRef::STD,
+                    ident: "Map".into(),
+                })
+            {
+                return Err(error_message);
+            }
+
+            let [roto_key_type, roto_value_type] = &type_name.arguments[..]
+            else {
+                return Err(error_message);
+            };
+
+            check_roto_type(
+                type_info,
+                main_scope,
+                rust_key_type,
+                roto_key_type,
+            )?;
+            check_roto_type(
+                type_info,
+                main_scope,
+                rust_value_type,
+                roto_value_type,
+            )?;
+            Ok(())
+        }
     }
 }
 
