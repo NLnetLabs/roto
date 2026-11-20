@@ -36,7 +36,10 @@ pub mod value;
 pub(crate) use pipeline::{source_file, src};
 
 use crate::ast::{Declaration, Identifier};
-pub use codegen::{TypedFunc, check::RotoFunc};
+pub use codegen::{
+    TypedFunc,
+    check::{FunctionRetrievalError, RotoFunc, TypeMismatch},
+};
 pub(crate) use pipeline::RotoError;
 pub use pipeline::{Blob, RotoReport};
 pub use roto_macros::Context;
