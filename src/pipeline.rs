@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, VecDeque},
     fmt,
+    ops::Range,
 };
 
 use crate::{
@@ -37,8 +38,6 @@ use crate::lir::{
     IrValue,
     eval::{self, Memory},
 };
-
-use ariadne::Cache;
 
 #[cfg(feature = "logger")]
 use crate::ir_printer::{IrPrinter, Printable};
@@ -123,7 +122,7 @@ pub struct Blob<Ctx: OptCtx> {
 impl RotoReport {
     /// Write this report to a type implementing [`fmt::Write`].
     pub fn write(&self, mut f: impl fmt::Write, color: bool) -> fmt::Result {
-        use ariadne::{Color, Label, Report, ReportKind};
+        use ariadne::{Color, IndexType, Label, Report, ReportKind};
 
         let sources = self
             .files
@@ -145,7 +144,10 @@ impl RotoReport {
         )
         .with_sources(sources);
 
-        let config = ariadne::Config::new().with_color(color);
+        // Our spans are byte offsets
+        let config = ariadne::Config::new()
+            .with_color(color)
+            .with_index_type(IndexType::Byte);
 
         for error in &self.errors {
             match error {
@@ -158,20 +160,14 @@ impl RotoReport {
                     write!(f, "Could not read file `{path}`: {err}")?;
                 }
                 RotoError::Parse(error) => {
-                    let file = self.filename(error.location);
-                    let file_text = file_cache.fetch(&file).unwrap().text();
-
                     let label_message = error.kind.label();
-                    let label = Label::new((
-                        self.filename(error.location),
-                        error.location.character_range(file_text),
-                    ))
-                    .with_message(label_message)
-                    .with_color(Color::Red);
+                    let label = Label::new(self.location(error.location))
+                        .with_message(label_message)
+                        .with_color(Color::Red);
 
                     let mut report = Report::build(
                         ReportKind::Error,
-                        (file, error.location.character_range(file_text)),
+                        self.location(error.location),
                     )
                     .with_config(config)
                     .with_message(format!("Parse error: {}", error))
@@ -182,12 +178,9 @@ impl RotoReport {
                     }
 
                     for hint in &error.hints {
-                        let label = Label::new((
-                            self.filename(hint.location),
-                            hint.location.start..hint.location.end,
-                        ))
-                        .with_message(&hint.text)
-                        .with_color(Color::Yellow);
+                        let label = Label::new(self.location(hint.location))
+                            .with_message(&hint.text)
+                            .with_color(Color::Yellow);
 
                         report = report.with_label(label)
                     }
@@ -204,26 +197,18 @@ impl RotoReport {
                     write!(f, "{s}")?;
                 }
                 RotoError::Type(error) => {
-                    let file = self.filename(self.spans.get(error.location));
-                    let file_text = file_cache.fetch(&file).unwrap().text();
-
                     let labels = error.labels.iter().map(|l| {
-                        let s = self.spans.get(l.id);
-                        Label::new((
-                            self.filename(s),
-                            s.character_range(file_text),
-                        ))
-                        .with_message(&l.message)
-                        .with_color(match l.level {
-                            Level::Error => Color::Red,
-                            Level::Info => Color::Blue,
-                        })
+                        Label::new(self.location(self.spans.get(l.id)))
+                            .with_message(&l.message)
+                            .with_color(match l.level {
+                                Level::Error => Color::Red,
+                                Level::Info => Color::Blue,
+                            })
                     });
 
-                    let span = self.spans.get(error.location);
                     let mut report = Report::build(
                         ReportKind::Error,
-                        (file, span.character_range(file_text)),
+                        self.location(self.spans.get(error.location)),
                     )
                     .with_config(config)
                     .with_message(format!(
@@ -269,8 +254,9 @@ impl std::fmt::Debug for RotoReport {
 }
 
 impl RotoReport {
-    fn filename(&self, s: Span) -> String {
-        self.files[s.file].name()
+    /// The file name and byte range of a span
+    fn location(&self, s: Span) -> (String, Range<usize>) {
+        (self.files[s.file].name(), s.start..s.end)
     }
 }
 
@@ -525,5 +511,56 @@ impl<C: Context> Blob<Ctx<C>> {
     #[allow(clippy::result_unit_err)]
     pub fn run_tests(&mut self, ctx: C) -> Result<(), ()> {
         codegen::testing::run_tests(&mut self.module, Ctx(ctx))
+    }
+}
+
+#[cfg(all(test, not(miri)))]
+mod report_tests {
+    use crate::{
+        Runtime,
+        load::{FileSpec, FileTree, Load, SourceFile},
+    };
+
+    fn file(name: &str, module_name: &str, contents: &str) -> SourceFile {
+        SourceFile {
+            name: name.into(),
+            module_name: module_name.into(),
+            contents: contents.into(),
+            location_offset: 0,
+            children: Vec::new(),
+        }
+    }
+
+    /// A label in another file than the error is placed using that file's
+    /// text
+    #[test]
+    fn label_in_other_file() {
+        let pkg = file(
+            "pkg.roto",
+            "pkg",
+            "fn main() -> i32 {\n    foo.Point + 1\n}\n",
+        );
+        let foo = file(
+            "foo.roto",
+            "foo",
+            "// A comment that pushes the declaration\n\
+             // further into the file than pkg.roto is long.\n\
+             record Point { x: i32, y: i32 }\n",
+        );
+        let tree = FileTree::file_spec(FileSpec::Directory(
+            pkg,
+            vec![FileSpec::File(foo)],
+        ));
+
+        let rt = Runtime::new();
+        let parsed =
+            tree.load().unwrap().resolve(&rt).unwrap().parse().unwrap();
+        let Err(report) = parsed.typecheck(&rt) else {
+            panic!("expected a type error");
+        };
+
+        let mut out = String::new();
+        report.write(&mut out, false).unwrap();
+        assert!(out.contains("foo.roto:3:8"), "{out}");
     }
 }
