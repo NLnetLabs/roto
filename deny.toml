@@ -48,6 +48,11 @@ allow = [
     #
     # Used by unicode-ident.
     "Unicode-3.0",
+
+    # The Boost Software License 1.0 is a permissive OSI-approved license.
+    # It is compatible with the BSD-3-Clause.
+    # See https://interoperable-europe.ec.europa.eu/licence/compatibility-check/BSL-1.0/BSD-3-Clause
+    "BSL-1.0",
 ]
 confidence-threshold = 0.8
 exceptions = []
