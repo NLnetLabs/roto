@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[cfg(feature = "repl")]
-use crate::ast::Stmt;
+use crate::ast::ReplStmt;
 
 use lexer::Lexer;
 use token::{Keyword, Token};
@@ -40,13 +40,6 @@ mod test_expressions;
 mod test_sections;
 
 pub type ParseResult<T> = Result<T, Box<ParseError>>;
-
-#[cfg(feature = "repl")]
-pub enum ReplStmt {
-    Declaration(Declaration),
-    Let(Meta<Stmt>),
-    Expr,
-}
 
 pub struct Parser<'source, 'spans> {
     file: usize,
@@ -198,7 +191,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     ///
     /// The span of the statement leaves out the optional semicolon after it.
     #[cfg(feature = "repl")]
-    pub fn parse_repl_stmt(
+    pub(crate) fn parse_repl_stmt(
         file: usize,
         spans: &'spans mut Spans,
         input: &'source str,
@@ -285,8 +278,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             } else if matches!(p.peek(), Some(Token::Keyword(Keyword::Let))) {
                 ReplStmt::Let(p.let_stmt()?)
             } else {
-                p.expr()?;
-                ReplStmt::Expr
+                ReplStmt::Expr(p.expr()?)
             })
         })?;
 

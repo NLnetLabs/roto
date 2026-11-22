@@ -6,37 +6,36 @@ use rustyline::{
     KeyCode, KeyEvent, Modifiers, history::DefaultHistory,
 };
 
-use std::cell::Cell;
-
 use indexmap::{IndexMap, IndexSet};
 
 use crate::{
     RotoError, RotoReport, Runtime,
-    ast::{Declaration, Identifier, Stmt},
-    codegen::{ConstantImports, RotoConstant, SharedModuleData},
-    ice, library,
-    load::{FileTree, Load, SourceFile},
+    ast::{Declaration, Identifier, ReplStmt, Stmt},
+    codegen::{ConstantImports, SharedModuleData},
+    ice,
+    load::{FileTree, Load},
     mir::{Pool, Ty, TyRef},
+    module::Parsed,
     parser::Parser,
     parser::lexer::Lexer,
     parser::meta::{Span, Spans},
-    parser::token::Token,
-    parser::{ParseError, ParseErrorKind, ReplStmt},
+    parser::{ParseError, ParseErrorKind},
     pipeline::{Blob, TypeChecked},
     runtime::context::NoCtx,
-    runtime::func::OutPtr,
     typechecker::TypeChecker,
     typechecker::info::TypeInfo,
     typechecker::scope::{DeclarationKind, ResolvedName},
     typechecker::scoped_display::TypeDisplay,
     typechecker::types::{Type, TypeName},
-    value::{DynVal, RotoString, VTable, Value},
+    value::{RotoString, Value},
 };
 
-#[derive(Completer, Helper, Highlighter, Hinter)]
-struct ReplValidator;
+mod wrap;
 
-impl Validator for ReplValidator {
+#[derive(Completer, Helper, Highlighter, Hinter)]
+struct ReplHelper;
+
+impl Validator for ReplHelper {
     fn validate(
         &self,
         ctx: &mut ValidationContext,
@@ -55,80 +54,43 @@ impl Validator for ReplValidator {
     }
 }
 
-const SESSION_MODULE: &str = "pkg";
-const RESERVED_PREFIX: &str = "__repl_";
-
-fn repl_files(contents: String) -> Vec<SourceFile> {
-    vec![SourceFile {
-        name: "<repl>".into(),
-        module_name: SESSION_MODULE.into(),
-        contents,
-        location_offset: 0,
-        children: Vec::new(),
-    }]
-}
-
-// REPL input classification
+/// REPL input classification
 #[derive(Debug)]
 enum ReplInput {
     /// `fn`, `filtermap`, `record` and `enum`
     Decl(ItemKind, Identifier, String),
     /// `import <path>`
     Import(Vec<String>),
-    /// `let`, `const`
-    Let(Identifier, String),
-    Expr(String),
+    /// `let`, `const`. The wrapper is built from the parsed line.
+    Let(Identifier),
+    /// An expression. The wrapper is built from the parsed line.
+    Expr,
 }
 
 fn classify_input(line: &str) -> Result<ReplInput, RotoReport> {
-    let input = parse_input(line)?;
-
-    // Do not allow user to call REPL's own runtime functions to
-    // prevent unexpected consequences
-    let tokens = lex(line);
-    if tokens.iter().any(
-        |t| matches!(t, Token::Ident(s) if s.starts_with(RESERVED_PREFIX)),
-    ) {
-        return Err(custom_report(&format!(
-            "names starting with `{RESERVED_PREFIX}` are reserved for the REPL"
-        )));
-    }
-
-    Ok(input)
-}
-
-fn lex(src: &str) -> Vec<Token<'_>> {
-    let mut lexer = Lexer::new(0, src);
-    let mut tokens = Vec::new();
-    while let Some((Ok(token), _)) = lexer.next() {
-        tokens.push(token);
-    }
-    tokens
-}
-
-fn is_blank(src: &str) -> bool {
-    Lexer::new(0, src).next().is_none()
-}
-
-fn parse_input(line: &str) -> Result<ReplInput, RotoReport> {
     let mut spans = Spans::default();
     let stmt = Parser::parse_repl_stmt(0, &mut spans, line)
         .map_err(|e| parse_report(line, *e))?;
-    // The text is taken by the span of the statement,
-    // which skips the optional trailing semicolon or comment
-    let text = span_text(line, spans.get(&stmt));
+    let span = spans.get(&stmt);
     match stmt.node {
+        // A declaration goes into the session text. It is taken by the span
+        // of the statement, which skips the optional trailing semicolon or
+        // comment.
         ReplStmt::Declaration(d) => {
-            classify_declaration(&d, &spans, line, text)
+            classify_declaration(&d, span_text(line, span))
         }
         ReplStmt::Let(stmt) => {
             let Stmt::Let(ident, _, _) = stmt.node else {
                 ice!("broken let statement parsing")
             };
-            Ok(ReplInput::Let(ident.node, text.into()))
+            Ok(ReplInput::Let(ident.node))
         }
-        ReplStmt::Expr => Ok(ReplInput::Expr(text.into())),
+        ReplStmt::Expr(_) => Ok(ReplInput::Expr),
     }
+}
+
+fn is_blank(src: &str) -> bool {
+    Lexer::new(0, src).next().is_none()
 }
 
 fn span_text(line: &str, span: Span) -> &str {
@@ -137,8 +99,6 @@ fn span_text(line: &str, span: Span) -> &str {
 
 fn classify_declaration(
     d: &Declaration,
-    spans: &Spans,
-    line: &str,
     text: &str,
 ) -> Result<ReplInput, RotoReport> {
     let src = text.to_owned();
@@ -175,12 +135,8 @@ fn classify_declaration(
                     .collect(),
             )
         }
-        // A constant handled like a 'let' as value
-        Declaration::Const(c) => {
-            let span = spans.get(&c.ident).merge(spans.get(&c.expr));
-            let text = format!("let {}", span_text(line, span));
-            ReplInput::Let(c.ident.node, text)
-        }
+        // A constant is stored like a `let`; the wrapper turns it into one
+        Declaration::Const(c) => ReplInput::Let(c.ident.node),
         Declaration::Test(_) => {
             return Err(custom_report(
                 "tests cannot be declared in the REPL",
@@ -189,7 +145,7 @@ fn classify_declaration(
     })
 }
 
-fn custom_report(msg: &str) -> RotoReport {
+fn custom_report(msg: impl Into<String>) -> RotoReport {
     RotoReport {
         errors: vec![RotoError::Custom(msg.into())],
         ..Default::default()
@@ -198,10 +154,19 @@ fn custom_report(msg: &str) -> RotoReport {
 
 fn parse_report(line: &str, e: ParseError) -> RotoReport {
     RotoReport {
-        files: repl_files(line.into()),
+        files: vec![wrap::input_file(line)],
         errors: vec![RotoError::Parse(e)],
         ..Default::default()
     }
+}
+
+/// The error for a line that would change the type of the stored value
+/// `value`; `what` is what the line tried to do, such as "declare `f`"
+fn changed_value_report(what: &str, value: Identifier) -> RotoReport {
+    custom_report(format!(
+        "cannot {what}: it changes the type of the value `{value}`; \
+         redefine `{value}` first"
+    ))
 }
 
 struct Probe<'r> {
@@ -212,9 +177,11 @@ struct Probe<'r> {
 
 /// REPL state between lines
 ///
-/// Each line is compiled by the regular pipeline as a single file: the wrapped
-/// input first, followed by the session text. The type checker graph is rebuilt
-/// from scratch every time.
+/// Each line is compiled by the regular pipeline from the session text, in
+/// the file `<session>`. An expression or a `let` is parsed on its own, from
+/// the file `<input>`, and wrapped in a function built as syntax tree nodes
+/// (see [`wrap`]), which is added to the parsed session before type checking.
+/// The type checker graph is rebuilt from scratch every time.
 struct Session<'r> {
     /// The host runtime
     rt: &'r Runtime<NoCtx>,
@@ -243,8 +210,10 @@ enum ItemKind {
     Fn,
     /// `record` and `enum`
     Type,
-    /// A `let`: `src` is `const x: T = __repl_cell();` and the value is in a
-    /// cell. `shape` is the type the value was stored with, in `shapes`.
+    /// A `let`: `src` is `const x: T = ();` and the value is in a cell. The
+    /// placeholder initializer is replaced by a call to the cell helper
+    /// after parsing (see [`wrap::patch_cells`]). `shape` is the type the
+    /// value was stored with, in `shapes`.
     Value { shape: TyRef },
 }
 
@@ -260,10 +229,18 @@ impl<'r> Session<'r> {
         }
     }
 
-    /// Generate text to compile. `entry` goes first.
+    /// Generate the session text. `entry`, if any, goes first.
     /// `skip` is the name that `entry` redeclares.
-    fn source(&self, entry: &str, skip: Option<Identifier>) -> String {
-        let mut s = format!("{entry}\n");
+    fn source(
+        &self,
+        entry: Option<&str>,
+        skip: Option<Identifier>,
+    ) -> String {
+        let mut s = String::new();
+        if let Some(entry) = entry {
+            s.push_str(entry);
+            s.push('\n');
+        }
         for import in &self.imports {
             s.push_str(import);
             s.push('\n');
@@ -285,19 +262,19 @@ impl<'r> Session<'r> {
         kind: ItemKind,
         name: Identifier,
         src: &str,
-    ) -> Result<(), RotoReport> {
-        let mut checked = self.check(self.source(src, Some(name)))?;
+    ) -> Result<Option<String>, RotoReport> {
+        let mut checked = self.check(self.source(Some(src), Some(name)))?;
         // The type of a value is resolved from its text in every compilation,
         // so redefining a type it depends on would make its cell read as
         // another type
         if let Some(value) = self.changed_value(&mut checked, None) {
-            return Err(custom_report(&format!(
-                "cannot declare `{name}`: it changes the type of the value \
-                 `{value}`; redefine `{value}` first"
-            )));
+            return Err(changed_value_report(
+                &format!("declare `{name}`"),
+                value,
+            ));
         }
 
-        if matches!(kind, ItemKind::Fn) {
+        let output = if matches!(kind, ItemKind::Fn) {
             let ident =
                 match checked.module_tree.modules[0].ast.declarations.first()
                 {
@@ -310,11 +287,13 @@ impl<'r> Session<'r> {
                 sig.parameter_types,
                 Box::new(sig.return_type),
             );
-            println!(
+            Some(format!(
                 "{name} : {}",
                 ty.display(checked.main_scope, &checked.type_info)
-            );
-        }
+            ))
+        } else {
+            None
+        };
 
         self.cells.remove(&cell_key(name));
         self.items.insert(
@@ -324,44 +303,29 @@ impl<'r> Session<'r> {
                 kind,
             },
         );
-        Ok(())
+        Ok(output)
     }
 
-    /// Evaluate `let name = ...` once and keep the value in a cell.
-    /// `const name: T = __repl_cell();` goes into the session text, and
-    /// codegen resolves that to the cell instead of running an initializer,
-    /// so the initializer and its side effects run exactly once.
+    /// Evaluate the `let` (or `const`) in `line` once and keep the value in
+    /// a cell. `const name: T = ();` goes into the session text, its
+    /// initializer becomes a call to the cell helper, and codegen resolves
+    /// that to the cell instead of running an initializer, so the
+    /// initializer and its side effects run exactly once.
     fn add_let(
         &mut self,
         name: Identifier,
-        stmt: &str,
-    ) -> Result<(), RotoReport> {
+        line: &str,
+    ) -> Result<Option<String>, RotoReport> {
         // a) Type check the initializer, which is run in step (c). The old
         // `name` stays in the session, so that `let x = x + 1` sees it.
-        let init = format!(
-            "fn __repl_init() {{\n{stmt}\n;\n__repl_store({name});\n}}"
-        );
-        let mut checked = self.check(self.source(&init, None))?;
-
-        let (expr_id, body_id) = {
-            let Some(Declaration::Function(f)) =
-                checked.module_tree.modules[0].ast.declarations.first()
-            else {
-                ice!("__repl_init is the first declaration")
-            };
-            let Some(Stmt::Let(_, _, expr)) =
-                f.body.stmts.first().map(|s| &s.node)
-            else {
-                ice!("__repl_init starts with the let")
-            };
-            (expr.id, f.body.id)
-        };
-        if checked.type_info.diverges(body_id) {
-            return Err(custom_report(&format!(
+        let (mut checked, wrapped) =
+            self.check_input(line, wrap::Wrapper::Init)?;
+        if checked.type_info.diverges(wrapped.body) {
+            return Err(custom_report(format!(
                 "the initializer of `{name}` never produces a value"
             )));
         }
-        let ty = checked.type_info.type_of(expr_id);
+        let ty = checked.type_info.type_of(wrapped.expr);
         let ty = default_deep(&mut checked.type_info, &ty);
         let ty_text = ty
             .display(checked.main_scope, &checked.type_info)
@@ -369,13 +333,13 @@ impl<'r> Session<'r> {
         match unstorable(&ty) {
             None => {}
             Some(Unstorable::Function) => {
-                return Err(custom_report(&format!(
+                return Err(custom_report(format!(
                     "cannot store `{name}` of type {ty_text}: functions \
                      cannot be stored as values"
                 )));
             }
             Some(Unstorable::Unknown) => {
-                return Err(custom_report(&format!(
+                return Err(custom_report(format!(
                     "cannot store `{name}` of type {ty_text}: its type is not \
                      fully known; add a type annotation: \
                      `let {name}: <type> = ...`"
@@ -392,21 +356,21 @@ impl<'r> Session<'r> {
         // initializer runs: functions that read the old `name` may not
         // accept the new type. The type text must also mean the type of the
         // value, which it does not if a session type shadows a built-in one.
-        let src = format!("const {name}: {ty_text} = __repl_cell();");
-        let mut session = self.check(self.source(&src, Some(name)))?;
+        let src = format!("const {name}: {ty_text} = ();");
+        let mut session = self.check(self.source(Some(&src), Some(name)))?;
         match self.changed_value(&mut session, Some((name, shape))) {
             None => {}
             Some(value) if value == name => {
-                return Err(custom_report(&format!(
+                return Err(custom_report(format!(
                     "cannot store `{name}`: its type, written as {ty_text}, \
                      means another type in the session"
                 )));
             }
             Some(value) => {
-                return Err(custom_report(&format!(
-                    "cannot define `{name}`: it changes the type of the \
-                     value `{value}`; redefine `{value}` first"
-                )));
+                return Err(changed_value_report(
+                    &format!("define `{name}`"),
+                    value,
+                ));
             }
         }
 
@@ -415,15 +379,18 @@ impl<'r> Session<'r> {
             .lower_to_mir()
             .lower_to_lir()
             .codegen_with_constants(&self.cells);
-        run_function::<()>(&mut blob, "__repl_init");
+        run_function::<()>(&mut blob, wrap::INIT);
         self.modules.push(blob.shared_data());
-        let Some(cell) = STORED.take() else {
-            ice!("__repl_init stores a value")
+        // A `return` in the initializer can skip the store. Nothing is
+        // committed yet, so the session stays as it was.
+        let Some(cell) = wrap::take_stored() else {
+            return Err(custom_report(format!(
+                "the initializer of `{name}` returned before producing a value"
+            )));
         };
 
         // d) Commit. The old cell, if any, is dropped here: nothing refers to
         // it any more, because every compilation starts afresh.
-        println!("{name} : {ty_text}");
         self.cells.insert(cell_key(name), cell);
         self.items.insert(
             name,
@@ -432,7 +399,7 @@ impl<'r> Session<'r> {
                 kind: ItemKind::Value { shape },
             },
         );
-        Ok(())
+        Ok(Some(format!("{name} : {ty_text}")))
     }
 
     /// Find a session value whose type in `checked` no longer matches the
@@ -477,61 +444,65 @@ impl<'r> Session<'r> {
     ///
     /// The type checker reports a clash between imports. A session item with
     /// the same name as an import takes precedence, as in a file.
-    fn add_import(&mut self, imports: Vec<String>) -> Result<(), RotoReport> {
+    fn add_import(
+        &mut self,
+        imports: Vec<String>,
+    ) -> Result<Option<String>, RotoReport> {
         let new: Vec<String> = imports
             .into_iter()
             .filter(|i| !self.imports.contains(i))
             .collect();
         if new.is_empty() {
-            return Ok(());
+            return Ok(None);
         }
-        let mut checked = self.check(self.source(&new.join("\n"), None))?;
+        let mut checked =
+            self.check(self.source(Some(&new.join("\n")), None))?;
         // An import can shadow a type that the type text of a value refers to,
         // which would make its cell read as another type
         if let Some(value) = self.changed_value(&mut checked, None) {
-            return Err(custom_report(&format!(
-                "cannot import this: it changes the type of the value \
-                 `{value}`; redefine `{value}` first"
-            )));
+            return Err(changed_value_report("import this", value));
         }
         self.imports.extend(new);
-        Ok(())
+        Ok(None)
     }
 
+    /// Load, resolve and parse the session text, and point the cells at
+    /// their storage (see [`wrap::patch_cells`])
+    fn parse_session(&self, text: String) -> Result<Parsed, RotoReport> {
+        let tree = FileTree {
+            files: vec![wrap::session_file(text)],
+        };
+        let mut parsed = tree.load()?.resolve(self.rt)?.parse()?;
+        wrap::patch_cells(&mut parsed);
+        Ok(parsed)
+    }
+
+    /// Type check the session text as it is
     fn check(
         &self,
         text: String,
     ) -> Result<TypeChecked<'r, NoCtx>, RotoReport> {
-        let rt = self.rt;
-        let tree = FileTree {
-            files: repl_files(text),
-        };
-        tree.load()?.resolve(rt)?.parse()?.typecheck(rt)
+        self.parse_session(text)?.typecheck(self.rt)
     }
 
-    /// Type check an expression and return its type
-    fn probe(&self, expr: &str) -> Result<Probe<'r>, RotoReport> {
-        let text =
-            self.source(&format!("fn __repl_main() {{\n{expr}\n;\n}}"), None);
-        let mut checked = self.check(text)?;
+    /// Type check the session with `line` wrapped as `wrapper`
+    fn check_input(
+        &self,
+        line: &str,
+        wrapper: wrap::Wrapper,
+    ) -> Result<(TypeChecked<'r, NoCtx>, wrap::Wrapped), RotoReport> {
+        let mut parsed = self.parse_session(self.source(None, None))?;
+        let wrapped = wrap::wrap_input(&mut parsed, line, wrapper);
+        Ok((parsed.typecheck(self.rt)?, wrapped))
+    }
 
-        let (expr_id, body_id) = {
-            let Some(Declaration::Function(f)) =
-                checked.module_tree.modules[0].ast.declarations.first()
-            else {
-                ice!("__repl_main is the first declaration")
-            };
-            let [stmt] = &f.body.stmts[..] else {
-                ice!("the wrapper contains exactly one statement")
-            };
-            let Stmt::Expr(e) = &stmt.node else {
-                ice!("the wrapper statement is an expression")
-            };
-            (e.id, f.body.id)
-        };
-
-        let diverges = checked.type_info.diverges(body_id);
-        let ty = default_numeric(checked.type_info.type_of(expr_id));
+    /// Type check the expression in `line` and return its type
+    fn probe(&self, line: &str) -> Result<Probe<'r>, RotoReport> {
+        let (mut checked, wrapped) =
+            self.check_input(line, wrap::Wrapper::Main)?;
+        let diverges = checked.type_info.diverges(wrapped.body);
+        let ty = checked.type_info.type_of(wrapped.expr);
+        let ty = default_deep(&mut checked.type_info, &ty);
 
         Ok(Probe {
             checked,
@@ -540,62 +511,65 @@ impl<'r> Session<'r> {
         })
     }
 
-    fn eval(&mut self, line: &str) -> Result<(), RotoReport> {
+    /// Evaluate the expression in `line`. Returns its value as text, for the
+    /// caller to print, or `None` if it has none to show.
+    ///
+    /// A value that can't be converted to a string is reported as an error
+    /// after the expression has run, so its side effects have happened.
+    fn eval(&mut self, line: &str) -> Result<Option<String>, RotoReport> {
         let mut p = self.probe(line)?;
         if p.diverges {
-            eprintln!("Expression diverges: do nothing");
-            return Ok(());
+            return Err(custom_report("Expression diverges: do nothing"));
         }
 
         let printable = has_to_string(&mut p.checked.type_info, &p.ty);
-        let checked = if printable {
-            self.check(self.source(
-                &format!(
-                    "fn __repl_main()->std.String {{\nf\"{{\n{line}\n}}\"\n}}"
-                ),
-                None,
-            ))?
+        let warning = (!printable && !matches!(p.ty, Type::Unit)).then(|| {
+            custom_report(format!(
+                "Warning: Expression result has type '{}' and can't be converted to string",
+                p.ty.display(p.checked.main_scope, &p.checked.type_info)
+            ))
+        });
+
+        // The print wrapper can reject input that `probe` accepted: a
+        // `return` in it returns `()` where the wrapper returns a `String`.
+        // Such input runs as it is, without printing.
+        let print = if printable {
+            self.check_input(line, wrap::Wrapper::Print).ok()
         } else {
-            if !matches!(p.ty, Type::Unit) {
-                eprintln!(
-                    "Warning: Expression result has type '{}' and can't be converted to string",
-                    p.ty.display(p.checked.main_scope, &p.checked.type_info)
-                );
-            }
-            p.checked
+            None
+        };
+        let (checked, printed) = match print {
+            Some((checked, _)) => (checked, true),
+            None => (p.checked, false),
         };
 
         let mut pkg = checked
             .lower_to_mir()
             .lower_to_lir()
             .codegen_with_constants(&self.cells);
-        if printable {
-            let text = run_function::<RotoString>(&mut pkg, "__repl_main");
-            println!("{text}");
+        let text = if printed {
+            let text = run_function::<RotoString>(&mut pkg, wrap::MAIN);
+            Some(text.to_string())
         } else {
-            run_function::<()>(&mut pkg, "__repl_main");
-        }
+            run_function::<()>(&mut pkg, wrap::MAIN);
+            None
+        };
         self.modules.push(pkg.shared_data());
 
-        Ok(())
+        match warning {
+            Some(warning) => Err(warning),
+            None => Ok(text),
+        }
     }
 }
 
 impl Drop for Session<'_> {
     fn drop(&mut self) {
         // The values refer to code in `modules`, so they go first, whatever
-        // the order of the fields. So does a value that `__repl_store` left
+        // the order of the fields. So does a value that the store helper left
         // behind, which would otherwise outlive the session in `STORED`.
         self.cells.clear();
-        drop(STORED.take());
-    }
-}
-
-fn default_numeric(ty: Type) -> Type {
-    match ty {
-        Type::IntVar(..) => Type::i32(),
-        Type::FloatVar(_) => Type::f64(),
-        ty => ty,
+        drop(wrap::take_stored());
     }
 }
 
@@ -632,7 +606,7 @@ fn run_function<R: Value>(prog: &mut Blob<NoCtx>, name: &str) -> R {
 
 /// The key of the cell of `name`: the full name of its constant
 fn cell_key(name: Identifier) -> String {
-    format!("{SESSION_MODULE}.{name}")
+    format!("{}.{name}", wrap::SESSION_MODULE)
 }
 
 /// Replace the numeric type variables in `ty`, at any depth, with the
@@ -711,69 +685,34 @@ fn reintern(from: &Pool, ty: TyRef, to: &mut Pool) -> TyRef {
     to.intern(ty)
 }
 
-thread_local! {
-    static STORED: Cell<Option<RotoConstant>> = const { Cell::new(None) };
-}
-
-unsafe extern "C" fn no_drop(_: *mut ()) {}
-
-/// The host runtime plus the functions that the REPL wraps input in
+/// The host runtime plus the helpers that the wrappers call (see
+/// [`wrap::helpers`])
 fn repl_runtime(rt: &Runtime<NoCtx>) -> Runtime<NoCtx> {
     let mut rt = rt.clone();
-    rt.add(library! {
-        /// Move a value into a new cell, see `Session::add_let`
-        #[sig = "fn[T](T)"]
-        #[vtables(T)]
-        fn __repl_store(vtable: VTable, v: DynVal) {
-            let cell = RotoConstant::new(
-                vtable.size(),
-                vtable.align(),
-                vtable.drop_fn.unwrap_or(no_drop),
-            );
-            // SAFETY: the cell is allocated with the layout of `T`, and `v`
-            // points to a `T`. A callee owns its parameters, so copying the
-            // bytes moves the value, and `v` must not be dropped.
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    v.0 as *const u8,
-                    cell.ptr() as *mut u8,
-                    vtable.size(),
-                );
-            }
-            STORED.set(Some(cell));
-        }
-
-        /// The initializer of the constant of a cell. Never called, because
-        /// codegen takes the address of the cell instead.
-        #[sig = "fn[T]() -> T"]
-        fn __repl_cell(_out: OutPtr<DynVal>) {
-            ice!("__repl_cell is never called")
-        }
-    })
-    .unwrap();
+    rt.add(wrap::helpers()).expect("the REPL helpers register");
     rt
 }
 
+/// Handle one line. Returns what it has to show, for the caller to print.
 fn handle_line(
     session: &mut Session<'_>,
     line: &str,
-) -> Result<(), RotoReport> {
+) -> Result<Option<String>, RotoReport> {
     match classify_input(line)? {
         ReplInput::Decl(kind, name, src) => {
-            session.add_decl(kind, name, &src)?
+            session.add_decl(kind, name, &src)
         }
-        ReplInput::Import(imports) => session.add_import(imports)?,
-        ReplInput::Let(name, stmt) => session.add_let(name, &stmt)?,
-        ReplInput::Expr(src) => session.eval(&src)?,
+        ReplInput::Import(imports) => session.add_import(imports),
+        ReplInput::Let(name) => session.add_let(name, line),
+        ReplInput::Expr => session.eval(line),
     }
-    Ok(())
 }
 
 pub(crate) fn repl(rt: &Runtime<NoCtx>) -> Result<(), RotoReport> {
     let rt = repl_runtime(rt);
     let mut session = Session::new(&rt);
-    let mut rl = Editor::<ReplValidator, DefaultHistory>::new().unwrap();
-    rl.set_helper(Some(ReplValidator));
+    let mut rl = Editor::<ReplHelper, DefaultHistory>::new().unwrap();
+    rl.set_helper(Some(ReplHelper));
     rl.bind_sequence(
         KeyEvent(KeyCode::Char('s'), Modifiers::CTRL),
         EventHandler::Simple(Cmd::Newline),
@@ -787,8 +726,10 @@ pub(crate) fn repl(rt: &Runtime<NoCtx>) -> Result<(), RotoReport> {
                     continue;
                 }
                 let _ = rl.add_history_entry(line.as_str());
-                if let Err(e) = handle_line(&mut session, &line) {
-                    eprintln!("{e}");
+                match handle_line(&mut session, &line) {
+                    Ok(Some(text)) => println!("{text}"),
+                    Ok(None) => {}
+                    Err(e) => eprintln!("{e}"),
                 }
             }
             Err(ReadlineError::Interrupted) => {

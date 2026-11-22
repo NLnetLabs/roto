@@ -30,7 +30,7 @@ cli = ["clap"]
 logger = ["env_logger"]
 disas = ["cranelift-codegen/disas"]
 fuzz = []
-repl = ["rustyline"]
+repl = ["cli", "dep:rustyline"]
 
 [dependencies]
 ariadne = "0.6.0"

@@ -120,6 +120,13 @@ pub enum Stmt {
     Expr(Meta<Expr>),
 }
 
+#[cfg(feature = "repl")]
+pub enum ReplStmt {
+    Declaration(Declaration),
+    Let(Meta<Stmt>),
+    Expr(Meta<Expr>),
+}
+
 #[derive(Clone, Debug)]
 pub struct Path {
     pub idents: Vec<Meta<Identifier>>,
