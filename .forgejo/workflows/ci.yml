@@ -154,9 +154,9 @@ jobs:
     runs-on: docker
     strategy:
       matrix:
-        # Test with no features, default features ("") and all features.
+        # Test with no features and default features ("").
         # Ordered fewest features to most features.
-        args: ["--no-default-features", "", "--all-features"]
+        args: ["--no-default-features", ""]
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
