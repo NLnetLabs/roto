@@ -11,7 +11,7 @@ body:
       options:
         - label: I agree to follow the [NLnet Labs Code of Conduct](https://www.nlnetlabs.nl/conduct/).
           required: true
-        - label: This PR follows the [NLnet Labs LLM Policy].
+        - label: This PR follows the [NLnet Labs LLM Policy](https://www.nlnetlabs.nl/llm-policy/).
           required: true
         - label: I have read Roto's [CONTRIBUTING.MD](https://codeberg.org/NLnetLabs/roto/src/branch/main/CONTRIBUTING.md).
           required: true
