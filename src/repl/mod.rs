@@ -1,5 +1,10 @@
 use indexmap::{IndexMap, IndexSet};
-use rotoline::{Output, Signal, prompt::Prompt, validate::Validator};
+use rotoline::{
+    Output, Signal,
+    highlight::{Highlighter, ansi},
+    prompt::{BufferInfo, LineInfo, Prompt},
+    validate::Validator,
+};
 
 use crate::{
     RotoError, RotoReport, Runtime,
@@ -697,18 +702,36 @@ impl Validator for RotoValidator {
 
 struct RotoPrompt;
 
+impl RotoPrompt {
+    fn align(info: &BufferInfo) -> usize {
+        let computed =
+            1 + ((info.total_lines.0 + 1) as f64).log10().ceil() as usize;
+        computed.max(2)
+    }
+}
+
 impl Prompt for RotoPrompt {
-    fn line_prefix(
-        &mut self,
-        info: &rotoline::prompt::LineInfo,
-    ) -> Option<String> {
+    fn line_prefix(&mut self, info: &LineInfo) -> Option<String> {
+        let align = Self::align(&info.buffer);
+
         if info.continuation {
-            Some("    ".into())
-        } else if info.line == 1 {
-            Some(">>> ".into())
+            Some(format!("{}{:>align$}│ {}", ansi::DIM, " ", ansi::RESET))
         } else {
-            Some("... ".into())
+            Some(format!(
+                "{}{:>align$}│ {}",
+                ansi::DIM,
+                info.line,
+                ansi::RESET
+            ))
         }
+    }
+}
+
+struct RotoHighlighter;
+
+impl Highlighter for RotoHighlighter {
+    fn highlight(&mut self, buffer: &str) -> rotoline::highlight::StyledStr {
+        crate::highlight::highlight(buffer)
     }
 }
 
@@ -717,21 +740,26 @@ pub(crate) fn repl(rt: &Runtime<NoCtx>) -> Result<(), RotoReport> {
     let mut session = Session::new(&rt);
     let mut rl = rotoline::Reader::new()
         .with_validator(RotoValidator)
-        .with_prompt(RotoPrompt);
+        .with_prompt(RotoPrompt)
+        .with_highlighter(RotoHighlighter);
 
     loop {
         let readline = rl.read();
         match readline {
             Ok(Output::Text(text)) => {
                 if is_blank(&text) {
+                    println!();
                     continue;
                 }
                 println!();
                 match handle_line(&mut session, &text) {
                     Ok(Some(text)) => {
                         println!("{text}");
+                        println!();
                     }
-                    Ok(None) => {}
+                    Ok(None) => {
+                        println!();
+                    }
                     Err(e) => eprintln!("{e}"),
                 }
             }

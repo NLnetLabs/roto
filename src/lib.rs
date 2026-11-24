@@ -20,6 +20,8 @@ pub mod deps;
 #[cfg(all(test, not(miri)))]
 mod file_tree_tests;
 pub mod fmt;
+#[cfg(feature = "repl")]
+mod highlight;
 mod ir_printer;
 mod label;
 mod lir;

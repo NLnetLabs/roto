@@ -68,6 +68,7 @@ impl<'a> Lexer<'a> {
                     let len =
                         self.input.chars().next().map_or(1, char::len_utf8);
                     let end = start + len;
+                    self.input = &self.input[len..];
                     Some((Err(()), start..end))
                 }
             }
