@@ -30,7 +30,7 @@ cli = ["clap"]
 logger = ["env_logger"]
 disas = ["cranelift-codegen/disas"]
 fuzz = []
-repl = ["cli", "dep:rustyline"]
+repl = ["cli", "dep:rotoline"]
 
 [dependencies]
 ariadne = "0.6.0"
@@ -45,9 +45,9 @@ rustc-literal-escaper = "0.0.7"
 libc = "0.2"
 sealed = "0.6.0"
 indexmap = "2.14.0"
-unicode-width = "0.2.2"
+unicode-width = "0.2.3"
 diffy = { version = "0.5.1", features = ["color"] }
-rustyline = { version = "18.0.1", features = ["derive"], optional = true }
+rotoline = { version = "0.1.0", git = "https://codeberg.org/NLnetLabs/rotoline.git", optional = true }
 
 [dependencies.cranelift]
 version = "0.136.0"

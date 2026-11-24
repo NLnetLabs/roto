@@ -1,12 +1,5 @@
-#![cfg(feature = "repl")]
-use rustyline::error::ReadlineError;
-use rustyline::validate::{ValidationContext, ValidationResult, Validator};
-use rustyline::{
-    Cmd, Completer, Editor, EventHandler, Helper, Highlighter, Hinter,
-    KeyCode, KeyEvent, Modifiers, history::DefaultHistory,
-};
-
 use indexmap::{IndexMap, IndexSet};
+use rotoline::{Output, Signal, prompt::Prompt, validate::Validator};
 
 use crate::{
     RotoError, RotoReport, Runtime,
@@ -31,28 +24,6 @@ use crate::{
 };
 
 mod wrap;
-
-#[derive(Completer, Helper, Highlighter, Hinter)]
-struct ReplHelper;
-
-impl Validator for ReplHelper {
-    fn validate(
-        &self,
-        ctx: &mut ValidationContext,
-    ) -> rustyline::Result<ValidationResult> {
-        if is_blank(ctx.input()) {
-            return Ok(ValidationResult::Valid(None));
-        }
-
-        let mut spans = Spans::default();
-        match Parser::parse_repl_stmt(0, &mut spans, ctx.input()) {
-            Err(e) if matches!(e.kind, ParseErrorKind::EndOfInput) => {
-                Ok(ValidationResult::Incomplete)
-            }
-            _ => Ok(ValidationResult::Valid(None)),
-        }
-    }
-}
 
 /// REPL input classification
 #[derive(Debug)]
@@ -708,34 +679,67 @@ fn handle_line(
     }
 }
 
+struct RotoValidator;
+
+impl Validator for RotoValidator {
+    fn is_valid(&mut self, buffer: &str) -> bool {
+        if is_blank(buffer) {
+            return true;
+        }
+
+        let mut spans = Spans::default();
+        match Parser::parse_repl_stmt(0, &mut spans, buffer) {
+            Err(e) if matches!(e.kind, ParseErrorKind::EndOfInput) => false,
+            _ => true,
+        }
+    }
+}
+
+struct RotoPrompt;
+
+impl Prompt for RotoPrompt {
+    fn line_prefix(
+        &mut self,
+        info: &rotoline::prompt::LineInfo,
+    ) -> Option<String> {
+        if info.continuation {
+            Some("    ".into())
+        } else if info.line == 1 {
+            Some(">>> ".into())
+        } else {
+            Some("... ".into())
+        }
+    }
+}
+
 pub(crate) fn repl(rt: &Runtime<NoCtx>) -> Result<(), RotoReport> {
     let rt = repl_runtime(rt);
     let mut session = Session::new(&rt);
-    let mut rl = Editor::<ReplHelper, DefaultHistory>::new().unwrap();
-    rl.set_helper(Some(ReplHelper));
-    rl.bind_sequence(
-        KeyEvent(KeyCode::Char('s'), Modifiers::CTRL),
-        EventHandler::Simple(Cmd::Newline),
-    );
+    let mut rl = rotoline::Reader::new()
+        .with_validator(RotoValidator)
+        .with_prompt(RotoPrompt);
 
     loop {
-        let readline = rl.readline("roto> ");
+        let readline = rl.read();
         match readline {
-            Ok(line) => {
-                if is_blank(&line) {
+            Ok(Output::Text(text)) => {
+                if is_blank(&text) {
                     continue;
                 }
-                let _ = rl.add_history_entry(line.as_str());
-                match handle_line(&mut session, &line) {
-                    Ok(Some(text)) => println!("{text}"),
+                println!();
+                match handle_line(&mut session, &text) {
+                    Ok(Some(text)) => {
+                        println!("{text}");
+                    }
                     Ok(None) => {}
                     Err(e) => eprintln!("{e}"),
                 }
             }
-            Err(ReadlineError::Interrupted) => {
+            Ok(Output::Signal(Signal::CtrlC)) => {
                 println!("Keyboard Interrupt");
+                break;
             }
-            Err(ReadlineError::Eof) => {
+            Ok(Output::Signal(Signal::CtrlD)) => {
                 break;
             }
             Err(err) => {

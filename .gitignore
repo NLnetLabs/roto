@@ -3,6 +3,8 @@
 .DS_Store
 .vscode
 
+.helix
+
 Cargo.lock
 /target
 
