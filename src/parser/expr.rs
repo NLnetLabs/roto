@@ -33,8 +33,9 @@ impl Parser<'_, '_> {
     ///
     /// ```ebnf
     /// Block      ::= '{' Stmt* Expr? '}'
-    /// Stmt       ::= ImportStmt | ExprStmt | IfStmt | MatchStmt
+    /// Stmt       ::= ImportStmt | LetStmt ';' | ExprStmt | IfStmt | MatchStmt
     /// ImportStmt ::= 'import' Path ';'
+    /// LetStmt    ::= 'let' Identifier (':' TypeExpr)? '=' Expr
     /// ExprStmt   ::= Expr ';'
     /// IfStmt     ::= If ';'?
     /// MatchStmt  ::= Match ';'?
@@ -54,26 +55,13 @@ impl Parser<'_, '_> {
 
             if self.peek_is(Token::Keyword(Keyword::Import)) {
                 let paths = self.import()?;
+                self.take(Token::SemiColon)?;
                 let span = self.get_span(&paths);
                 stmts.push(self.spans.add(span, Stmt::Import(paths)));
             } else if self.peek_is(Token::Keyword(Keyword::Let)) {
-                let start = self.take(Token::Keyword(Keyword::Let))?;
-                let identifier = self.identifier()?;
-                let ty = if self.peek_is(Token::Colon) {
-                    self.take(Token::Colon)?;
-                    Some(self.type_expr()?)
-                } else {
-                    None
-                };
-                self.take(Token::Eq)?;
-                let expr = self.expr()?;
-                let end = self.take(Token::SemiColon)?;
-                stmts.push(
-                    self.spans.add(
-                        start.merge(end),
-                        Stmt::Let(identifier, ty, expr),
-                    ),
-                )
+                let stmt = self.let_stmt()?;
+                self.take(Token::SemiColon)?;
+                stmts.push(stmt)
             }
             // Edge case: if and match don't have to end in a semicolon
             // but if they appear at the end, they are the last
@@ -185,6 +173,26 @@ impl Parser<'_, '_> {
                 }
             };
         }
+    }
+
+    /// Parse a `let` statement
+    ///
+    /// ```ebnf
+    /// LetStmt ::= 'let' Identifier (':' TypeExpr)? '=' Expr
+    /// ```
+    pub(super) fn let_stmt(&mut self) -> ParseResult<Meta<Stmt>> {
+        let start = self.take(Token::Keyword(Keyword::Let))?;
+        let identifier = self.identifier()?;
+        let ty = if self.peek_is(Token::Colon) {
+            self.take(Token::Colon)?;
+            Some(self.type_expr()?)
+        } else {
+            None
+        };
+        self.take(Token::Eq)?;
+        let expr = self.expr()?;
+        let span = start.merge(self.spans.get(&expr));
+        Ok(self.spans.add(span, Stmt::Let(identifier, ty, expr)))
     }
 
     /// Parse an expression while allowing record literals
@@ -1162,7 +1170,11 @@ impl Parser<'_, '_> {
             }
 
             if matches!(part, FStringToken::StringEnd(_)) {
-                let span = start_span.merge(Span::new(self.file, span));
+                // span stops before the closing quote; include it
+                let end = span.end + 1;
+                self.prev_end = end;
+                let span =
+                    start_span.merge(Span::new(self.file, span.start..end));
                 return Ok(self.spans.add(span, Expr::FString(parts)));
             }
 

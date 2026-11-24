@@ -14,7 +14,10 @@ use crate::{
     },
     parser::error::Hint,
 };
-use error::ParseErrorKind;
+
+#[cfg(feature = "repl")]
+use crate::ast::ReplStmt;
+
 use lexer::Lexer;
 use token::{Keyword, Token};
 
@@ -29,7 +32,7 @@ mod precedence;
 mod signature;
 pub mod token;
 
-pub use error::ParseError;
+pub use error::{ParseError, ParseErrorKind};
 
 #[cfg(all(test, not(miri)))]
 mod test_expressions;
@@ -42,6 +45,7 @@ pub struct Parser<'source, 'spans> {
     file: usize,
     file_length: usize,
     lexer: Lexer<'source>,
+    prev_end: usize,
     pub spans: &'spans mut Spans,
 }
 
@@ -73,6 +77,7 @@ impl<'source> Parser<'source, '_> {
             }
             .into()),
             Some((Ok(token), span)) => {
+                self.prev_end = span.end;
                 Ok((token, Span::new(self.file, span)))
             }
         }
@@ -178,6 +183,23 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         Self::run_parser(Self::tree, file, spans, input)
     }
 
+    /// Parse a single statement (used in REPL)
+    ///
+    /// Unlike [`Parser::parse`], this accepts one item rather than a whole
+    /// file, and that item may be an expression or a `let`, neither of which
+    /// can appear at the top level of a script.
+    ///
+    /// The span of the statement leaves out the optional semicolon after it.
+    #[cfg(feature = "repl")]
+    pub(crate) fn parse_repl_stmt(
+        file: usize,
+        spans: &'spans mut Spans,
+        input: &'source str,
+    ) -> ParseResult<Meta<ReplStmt>> {
+        let (stmt, _) = Self::run_parser(Self::stmt, file, spans, input)?;
+        Ok(stmt)
+    }
+
     pub fn run_parser<T>(
         mut parser: impl FnMut(&mut Self) -> ParseResult<T>,
         file: usize,
@@ -188,6 +210,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
             file,
             file_length: input.len(),
             lexer: Lexer::new(file, input),
+            prev_end: 0,
             spans,
         };
         let out = match parser(&mut p) {
@@ -242,52 +265,87 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         })
     }
 
+    /// Parse a single statement
+    ///
+    /// ```ebnf
+    /// Stmt ::= (Declaration | LetStmt | Expr) ';'?
+    /// ```
+    #[cfg(feature = "repl")]
+    fn stmt(&mut self) -> ParseResult<Meta<ReplStmt>> {
+        let stmt = self.spanned(|p| {
+            Ok(if let Some(declaration) = p.try_root()? {
+                ReplStmt::Declaration(declaration)
+            } else if matches!(p.peek(), Some(Token::Keyword(Keyword::Let))) {
+                ReplStmt::Let(p.let_stmt()?)
+            } else {
+                ReplStmt::Expr(p.expr()?)
+            })
+        })?;
+
+        self.next_is(Token::SemiColon);
+
+        Ok(stmt)
+    }
+
     /// Parse a root expression
     ///
     /// ```ebnf
-    /// Root ::= FilterMap | Function | Type
+    /// Root ::= FilterMap | Function | Type | Enum | Test
+    ///        | Const ';'
+    ///        | Import ';'
     /// ```
     fn root(&mut self) -> ParseResult<Declaration> {
-        let end_of_input = ParseError {
-            kind: ParseErrorKind::EndOfInput,
-            location: Span::new(
-                self.file,
-                self.file_length..self.file_length,
-            ),
-            note: None,
-            hints: Vec::new(),
-        };
-        let expr = match self.peek().ok_or(end_of_input)? {
-            Token::Keyword(Keyword::FilterMap | Keyword::Filter) => {
+        if let Some(declaration) = self.try_root()? {
+            if matches!(
+                declaration,
+                Declaration::Const(_) | Declaration::Import(_)
+            ) {
+                self.take(Token::SemiColon)?;
+            }
+            return Ok(declaration);
+        }
+
+        let (token, span) = self.next()?;
+        Err(ParseError::expected(
+            "a function, filter, filtermap or import",
+            token,
+            span,
+        )
+        .into())
+    }
+
+    /// Try to parse a root expression, return `None` if it can't
+    ///
+    /// ```ebnf
+    /// Declaration ::= FilterMap | Function | Type | Enum | Test
+    ///               | Const | Import
+    /// ```
+    fn try_root(&mut self) -> ParseResult<Option<Declaration>> {
+        let declaration = match self.peek() {
+            Some(Token::Keyword(Keyword::FilterMap | Keyword::Filter)) => {
                 Declaration::FilterMap(Box::new(self.filter_map()?))
             }
-            Token::Keyword(Keyword::Const) => {
+            Some(Token::Keyword(Keyword::Const)) => {
                 Declaration::Const(self.constant()?)
             }
-            Token::Keyword(Keyword::Record) => {
+            Some(Token::Keyword(Keyword::Record)) => {
                 Declaration::Record(self.record_type_assignment()?)
             }
-            Token::Keyword(Keyword::Enum) => {
+            Some(Token::Keyword(Keyword::Enum)) => {
                 Declaration::Enum(self.enum_declaration()?)
             }
-            Token::Keyword(Keyword::Fn) => {
+            Some(Token::Keyword(Keyword::Fn)) => {
                 Declaration::Function(self.function()?)
             }
-            Token::Keyword(Keyword::Test) => Declaration::Test(self.test()?),
-            Token::Keyword(Keyword::Import) => {
+            Some(Token::Keyword(Keyword::Test)) => {
+                Declaration::Test(self.test()?)
+            }
+            Some(Token::Keyword(Keyword::Import)) => {
                 Declaration::Import(self.import()?)
             }
-            _ => {
-                let (token, span) = self.next()?;
-                return Err(ParseError::expected(
-                    "a function, filter, filtermap or import",
-                    token,
-                    span,
-                )
-                .into());
-            }
+            _ => return Ok(None),
         };
-        Ok(expr)
+        Ok(Some(declaration))
     }
 
     /// Parse a constant declaration
@@ -298,7 +356,6 @@ impl<'source, 'spans> Parser<'source, 'spans> {
         let ty = self.type_expr()?;
         self.take(Token::Eq)?;
         let expr = self.expr()?;
-        self.take(Token::SemiColon)?;
 
         Ok(ConstantDeclaration { ident, ty, expr })
     }
@@ -306,7 +363,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
     /// Parse a term section
     ///
     /// ```ebnf
-    /// Function ::= 'fn' Identifier '{' Body '}'
+    /// Function ::= 'fn' Identifier Params ('->' TypeExpr)? Block
     /// ```
     fn function(&mut self) -> ParseResult<FunctionDeclaration> {
         self.take(Token::Keyword(Keyword::Fn))?;
@@ -337,9 +394,7 @@ impl<'source, 'spans> Parser<'source, 'spans> {
 
     fn import(&mut self) -> ParseResult<Meta<ImportPath>> {
         self.take(Token::Keyword(Keyword::Import))?;
-        let path = self.path_expr()?;
-        self.take(Token::SemiColon)?;
-        Ok(path)
+        self.path_expr()
     }
 }
 
@@ -386,5 +441,21 @@ impl Parser<'_, '_> {
 
     fn merge_spans<T, U>(&mut self, x: &Meta<T>, y: &Meta<U>) -> Span {
         self.spans.merge(x, y)
+    }
+
+    /// Run `parser` and register the span of the tokens it took
+    #[cfg(feature = "repl")]
+    fn spanned<T>(
+        &mut self,
+        parser: impl FnOnce(&mut Self) -> ParseResult<T>,
+    ) -> ParseResult<Meta<T>> {
+        let start = match self.lexer.peek() {
+            Some((_, span)) => span.start,
+            None => self.file_length,
+        };
+        let node = parser(self)?;
+        // A parser that took no tokens gets an empty span
+        let end = self.prev_end.max(start);
+        Ok(self.add_span(Span::new(self.file, start..end), node))
     }
 }

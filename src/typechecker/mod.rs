@@ -752,7 +752,7 @@ impl TypeChecker {
         Ok(())
     }
 
-    fn flatten_import_paths(
+    pub(crate) fn flatten_import_paths(
         flat_paths: &mut Vec<ast::Path>,
         path: &Meta<ast::ImportPath>,
     ) {
