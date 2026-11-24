@@ -150,7 +150,7 @@ jobs:
         uses: crate-ci/typos@v1.42.0
 
   doc:
-    name: Check rustdoc warnings
+    name: Check rustdoc warnings (${{ matrix.args }})
     runs-on: docker
     strategy:
       matrix:
